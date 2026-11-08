@@ -581,6 +581,35 @@ def _source_current(source):
              and all(a is b for a, b in zip(source.expected, actual.expected, strict=True)))
 
 
+class _NativeMetadataSnapshot(NamedTuple):
+    """Primitive stat DATA only; never a consumer ACK or operation allowance."""
+    identity: tuple
+    mtime: int | float
+
+    def __repr__(self):
+        return '<NativeMetadataSnapshot unqualified DATA redacted>'
+
+
+def _native_metadata_snapshot(owner, registration, native, value):
+    """Snapshot an actual retained stat result under original native machinery.
+
+    Unwired preparation: the producer must retain its actual native return first;
+    the later fixed consumer must bind this DATA to its original pending claim.
+    """
+    _require(native is not None and type(registration) is _NativeScopeRegistration)
+    _native_work_origin_tail(owner, registration, native)
+    _require(type(value) is native.result_type)
+    identity = (value.st_dev, value.st_ino, value.st_mode, value.st_uid, value.st_gid,
+                value.st_nlink, value.st_size, value.st_mtime_ns, value.st_ctime_ns)
+    mtime = value.st_mtime
+    _require(all(type(part) is int for part in identity)
+             and type(mtime) in (int, float))
+    snapshot = _NativeMetadataSnapshot(identity, mtime)
+    _native_work_origin_tail(owner, registration, native)
+    _require(type(value) is native.result_type)
+    return snapshot
+
+
 def _identity(row, directory=False):
     _require(type(row) is os.stat_result)
     result = (row.st_dev, row.st_ino, row.st_mode, row.st_uid, row.st_gid)

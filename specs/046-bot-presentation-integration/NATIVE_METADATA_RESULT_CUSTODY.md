@@ -97,3 +97,7 @@ Known raised native work, mismatched result, interrupted publication and partial
 ACK all need an explicit ended/abandon transition. Reserved descriptor cleanup
 can proceed only after that original work has ended; unknown/ACK/debit history
 remains sticky. No retry or restoration of IDLE can erase ambiguous work.
+
+## First source preparation
+
+An unwired `_NativeMetadataSnapshot` and `_native_metadata_snapshot` now capture exact identity integers plus the actual st_mtime under original native machinery joins. They perform no native call, debit, phase change, site advance or ACK. The producer must first retain its actual C return, and a fixed consumer must later bind this DATA to the original pending result. Merely constructing or copying a snapshot grants nothing. No timestamp conversion or policy is silently applied at snapshot capture. Runtime tests and boundary wiring remain required.
