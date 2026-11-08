@@ -25,7 +25,7 @@ continuation=GatewayContinuationOwner.retain(entry,approval,recipe,checked)
 rows=selected_cache_input_attempts(continuation)
 index=next(i for i,row in enumerate(rows) if row.plan_row.source.path==str(dep_root/'__init__.py'))
 owner=RuntimeSourceReadOwner.retain(continuation,index)
-seen=[];injected=[];restore=[]
+seen=[];injected=[];restore=[];outcomes=[]
 def no_action(self):return None
 def drift(frame):
     if injected:return
@@ -53,11 +53,14 @@ def prepare(frame):
         frame.f_locals['row'])
     operation=m._prepare_metadata_operation(owner,resource)
     counts=tuple(operation.ledger.counts);attempts=len(operation.ledger.attempts)
-    refused=False
-    try:m._prepare_directory_consumer(owner,operation)
+    refused=False;returned=None
+    try:returned=m._prepare_directory_consumer(owner,operation)
     except a.ArtifactObservationError:refused=True
     finally:
         for action in reversed(restore):action()
+    outcomes.append(dict(case=case,injected=injected==[True],refused=refused,
+                         published=returned is not None and
+                         operation.result.consumer[0] is returned))
     assert injected==[True] and refused
     assert operation.result.consumer[0] is None
     assert operation.result.raw[0] is operation.result.unset
@@ -68,7 +71,17 @@ def prepare(frame):
 trace_synthetic_boundary(a.StartupArtifactOwner._file.__code__,
                          'info = StartupArtifactOwner._fstat(self, fd, s, native_registration)',
                          prepare)
-owner.read()
+def save_outcome():
+    path=base/'directory-material-outcome.json'
+    fd=a.os.open(path,a.os.O_WRONLY|a.os.O_CREAT|a.os.O_EXCL|a.os.O_NOFOLLOW|a.os.O_CLOEXEC,0o600)
+    with a.os.fdopen(fd,'w') as stream:
+        json.dump(dict(case=case,outcomes=outcomes),stream,separators=(',',':'))
+try:owner.read()
+except BaseException:
+    try:save_outcome()
+    except Exception:sys.stderr.write('SYNTHETIC_MATERIAL_OUTCOME_UNAVAILABLE\n')
+    raise
+else:save_outcome()
 assert seen==[True] and owner._ready and not owner._failed and not owner._unknown
 owner.release()
 assert owner._original_buffer==bytearray()
