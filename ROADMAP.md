@@ -6,7 +6,7 @@ Several synthetic fixtures replaced canonical native file functions even during
 normal observation; the new continuity checks correctly reject that substitution.
 The test-only migration preserves those checks. Four normal paths and 74 first
 migration operator/link checks passed; the remaining 144-case investigation and
-the refined 160-case fixture suite are not completed evidence. See
+the refined 164-case fixture suite are not completed evidence. See
 [fixture migration and limits](specs/046-bot-presentation-integration/NATIVE_IO_FIXTURE_MIGRATION.md).
 
 Source-level startup, cache and transport components do not yet establish an
