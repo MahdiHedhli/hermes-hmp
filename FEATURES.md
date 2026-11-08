@@ -1,11 +1,14 @@
-## November 8 — repaired reader passed 130 cases; image deployment awaits approval
+## November 8 — current reader passes; minimum-version timeout remains open
 
 Declared bytecode-cache reader work has advanced separately: frozen producer
 `9d5e549` adds exact-type preflight and original-cohort cleanup, with three
-malformed-field cases queued on both interpreters. Descendant `6f84dee` integrates
+malformed-field cases passing on both interpreters (3 each, no skips, unchanged
+source and verified log/XML bindings). Descendant `6f84dee` integrates
 a fixed buffer/hash/header and actual-EOF consumer plus caller ACK closure;
-18 cache-reader cases are authored and queued after the existing lane. Static
-checks pass, but these new runtime cases have not run. This cache is Python
+18 cache-reader cases are running on Python 3.14.9; no aggregate result yet.
+Test-only descendant `d000e09` adds 16 partial-ACK interruptions, not yet run.
+A bounded independent source review found no new concrete blocker, not a runtime
+pass. Static checks pass; no aggregate cache integration pass is claimed. This cache is Python
 bytecode custody for character startup, not a delivered chat-image feature.
 Host-local chat media remains the separate reviewed deployment described below.
 No source prototype is represented as installed or physically qualified.
@@ -35,7 +38,11 @@ and the optimistic close-status mirror without weakening the original-ledger
 validator. The first 14 focused cases passed on Python 3.14.9. The repaired source then
 passed all 130 selected read/close cases on that interpreter with zero failures,
 errors or skips and unchanged source. Actual source, receipt, log and XML hashes
-were rechecked. Python 3.11.15 qualification is running next in the serial lane.
+were rechecked. Python 3.11.15 then finished 129 passing and one failure: the
+synthetic source-digest `linear_reads` child exceeded its existing 60-second
+deadline. Source was unchanged; receipt/log/XML bindings were verified. This
+floor suite is not qualified. Test-only `daf6350` prepares a 45-second bounded
+stack diagnostic without changing the deadline; it is not yet executed.
 The original failures remain preserved, not relabeled passing; no complete
 startup, six-operation, runtime/service or device/image qualification is claimed.
 
