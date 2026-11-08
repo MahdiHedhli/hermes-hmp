@@ -887,8 +887,10 @@ historical, not an alternative live authorization path or resolved incident.
 
 ### Original native file effects — proposed November 8, 2026
 
-- [ ] Review and freeze [held native effects](NATIVE_FILE_EFFECTS.md), including
-      aggregate storage/traceback lifetime and no operational fallback.
+- [x] Review and freeze [held native effects](NATIVE_FILE_EFFECTS.md), including
+      original result claims, actor/in-flight exclusion, aggregate cap, reserved
+      close capacity, raw/exception lifetimes and no operational fallback.
+      Independent read-only contract review accepted; implementation remains open.
 - [ ] Integrate all six held native operations through the original IO scope,
       preserving actual outcomes, descriptor custody, byte progress and unknown debt.
 - [ ] Complete current/floor/affected causals and independent security review;

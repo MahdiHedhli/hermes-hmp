@@ -1,6 +1,7 @@
 # Held native file effects — proposed integration contract
 
-Status: implementation contract for review, not implemented or qualified. This
+Status: independently reviewed source contract; implementation and qualification
+remain open. This
 continues the full presentation startup requirement; it does not replace runtime,
 loader, native/key, transport or physical qualification with a smaller feature.
 Baseline: HMP1a49174; native reference ed1afb082eb3e46cf2edae9d8f68fb67b09ee4df.
@@ -112,3 +113,29 @@ of acknowledgement retains unknown debt without automatic replay or closure cred
 
 Second review must accept or amend these exact storage, cap, retirement, exception
 and cleanup choices before code is described as implementing the frozen contract.
+
+## Accepted ownership and state-machine clarifications
+
+Independent read-only review accepted the source cap and lifetime/reservation
+proposal with the following mandatory clarifications, now part of this contract:
+
+- Preallocate the original attempt AND result-claim object/slot in the original
+  immutable scope/descriptor lineage. Hold those exact locals across callbacks.
+  Acknowledgment joins the exact attempt, claim, raw returned allocation, fixed
+  consumer owner/scope and original progress. A reconstructed equal claim or
+  mutable current slot cannot acknowledge a result. Failed ACK retains debt and
+  original cleanup custody; it cannot discard the result as though consumed.
+- Establish original actor/context eligibility before consuming an attempt. Use
+  explicit in-flight/reentrance exclusion: an audit callback cannot start another
+  work effect or close a descriptor while the native boundary is in flight.
+  Admitted failure is sticky. Cleanup begins only after the original call has
+  returned or raised, never while its result/resource ownership is uncertain.
+- Attach reserved close capacity to the original descriptor attempt BEFORE open.
+  Transfer it only to the actual known returned fd. Post-return allocation or
+  guard failure cannot cancel that reservation. Unknown-open debt never guesses
+  an fd or returns the reservation as reusable work credit. An exhausted work
+  allowance cannot block a close that already owns reserved capacity.
+
+This is bounded contract acceptance, with no reviewer tests or writes. It is not
+implementation acceptance, operational RSS/latency qualification, kernel outcome
+proof, source fallback, deployed startup or physical character-image completion.
