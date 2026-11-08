@@ -38,8 +38,9 @@ admission; all14 dedicated cases passed on Python3.14.9 with unchanged source
 and rehashed source/log/XML evidence. All14 also passed on Python3.11.15,
 with source/log/XML hashes rechecked. Fixed ACTIVE-state guard `a131932` passed
 all20 cases on Python3.14.9 with unchanged source and rehashed evidence; its
-minimum-version suite is running. Finite review found no new concrete defect
-after the explicit phase/failure-slot checks. These remain guard-only passes.
+same20 cases also passed on Python3.11.15 with unchanged source and rehashed
+source/log/XML evidence. Finite review found no new concrete defect after the
+explicit phase/failure-slot checks. These remain guard-only passes.
 
 Separate uninstalled source now binds the original consumer once and admits a
 fixed directory intent under the captured actor/ledger. Producer candidate
@@ -49,8 +50,9 @@ producer defects before execution: pending must retire the in-flight call,
 and error handling must clear raw aliases and raise a fresh owner-attributed
 refusal. Both are corrected in source; dedicated execution is pending. Its29
 cases retain all earlier unrun26 cases and add actual synthetic-descriptor
-return/snapshot-failure/foreign-slot checks. The suite is serialized behind the
-running floor suite. No fixed metadata policy ACK, site advancement, complete
+return/snapshot-failure/foreign-slot checks. Its current-version29-case suite
+is now running; minimum-version execution depends on that result. No fixed
+metadata policy ACK, site advancement, complete
 operation migration, native runtime or physical character pass is claimed.
 Scanner policy is unchanged. Actual metadata admission/debit/native calls, fixed result
 policy/ACK, tree/link/diagnostic plans and full operation-budget integration remain
@@ -1048,3 +1050,30 @@ repaired scope registry remain separate pending source qualification.
 All completed boxes here describe exact selected source tests, not delivered
 character or host-local-image features. These candidate sources are not included
 in this branch's34b862e server/scanner bytes and are not deployed.
+
+### Fixed metadata result path — November 8 current checkpoint
+
+- [x] **PS1-META-COHORT** Exact `a19560a` structural original-consumer/refusal
+      selection:14 cases pass on each supported interpreter; source/log/XML
+      hashes rechecked. Preparation only.
+- [x] **PS1-META-ACTIVE** Exact `a131932` state/debit/failure guard selection:
+      20 cases pass on each interpreter with rehashed source/evidence. These
+      fixtures construct ACTIVE state; they do not prove native admission.
+- [ ] **PS1-META-PRODUCER** Qualify `f47a1be` original consumer latch, actual actor
+      admission, literal captured fstat and actual pending return. The29-case
+      descendant preserves all prior unrun26 cases; current execution is active
+      and the floor is dependent. Review corrections precede these tests.
+- [ ] **PS1-META-ACK** Implement fixed directory policy consumption of the actual
+      pending producer return: original UID/mode/identity policy, one-use latch,
+      raw-free original commit, post-callback closure, raw/envelope retirement,
+      exact cursor advance and IDLE. Preserve partial ACK/debit/failure history,
+      foreign slots and wrong-actor/revoked-lifetime refusal; no replay/refund.
+- [ ] **PS1-META-MIGRATE** Complete all39 stat/fstat sites, both distinct missing
+      diagnostics, tree/link plans, six fixed operations and separate directory
+      enumeration under original aggregate budgets and reserved cleanup.
+- [ ] **PS1-META-ACCEPT** Complete integrated startup/factory/service/key/runtime,
+      CPU/RSS/deadline and physical character delivery qualification. The prior
+      60-second floor timeout remains unresolved; do not extend its deadline.
+
+All rows retain the full character-delivery scope. They do not activate hosts,
+change grants, deliver host-local chat media or certify release readiness.

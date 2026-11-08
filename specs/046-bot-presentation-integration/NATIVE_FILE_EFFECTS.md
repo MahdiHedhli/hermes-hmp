@@ -38,8 +38,9 @@ admission; all14 dedicated cases passed on Python3.14.9 with unchanged source
 and rehashed source/log/XML evidence. All14 also passed on Python3.11.15,
 with source/log/XML hashes rechecked. Fixed ACTIVE-state guard `a131932` passed
 all20 cases on Python3.14.9 with unchanged source and rehashed evidence; its
-minimum-version suite is running. Finite review found no new concrete defect
-after the explicit phase/failure-slot checks. These remain guard-only passes.
+same20 cases also passed on Python3.11.15 with unchanged source and rehashed
+source/log/XML evidence. Finite review found no new concrete defect after the
+explicit phase/failure-slot checks. These remain guard-only passes.
 
 Separate uninstalled source now binds the original consumer once and admits a
 fixed directory intent under the captured actor/ledger. Producer candidate
@@ -49,8 +50,9 @@ producer defects before execution: pending must retire the in-flight call,
 and error handling must clear raw aliases and raise a fresh owner-attributed
 refusal. Both are corrected in source; dedicated execution is pending. Its29
 cases retain all earlier unrun26 cases and add actual synthetic-descriptor
-return/snapshot-failure/foreign-slot checks. The suite is serialized behind the
-running floor suite. No fixed metadata policy ACK, site advancement, complete
+return/snapshot-failure/foreign-slot checks. Its current-version29-case suite
+is now running; minimum-version execution depends on that result. No fixed
+metadata policy ACK, site advancement, complete
 operation migration, native runtime or physical character pass is claimed.
 Scanner policy is unchanged. Actual metadata admission/debit/native calls, fixed result
 policy/ACK, tree/link/diagnostic plans and full operation-budget integration remain
