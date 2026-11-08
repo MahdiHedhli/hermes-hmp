@@ -239,7 +239,14 @@ def at_original_fstat(actual_owner,fd,scope,registration=None):
         assert frame.f_code is original_file_code
         assert frame.f_locals['native_registration'] is registration
         assert frame.f_locals['fd'] is fd
-        exercise(frame)
+        try:exercise(frame)
+        except BaseException:
+            # Only synthetic fixture diagnostics; keep the original failure.
+            import traceback
+            path=Path(sys.argv[1])/'caller-interruption-private-error.log'
+            diagnostic_fd=os.open(path,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
+            with os.fdopen(diagnostic_fd,'w') as stream:traceback.print_exc(file=stream)
+            raise
     return original_fstat(actual_owner,fd,scope,registration)
 a.StartupArtifactOwner._fstat=at_original_fstat
 try:owner.read()
