@@ -374,3 +374,24 @@ first substitutes a copied pending consumer and requires refusal without
 clearing it or poisoning the ledger, then restores the disposable fixture and
 performs original cleanup. This47-case descendant retains all45 cases and is
 unrun. It does not qualify admitted/pending/lost-return abort handling.
+
+## Caller-held known-return abort candidate
+
+A separate abort helper accepts only the actual unACKed producer return under
+its current live cohort, optionally paired with the caller's actual prepared
+policy commit. It samples original actor context once with original owner/arg
+closure and repeats the exact pending/prepared proof before mutating anything.
+A wrong actor, copied return/commit or invalid lifetime is refused without
+retiring rightful-owner state. No current storage row is adopted as a receipt.
+
+Once verified it marks sticky failure, preserves one charge/attempt and the
+original cursor/pending history, conditionally retires only held original raw/
+snapshot/envelope/category and consumption backlinks, and closes the original
+phase without ACK/refund/FD operations. Foreign replacements survive; a full
+retirement mismatch fails rather than claiming success. Raw-linked locals clear
+before a fresh bounded owner refusal. The caller must drop its own envelope.
+
+This is unreviewed/unrun/unwired. It does not solve producer lost-return,
+revoked-lifetime cleanup or partial-ACK recovery, which remain required before
+complete caller integration. Normal cancellation here deliberately fails the
+original operation; it is not a retry or new authority.

@@ -1094,3 +1094,104 @@ def _release_ended_directory_preparation(owner, consumer):
     finally:
         consumer = operation = result = resource = metadata = ledger = phase = None
     raise ArtifactObservationError(owner) from None
+
+
+def _abandon_known_directory_return(owner, consumer, actual, commit=None):
+    """Abort only a caller-held original unACKed return under its live cohort.
+
+    Optional commit is the caller's actual prepared policy return, never a row
+    adopted from current storage. No native work, close, refund, cursor advance
+    or ACK occurs. Lost producer return/revoked lifetime need separate handling.
+    """
+    verified = False
+    operation = result = ledger = phase = category = None
+    actor_state = actor_arguments = None
+    try:
+        if commit is None:
+            _pending_directory_return_tail(owner, consumer, actual)
+        else:
+            _prepared_directory_commit_tail(owner, consumer, actual, commit)
+        operation = actual.operation
+        result, ledger, phase = operation.result, operation.ledger, operation.phase
+        category = result.category[0]
+        actor_arguments = (consumer, actual, commit)
+        actor_state = _native_pre_actor_state(owner, actor_arguments)
+        _native_actor_context(operation.native.actor_calls,
+                              (operation.native.native, operation.native.thread_native),
+                              operation.context)
+        _native_post_actor_state(owner, actor_state, actor_arguments)
+        if commit is None:
+            _pending_directory_return_tail(owner, consumer, actual)
+        else:
+            _prepared_directory_commit_tail(owner, consumer, actual, commit)
+        verified = True
+        operation.state[2] = True
+        ledger.failed[0] = True
+        if ledger.failure[0] is None:
+            ledger.failure[0] = operation
+        if result.raw[0] is actual.raw:
+            result.raw[0] = result.unset
+        if result.snapshot[0] is actual.snapshot:
+            result.snapshot[0] = None
+        if result.envelope[0] is actual:
+            result.envelope[0] = None
+        if result.category[0] is category:
+            result.category[0] = None
+        if consumer.consumption[0] is actual:
+            consumer.consumption[0] = operation
+        if phase.result[0] is operation:
+            phase.result[0] = None
+        if phase.current[0] is phase.pending or phase.current[0] is phase.idle:
+            phase.current[0] = phase.failed
+        _require(operation.state[0] is True and operation.state[1] is True
+                 and operation.state[2] is True and operation.ended[0] is True
+                 and ledger.failed[0] is True and ledger.failure[0] is operation
+                 and ledger.inflight[0] is None
+                 and phase.current[0] is phase.failed and phase.result[0] is None
+                 and result.raw[0] is result.unset
+                 and result.snapshot[0] is result.envelope[0] is result.category[0] is None
+                 and result.acknowledged[0] is None
+                 and consumer.commit[0] is commit
+                 and consumer.consumption[0] is (None if commit is None else operation)
+                 and consumer.resource.metadata.progress[0] is consumer.resource.ordinal
+                 and consumer.resource.metadata.progress[1] is consumer
+                 and ledger.counts is operation.budget[0]
+                 and ledger.counts[0] is operation.budget[3]
+                 and ledger.counts[1] is operation.budget[2]
+                 and ledger.attempts is operation.attempts
+                 and ledger.attempts[operation.index] is operation)
+        return None
+    except BaseException:
+        if verified:
+            if type(operation.state) is list and len(operation.state) == 3:
+                operation.state[2] = True
+            if type(ledger.failed) is list and len(ledger.failed) == 1:
+                ledger.failed[0] = True
+            if (type(ledger.failure) is list and len(ledger.failure) == 1
+                    and ledger.failure[0] is None):
+                ledger.failure[0] = operation
+            if type(result.raw) is list and len(result.raw) == 1 and result.raw[0] is actual.raw:
+                result.raw[0] = result.unset
+            if (type(result.snapshot) is list and len(result.snapshot) == 1
+                    and result.snapshot[0] is actual.snapshot):
+                result.snapshot[0] = None
+            if (type(result.envelope) is list and len(result.envelope) == 1
+                    and result.envelope[0] is actual):
+                result.envelope[0] = None
+            if (type(result.category) is list and len(result.category) == 1
+                    and result.category[0] is category):
+                result.category[0] = None
+            if (type(consumer.consumption) is list and len(consumer.consumption) == 1
+                    and consumer.consumption[0] is actual):
+                consumer.consumption[0] = operation
+            if (type(phase.current) is list and len(phase.current) == 1
+                    and (phase.current[0] is phase.pending or phase.current[0] is phase.idle)):
+                phase.current[0] = phase.failed
+            if (type(phase.result) is list and len(phase.result) == 1
+                    and phase.result[0] is operation):
+                phase.result[0] = None
+    finally:
+        actual = commit = consumer = None
+        actor_state = actor_arguments = None
+        operation = result = ledger = phase = None
+    raise ArtifactObservationError(owner) from None
