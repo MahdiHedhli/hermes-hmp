@@ -10,6 +10,7 @@ from importlib.machinery import ModuleSpec
 from types import ModuleType
 from typing import NamedTuple
 
+from hmp_plugin.presentation_gateway_activation import GatewayActivationOwner
 from hmp_plugin.presentation_gateway_package import (
     GatewayPackageOwner,
     _same_origins,
@@ -28,6 +29,7 @@ from hmp_plugin.presentation_startup_artifacts import (
     _identity,
     _native_registration_tail,
     _native_walk_scope,
+    _Scope,
 )
 
 from . import gateway_entry
@@ -347,7 +349,21 @@ class EntryFileSnapshotOwner:
             _native_registration_tail(io, io_scope, io_cell, io_root,
                                       native_registration, native_registry)
             _require(owner._inputs is inputs and owner._root_cell is cell
-                     and owner._fact_cell is None and activation._entry_files_fact_cell is None)
+                     and owner._fact_cell is None and activation._entry_files_fact_cell is None
+                     and owner._ready is False and owner._failed is False
+                     and owner._unknown is False and owner._completing is True
+                     and owner._attempt_cell is attempt
+                     and activation._entry_files_attempt_cell is attempt
+                     and io._scope is io_scope is io._origin
+                     and io._cell is io_cell and io._root_cell is io_root
+                     and activation._artifact_cell is io_root
+                     and io._attempt_cell is file_attempt
+                     and activation._artifact_attempt_cell is file_attempt
+                     and io._ready is True and io._failed is False
+                     and io._unknown is False and io._reading is False
+                     and io._fact_cell is file_fact and activation._artifact_fact_cell is file_fact
+                     and io._hashes is file_fact[2] and io._count_cell is file_fact[3]
+                     and io._bytes_read is file_fact[3][2])
             owner._fact_cell = activation._entry_files_fact_cell = fact
             owner._ready = True
             return owner
@@ -435,10 +451,13 @@ class EntryFileSnapshotOwner:
     def _io_current(self, io, native_registration=None):
         _require(type(io) is StartupArtifactOwner)
         io_scope, io_cell, io_root = io._origin, io._cell, io._root_cell
+        _require(type(io_scope) is _Scope
+                 and type(io_scope.activation) is GatewayActivationOwner)
         inputs = EntryFileSnapshotOwner._current(self)
-        _require(type(io) is StartupArtifactOwner and type(inputs.io_slot) is list
-                 and len(inputs.io_slot) == 1 and inputs.io_slot[0] is io
-                 and io._origin.activation._artifact_owner is io)
+        _require(io._origin is io_scope and io._scope is io_scope
+                 and io._cell is io_cell and io._root_cell is io_root)
+        _require(type(inputs.io_slot) is list and len(inputs.io_slot) == 1
+                 and inputs.io_slot[0] is io and io_scope.activation._artifact_owner is io)
         cell = self._root_cell
         _require(_native_walk_scope(io, native_registration) is io_scope)
         EntryFileSnapshotOwner._pure_current(self, inputs, cell)

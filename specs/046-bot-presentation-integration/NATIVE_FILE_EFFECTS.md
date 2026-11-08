@@ -437,3 +437,13 @@ The child scripts parse; tests have not run. This draft includes the exact
 present-leaf probe repair from9a4ed59. Independent review and affected regression
 remain required. No step/consumer/native operation authority, quota/reserved
 cleanup, complete enumeration origin or runtime/key/image admission is implied.
+
+Review found a nested-access callback gap in the initial entry draft: IO-current
+checks dereferenced a potentially replaced origin before rejoining its held
+scope. The repair validates original scope/activation types before the callback,
+then checks exact scope/cell/root identity before nested access. Final entry
+fact publication also repeats original lifecycle/attempt/fact/count invariants
+after allocation. Seven added callback cases cover foreign-origin zero-getter
+refusal, coherent scope replacement and lifecycle/attempt/IO fact/count drift at
+publication. Entry coverage is now23 prepared cases; no test pass is claimed.
+Independent repair review and exact qualification remain required.
