@@ -18,11 +18,16 @@ close-attempt flags, one unknown record and the actual injected fault. Native-op
 attempt observations precede effects; successful helper returns are not used as
 proof of zero attempts.
 
-Four normal paths and 74 first-migration operator/link checks passed. Independent
-read-only review accepted the refined descriptor monitor, but that V2 refinement
-is NOT RUN while a separate 144-case residual check remains active. Further
-failures still need classification; no blanket fixture-only/full-pass claim is
-made. No production implementation, live host/device or permission change.
+Four normal paths and 74 first-migration operator/link checks passed. The residual
+144-case run finished with125 passes and19 failures, no skipped/error cases and
+unchanged source. The failures group into cache observation8, source digest3,
+cache probe5 and cache reader3. All19 map to fixture modules changed by the
+reviewed refinement; this mapping does not itself prove that the repair succeeds.
+
+Independent read-only review accepted the refined descriptor monitor. Its separate
+seven-module suite declares164 cases and is now running on2971995, with a unique
+source-bound receipt. No full integration pass is claimed. Production checks,
+live hosts/devices, permissions and installed builds are unchanged.
 
 Validation outputs must use explicit run configuration and a unique private run
 directory, with source/test manifest and machine-readable result counts. A copied
