@@ -348,3 +348,20 @@ The45-case selection retains all35 existing cases and four unchanged direct
 guard cases. It is unrun; first/last line-fault preflights on both Python
 versions must observe actual injection before any matrix pass is credited.
 The separately queued ordinary-entry preflight remains frozen and untouched.
+
+## Ended uncharged preparation release candidate
+
+The caller prerequisite now has a separate local cleanup for a clean actor
+refusal: it accepts only the actual latched consumer with an ended, never
+admitted/returned/failed intent, unchanged original counts/attempts, empty raw
+result/commit/ACK cells, healthy ledger and IDLE/no-inflight state. It retains
+the ended intent as consumption history and releases only its original metadata
+pending slot; it never rearms that intent, changes a cursor or touches an FD.
+The explicit unspent admission wrapper still requires endedFalse.
+
+Final original resource/material/lifetime/unused-cell closure is checked after
+release. Partial publication/drift fails stickily without restoring the slot or
+changing debit/history; foreign pending slots fail before any publication and
+are not cleared. No actor resample, refund, retry or new authority is introduced.
+This source is unreviewed/unrun/unwired. Admitted/pending/lost-return abort
+handling remains separate and incomplete.

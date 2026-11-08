@@ -201,7 +201,7 @@ def _directory_material_tail(owner, consumer):
     return consumer
 
 
-def _unspent_directory_cells_tail(owner, operation):
+def _undebited_directory_cells_tail(owner, operation):
     """Untouched original intent cells only; caller proves resource/consumer joins."""
     _require(type(operation) is _MetadataOperation and operation.owner is owner
              and type(operation.result) is _MetadataResult
@@ -232,7 +232,7 @@ def _unspent_directory_cells_tail(owner, operation):
              and type(operation.state) is list and len(operation.state) == 3
              and all(type(value) is bool and value is False for value in operation.state)
              and type(operation.ended) is list and len(operation.ended) == 1
-             and operation.ended[0] is False
+             and type(operation.ended[0]) is bool
              and type(result.attempt) is list and len(result.attempt) == 1
              and result.attempt[0] is operation
              and type(result.raw) is list and len(result.raw) == 1
@@ -247,6 +247,13 @@ def _unspent_directory_cells_tail(owner, operation):
              and ledger.failed[0] is False
              and type(ledger.failure) is list and len(ledger.failure) == 1
              and ledger.failure[0] is None)
+    return result
+
+
+def _unspent_directory_cells_tail(owner, operation):
+    """An undebited intent must still be unended to enter admission."""
+    result = _undebited_directory_cells_tail(owner, operation)
+    _require(operation.ended[0] is False)
     return result
 
 
@@ -1027,4 +1034,63 @@ def _ack_directory_policy(owner, consumer, actual, commit):
         actual = commit = consumer = None
         actor_state = actor_arguments = None
         operation = result = ledger = phase = None
+    raise ArtifactObservationError(owner) from None
+
+
+def _release_ended_directory_preparation(owner, consumer):
+    """Release only an original ended, uncharged, raw-empty preparation.
+
+    No descriptor operation, actor resample, refund or intent rearming occurs.
+    This permits rightful-owner preparation after a clean actor refusal; it
+    cannot retire an admitted, returned, failed or pending native operation.
+    """
+    resource = _latched_directory_resource_tail(owner, consumer)
+    operation = consumer.operation
+    result = _undebited_directory_cells_tail(owner, operation)
+    ledger, phase = operation.ledger, operation.phase
+    _require(operation.ended[0] is True
+             and phase.current[0] is phase.idle and phase.result[0] is None
+             and ledger.inflight[0] is None
+             and type(consumer.consumption) is list and len(consumer.consumption) == 1
+             and consumer.consumption[0] is None
+             and type(consumer.commit) is list and len(consumer.commit) == 1
+             and consumer.commit[0] is None
+             and type(result.consumer) is list and len(result.consumer) == 1
+             and result.consumer[0] is consumer)
+    metadata = resource.metadata
+    _require(metadata.progress[0] is resource.ordinal and metadata.progress[1] is consumer
+             and _directory_material_tail(owner, consumer) is consumer)
+    try:
+        consumer.consumption[0] = operation  # preserve this ended preparation's history
+        metadata.progress[1] = None
+        _require(_native_declared_metadata_plan_tail(owner, resource.registration,
+                                                     resource.held_walk) is metadata
+                 and metadata.progress[0] is resource.ordinal and metadata.progress[1] is None
+                 and _undebited_directory_cells_tail(owner, operation) is result
+                 and consumer.consumption[0] is operation and consumer.commit[0] is None
+                 and result.consumer[0] is consumer
+                 and phase.current[0] is phase.idle and phase.result[0] is None
+                 and ledger.inflight[0] is None
+                 and _directory_material_tail(owner, consumer) is consumer)
+        _native_read_lifecycle_tail(owner, resource.registration, consumer.parents)
+        _require(_undebited_directory_cells_tail(owner, operation) is result
+                 and operation.ended[0] is True
+                 and metadata.progress[0] is resource.ordinal and metadata.progress[1] is None
+                 and consumer.consumption[0] is operation and consumer.commit[0] is None
+                 and phase.current[0] is phase.idle and phase.result[0] is None
+                 and ledger.inflight[0] is None)
+        return consumer
+    except BaseException:
+        if type(operation.state) is list and len(operation.state) == 3:
+            operation.state[2] = True
+        if type(ledger.failed) is list and len(ledger.failed) == 1:
+            ledger.failed[0] = True
+        if (type(ledger.failure) is list and len(ledger.failure) == 1
+                and ledger.failure[0] is None):
+            ledger.failure[0] = operation
+        if (type(phase.current) is list and len(phase.current) == 1
+                and phase.current[0] is phase.idle):
+            phase.current[0] = phase.failed
+    finally:
+        consumer = operation = result = resource = metadata = ledger = phase = None
     raise ArtifactObservationError(owner) from None
