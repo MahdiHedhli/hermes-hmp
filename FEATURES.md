@@ -4,8 +4,10 @@ The combined startup suite failed 215 cases and passed 1,065 on source1ab9910.
 Focused decoder and native-binding checks remain valid but do not establish an
 integrated pass. Four normal paths and74 operator/link checks passed after
 moving fixture observations away from canonical native aliases. A further reviewed
-monitoring refinement is untested;144 residual original failures are running.
-The queued seven-module refinement declares164 cases; actual results remain pending.
+monitoring refinement is under test. The144-case residual run completed with
+125 passes and19 failures, zero skips/errors and unchanged source. The19 failures
+remain unresolved evidence. The reviewed seven-module refinement is now running
+with164 statically declared cases; its actual results remain pending.
 Production checks remain unchanged. Character/local-image delivery stays open.
 
 # November 8: original file bindings captured, not syscall outcomes
