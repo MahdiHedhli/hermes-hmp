@@ -17,12 +17,18 @@ no unrun candidate is claimed passing. Its floor and full regression runs depend
 on resolving the focused failures. No complete native IO/cleanup/quota/runtime
 or device qualification is claimed.
 
-A separate uninstalled experimental runtime-source loop now connects original
-read-result custody, fixed consumption and EOF acknowledgment. Its 24 causal
-consumer cases are authored but unexecuted; static checks and bounded source
-review do not establish behavioral qualification. Isolated EOF-accounting source
-`7a4d42f` has started its separate 25-case current-interpreter suite. Cache reads,
-metadata/link/diagnostic sites and directory enumeration remain unfinished.
+Separate uninstalled source `9dc2875` now connects original runtime-source read
+results, fixed consumption and EOF acknowledgment. Its 24 new consumer cases
+are authored but unexecuted; actual collection of the focused consumer/runtime/
+digest selection is 68. Static checks and bounded review are not qualification.
+
+The first isolated EOF source `7a4d42f` collected 29 cases: 26 passed and three
+failed from a fixture signature mismatch against its older baseline; the expected
+count of 25 was also incorrect. Original source and failure evidence are retained.
+Test-only successor `708beff` restores that baseline's four-argument read wrapper,
+keeps production checks unchanged, and is running the corrected 29-case suite.
+The 68-case runtime consumer run waits for current/floor EOF qualification.
+Cache reads, metadata/link/diagnostic sites and enumeration remain unfinished.
 
 Device-local sections/static icons and selected-bot readiness are implemented in
 app source, with physical qualification pending. Desktop character parity and
