@@ -330,3 +330,21 @@ ACK store-level faults can be observed directly; no inner-trace pass is inferred
 The normal ACK and late-ACK-fault cases are selected as a current/floor entry
 hook preflight before a larger interruption matrix. The35-case source selection
 is retained; no active test was stopped or changed. Preflight is unrun.
+
+## Authored per-store ACK fault matrix
+
+A test-only descendant adds10 ACK interruptions before the raw, snapshot,
+envelope, category, consumption backlink, cursor, pending-slot, phase-result,
+IDLE and final-closure statements. Each route binds the exact function code and
+unique statement inside its main try block, restores tracing before raising,
+and asserts the actual owner/return/commit and nine observed prior-write flags.
+The case requires exactly one injection, preserved partial cursor/pending
+history and ACK marker, sticky failure and unchanged debit, original raw
+retirement, and duplicate refusal. No production callback or source change is
+introduced. This addresses individual stores, not arbitrary bytecode or every
+foreign-slot/drift/lost-return permutation.
+
+The45-case selection retains all35 existing cases and four unchanged direct
+guard cases. It is unrun; first/last line-fault preflights on both Python
+versions must observe actual injection before any matrix pass is credited.
+The separately queued ordinary-entry preflight remains frozen and untouched.

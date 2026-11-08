@@ -19,7 +19,17 @@ from .test_presentation_gateway_approval import operator_composed_script
                                  'produce', 'produce_snapshot_failure',
                                  'produce_foreign_raw_failure', 'consume',
                                  'consume_wrong_actor', 'consume_policy_failure',
-                                 'ack', 'ack_wrong_actor', 'ack_late_failure'))
+                                 'ack', 'ack_wrong_actor', 'ack_late_failure',
+                        'ack_interrupt_raw',
+                        'ack_interrupt_snapshot',
+                        'ack_interrupt_envelope',
+                        'ack_interrupt_category',
+                        'ack_interrupt_backlink',
+                        'ack_interrupt_cursor',
+                        'ack_interrupt_pending',
+                        'ack_interrupt_phase_result',
+                        'ack_interrupt_idle',
+                        'ack_interrupt_final'))
 def test_original_metadata_operation(tmp_path, monkeypatch, case):
     script, mutation = operator_composed_script('links')
     script = script.replace('GatewayPackageOwner.verify_recipe(recipe)',
@@ -72,7 +82,17 @@ def prepare(frame):
                         'admit_after_debit_failure','admit_foreign_slot_failure',
                         'produce','produce_snapshot_failure','produce_foreign_raw_failure',
                         'consume','consume_wrong_actor','consume_policy_failure',
-                        'ack','ack_wrong_actor','ack_late_failure')
+                        'ack','ack_wrong_actor','ack_late_failure',
+                        'ack_interrupt_raw',
+                        'ack_interrupt_snapshot',
+                        'ack_interrupt_envelope',
+                        'ack_interrupt_category',
+                        'ack_interrupt_backlink',
+                        'ack_interrupt_cursor',
+                        'ack_interrupt_pending',
+                        'ack_interrupt_phase_result',
+                        'ack_interrupt_idle',
+                        'ack_interrupt_final')
         assert resource.descriptor is descriptor
         assert resource.metadata is held[5] and resource.held_walk is held
         assert resource.arguments[0] is descriptor.fd
@@ -145,14 +165,34 @@ def prepare(frame):
                         'admit_after_debit_failure','admit_foreign_slot_failure',
                         'produce','produce_snapshot_failure','produce_foreign_raw_failure',
                         'consume','consume_wrong_actor','consume_policy_failure',
-                        'ack','ack_wrong_actor','ack_late_failure')
+                        'ack','ack_wrong_actor','ack_late_failure',
+                        'ack_interrupt_raw',
+                        'ack_interrupt_snapshot',
+                        'ack_interrupt_envelope',
+                        'ack_interrupt_category',
+                        'ack_interrupt_backlink',
+                        'ack_interrupt_cursor',
+                        'ack_interrupt_pending',
+                        'ack_interrupt_phase_result',
+                        'ack_interrupt_idle',
+                        'ack_interrupt_final')
                 else:
                     assert (case in ('latched','latch_postpublication_failure',
                                     'admit','admit_wrong_actor','admit_before_debit_failure',
                         'admit_after_debit_failure','admit_foreign_slot_failure',
                         'produce','produce_snapshot_failure','produce_foreign_raw_failure',
                         'consume','consume_wrong_actor','consume_policy_failure',
-                        'ack','ack_wrong_actor','ack_late_failure')
+                        'ack','ack_wrong_actor','ack_late_failure',
+                        'ack_interrupt_raw',
+                        'ack_interrupt_snapshot',
+                        'ack_interrupt_envelope',
+                        'ack_interrupt_category',
+                        'ack_interrupt_backlink',
+                        'ack_interrupt_cursor',
+                        'ack_interrupt_pending',
+                        'ack_interrupt_phase_result',
+                        'ack_interrupt_idle',
+                        'ack_interrupt_final')
                             or case.startswith('active')) and returned is resource
                 # Latched structural validation never renews unclaimed admission.
                 try:a._native_declared_metadata_plan_tail(owner,registration,held)
@@ -296,7 +336,17 @@ def prepare(frame):
                             else:
                                 assert case in ('produce','consume','consume_wrong_actor',
                                                 'consume_policy_failure','ack','ack_wrong_actor',
-                                                'ack_late_failure')
+                                                'ack_late_failure',
+                        'ack_interrupt_raw',
+                        'ack_interrupt_snapshot',
+                        'ack_interrupt_envelope',
+                        'ack_interrupt_category',
+                        'ack_interrupt_backlink',
+                        'ack_interrupt_cursor',
+                        'ack_interrupt_pending',
+                        'ack_interrupt_phase_result',
+                        'ack_interrupt_idle',
+                        'ack_interrupt_final')
                                 assert type(actual) is m._DirectoryMetadataReturn
                                 pending=m._pending_directory_return_tail(owner,consumer,actual)
                                 assert pending is actual
@@ -363,7 +413,17 @@ def prepare(frame):
                                             assert progress[0] is resource.ordinal
                                         else:
                                             assert case in ('consume','consume_wrong_actor','ack',
-                                                            'ack_wrong_actor','ack_late_failure')
+                                                            'ack_wrong_actor','ack_late_failure',
+                        'ack_interrupt_raw',
+                        'ack_interrupt_snapshot',
+                        'ack_interrupt_envelope',
+                        'ack_interrupt_category',
+                        'ack_interrupt_backlink',
+                        'ack_interrupt_cursor',
+                        'ack_interrupt_pending',
+                        'ack_interrupt_phase_result',
+                        'ack_interrupt_idle',
+                        'ack_interrupt_final')
                                             assert type(commit) is m._DirectoryPolicyCommit
                                             assert commit.identity==actual.snapshot.identity[:5]
                                             assert commit.owner is owner
@@ -409,21 +469,84 @@ def prepare(frame):
                                                     assert phase.current[0] is phase.pending
                                                     assert ledger.failed==[False]
                                                 ack_original=m._acked_directory_commit_tail
-                                                ack_events=[]
+                                                ack_events=[];ack_rows=[];ack_index=None
+                                                previous_trace=sys.gettrace()
                                                 if case=='ack_late_failure':
                                                     def refuse_after_ack(*args):
                                                         assert ack_original(*args) is commit
                                                         ack_events.append(True)
                                                         raise a.ArtifactObservationError(owner)
                                                     m._acked_directory_commit_tail=refuse_after_ack
+                                                elif case.startswith('ack_interrupt_'):
+                                                    import ast
+                                                    points=(
+                                                        'result.raw[0] = result.unset',
+                                                        'result.snapshot[0] = None',
+                                                        'result.envelope[0] = None',
+                                                        'result.category[0] = None',
+                                                        'consumer.consumption[0] = commit',
+                                                        'metadata.progress[0]',
+                                                        'metadata.progress[1]',
+                                                        'phase.result[0] = None',
+                                                        'phase.current[0] = phase.idle',
+                                                        '_require(_acked_directory_commit_tail(')
+                                                    labels=('raw','snapshot','envelope','category',
+                                                        'backlink','cursor','pending','phase_result',
+                                                        'idle','final')
+                                                    ack_index=labels.index(case[len('ack_interrupt_'):])
+                                                    ack_code=m._ack_directory_policy.__code__
+                                                    source=Path(ack_code.co_filename).read_text()
+                                                    syntax=ast.parse(source)
+                                                    definition=next(n for n in syntax.body
+                                                        if isinstance(n,ast.FunctionDef)
+                                                        and n.lineno==ack_code.co_firstlineno)
+                                                    outer=next(n for n in definition.body
+                                                        if isinstance(n,ast.Try))
+                                                    lines=source.splitlines()
+                                                    fragment=points[ack_index]
+                                                    matches=[i+1 for i in range(
+                                                        ack_code.co_firstlineno-1,
+                                                        outer.handlers[0].lineno-1)
+                                                        if fragment in lines[i]]
+                                                    assert len(matches)==1,(case,matches)
+                                                    assert previous_trace is None
+                                                    def interrupt_ack(frame,event,arg):
+                                                        if frame.f_code is not ack_code:return None
+                                                        if (event=='line'
+                                                                and frame.f_lineno==matches[0]):
+                                                            sys.settrace(previous_trace)
+                                                            local=frame.f_locals
+                                                            assert local['actual'] is actual
+                                                            assert local['commit'] is commit
+                                                            assert local['consumer'] is consumer
+                                                            assert result.acknowledged[0] is commit
+                                                            ack_rows.append((
+                                                                result.raw[0] is result.unset,
+                                                                result.snapshot[0] is None,
+                                                                result.envelope[0] is None,
+                                                                result.category[0] is None,
+                                                                consumer.consumption[0] is commit,
+                                                                progress[0] is commit.next_ordinal,
+                                                                progress[1] is None,
+                                                                phase.result[0] is None,
+                                                                phase.current[0] is phase.idle))
+                                                            ack_events.append(True)
+                                                            raise a.ArtifactObservationError(owner)
+                                                        return interrupt_ack
+                                                    sys.settrace(interrupt_ack)
                                                 try:
                                                     try:acked=m._ack_directory_policy(
                                                         owner,consumer,actual,commit)
                                                     except a.ArtifactObservationError as exc:
-                                                        assert case=='ack_late_failure'
+                                                        assert (case=='ack_late_failure'
+                                                                or ack_index is not None)
                                                         assert exc.failed_owner is owner
                                                         assert exc.__context__ is None
                                                         assert ack_events==[True]
+                                                        if ack_index is not None:
+                                                            expected_row=tuple(ack_index>=i+1
+                                                                              for i in range(9))
+                                                            assert ack_rows==[expected_row]
                                                         assert ledger.failed==[True]
                                                         assert ledger.failure[0] is operation
                                                         assert operation.state==[True,True,True]
@@ -436,6 +559,7 @@ def prepare(frame):
                                                         assert phase.current[0] is phase.idle
                                                         assert ledger.failed==[False]
                                                 finally:
+                                                    sys.settrace(previous_trace)
                                                     m._acked_directory_commit_tail=ack_original
                                                 assert result.acknowledged[0] is commit
                                                 assert consumer.commit[0] is commit
@@ -443,14 +567,21 @@ def prepare(frame):
                                                 assert result.raw[0] is result.unset
                                                 assert result.snapshot==result.envelope==[None]
                                                 assert result.category==[None]
-                                                assert progress==[commit.next_ordinal,None]
+                                                expected_cursor=(commit.next_ordinal
+                                                    if ack_index is None or ack_index>=6
+                                                    else resource.ordinal)
+                                                expected_pending=(None
+                                                    if ack_index is None or ack_index>=7
+                                                    else consumer)
+                                                expected_progress=[expected_cursor,expected_pending]
+                                                assert progress==expected_progress
                                                 assert phase.result==ledger.inflight==[None]
                                                 try:m._ack_directory_policy(
                                                     owner,consumer,actual,commit)
                                                 except a.ArtifactObservationError:pass
                                                 else:raise AssertionError('ACK replayed')
                                                 assert result.acknowledged[0] is commit
-                                                assert progress==[commit.next_ordinal,None]
+                                                assert progress==expected_progress
                                     finally:m._directory_identity=policy_original
                             assert captured==[True]
                             assert ledger.counts==[counts[0]+1,counts[1]]
