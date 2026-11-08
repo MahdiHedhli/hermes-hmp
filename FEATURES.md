@@ -1,5 +1,15 @@
 ## November 8 — repaired reader passed 130 cases; image deployment awaits approval
 
+Declared bytecode-cache reader work has advanced separately: frozen producer
+`9d5e549` adds exact-type preflight and original-cohort cleanup, with three
+malformed-field cases queued on both interpreters. Descendant `6f84dee` integrates
+a fixed buffer/hash/header and actual-EOF consumer plus caller ACK closure;
+18 cache-reader cases are authored and queued after the existing lane. Static
+checks pass, but these new runtime cases have not run. This cache is Python
+bytecode custody for character startup, not a delivered chat-image feature.
+Host-local chat media remains the separate reviewed deployment described below.
+No source prototype is represented as installed or physically qualified.
+
 Open-registration source `1aa605d` passed all 1,434 configured startup cases on
 Python 3.14.9 with zero failures, errors or skips; its eight focused cases passed
 on both Python 3.14.9 and 3.11.15. Exact source/receipt/log/XML bindings were
