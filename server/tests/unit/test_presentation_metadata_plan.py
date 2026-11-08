@@ -112,15 +112,16 @@ def test_fixed_variant_binding_refuses_drift_without_foreign_hooks(fault):
         elif fault == 'ordinal_bool':
             variant = variant._replace(ordinal=False)
         elif fault == 'copied_site':
-            variant = variant._replace(site=tuple(list(variant.site)))
+            copied = list(variant.site)
+            variant = variant._replace(site=tuple(copied))
         elif fault == 'swapped_row':
             variant = plan.variants[1]
         else:
             site = (4, 'unknown', 0) if fault == 'unknown_role' else (
                 (3, 'directory', 0) if fault == 'wrong_operation' else (4, 'directory', False))
-            plan = plan._replace(definitions=(site,) + plan.definitions[1:])
+            plan = plan._replace(definitions=(site, *plan.definitions[1:]))
             variant = variant._replace(site=site)
-        plan = plan._replace(variants=(variant,) + plan.variants[1:])
+        plan = plan._replace(variants=(variant, *plan.variants[1:]))
     with pytest.raises(a.ArtifactObservationError):
         a._native_declared_metadata_site_tail(owner, plan, 0)
     assert calls == []
