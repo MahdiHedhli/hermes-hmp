@@ -50,9 +50,16 @@ producer defects before execution: pending must retire the in-flight call,
 and error handling must clear raw aliases and raise a fresh owner-attributed
 refusal. Both are corrected in source; dedicated execution is pending. Its29
 cases retain all earlier unrun26 cases and add actual synthetic-descriptor
-return/snapshot-failure/foreign-slot checks. Its current-version29-case suite
-is now running; minimum-version execution depends on that result. No fixed
-metadata policy ACK, site advancement, complete
+return/snapshot-failure/foreign-slot checks. All29 passed on Python3.14.9 with
+unchanged source and rehashed source/log/XML evidence; Python3.11.15 is running.
+This qualifies the sampled original directory intent/admission/pending-return
+slice only. Separate consumer `6f5d4e1` and ACK `520b08d` have finite source review
+with no new concrete blocker, but their35-case selection remains unrun. A
+test-only ordinary-fstat entry hook `fcf9eac` is selected for two current/floor
+ACK preflight cases after producer floor qualification; it avoids known nested
+trace suppression without replacing captured native OS functions. Per-store
+interruptions and lost-return tests remain open. No fixed metadata policy/ACK
+execution qualification, integrated site advancement, complete
 operation migration, native runtime or physical character pass is claimed.
 Scanner policy is unchanged. Actual metadata admission/debit/native calls, fixed result
 policy/ACK, tree/link/diagnostic plans and full operation-budget integration remain
