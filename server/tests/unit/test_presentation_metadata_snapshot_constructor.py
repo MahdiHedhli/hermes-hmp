@@ -25,7 +25,14 @@ def test_snapshot_constructor_cannot_replace_actual_native_identity(tmp_path, mo
 '''),
             ("        if event=='return':\n"
              "            operation,marker,payload_reference=captured[0]", r'''
-        if event=='return' and arg is not None:
+        if event=='return' and arg is None:
+            if native_entries==[True]:
+                # Refresh the profiler's cached Python3.11 locals after the
+                # producer finally; the observer must not retain old payloads.
+                assert frame.f_locals['raw'] is captured[0][0].result.unset
+                assert frame.f_locals['actual'] is frame.f_locals['payload'] is None
+            return lose_return
+        if event=='return':
             operation,marker,payload_reference=captured[0]
 '''),
             ("            returns.append(True)", r'''
