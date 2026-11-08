@@ -47,10 +47,10 @@ See [fixed startup factory contract](GATEWAY_STARTUP_FACTORY.md).
 - [x] **PS1-CACHE-INPUT-RULES** Capture original source timestamp and implement/review
       supported source-loader input-attempt rules.60 current and52 actual floor
       child cases pass; [scope](SOURCE_CACHE_INPUTS.md), not runtime admission.
-- [ ] **PS1-CACHE-INPUT-BIND** Bind actual original source/cache receipts and
+- [x] **PS1-CACHE-INPUT-BIND** Bind actual original source/cache receipts and
       absence/nonfile observations under original mode/magic/location before
       any runtime use; reseal held allocations after callbacks. See
-      [remaining work](SOURCE_CACHE_INPUTS.md).
+      [implementation and runtime limits](SOURCE_CACHE_INPUTS.md).
 - [ ] **PS1-LOADER** Enforce actual platform runtime/current and future import policy;
       snapshot DATA cannot mint startup admission.
       Next reviewed executable slice: original source-hash builtin/key/machinery,

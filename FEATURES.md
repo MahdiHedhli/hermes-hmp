@@ -1,3 +1,14 @@
+# November 7: original cache-input receipt binding
+
+The consumer now joins original source receipts to cache artifacts/headers or
+actual original absence/directory proofs, preserving mode, magic and context.
+Final callback substitutions and malformed proofs refuse before data publication.
+Twelve focused cases passed; independent read-only custody review accepted.
+This is sampled input-attempt DATA, not successful loading or runtime admission.
+Bot-character delivery and host-local images remain unfinished. No live settings
+or device grants changed.
+See [scope](specs/046-bot-presentation-integration/SOURCE_CACHE_INPUTS.md).
+
 # November 7: source-loader cache input rules
 
 The original source stat timestamp now stays joined to source hash receipts.
@@ -3681,3 +3692,8 @@ notice completion, with unknown-IO false. This is stronger localization, not a
 resolved cause or timeout diagnosis. A later 14-case repeated run passed. Test
 notes retain only exception class and bounded source-function/line locations,
 not arbitrary exception messages or payloads.
+
+The binding matrix also passed nine actual Python3.11.15 child cases with
+source hashes unchanged. Three direct malformed-proof cases passed again after
+import/line-format cleanup. These are bounded checks, not full-plugin or device
+qualification.
