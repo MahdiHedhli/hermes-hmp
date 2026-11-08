@@ -8,7 +8,9 @@ from .test_presentation_gateway_approval import operator_composed_script
 
 
 @pytest.mark.parametrize('case', ('normal', 'copied_descriptor', 'copied_registration',
-                                 'foreign_descriptor', 'unexpected_name'))
+                                 'foreign_descriptor', 'unexpected_name',
+                                 'latched', 'copied_consumer', 'wrong_pending',
+                                 'copied_operation', 'wrong_result_consumer'))
 def test_original_metadata_operation(tmp_path, monkeypatch, case):
     script, mutation = operator_composed_script('links')
     script = script.replace('GatewayPackageOwner.verify_recipe(recipe)',
@@ -50,9 +52,12 @@ def prepare(frame):
         resource=a._prepare_native_metadata_resource(
             owner,candidate_registration,held,candidate,name)
     except a.ArtifactObservationError:
-        assert case!='normal'
+        assert case in ('copied_descriptor','copied_registration',
+                        'foreign_descriptor','unexpected_name')
     else:
-        assert case=='normal' and resource.descriptor is descriptor
+        assert case in ('normal','latched','copied_consumer','wrong_pending',
+                        'copied_operation','wrong_result_consumer')
+        assert resource.descriptor is descriptor
         assert resource.metadata is held[5] and resource.held_walk is held
         assert resource.arguments[0] is descriptor.fd
         assert resource.site==(4,'directory',0) and resource.ordinal==0
@@ -80,6 +85,28 @@ def prepare(frame):
         except a.ArtifactObservationError:pass
         else:raise AssertionError('directory consumer rebound')
         assert result.consumer[0] is consumer
+        if case!='normal':
+            progress[1]=consumer
+            candidate_consumer=consumer
+            if case=='copied_consumer':candidate_consumer=consumer._replace()
+            elif case=='wrong_pending':progress[1]=consumer._replace()
+            elif case=='copied_operation':
+                candidate_consumer=consumer._replace(operation=operation._replace())
+                progress[1]=candidate_consumer
+            elif case=='wrong_result_consumer':result.consumer[0]=consumer._replace()
+            try:
+                try:returned=m._latched_directory_resource_tail(owner,candidate_consumer)
+                except a.ArtifactObservationError:
+                    assert case!='latched'
+                else:
+                    assert case=='latched' and returned is resource
+                # Latched structural validation never renews unclaimed admission.
+                try:a._native_declared_metadata_plan_tail(owner,registration,held)
+                except a.ArtifactObservationError:pass
+                else:raise AssertionError('latched plan renewed')
+            finally:
+                progress[1]=None
+                result.consumer[0]=consumer
     assert counts==tuple(ledger.counts) and len(ledger.attempts)==attempts
     assert progress==[0,None] and held[5].progress is progress
     assert phase.current[0] is phase.idle and phase.result[0] is None
