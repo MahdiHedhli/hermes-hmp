@@ -2508,6 +2508,75 @@ def _native_runtime_read_closed_tail(owner, commit, step):
     return commit
 
 
+def _native_cache_read_closed_tail(owner, commit, step):
+    """Caller closure for the actual cache ACK; no journal prefixes are retained."""
+    _require(type(commit) is _NativeCacheReadCommit and type(step) is _NativeReadFileStep
+             and commit.step is step and step.owner is owner
+             and type(commit.operation) is _NativeFileOperation
+             and type(commit.result) is _NativeFileResultClaim
+             and type(commit.consumer) is _NativeReadConsumer)
+    operation, result, consumer = commit.operation, commit.result, commit.consumer
+    registration = step.registration
+    _native_read_walk_tail(owner, registration, step.walk, step.expected, step)
+    _native_read_lifecycle_tail(owner, registration, step.parents)
+    _require(operation.owner is owner and operation.registration is registration
+             and operation.result is result and operation.consumer is consumer
+             and result.consumer is consumer and consumer.file_step is step
+             and type(result.acknowledged) is list and len(result.acknowledged) == 1
+             and result.acknowledged[0] is commit
+             and type(result.raw) is list and len(result.raw) == 1
+             and result.raw[0] is result.unset
+             and type(result.envelope) is list and len(result.envelope) == 1
+             and result.envelope[0] is None
+             and consumer.committed[0] is commit
+             and consumer.consumption[0] is commit.consumption_token
+             and type(operation.state) is list and len(operation.state) == 3
+             and operation.state[0] is True and operation.state[1] is True
+             and operation.state[2] is False
+             and type(commit.count) is tuple and len(commit.count) == 3
+             and owner._count_cell is commit.count and owner._bytes_read is commit.count[2]
+             and step.progress[0] is commit.ordinal and step.progress[1] is commit.remaining
+             and step.progress[2] is commit.count and step.progress[3] is None
+             and step.eof[0] is commit.eof)
+    ledger, phase = operation.ledger, registration.native_phase
+    _require(ledger is registration.native_ledger and ledger.failed[0] is False
+             and ledger.attempts[operation.index] is operation
+             and ledger.counts is operation.budget[0]
+             and ledger.counts[0] is operation.budget[3]
+             and ledger.counts[1] is operation.budget[2]
+             and ledger.inflight[0] is None
+             and phase.current[0] is phase.idle and phase.result[0] is None)
+    _native_read_accumulator_tail(owner, step, commit.count)
+    namespace, own = vars(step.material_module), vars(owner)
+    _require(type(namespace) is dict and len(namespace) <= 4096
+             and all(type(key) is str for key in namespace)
+             and namespace.get('__name__') == 'hmp_startup.cache_reader'
+             and namespace.get('_OWNER') is owner
+             and type(own) is dict and len(own) <= 4096
+             and all(type(key) is str for key in own)
+             and own.get('_cache_native_heads') is None
+             and own.get('_reading') is False and own.get('_read_claim') is None)
+    attempts, results = namespace.get('_ATTEMPTS'), namespace.get('_RESULTS')
+    _require(type(attempts) is tuple and type(results) is tuple
+             and type(commit.cache_index) is int and 0 <= commit.cache_index < 4096
+             and len(attempts) == len(results) == commit.cache_index + 1
+             and attempts[commit.cache_index] is commit.cache_attempt
+             and results[commit.cache_index] is commit.cache_result
+             and own.get('_attempts') is attempts and own.get('_results') is results
+             and step.scope.activation._cache_read_attempts is attempts
+             and step.scope.activation._cache_read_results is results
+             and type(commit.cache_attempt) is tuple and len(commit.cache_attempt) == 5
+             and type(commit.cache_result) is tuple and len(commit.cache_result) == 3
+             and commit.cache_result[0] is commit.cache_attempt
+             and commit.cache_result[1] is commit.count
+             and type(commit.cache_attempt[4]) is list and len(commit.cache_attempt[4]) == 1
+             and commit.cache_attempt[4][0] is commit.cache_result
+             and type(commit.header) is bytes
+             and len(commit.header) == min(16, commit.count[2])
+             and commit.header == step.buffer[:16])
+    return commit
+
+
 def _native_pre_actor_state(owner, arguments):
     """Bounded original owner/argument mirrors, not an operation permission."""
     names = vars(owner)
@@ -3547,7 +3616,7 @@ class StartupArtifactOwner:
             capture_header = (not anchor and not _configuration(self)
                               and expected.path.endswith(".pyc"))
             remaining = before.st_size if anchor else expected.size
-            if runtime_source and native_registration is not None:
+            if (runtime_source or declared_reader is not None) and native_registration is not None:
                 _require(type(native_walk) is tuple and len(native_walk) == 5)
                 native_step = _new_native_read_file_step(
                     self, native_registration, native_walk[0], expected, row, digest,
@@ -3558,10 +3627,20 @@ class StartupArtifactOwner:
                 if native_step is not None:
                     native_consumer = _new_native_read_consumer(
                         self, native_step, row, min(remaining, 65536))
-                    native_envelope = StartupArtifactOwner._read(
-                        self, fd, min(remaining, 65536), s, native_registration, native_consumer)
-                    native_commit = _consume_native_runtime_read(self, native_envelope)
-                    _native_runtime_read_closed_tail(self, native_commit, native_step)
+                    if declared_reader is None:
+                        native_envelope = StartupArtifactOwner._read(
+                            self, fd, min(remaining, 65536), s, native_registration,
+                            native_consumer)
+                        native_commit = _consume_native_runtime_read(self, native_envelope)
+                        _native_runtime_read_closed_tail(self, native_commit, native_step)
+                    else:
+                        native_envelope = declared_reader._read(
+                            self, fd, min(remaining, 65536), s, native_registration,
+                            native_consumer)
+                        native_commit = _consume_native_cache_read(self, native_envelope)
+                        _native_cache_read_closed_tail(self, native_commit, native_step)
+                        if capture_header:
+                            header = native_commit.header
                     _require(native_commit.eof is False)
                     remaining, progress = native_commit.remaining, native_commit.count
                     native_envelope = None
@@ -3591,10 +3670,18 @@ class StartupArtifactOwner:
             _require(progress is None or self._count_cell is progress)
             if native_step is not None:
                 native_consumer = _new_native_read_consumer(self, native_step, row, 1)
-                native_envelope = StartupArtifactOwner._read(
-                    self, fd, 1, s, native_registration, native_consumer)
-                native_commit = _consume_native_runtime_read(self, native_envelope)
-                _native_runtime_read_closed_tail(self, native_commit, native_step)
+                if declared_reader is None:
+                    native_envelope = StartupArtifactOwner._read(
+                        self, fd, 1, s, native_registration, native_consumer)
+                    native_commit = _consume_native_runtime_read(self, native_envelope)
+                    _native_runtime_read_closed_tail(self, native_commit, native_step)
+                else:
+                    native_envelope = declared_reader._read(
+                        self, fd, 1, s, native_registration, native_consumer)
+                    native_commit = _consume_native_cache_read(self, native_envelope)
+                    _native_cache_read_closed_tail(self, native_commit, native_step)
+                    if capture_header:
+                        header = native_commit.header
                 _require(native_commit.eof is True and native_commit.remaining == 0)
                 native_envelope = None
                 data = b''  # actual empty return already consumed/ACKed above
@@ -3636,7 +3723,7 @@ class StartupArtifactOwner:
                 result = _HashedArtifact(self, s, expected, original, actual_hash, header,
                                          source_hash, source_root, source_mtime)
         except BaseException:
-            if runtime_source and native_registration is not None:
+            if (runtime_source or declared_reader is not None) and native_registration is not None:
                 self._failed = self._unknown = True
             if type(native_envelope) is _NativeReadResult:
                 try:
