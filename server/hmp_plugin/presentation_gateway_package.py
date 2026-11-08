@@ -26,6 +26,7 @@ from .presentation_startup_artifacts import (
     _expected,
     _HashedArtifact,
     _identity,
+    _native_registration_tail,
     _native_walk_scope,
 )
 from .presentation_startup_artifacts import _Scope as IoScope
@@ -331,6 +332,8 @@ class GatewayPackageOwner:
             from .presentation_startup_artifacts import _register_native_scope
 
             native_registration = _register_native_scope(owner, s, scope_cell, scope_root)
+            native_registry = (None if native_registration is None
+                               else native_registration.lineage.ledger.scopes)
             _require(owner._origin is s and owner._scope is s
                      and owner._cell is scope_cell and owner._root_cell is scope_root
                      and activation._package_cell is scope_root)
@@ -344,6 +347,8 @@ class GatewayPackageOwner:
             origins = GatewayPackageOwner._origins(owner)
             _require(_native_walk_scope(owner, native_registration) is s)
             _require(_same_origins(origins, GatewayPackageOwner._origins(owner)))
+            _native_registration_tail(owner, s, scope_cell, scope_root,
+                                      native_registration, native_registry)
             _require(all(type(r) is _Descriptor and r.closed is True and r.unknown is False
                          for r in s.records)
                      and all(type(r) is _Scan and r.closed is True and r.unknown is False
@@ -364,6 +369,13 @@ class GatewayPackageOwner:
                      and activation._package_fact_cell is None)
             fact = (owner, s, entries, origins, hashes, after, data, actual_count)
             fact_cell = (owner, s, fact)
+            _native_registration_tail(owner, s, scope_cell, scope_root,
+                                      native_registration, native_registry)
+            _require(owner._fact is None and owner._fact_cell is None
+                     and activation._package_fact_cell is None and owner._ready is False
+                     and owner._failed is False and owner._unknown is False
+                     and owner._count_cell is actual_count
+                     and owner._bytes_read is actual_count[2])
             owner._fact, owner._fact_cell = fact, fact_cell
             activation._package_fact_cell = fact_cell
             owner._ready = True  # package snapshot only; never runtime/key/native admission

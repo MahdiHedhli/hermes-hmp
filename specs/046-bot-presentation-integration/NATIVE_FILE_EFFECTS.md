@@ -357,3 +357,12 @@ read/stat, separate enumeration effect origin, quota and independent reserved
 cleanup remain unfinished. Existing cleanup is not made dependent on a new work
 guard. No source fallback, live host/device change or runtime/image acceptance
 is implied by the partial source map.
+
+Review of the first threading increment found two final callback gaps before
+execution/deployment. The repair reseals the held source fact after the file's
+last work guard and checks original result/root/count, followed by a pure held
+registration rejoin. Package verification rejoins the held registration/registry
+after final origin callbacks and again before fact publication; no new actor/
+freshness callback cycle is started. Three added causal cases mutate the source
+effect or registration at those precise tails. The new walker set is11 cases,
+not yet executed; source review of this repair remains required.

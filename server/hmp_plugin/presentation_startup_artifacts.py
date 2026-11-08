@@ -537,6 +537,20 @@ def _register_native_scope(owner, s, cell, root):
     return record
 
 
+def _native_registration_tail(owner, s, cell, root, registration, registry):
+    """Pure held DATA rejoin after the fixed caller's last work callback."""
+    _require(_capture_native_scope(s, cell, root) is registration
+             and owner._scope is s and owner._origin is s
+             and owner._cell is cell and owner._root_cell is root)
+    if registration is None:
+        _require(registry is None)
+        return
+    _require(type(registry) is list and type(registration.index) is int
+             and 0 <= registration.index < len(registry)
+             and registry[registration.index] is registration
+             and vars(owner).get('_native_scope_registration') is registration)
+
+
 def _native_walk_scope(owner, registration):
     if registration is None:
         s = _owner_guard(owner)
@@ -1139,7 +1153,9 @@ class StartupArtifactOwner:
                             _require(expected is s.expected[0] and self._started is True
                                      and self._ready is False)
                             declared_reader = DeclaredCacheReadOwner
-        root_cell = self._root_cell
+        root_cell, owner_cell = self._root_cell, self._cell
+        native_registry = (None if native_registration is None
+                           else native_registration.lineage.ledger.scopes)
         held, directories, read_effects = [], [], []
         source_root = source_effect = source_buffer = None
         source_hash = b""
@@ -1277,4 +1293,15 @@ class StartupArtifactOwner:
                      and source_effect.buffer is source_buffer and len(source_buffer) == 0)
         _require(_native_walk_scope(self, native_registration) is s
                  and self._count_cell is count_cell and self._bytes_read is counted)
+        if source_effect is not None:
+            _require(source_digest.seal_fact(source_fact) is source_fact
+                     and source_fact.root is source_root and source_fact.source_hash is source_hash
+                     and source_fact.count is count_cell and type(result) is _HashedArtifact
+                     and result.source_digest is source_fact
+                     and source_effect.buffer is source_buffer
+                     and source_effect.cleared is True and source_effect.unknown is False
+                     and source_effect.result is source_hash and source_effect.after is count_cell)
+        _native_registration_tail(self, s, owner_cell, root_cell,
+                                  native_registration, native_registry)
+        _require(self._count_cell is count_cell and self._bytes_read is counted)
         return result
