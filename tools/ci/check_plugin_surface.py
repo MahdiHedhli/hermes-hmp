@@ -228,6 +228,10 @@ class _ModuleScanner(ast.NodeVisitor):
                 "hmp_startup.entry_files": {"EntryFileSnapshotOwner", "_Inputs"},
                 "hmp_startup.runtime_files": {"RuntimeFilePlan", "_inside", "_path"},
             }
+            if (self.name == "presentation_source_digest.py" and self._function_depth > 0
+                    and module == "hmp_startup.gateway_entry" and names
+                    and set(names) <= {"GatewayEntryOwner", "_interpreter_current"}):
+                return
             if (self.name == "presentation_startup_cache.py"
                     and self._function_depth > 0 and names
                     and set(names) <= cache_joins.get(module, set())):

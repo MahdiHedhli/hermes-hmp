@@ -147,3 +147,13 @@ The newer strict runtime fact adds the original cache sidecar as field eight;
 file fact variants remain four/five fields and legacy entry-only facts six.
 See [actual cache observations](CACHE_OBSERVATIONS.md). The earlier seven-field
 runtime fact is historical DATA and cannot satisfy this newer continuation join.
+
+## Original-read source-hash integration
+
+[Source digest custody](SOURCE_DIGESTS.md) now provides an explicit original-entry
+package hash path and carries the same context into pending file reads. Immutable
+receipt facts retain actual chunk/EOF observations and are resealed by
+selected_source_hashes through original continuation. Legacy receipts without
+this evidence refuse that consumer; there is no completed-owner reread or implicit
+upgrade. Cache source/header relationship, actual loader selection and
+listener/native/key/broker/physical admission remain separate unfinished work.

@@ -40,6 +40,10 @@ See [fixed startup factory contract](GATEWAY_STARTUP_FACTORY.md).
       Never infer loose-cache absence or extend a completed owner.
       Original-owner loose absence source and sidecar are implemented;
       [verification scope](CACHE_OBSERVATIONS.md) remains separately tracked.
+- [x] **PS1-SOURCE-DIGEST** Compute original source digests in the existing prefix/
+      pending file reads and consume exact immutable facts through continuation.
+      [Implementation and remaining qualification](SOURCE_DIGESTS.md); not cache
+      equivalence or runtime admission.
 - [ ] **PS1-LOADER** Enforce actual platform runtime/current and future import policy;
       snapshot DATA cannot mint startup admission.
       Next reviewed executable slice: original source-hash builtin/key/machinery,

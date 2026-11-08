@@ -81,3 +81,13 @@ were needed after the 1,041-pass baseline. This is not a
 completed source-hashing/selection stage.
 Same-original-read bounded source buffering/hash, timestamp/hash cache selection
 and runtime consumption remain unimplemented. No live runtime changed.
+
+## Original-read source digests completed as DATA
+
+The bounded implementation and local current/floor qualification are now recorded
+in [SOURCE_DIGESTS.md](SOURCE_DIGESTS.md). It explicitly binds package prefix and
+pending reads to the original entry, retains actual read/return allocations through
+callbacks/FD closure and consumes every selected source fact through continuation.
+The earlier in-progress checkpoint above is historical. Actual timestamp/hash cache
+relation/selection/fallback and fixed runtime consumption remain next; no source
+digest or header classifier alone admits code.

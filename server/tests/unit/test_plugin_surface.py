@@ -502,6 +502,16 @@ def test_unreviewed_parser_import_variants_remain_closed(pkg: Path, statement: s
          "def f():\n    from hmp_startup.runtime_files import OtherOwner\n", False),
         ("reads.py",
          "def f():\n    from hmp_startup.runtime_files import _path\n", False),
+        ("presentation_source_digest.py",
+         "def f():\n    from hmp_startup.gateway_entry import GatewayEntryOwner\n", True),
+        ("presentation_source_digest.py",
+         "def f():\n    from hmp_startup.gateway_entry import _interpreter_current\n", True),
+        ("presentation_source_digest.py",
+         "from hmp_startup.gateway_entry import GatewayEntryOwner\n", False),
+        ("presentation_source_digest.py",
+         "def f():\n    from hmp_startup.gateway_entry import *\n", False),
+        ("presentation_source_digest.py",
+         "def f():\n    from hmp_startup.gateway_entry import OtherOwner\n", False),
     ],
 )
 def test_startup_type_imports_stay_closed(pkg: Path, module: str, body: str, ok: bool) -> None:

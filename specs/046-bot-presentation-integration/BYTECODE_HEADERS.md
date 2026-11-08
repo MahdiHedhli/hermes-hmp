@@ -61,3 +61,13 @@ selection and complete approved source/cache artifact coverage remain separate
 unfinished requirements. A private observation type is not a new operator recipe
 schema or a permission/configuration write API. Tests mutate settings only in
 isolated synthetic fixture processes, never on a live gateway.
+
+## Original-read source-hash integration
+
+[Source digest custody](SOURCE_DIGESTS.md) now provides an explicit original-entry
+package hash path and carries the same context into pending file reads. Immutable
+receipt facts retain actual chunk/EOF observations and are resealed by
+selected_source_hashes through original continuation. Legacy receipts without
+this evidence refuse that consumer; there is no completed-owner reread or implicit
+upgrade. Cache source/header relationship, actual loader selection and
+listener/native/key/broker/physical admission remain separate unfinished work.

@@ -34,3 +34,13 @@ runtime payloads; they do not execute a selected interpreter or establish
 installed/native/phone acceptance. A subsequent comment-only lint adjustment has
 separate raw hashes and verified identical compiled code; exact-head CI remains
 a separate qualification.
+
+## Original-read source-hash integration
+
+[Source digest custody](SOURCE_DIGESTS.md) now provides an explicit original-entry
+package hash path and carries the same context into pending file reads. Immutable
+receipt facts retain actual chunk/EOF observations and are resealed by
+selected_source_hashes through original continuation. Legacy receipts without
+this evidence refuse that consumer; there is no completed-owner reread or implicit
+upgrade. Cache source/header relationship, actual loader selection and
+listener/native/key/broker/physical admission remain separate unfinished work.

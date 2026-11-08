@@ -78,6 +78,8 @@ class _HashedArtifact(NamedTuple):
     identity: tuple
     sha256: str
     bytecode_header: bytes
+    source_hash: bytes = b""
+    source_digest: object = None
 
     def __repr__(self):
         return "<HashedArtifact original-descriptor DATA redacted>"
@@ -102,6 +104,7 @@ class _Scope(NamedTuple):
     runtime: object = None
     reads: object = None
     cache: object = None
+    source_digest: object = None
 
     def __repr__(self):
         return "<StartupArtifactScope redacted>"
@@ -437,9 +440,10 @@ class StartupArtifactOwner:
             if source is not None:
                 _require(type(source) is _PackageSource)
                 owner._bytes_read = source.count_cell[2]
+            digest_context = None if source is None else source.owner._origin.source_digest
             s = _Scope(activation, activation._scope, expected,
                        (os.getpid(), os.geteuid(), threading.get_ident()), [], source, runtime,
-                       None, cache)
+                       None if digest_context is None else [], cache, digest_context)
             owner._scope = owner._origin = s
             owner._cell = (owner, s)
             owner._root_cell = (activation, owner, s)
@@ -705,6 +709,11 @@ class StartupArtifactOwner:
             read_index = len(s.reads)
             effect = _ReadEffect(cell)
             s.reads.append(effect)  # original allocation before read effects
+        source_read = source_return = None
+        if s.source_digest is not None:
+            from . import presentation_source_digest as source_digest
+            _require(type(s.reads) is list and len(s.reads) <= 65536)
+            source_read = source_digest.retain_read(s.source_digest, self, s, effect, read_index)
         self._reading = True
         data = None
         try:
@@ -724,11 +733,16 @@ class StartupArtifactOwner:
                 self._count_cell = after_cell
             if runtime is not None and same:
                 runtime.count[0] = after_cell
+            if source_read is not None:
+                source_return = source_digest.observed_read(source_read, after_cell, len(data))
             self._reading = False
             _require(same and (effect is None or (len(s.reads) == read_index + 1
                       and s.reads[read_index] is effect))
                      and len(data) <= count and _owner_guard(self) is s
-                     and self._bytes_read is after and self._count_cell is after_cell)
+                     and self._bytes_read is after and self._count_cell is after_cell
+                     and (source_read is None or
+                          (source_read.result[0] is source_return
+                           and source_read.root.reads[-1] is source_read)))
             return data
         except BaseException:
             self._unknown = True
@@ -944,11 +958,19 @@ class StartupArtifactOwner:
             _require(type(expected) is ExpectedArtifact)
         root_cell = self._root_cell
         held, directories, read_effects = [], [], []
+        source_root = source_effect = source_buffer = None
+        source_hash = b""
+        source_observations = []
         progress = self._count_cell if s.runtime is not None else None
         data = digest = None
         result = None
         failed = False
         try:
+            if s.source_digest is not None:
+                from . import presentation_source_digest as source_digest
+                source_root = source_digest.begin(self, s, expected)
+                source_effect = None if source_root is None else source_root.effect
+                source_buffer = None if source_root is None else source_root.buffer
             parent = None
             for name in ("/", *expected.path[1:].split("/")[:-1]):
                 row, fd = StartupArtifactOwner._open(self, name, parent, True)
@@ -984,6 +1006,8 @@ class StartupArtifactOwner:
                 _require(_owner_guard(self) is s)
                 _require(progress is None or self._count_cell is progress)
                 data = StartupArtifactOwner._read(self, fd, min(remaining, 65536), s)
+                if source_root is not None:
+                    source_observations.append(source_digest.capture(source_root))
                 if anchor:
                     read_effects.append(s.reads[-1])
                 if progress is not None:
@@ -993,12 +1017,16 @@ class StartupArtifactOwner:
                 _require(_owner_guard(self) is s)
                 _append_configuration(self, data)
                 digest.update(data)
+                if source_effect is not None:
+                    source_digest.append(source_root, source_buffer, data, source_observations)
                 if capture_header and len(header) < 16:
                     header += data[:16 - len(header)]
                 data = None
                 _require(_owner_guard(self) is s)
             _require(progress is None or self._count_cell is progress)
             data = StartupArtifactOwner._read(self, fd, 1, s)
+            if source_root is not None:
+                source_observations.append(source_digest.capture(source_root))
             if anchor:
                 read_effects.append(s.reads[-1])
             count_cell, counted = self._count_cell, self._bytes_read
@@ -1009,6 +1037,9 @@ class StartupArtifactOwner:
             _require(_owner_guard(self) is s
                      and type(actual_hash) is str
                      and (anchor or actual_hash == expected.sha256))
+            if source_effect is not None:
+                source_hash = source_digest.finish(source_root, source_buffer, count_cell,
+                                                   source_observations)
             for name, parent, directory, signature in directories:
                 _require(
                     _identity(StartupArtifactOwner._fstat(self, directory, s), True) == signature
@@ -1021,10 +1052,19 @@ class StartupArtifactOwner:
                 result = _OperatorFileReceipt(self, s, expected, original, actual_hash, count_cell,
                                               tuple(row for row, _ in held), tuple(read_effects))
             elif not _configuration(self):
-                result = _HashedArtifact(self, s, expected, original, actual_hash, header)
+                result = _HashedArtifact(self, s, expected, original, actual_hash, header,
+                                         source_hash, source_root)
         except BaseException:
+            if source_effect is not None and source_effect.attempted is True:
+                source_effect.unknown = True
             failed = True
         finally:
+            if source_effect is not None:
+                try:
+                    source_digest.clear(source_root, source_buffer)
+                except BaseException:
+                    source_effect.unknown = self._unknown = True
+                    failed = True
             data = digest = header = None
             for row, fd in reversed(held):
                 try:
@@ -1036,4 +1076,11 @@ class StartupArtifactOwner:
             raise ArtifactObservationError(self) from None
         _require(_owner_guard(self) is s and self._count_cell is count_cell
                  and self._bytes_read is counted)
+        if source_effect is not None:
+            source_fact = source_digest.fact(source_root, self, s, expected,
+                                             source_hash, count_cell, source_observations)
+            result = result._replace(source_digest=source_fact)
+            _require(source_effect.cleared is True and source_effect.unknown is False
+                     and source_effect.result is source_hash
+                     and source_effect.buffer is source_buffer and len(source_buffer) == 0)
         return result

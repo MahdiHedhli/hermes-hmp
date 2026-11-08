@@ -1,3 +1,16 @@
+# November 7: original-read source digests
+
+Source hashing now uses the same original bounded file reads, preserving immutable
+chunk/EOF observations through callbacks and descriptor closure. Prefix and pending
+receipts share the original interpreter context; persistent consumption refuses
+legacy, copied, replaced or stale evidence. Independent bounded review accepted.
+The unchanged prefinal source passed1068 affected startup checks. Final guard/linear
+changes passed22 focused current cases and21 actual Python3.11 child cases; full
+final-head plugin/CI and installed qualification remain separate.
+This is source-hash DATA, not cache equivalence or runtime admission. Bot-character
+delivery and host-local images remain unfinished; no live settings changed.
+See [scope](specs/046-bot-presentation-integration/SOURCE_DIGESTS.md).
+
 # November 7: original loader source-hash provenance
 
 The interpreter origin now retains the actual frozen SourceLoader get_code

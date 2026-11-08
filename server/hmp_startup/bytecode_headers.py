@@ -54,3 +54,58 @@ def selected_bytecode_headers(continuation):
     _require(GatewayContinuationOwner.current_binding(continuation) is root
              and _interpreter_current(interpreter) is interpreter)
     return tuple(result)
+
+
+class SourceHashData(NamedTuple):
+    receipt: _HashedArtifact
+    fact: object
+
+    def __repr__(self):
+        return '<OriginalSourceHashData not-admission redacted>'
+
+
+def selected_source_hashes(continuation):
+    """Join all original source receipts; never infer cache equivalence."""
+    from hmp_plugin.presentation_source_digest import (
+        SourceDigestContext,
+        SourceDigestFact,
+        seal_fact,
+    )
+
+    _require(type(continuation) is GatewayContinuationOwner)
+    root = GatewayContinuationOwner.current_binding(continuation)
+    source = root[2]
+    interpreter = source.entry_binding[0].interpreter
+    context = source.io_scope.source_digest
+    _require(type(context) is SourceDigestContext
+             and source.inputs.plugin_binding[0].source_digest is context
+             and context.entry is source.entry and context.interpreter is interpreter
+             and type(context.binding) is tuple and len(context.binding) == 3
+             and all(a is b for a, b in zip(context.binding, source.entry_binding, strict=True)))
+    plan = source.inputs.runtime_plan
+    receipts = (*plan.prior, *source.snapshot_fact[3][2])
+    result = []
+    expected_sources = tuple(row for row in plan.all_files if row.path.endswith('.py'))
+    for expected in expected_sources:
+        matching = tuple(row for row in receipts
+                         if type(row) is _HashedArtifact and row.expected is expected)
+        _require(len(matching) == 1)
+        receipt = matching[0]
+        fact = receipt.source_digest
+        _require(type(fact) is SourceDigestFact and seal_fact(fact) is fact
+                 and fact.root.context is context
+                 and fact.root.owner is receipt.owner and fact.root.scope is receipt.scope
+                 and fact.root.expected is expected and fact.source_hash is receipt.source_hash)
+        result.append(SourceHashData(receipt, fact))
+    held = tuple(result)
+    _require(GatewayContinuationOwner.current_binding(continuation) is root
+             and source.io_scope.source_digest is context
+             and source.inputs.plugin_binding[0].source_digest is context
+             and _interpreter_current(interpreter) is interpreter)
+    for expected, row in zip(expected_sources, held, strict=True):
+        _require(row.receipt.expected is expected and row.receipt.source_digest is row.fact
+                 and row.fact.root.context is context and row.fact.root.owner is row.receipt.owner
+                 and row.fact.root.scope is row.receipt.scope and row.fact.root.expected is expected
+                 and row.fact.source_hash is row.receipt.source_hash
+                 and seal_fact(row.fact) is row.fact)
+    return held
