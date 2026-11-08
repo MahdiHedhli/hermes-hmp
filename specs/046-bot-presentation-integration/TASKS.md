@@ -17,18 +17,25 @@ no unrun candidate is claimed passing. Its floor and full regression runs depend
 on resolving the focused failures. No complete native IO/cleanup/quota/runtime
 or device qualification is claimed.
 
-Separate uninstalled source `9dc2875` now connects original runtime-source read
-results, fixed consumption and EOF acknowledgment. Its 24 new consumer cases
-are authored but unexecuted; actual collection of the focused consumer/runtime/
-digest selection is 68. Static checks and bounded review are not qualification.
+Separate uninstalled source `9dc2875` connects original runtime-source read
+results, fixed consumption and EOF acknowledgment. Its 68-case focused current
+run is active and has reported failures; terminal diagnostics remain pending.
+Static checks and bounded review do not establish behavioral qualification.
 
-The first isolated EOF source `7a4d42f` collected 29 cases: 26 passed and three
-failed from a fixture signature mismatch against its older baseline; the expected
-count of 25 was also incorrect. Original source and failure evidence are retained.
-Test-only successor `708beff` restores that baseline's four-argument read wrapper,
-keeps production checks unchanged, and is running the corrected 29-case suite.
-The 68-case runtime consumer run waits for current/floor EOF qualification.
-Cache reads, metadata/link/diagnostic sites and enumeration remain unfinished.
+Corrected isolated EOF source `708beff` passed all 29 cases on both Python3.14.9
+and3.11.15, with zero failures/errors/skips and unchanged source; source, receipts,
+logs and XML bindings were rechecked. The original `7a4d42f` 26-pass/3-failure run
+and incorrect expected count25 remain preserved; its successor only restored the
+older baseline's four-argument fixture signature and corrected full count29.
+
+Test-only cleanup candidate `b3115ee` preserves the 60-second deadline, adds
+private stack/timeout evidence and moves close-ACK injection to the actual native
+close receipt boundary. Its four-case diagnostic selection is queued, not a
+resolution of the original12 failures. Test-only `3102341` narrows unnecessary
+consumer profiling/tracing while retaining fault boundaries/assertions; it has
+no execution or performance result. Production source is unchanged in both
+fixture descendants. Cache/metadata/link/diagnostic integration and enumeration
+remain unfinished.
 
 Device-local sections/static icons and selected-bot readiness are implemented in
 app source, with physical qualification pending. Desktop character parity and
