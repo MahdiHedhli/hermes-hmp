@@ -289,7 +289,10 @@ class DeclaredCacheReadOwner:
         else:
             _require(self._bytes_read == 0)
 
-    def _read(self, fd, requested, s, native_registration=None):
+    def _read(self, fd, requested, s, native_registration=None, consumer=None):
+        if consumer is not None:
+            return DeclaredCacheReadOwner._read_native(
+                self, fd, requested, s, native_registration, consumer)
         global _ATTEMPTS, _RESULTS
         native = _capture_native_work_origin(self, native_registration)
         read_call = None if native is None else native.operations[1]
@@ -384,6 +387,154 @@ class DeclaredCacheReadOwner:
             else:
                 self._unknown = True
             data = None
+
+    def _read_native(self, fd, requested, s, native_registration, consumer):
+        """Experimental typed cache producer; no file-loop caller until ACK lands."""
+        global _ATTEMPTS, _RESULTS
+        from hmp_plugin.presentation_startup_artifacts import (
+            _abandon_native_read,
+            _admit_native_read,
+            _native_cache_read_return_tail,
+            _native_read_ready_tail,
+            _native_read_result_current,
+            _NativeActorMismatchError,
+            _NativeCacheReadReturn,
+            _NativeOpenedDescriptor,
+            _NativeReadConsumer,
+            _NativeReadResult,
+            _prepare_native_read_operation,
+        )
+
+        native = _capture_native_work_origin(self, native_registration)
+        _require(native is not None and _native_walk_scope(self, native_registration) is s
+                 and type(consumer) is _NativeReadConsumer and consumer.owner is self
+                 and consumer.scope is s and consumer.registration is native_registration
+                 and type(consumer.descriptor) is _NativeOpenedDescriptor
+                 and type(consumer.effect) is list and len(consumer.effect) == 1
+                 and type(s.reads) is list
+                 and type(fd) is int and fd is consumer.descriptor.fd
+                 and type(requested) is int and requested is consumer.requested
+                 and self._started is True and self._ready is False
+                 and self._reading is False and self._read_claim is None
+                 and self._cache_native_heads is None
+                 and type(_ATTEMPTS) is tuple and type(_RESULTS) is tuple
+                 and len(_ATTEMPTS) < 4096 and len(_ATTEMPTS) == len(_RESULTS))
+        root, cell, before = _ROOT, _CELL, self._count_cell
+        prior_attempts, prior_results = _ATTEMPTS, _RESULTS
+        index, read_index = len(prior_attempts), len(s.reads)
+        effect, result_slot = _ReadEffect(before), [None]
+        attempt = (effect, fd, requested, before, result_slot)
+        attempts = (*prior_attempts, attempt)
+        heads = (prior_attempts, prior_results, attempts)
+        data = envelope = operation = None
+        expected_results = prior_results
+        failed = False
+        try:
+            _require(consumer.effect[0] is None and consumer.before_count is before)
+            s.reads.append(effect)
+            consumer.effect[0] = effect
+            _ATTEMPTS = self._attempts = s.activation._cache_read_attempts = attempts
+            self._reading, self._read_claim = True, attempt
+            self._cache_native_heads = heads
+            operation = _prepare_native_read_operation(self, consumer)
+            _require(_admit_native_read(self, consumer, operation) is operation)
+            read_call = native.operations[1]
+            _require(operation.callee is read_call
+                     and _native_read_ready_tail(self, consumer, operation) is operation)
+            data = read_call(fd, requested)
+            operation.result.raw[0] = data  # actual C return before any result allocation
+            operation.ended[0] = operation.state[1] = True
+            _require(type(data) is bytes)
+            length = len(data)
+            operation.result.length[0], operation.result.category[0] = length, 'returned_bytes'
+            after = (self, s, before[2] + length)
+            result = (attempt, after, length)
+            result_slot[0] = result
+            effect.after, effect.returned = after, True
+            same = (_OWNER is self and _ROOT is root and _CELL is cell
+                    and self._origin is s and self._scope is s
+                    and self._root_cell is root and self._cell is cell
+                    and self._count_cell is before and self._bytes_read is before[2]
+                    and self._reading is True and self._read_claim is attempt
+                    and self._cache_native_heads is heads
+                    and _ATTEMPTS is attempts and self._attempts is attempts
+                    and s.activation._cache_read_attempts is attempts
+                    and _RESULTS is prior_results and self._results is prior_results
+                    and s.activation._cache_read_results is prior_results)
+            if same:
+                self._count_cell, self._bytes_read = after, after[2]
+            _require(same and length <= requested)
+            results = (*prior_results, result)
+            _RESULTS = self._results = s.activation._cache_read_results = results
+            expected_results = results
+            self._reading, self._read_claim = False, None
+            actual = _NativeCacheReadReturn(heads, results, attempt, result, index)
+            _require(_native_cache_read_return_tail(self, consumer, actual, after) is actual
+                     and self._cache_native_heads is heads)
+            consumer.progress[0] = after
+            claim, step = operation.result, consumer.file_step
+            envelope = _NativeReadResult(
+                operation, claim, consumer, data, after, step, effect, read_index,
+                None, type(None), None, consumer.committed, consumer.consumption,
+                consumer.effect, claim.raw, claim.length, claim.category,
+                claim.acknowledged, consumer.result, consumer.operation,
+                consumer.progress, step.progress, claim.attempt, claim.envelope, actual)
+            claim.envelope[0] = envelope
+            ledger, phase = operation.ledger, native_registration.native_phase
+            _require(ledger.inflight[0] is operation and phase.result[0] is operation
+                     and phase.current[0] is phase.active)
+            ledger.inflight[0] = None
+            phase.current[0] = phase.pending
+            _require(_native_cache_read_return_tail(self, consumer, actual, after) is actual
+                     and self._cache_native_heads is heads)
+            self._cache_native_heads = None
+            _require(_native_read_result_current(self, envelope) is s)
+            return envelope
+        except BaseException as error:
+            failed = True
+            clean_unadmitted = False
+            if operation is not None:
+                ledger, phase = operation.ledger, native_registration.native_phase
+                clean_unadmitted = (type(error) is _NativeActorMismatchError
+                                    and operation.state[0] is False and ledger.failed[0] is False
+                                    and phase.current[0] is phase.idle
+                                    and phase.result[0] is None and ledger.inflight[0] is None
+                                    and ledger.counts is operation.budget[0]
+                                    and ledger.counts[0] is operation.budget[1]
+                                    and ledger.counts[1] is operation.budget[2])
+            self._failed = True
+            if not clean_unadmitted:
+                self._unknown = effect.unknown = True
+                if operation is not None:
+                    operation.ended[0] = True
+                    try:
+                        _abandon_native_read(self, operation, data, envelope)
+                    except BaseException:
+                        operation.state[2] = True
+                        operation.ledger.failed[0] = True
+        finally:
+            # Retire only the original routing cohort. Drift keeps evidence intact.
+            cohort = (_OWNER is self and _ROOT is root and _CELL is cell
+                      and self._scope is s and self._origin is s
+                      and self._root_cell is root and self._cell is cell
+                      and s.activation._cache_read_owner is self
+                      and s.activation._cache_read_cell is root
+                      and _ATTEMPTS is attempts and self._attempts is attempts
+                      and s.activation._cache_read_attempts is attempts
+                      and _RESULTS is expected_results and self._results is expected_results
+                      and s.activation._cache_read_results is expected_results)
+            if cohort and self._cache_native_heads is heads:
+                self._cache_native_heads = None
+            elif self._cache_native_heads is not None:
+                self._unknown = True
+            if (cohort and self._read_claim is attempt
+                    and type(self._reading) is bool):
+                self._read_claim, self._reading = None, False
+            elif self._read_claim is not None:
+                self._unknown = True
+            data = envelope = None
+        if failed:
+            raise CacheReadError(self) from None
 
     def _append(self, data):
         s = DeclaredCacheReadOwner._guard(self)

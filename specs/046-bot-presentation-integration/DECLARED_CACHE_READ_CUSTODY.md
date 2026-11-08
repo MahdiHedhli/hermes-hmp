@@ -39,3 +39,37 @@ state. It does not establish the complete attempts prefix solely from lengths
 and the new slot; the fixed producer must construct that exact prefix from its
 held prior tuple, and admission must join it across the actor snapshot. Neither
 these DATA checks nor source review are a successful cache-read test.
+
+## Ephemeral actual-return prototype
+
+A new immutable cache return holds actual attempt/result allocations and their
+original tuple heads only while the fixed caller holds it. Its pure return tail
+joins the exact result slot, effect/count bridge, module/owner/activation aliases
+and original registration/lifetime. Neither holder nor helper is wired yet.
+The future producer must pass its actual locally retained return; constructing
+an equal holder or copying a namespace is not independent IO proof. Retained
+ACK facts must exclude this return's prefix heads, with explicit graph checks.
+
+## Optional cache producer prototype (no caller)
+
+DeclaredCacheReadOwner._read now delegates only when given a typed consumer.
+The default legacy route remains unchanged. The experimental producer publishes
+the same cache journal attempt/effect, holds transient original heads before the
+single latched actor/admission path, retains actual raw bytes immediately, then
+publishes actual count/result/resultslot and a pending envelope containing the
+locally held cache return. It retires only its original transient owner heads
+after pending publication and checks the actual return again across callbacks.
+
+Failure retains actual progress, abandons owned raw results, preserves a foreign
+head replacement and raises fresh without raw-bearing exception context. Exact
+clean unadmitted actor refusal retires this cache reader without inventing an
+unknown native read or poisoning the unchanged shared ledger. No reader reuse is
+promised. The old finally path is not used for typed reads.
+
+This producer is not called by the file loop. Cache buffer/header consumption,
+actual EOF ACK, bounded retained commit, caller closure and causal tests remain
+unimplemented. Static checks are not operational qualification.
+
+### Reviewed producer safeguards, November 8
+
+The optional producer now fences the descriptor, effect cell and read list before nested access. Cleanup requires the held original owner/root/scope and journal cohort; routing drift preserves uncertain claims rather than clearing them. Three focused malformed-field regression cases have been added (descriptor, effect and reads), asserting zero foreign hooks and zero reader mutation. These cases are not yet executed: the existing minimum-version regression process remains live, and native suites are serialized. The cache consumer, header/EOF acknowledgment and file-loop integration remain unfinished.
