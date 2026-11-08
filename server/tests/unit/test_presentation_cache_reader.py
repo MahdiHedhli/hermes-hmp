@@ -12,7 +12,11 @@ from .test_presentation_gateway_approval import operator_composed_script
                                  'late_effect', 'late_ledger', 'late_lifecycle',
                                  'native_count_drift', 'foreign_read_claim', 'late_owner',
                                  'consumer_wrong_thread', 'consumer_duplicate',
-                                 'consumer_feed_failure', 'consumer_eof_ack_failure'))
+                                 'consumer_feed_failure', 'consumer_eof_ack_failure',
+                                 *(f'interrupt_{prefix}{point}'
+                                   for prefix in ('', 'eof_')
+                                   for point in ('ack', 'raw', 'envelope', 'cursor',
+                                                 'progress', 'eof', 'phase', 'return'))))
 def test_declared_cache_reader(tmp_path, monkeypatch, case):
     script, mutation = operator_composed_script('links')
     script = script.replace('GatewayPackageOwner.verify_recipe(recipe)',
@@ -124,6 +128,28 @@ def consume_cache(self,envelope):
         consumer_checks.append(True)
     return commit
 a._consume_native_cache_read=consume_cache
+if case.startswith('interrupt_'):
+    point=case[len('interrupt_'):]
+    interrupt_eof=point.startswith('eof_')
+    if interrupt_eof:point=point[len('eof_'):]
+    boundary={
+        'ack':'envelope.raw_cell[0] = envelope.result.unset',
+        'raw':'envelope.envelope_cell[0] = None',
+        'envelope':'step.progress[0] = commit.ordinal',
+        'cursor':'step.progress[2] = commit.count',
+        'progress':'step.progress[3] = None',
+        'eof':'phase = operation.registration.native_phase',
+        'phase':'phase.current[0] = phase.idle',
+        'return':'return commit',
+    }[point]
+    interrupted=[]
+    def interrupt_ack(frame):
+        envelope=frame.f_locals['envelope']
+        if envelope.consumer.owner is owner and frame.f_locals['eof'] is interrupt_eof:
+            assert not interrupted
+            interrupted.append(envelope)
+            raise OSError('SYNTHETIC_CACHE_PARTIAL_ACK')
+    trace_synthetic_boundary(actual_consume.__code__,boundary,interrupt_ack)
 if case in ('consumer_feed_failure','consumer_eof_ack_failure'):
     def interrupt_consumer(frame):
         envelope=frame.f_locals['envelope']
@@ -139,9 +165,24 @@ except CacheReadError:
     assert case in ('changed','read_error','late_buffer','late_effect',
                     'late_ledger','late_lifecycle','native_count_drift',
                     'foreign_read_claim','late_owner','consumer_feed_failure',
-                    'consumer_eof_ack_failure') and owner._failed
+                    'consumer_eof_ack_failure') or case.startswith('interrupt_')
+    assert owner._failed
     assert not owner._ready and owner._fact is None and cm._READY is None
     assert original==bytearray()
+    if case.startswith('interrupt_'):
+        assert len(interrupted)==1 and owner._unknown
+        envelope=interrupted[0]
+        assert type(envelope.ack_cell[0]) is a._NativeCacheReadCommit
+        assert envelope.raw_cell[0] is envelope.result.unset
+        assert envelope.envelope_cell[0] is None
+        assert envelope.operation.ledger.failed[0] is True
+        assert envelope.operation.state[2] is True
+        assert envelope.result.category[0] in ('returned_bytes_ack_unconfirmed','returned_bytes')
+        before=(len(cm._ATTEMPTS),len(cm._RESULTS))
+        try:owner.read()
+        except CacheReadError:pass
+        else:raise AssertionError('partial ACK replayed')
+        assert before==(len(cm._ATTEMPTS),len(cm._RESULTS))
     if case=='read_error':
         assert owner._bytes_read==65536 and owner._unknown
         assert len(owner._origin.reads)==2 and owner._origin.reads[-1].unknown

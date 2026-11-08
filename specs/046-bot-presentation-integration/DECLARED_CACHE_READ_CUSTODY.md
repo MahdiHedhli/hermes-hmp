@@ -81,3 +81,7 @@ A separate descendant branch now contains an unwired fixed cache consumer. It ho
 ### Experimental caller integration, November 8
 
 The descendant source now routes registered declared-cache reads through the typed producer and fixed consumer, including a real empty EOF acknowledgment before final metadata/hash checks. The caller carries the actual commit into an import-free closure checking the original ledger, retired raw/envelope cells, cursor, journal attempt/result/index and bounded header. Legacy unregistered reads retain their existing route. This integration has only static checks; no runtime pass or deployment is claimed. Required next gates are causal cache tests, partial-ACK cleanup and retention review, current/minimum-version suites and independent review.
+
+### Partial acknowledgment test matrix, November 8
+
+A test-only descendant adds sixteen interruptions: eight exact consumer boundaries for a nonempty chunk and the same eight for actual EOF (ACK publication, raw retirement, envelope retirement, cursor, progress, EOF state, phase and return). Assertions require preserved actual ACK history, raw/envelope retirement, failed lineage, cleared original buffer and no replay. These are authored synthetic cases, not executed passes and not claims about every bytecode interruption. The original 18-case integration remains frozen for its already queued current/floor lane.
