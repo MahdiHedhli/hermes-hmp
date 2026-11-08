@@ -155,9 +155,26 @@ def consume(self,envelope):
         raise OSError('SYNTHETIC_AFTER_ACK_LOST_RETURN')
     return commit
 a._consume_native_runtime_read=consume
+require_sites=[]
+def require_trace(frame,event,arg):
+    source=frame.f_code.co_filename.rsplit('/',1)[-1]
+    if (frame.f_code.co_name!='_require' or source not in (
+        'presentation_startup_artifacts.py','runtime_reader.py',
+        'presentation_source_digest.py','gateway_entry.py','gateway_continuation.py')):
+        return None
+    frame.f_trace_lines=False
+    if event=='exception' and len(require_sites)<16:
+        caller=frame.f_back
+        require_sites.append((caller.f_code.co_filename.rsplit('/',1)[-1],
+                              caller.f_code.co_name,caller.f_lineno))
+    return require_trace
+if case=='normal':sys.settrace(require_trace)
 try:
     try:owner.read()
     except RuntimeReadError:
+        sys.settrace(None)
+        if case=='normal':
+            sys.stderr.write('SYNTHETIC_REQUIRE_SITES '+json.dumps(require_sites)+'\n')
         assert case in ('before_feed_swap','after_feed_lost_ack',
                         'eof_lost_ack','after_ack_lost_return') or interrupt_point is not None
         assert checks and seen and owner._failed and original==bytearray()
@@ -189,6 +206,7 @@ try:
         owner.release();assert original==bytearray()
 finally:
     sys.setprofile(None)
+    sys.settrace(None)
 assert all(row.closed and row.close_attempted and not row.unknown for row in owner._origin.records)
 print(json.dumps({'mutation':mutation,'runtime_admitted':False}))
 '''
