@@ -18,7 +18,7 @@ def test_fixed_directory_caller(tmp_path, monkeypatch, case):
     script = script[:script.rfind('print(json.dumps')]
     script += '\ncase=' + repr(case) + '\n'
     script += r'''
-import ast, gc, inspect, weakref
+import ast, gc, inspect, os, weakref
 from hmp_startup.gateway_continuation import GatewayContinuationOwner
 from hmp_startup.cache_selection import selected_cache_input_attempts
 from hmp_startup.runtime_reader import RuntimeSourceReadOwner
