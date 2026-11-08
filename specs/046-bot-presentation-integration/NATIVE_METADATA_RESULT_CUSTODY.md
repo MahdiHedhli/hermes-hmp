@@ -277,3 +277,11 @@ are fresh bounded owner-attributed errors with raw-linked locals cleared.
 
 This source is unreviewed/unrun and unwired. One-use raw retirement, cursor
 advance, partial-ACK behavior and IDLE publication remain unimplemented.
+
+Finite read-only review found no concrete blocker in consumer preparation.
+Three authored cases extend the real descriptor producer fixture: original
+policy commit with duplicate/copied-return refusal, actual wrong-thread
+consumption with unchanged pending result followed by rightful-owner commit,
+and a policy checkpoint failure after validating original identity. The last
+requires sticky refusal, unchanged debit/cursor, original raw retirement and
+no ACK. All32 cases remain unrun; syntax/lint/scanner are static evidence only.
