@@ -54,6 +54,12 @@ if case.startswith('interrupt_'):
     matches=[first+i for i,line in enumerate(lines) if line.strip()==target]
     assert len(matches)==1
     target_line=matches[0]
+reentrant_line=None
+if case=='reentrant':
+    lines,first=inspect.getsourcelines(actual_consume)
+    matches=[first+i for i,line in enumerate(lines) if line.strip()=='step.buffer.extend(data)']
+    assert len(matches)==1
+    reentrant_line=matches[0]
 actual_append,actual_eof=sd.append,sd.consume_eof
 seen=[];commits=[];checks=[];after_eof=[];late_metadata=[];native_metadata=[]
 def profile(frame,event,arg):
@@ -61,6 +67,7 @@ def profile(frame,event,arg):
         late_metadata.append(True)
     if (case=='reentrant' and event=='c_return' and type(arg) is BuiltinMethodType
         and arg.__self__ is original and arg.__name__=='extend' and not checks):
+        sys.setprofile(None)  # only the actual extend return needs observation
         envelope=seen[-1]
         assert envelope.consumption_cell[0] is not None
         before=(owner._failed,owner._unknown,bytes(original),envelope.result.raw[0])
@@ -79,6 +86,7 @@ def lose_eof(root,buffer,count,observations):
     result=actual_eof(root,buffer,count,observations)
     if root.owner is owner and case=='eof_lost_ack':
         assert root.effect.eof is count
+        sys.setprofile(profile)  # arm before the EOF failure marker is published
         after_eof.append(True)
         checks.append(True)
         raise OSError('SYNTHETIC_EOF_LOST_ACK')
@@ -106,19 +114,26 @@ def consume(self,envelope):
         owner._buffer=replacement
         checks.append(True)
     def interrupt(frame,event,arg):
-        if (event=='line' and frame.f_code is actual_consume.__code__
-            and frame.f_lineno==target_line and not checks):
+        if frame.f_code is not actual_consume.__code__:return None
+        if (event=='line' and case=='reentrant' and frame.f_lineno==reentrant_line
+            and not checks):
+            assert frame.f_locals['envelope'] is envelope
+            sys.setprofile(profile)
+        if (event=='line' and frame.f_lineno==target_line and not checks):
             assert frame.f_locals['commit'].eof is interrupt_eof
             checks.append(True)
-            if interrupt_eof:after_eof.append(True)
+            if interrupt_eof:
+                sys.setprofile(profile)
+                after_eof.append(True)
             raise InterruptedError('SYNTHETIC_OWNED_ACK_TRANSITION_ONLY')
         return interrupt
     selected_interrupt=(interrupt_point is not None
                         and (envelope.consumer.remaining==0) is interrupt_eof)
-    if selected_interrupt:sys.settrace(interrupt)
+    selected_trace=selected_interrupt or (case=='reentrant' and not checks)
+    if selected_trace:sys.settrace(interrupt)
     try:commit=actual_consume(self,envelope)
     finally:
-        if selected_interrupt:sys.settrace(None)
+        if selected_trace:sys.settrace(None)
     assert envelope.ack_cell[0] is commit and envelope.commit_cell[0] is commit
     assert envelope.raw_cell[0] is envelope.result.unset
     assert envelope.envelope_cell[0] is None
@@ -140,7 +155,6 @@ def consume(self,envelope):
         raise OSError('SYNTHETIC_AFTER_ACK_LOST_RETURN')
     return commit
 a._consume_native_runtime_read=consume
-sys.setprofile(profile)
 try:
     try:owner.read()
     except RuntimeReadError:
