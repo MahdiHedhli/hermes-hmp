@@ -11,8 +11,10 @@ from .presentation_startup_artifacts import (
     _native_read_lifecycle_tail,
     _native_work_origin_tail,
     _NativeMetadataResource,
+    _NativeScopeRegistration,
     _prepare_native_metadata_resource,
     _require,
+    _Scope,
 )
 
 
@@ -124,17 +126,70 @@ class _DirectoryConsumer(NamedTuple):
     resource: _NativeMetadataResource
     parents: tuple
     owner_type: type
+    class_name: str
+    module_name: str
     material: object
     material_code: object
     material_module: ModuleType
     file_function: object
     file_code: object
     file_module: ModuleType
+    file_owner_type: type
     consumption: list
     commit: list
 
     def __repr__(self):
         return '<DirectoryConsumer unqualified fixed policy redacted>'
+
+
+def _directory_material_tail(owner, consumer):
+    """Import-free original material closure, including constructor-return drift."""
+    _require(type(consumer) is _DirectoryConsumer and consumer.owner is owner
+             and type(consumer.owner_type) is type and type(owner) is consumer.owner_type
+             and type(consumer.operation) is _MetadataOperation
+             and type(consumer.resource) is _NativeMetadataResource
+             and consumer.resource is consumer.operation.resource
+             and type(consumer.resource.registration) is _NativeScopeRegistration
+             and type(consumer.resource.registration.scope) is _Scope)
+    scope = consumer.resource.registration.scope
+    origin = scope.material_origin
+    _require(type(origin) is tuple and len(origin) == 6
+             and origin[0] is consumer.material and origin[1] is consumer.material_code
+             and origin[3] is consumer.owner_type and origin[4] is consumer.file_function
+             and origin[5] is consumer.file_code
+             and type(consumer.material) is FunctionType
+             and consumer.material.__code__ is consumer.material_code
+             and type(consumer.file_function) is FunctionType
+             and consumer.file_function.__code__ is consumer.file_code
+             and type(consumer.material_module) is ModuleType
+             and consumer.material.__globals__ is vars(consumer.material_module)
+             and origin[2] is vars(consumer.material_module)
+             and type(consumer.file_module) is ModuleType
+             and consumer.file_function.__globals__ is vars(consumer.file_module)
+             and type(consumer.file_owner_type) is type
+             and consumer.file_owner_type is StartupArtifactOwner
+             and vars(consumer.file_owner_type).get('_file') is consumer.file_function
+             and vars(consumer.file_module).get('StartupArtifactOwner') is consumer.file_owner_type
+             and vars(consumer.owner_type).get('_material_guard') is consumer.material
+             and type(consumer.class_name) is str and type(consumer.module_name) is str
+             and (consumer.class_name, consumer.module_name) in (
+                 ('RuntimeSourceReadOwner', 'hmp_startup.runtime_reader'),
+                 ('DeclaredCacheReadOwner', 'hmp_startup.cache_reader'))
+             and type(consumer.owner_type.__name__) is str
+             and consumer.owner_type.__name__ == consumer.class_name
+             and type(consumer.owner_type.__module__) is str
+             and consumer.owner_type.__module__ == consumer.module_name
+             and vars(consumer.material_module).get(consumer.class_name) is consumer.owner_type
+             and type(vars(consumer.material_module).get('__name__')) is str
+             and vars(consumer.material_module).get('__name__') == consumer.module_name
+             and type(vars(consumer.file_module).get('__name__')) is str
+             and vars(consumer.file_module).get('__name__') ==
+             'hmp_plugin.presentation_startup_artifacts'
+             and type(sys.modules) is dict
+             and sys.modules.get(consumer.module_name) is consumer.material_module
+             and sys.modules.get('hmp_plugin.presentation_startup_artifacts')
+             is consumer.file_module)
+    return consumer
 
 
 def _unused_directory_intent_tail(owner, operation):
@@ -239,13 +294,17 @@ def _prepare_directory_consumer(owner, operation):
     parents = (scope.activation, scope.activation_scope, root, root[0], type(root[0]),
                root[2], type(root[2]))
     _native_read_lifecycle_tail(owner, resource.registration, parents)
-    consumer = _DirectoryConsumer(owner, operation, resource, parents, kind, origin[0],
-                                   origin[1], module, origin[4], origin[5], file_module,
+    consumer = _DirectoryConsumer(owner, operation, resource, parents, kind,
+                                   class_name, module_name, origin[0], origin[1], module,
+                                   origin[4], origin[5], file_module, StartupArtifactOwner,
                                    [None], [None])
     _require(_resource_tail(owner, resource) is resource
              and operation.result is result and result.consumer[0] is None
              and result.attempt[0] is operation and result.raw[0] is result.unset)
     _native_read_lifecycle_tail(owner, resource.registration, parents)
-    _require(_unused_directory_intent_tail(owner, operation) is result)
+    _require(_unused_directory_intent_tail(owner, operation) is result
+             and _directory_material_tail(owner, consumer) is consumer)
     result.consumer[0] = consumer
+    _require(_directory_material_tail(owner, consumer) is consumer
+             and result.consumer[0] is consumer)
     return consumer
