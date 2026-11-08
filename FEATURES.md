@@ -6,17 +6,22 @@ on both Python 3.14.9 and 3.11.15. Exact source/receipt/log/XML bindings were
 verified. Earlier `77ae4dc` retains its separate 1,426-case pass and 183 focused
 passes on each interpreter. The original `9e6f02a` failed run remains preserved.
 
-Later coupled open/close source `5439fee` is frozen for testing. Its active
-412-case focused run has reported failures; terminal diagnostics are pending.
+Later coupled open/close source `5439fee` finished its 412-case focused run:
+400 passed and 12 failed, with no errors/skips and unchanged source. Source,
+receipt, log and XML bindings were rechecked. Eleven positive cases hit the
+existing 60-second child deadline; one failed a close-ACK assertion. Diagnosis
+continues without extending the deadline or relabeling failures as passing.
 Unrun intermediate queues were consolidated into this descendant only after
 ancestry and selected-case coverage checks; no active test was interrupted and
 no unrun candidate is claimed passing. Its floor and full regression runs depend
 on resolving the focused failures. No complete native IO/cleanup/quota/runtime
 or device qualification is claimed.
 
-A separate uninstalled reader prototype is implementing original-result custody,
-fixed consumer acknowledgment and explicit EOF accounting. Static checks and a
-bounded refusal-path source review are not behavioral qualification. Remaining
+A separate uninstalled experimental runtime-source loop now connects original
+read-result custody, fixed consumption and EOF acknowledgment. Its 24 causal
+consumer cases are authored but unexecuted; static checks and bounded source
+review do not establish behavioral qualification. Isolated EOF-accounting source
+`7a4d42f` has started its separate 25-case current-interpreter suite. Cache reads,
 metadata/link/diagnostic sites and directory enumeration remain unfinished.
 
 Device-local sections/static icons and selected-bot readiness are implemented in
