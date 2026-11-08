@@ -46,6 +46,8 @@ def exercise(frame):
     trace_before,profile_before=sys.gettrace(),sys.getprofile()
     assert trace_before is profile_before is None
     gc_before=gc.isenabled()
+    producer_code=m._produce_directory_metadata.__code__
+    native_callee=registration.native_origin.operations[4]
     def capture_factory(actual_owner,actual_resource):
         triple=factory(actual_owner,actual_resource)
         operation,marker,payload=triple
@@ -54,12 +56,13 @@ def exercise(frame):
         captured.append((operation,marker,weakref.ref(payload)))
         return triple
     def observe_native(frame,event,arg):
-        if (event=='c_call' and arg is registration.native_origin.operations[4]
-                and frame.f_code is m._produce_directory_metadata.__code__):
+        if (event=='c_call' and arg is native_callee
+                and frame.f_code is producer_code):
             assert len(captured)==1 and frame.f_locals['operation'] is captured[0][0]
             native_entries.append(True)
     def lose_return(frame,event,arg):
-        if frame.f_code is m._produce_directory_metadata.__code__ and event=='return':
+        if frame.f_code is not producer_code:return None
+        if event=='return':
             operation,marker,payload_reference=captured[0]
             assert type(arg) is m._DirectoryMetadataReturn and arg.operation is operation
             assert frame.f_locals['raw'] is operation.result.unset
