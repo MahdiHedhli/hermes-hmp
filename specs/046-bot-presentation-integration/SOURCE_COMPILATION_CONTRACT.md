@@ -101,7 +101,8 @@ across callbacks. This is not a cache-selected get_code result or execution gran
 The first matrix passed37 cases; the strengthened always-on optimized parity
 checks passed3 further cases and actual syntax-error sanitization passed1. The
 parity child intentionally runs under -O/-OO, so ordinary assert statements are
-not used for its verification. Actual Python3.11 and broader shared entry/reader
-qualification remain pending; no production deployment or native admission is
+not used for its verification. 38 actual Python3.11.15 child cases passed with source hashes unchanged;
+all floor-tested source hashes also match after reconciling the published
+fixture/docs repair. Broader shared entry/reader qualification is now active; no production deployment or native admission is
 claimed. The original reader's separate unchanged-source1162-pass baseline does
 not qualify these new compiler/reader changes.

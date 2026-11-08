@@ -1,3 +1,16 @@
+# November 7: owned source compilation under qualification
+
+The original interpreter now retains actual SourceLoader source_to_code metadata,
+its function-builtins dictionary and native compiler. A fixed owner compiles only
+an actual completed source read, preserves original actor/bytes/count/code facts,
+refuses replay and stale callbacks, then clears source bytes. It never executes
+code or grants runtime/native/key authority. Independent bounded review accepted.
+37 current matrix cases plus stronger optimization/syntax checks passed;38 actual
+Python3.11 child cases passed with source unchanged. Reconciliation with the
+fixture/docs fix preserved all tested source hashes. Broader startup checks are
+active, not yet a pass. No bot-character/local-media delivery or deployment claim.
+See [contract](specs/046-bot-presentation-integration/SOURCE_COMPILATION_CONTRACT.md).
+
 # November 7: fresh runtime source read
 
 An original-continuation source reader now owns a separate bounded read phase,
