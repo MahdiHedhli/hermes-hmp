@@ -372,3 +372,53 @@ def _latched_directory_resource_tail(owner, consumer):
     _native_work_origin_tail(owner, registration, operation.native)
     _require(_directory_material_tail(owner, consumer) is consumer)
     return resource
+
+
+def _active_directory_operation_tail(owner, consumer):
+    """Rejoin an already-debited ACTIVE directory intent; never admit work.
+
+    The future producer must hold its original consumer across admission. A
+    caller-built matching ledger row is not an independent native-call receipt.
+    This function neither invokes the native callee nor changes any state.
+    """
+    _latched_directory_resource_tail(owner, consumer)
+    operation = consumer.operation
+    ledger, phase, result = operation.ledger, operation.phase, operation.result
+    _require(type(operation.state) is list and len(operation.state) == 3
+             and operation.state[0] is True and operation.state[1] is False
+             and operation.state[2] is False
+             and type(operation.ended) is list and len(operation.ended) == 1
+             and operation.ended[0] is False
+             and type(operation.attempts) is list
+             and ledger.attempts is operation.attempts
+             and type(operation.index) is int
+             and 0 <= operation.index < len(operation.attempts)
+             and operation.attempts[operation.index] is operation
+             and type(operation.budget) is tuple and len(operation.budget) == 4
+             and ledger.counts is operation.budget[0]
+             and type(ledger.counts) is list and len(ledger.counts) == 2
+             and all(type(value) is int for value in operation.budget[1:])
+             and all(type(value) is int for value in ledger.counts)
+             and operation.budget[3] == operation.budget[1] + 1
+             and 0 <= operation.budget[1] < 1048576
+             and 0 <= operation.budget[2] < 1048576 - operation.budget[1]
+             and ledger.counts[0] is operation.budget[3]
+             and ledger.counts[1] is operation.budget[2]
+             and type(ledger.inflight) is list and len(ledger.inflight) == 1
+             and ledger.inflight[0] is operation
+             and type(ledger.failed) is list and len(ledger.failed) == 1
+             and ledger.failed[0] is False
+             and type(phase.current) is list and len(phase.current) == 1
+             and phase.current[0] is phase.active
+             and type(phase.result) is list and len(phase.result) == 1
+             and phase.result[0] is operation
+             and type(result.raw) is list and len(result.raw) == 1
+             and result.raw[0] is result.unset
+             and all(type(cell) is list and len(cell) == 1 and cell[0] is None
+                     for cell in (result.category, result.snapshot,
+                                  result.acknowledged, result.envelope))
+             and type(consumer.consumption) is list and len(consumer.consumption) == 1
+             and consumer.consumption[0] is None
+             and type(consumer.commit) is list and len(consumer.commit) == 1
+             and consumer.commit[0] is None)
+    return operation

@@ -10,7 +10,9 @@ from .test_presentation_gateway_approval import operator_composed_script
 @pytest.mark.parametrize('case', ('normal', 'copied_descriptor', 'copied_registration',
                                  'foreign_descriptor', 'unexpected_name',
                                  'latched', 'copied_consumer', 'wrong_pending',
-                                 'copied_operation', 'wrong_result_consumer'))
+                                 'copied_operation', 'wrong_result_consumer',
+                                 'active', 'active_wrong_phase', 'active_failed',
+                                 'active_missing_debit', 'active_wrong_result'))
 def test_original_metadata_operation(tmp_path, monkeypatch, case):
     script, mutation = operator_composed_script('links')
     script = script.replace('GatewayPackageOwner.verify_recipe(recipe)',
@@ -56,7 +58,9 @@ def prepare(frame):
                         'foreign_descriptor','unexpected_name')
     else:
         assert case in ('normal','latched','copied_consumer','wrong_pending',
-                        'copied_operation','wrong_result_consumer')
+                        'copied_operation','wrong_result_consumer',
+                        'active','active_wrong_phase','active_failed',
+                        'active_missing_debit','active_wrong_result')
         assert resource.descriptor is descriptor
         assert resource.metadata is held[5] and resource.held_walk is held
         assert resource.arguments[0] is descriptor.fd
@@ -97,13 +101,42 @@ def prepare(frame):
             try:
                 try:returned=m._latched_directory_resource_tail(owner,candidate_consumer)
                 except a.ArtifactObservationError:
-                    assert case!='latched'
+                    assert case not in ('latched','active','active_wrong_phase','active_failed',
+                                       'active_missing_debit','active_wrong_result')
                 else:
-                    assert case=='latched' and returned is resource
+                    assert (case=='latched' or case.startswith('active')) and returned is resource
                 # Latched structural validation never renews unclaimed admission.
                 try:a._native_declared_metadata_plan_tail(owner,registration,held)
                 except a.ArtifactObservationError:pass
                 else:raise AssertionError('latched plan renewed')
+                if case.startswith('active'):
+                    # Guard-only synthetic ACTIVE state, not production admission.
+                    # No native operation is called and all original cells restore.
+                    try:m._active_directory_operation_tail(owner,consumer)
+                    except a.ArtifactObservationError:pass
+                    else:raise AssertionError('unused intent accepted as ACTIVE')
+                    ledger.attempts.append(operation)
+                    ledger.counts[0]=operation.budget[3]
+                    ledger.inflight[0]=operation
+                    phase.current[0]=phase.active
+                    phase.result[0]=operation
+                    operation.state[0]=True
+                    try:
+                        if case=='active_wrong_phase':phase.current[0]=phase.pending
+                        elif case=='active_failed':ledger.failed[0]=True
+                        elif case=='active_missing_debit':ledger.counts[0]=counts[0]
+                        elif case=='active_wrong_result':phase.result[0]=operation._replace()
+                        try:active=m._active_directory_operation_tail(owner,consumer)
+                        except a.ArtifactObservationError:assert case!='active'
+                        else:assert case=='active' and active is operation
+                    finally:
+                        assert ledger.attempts.pop() is operation
+                        ledger.counts[0]=counts[0]
+                        ledger.inflight[0]=None
+                        ledger.failed[0]=False
+                        phase.current[0]=phase.idle
+                        phase.result[0]=None
+                        operation.state[0]=False
             finally:
                 progress[1]=None
                 result.consumer[0]=consumer

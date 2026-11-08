@@ -149,3 +149,19 @@ latched-consumer tests and independent review remain required before wiring it.
 Separately, frozen constructor repair source `cefd515` passed 12 cases on both
 Python 3.14.9 and 3.11.15; policy source `d537500` passed 20 on each. These
 results do not qualify this changed helper, an integrated dispatcher or devices.
+
+## ACTIVE directory-state guard preparation
+
+The next fixed guard rejoins the original latched directory consumer and requires
+the original operation at its ledger ordinal, exactly one charged work unit with
+reserved-close allowance preserved, the original in-flight and phase result
+slots, ACTIVE state, healthy ledger, and untouched raw/consumer-result cells.
+It does not debit, sample an actor, invoke fstat, publish a result, or acknowledge
+consumption. Guard fixtures construct a temporary synthetic ACTIVE state and
+restore it before the existing source-read flow continues; they prove only
+guard discrimination, never real admission or native-result provenance.
+
+Dedicated cases cover unused intent, valid synthetic state, wrong phase, sticky
+ledger failure, missing debit and copied phase result. Static checks passed;
+execution and independent review are pending. Literal producer, pending result
+retention, fixed policy consumption, ACK and migration remain incomplete.
