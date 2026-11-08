@@ -128,6 +128,35 @@ releasing its owned preparation without rearming that intent also needs an
 explicit reviewed path. These are local implementation requirements, not a new
 upstream API blocker or a request to broaden permissions.
 
+## Next fixed-caller implementation and acceptance
+
+The next caller must obtain the actual operation/marker/payload factory return
+before preparing/latching the consumer or entering the native producer. Its
+original references stay in caller locals across producer return and exception
+unwinding. Neither `result.custody_slot[0]` nor a stored envelope can nominate
+replacement custody after the call. Temporary payload-cell tuples must not enter
+operation, consumer, commit, ledger, failure or metadata-progress history.
+
+Separate the two exit paths:
+
+- Normal: hold the actual producer return through policy and ACK, prove the
+  original closed commit, dispose of caller envelope/cell aliases, detach only
+  the original payload, and rejoin current live authority before further work.
+- Failure: prove the actual fixed synchronous call has unwound and that cleanup
+  runs under its originally captured actor. This memory retirement cannot depend
+  on a permission remaining live, cannot clear foreign links or rewind partial
+  ACK stores, and cannot authorize native close, retry, consumption or new work.
+  A mutable ended flag or matching actor tuple alone is insufficient proof.
+
+Acceptance must inject the original producer return-event loss against this
+actual caller, not merely invoke the memory helper with synthetic values. It
+must also cover return loss after policy/ACK, early failure before admission,
+revocation during the call, a wrong actor, replaced links/cells, partial detach,
+retained failure/ledger roots, GC-disabled reclamation and bounded outward
+exceptions. Native debit, cursor and ACK histories must remain independently
+observable and unchanged except for stores that actually occurred. A detached
+payload is never an ACK. The original failing control stays preserved.
+
 ## Full scope remains open
 
 The [dated inventory](NATIVE_METADATA_SITES.json) records39 stat/fstat syntax
