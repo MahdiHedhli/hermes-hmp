@@ -752,6 +752,7 @@ class _NativeDeclaredWalk(NamedTuple):
     components: tuple
     state: list
     read_step: list
+    metadata_slot: object = None
 
     def __repr__(self):
         return "<OriginalDeclaredFileWalk not-operation-authority redacted>"
@@ -876,7 +877,8 @@ def _register_native_scope(owner, s, cell, root):
         declaration = declaration.files
     _expected(declaration)
     walks = tuple(_NativeDeclaredWalk(owner, s, cell, root, declaration, expected,
-                                     ordinal, ("/", *expected.path[1:].split("/")), [0], [None])
+                                     ordinal, ("/", *expected.path[1:].split("/")),
+                                     [0], [None], [None])
                   for ordinal, expected in enumerate(declaration))
     progress = [0]
     ledger, native_origin = lineage.ledger, lineage.native
@@ -951,6 +953,46 @@ def _native_walk_scope(owner, registration):
     return _native_scope_current(owner, registration).scope
 
 
+class _NativeDeclaredMetadataPlan(NamedTuple):
+    """Original per-file site allocation; resource binding and ACK still required."""
+    owner: object
+    scope: _Scope
+    walk: _NativeDeclaredWalk
+    expected: ExpectedArtifact
+    definitions: tuple
+    progress: list
+
+    def __repr__(self):
+        return '<NativeDeclaredMetadataPlan unqualified site DATA redacted>'
+
+
+def _prepare_declared_metadata_plan(owner, registration, walk):
+    """Allocate fixed file-site order once, before this walk's native effects."""
+    _require(type(registration) is _NativeScopeRegistration
+             and type(walk) is _NativeDeclaredWalk and walk.owner is owner
+             and type(walk.scope) is _Scope and walk.scope is registration.scope
+             and type(walk.declaration) is tuple and type(walk.index) is int
+             and 0 <= walk.index < len(walk.declaration)
+             and type(walk.expected) is ExpectedArtifact
+             and type(walk.expected.path) is str
+             and walk.expected is walk.declaration[walk.index]
+             and type(walk.components) is tuple and 1 < len(walk.components) <= 4096
+             and all(type(part) is str for part in walk.components)
+             and type(walk.metadata_slot) is list and len(walk.metadata_slot) == 1
+             and walk.metadata_slot[0] is None)
+    # Operation indices match the captured native tuple. Roles are fixed DATA,
+    # never dispatch selectors. Actual opened-parent/leaf joins are not minted here.
+    definitions = tuple((4, 'directory', index)
+                        for index in range(len(walk.components) - 1))
+    leaf = len(walk.components) - 1
+    definitions += ((3, 'leaf_before', leaf), (4, 'leaf_opened', leaf),
+                    (4, 'leaf_after_read', leaf), (3, 'leaf_after_read', leaf))
+    if walk.scope.source_digest is not None and walk.expected.path.endswith('.py'):
+        definitions += ((4, 'source_after_hash', leaf), (3, 'source_after_hash', leaf))
+    return _NativeDeclaredMetadataPlan(owner, walk.scope, walk, walk.expected,
+                                       definitions, [0, None])
+
+
 def _begin_native_declared_walk(owner, registration, expected):
     _require(type(registration) is _NativeScopeRegistration)
     walks, progress = registration.file_walks, registration.file_progress
@@ -974,6 +1016,9 @@ def _begin_native_declared_walk(owner, registration, expected):
              and len(progress) == 1 and progress[0] is index
              and walks[index] is plan and plan.state is state and len(state) == 1
              and type(state[0]) is int and state[0] == 0)
+    metadata = _prepare_declared_metadata_plan(owner, registration, plan)
+    _require(plan.metadata_slot[0] is None and plan.state is state and state[0] == 0)
+    plan.metadata_slot[0] = metadata
     state[0] = 1  # file-walk intent only, before any descriptor acquisition
     return plan, walks, progress, index, state
 

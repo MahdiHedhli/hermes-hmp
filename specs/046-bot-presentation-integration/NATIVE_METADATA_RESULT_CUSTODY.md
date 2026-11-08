@@ -101,3 +101,7 @@ remains sticky. No retry or restoration of IDLE can erase ambiguous work.
 ## First source preparation
 
 An unwired `_NativeMetadataSnapshot` and `_native_metadata_snapshot` now capture exact identity integers plus the actual st_mtime under original native machinery joins. They perform no native call, debit, phase change, site advance or ACK. The producer must first retain its actual C return, and a fixed consumer must later bind this DATA to the original pending result. Merely constructing or copying a snapshot grants nothing. No timestamp conversion or policy is silently applied at snapshot capture. Runtime tests and boundary wiring remain required.
+
+## Original declared-file site allocation prototype
+
+Each registered file walk now has an original metadata slot. Beginning that walk allocates its fixed metadata order once, before descriptor acquisition: directory fstats, leaf pre-stat/opened-fstat, after-read fstat/stat, and the source-only after-hash pair. Allocation is lazy per file, avoiding a full path-product allocation across the package. The original walk pins the actual plan and its progress cells. These definitions do not bind an opened parent or leaf yet, admit native work, debit budget, consume results or advance an ACK. Tree/link/cache-absence site plans and operation/consumer wiring remain required. This source is isolated from the running8afe qualification and has not run tests.
