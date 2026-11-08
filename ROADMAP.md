@@ -82,6 +82,18 @@ Test-only `6d3a8cd`, with production identical to `b6b8322`, ran one original
 timeout case with a private45-second stack sampler and unchanged60-second
 deadline. It passed at26.093 seconds before sampling, leaving an empty stack
 file. This supplies no timeout cause and does not erase the original failures.
+The next source draft `872e0fb` adds original-actor eligibility before caller
+custody allocation/latching while retaining the later ACTIVE sample. Independent
+source review found no new blocker; unchanged wrong-actor control and repaired
+causal cases remain unrun behind the serial regression. Uninstalled leaf-policy
+preparation `d85d5d2` preserves declared regular-file type/owner/link/size/mode
+checks in primitive DATA;23 negative tests are authored but unrun. Source review
+found policy parity, not native-result/declaration provenance or admission. It
+excludes anchor/configuration policies; actual leaf/ancestor consumers, original
+mtime/hash/EOF checks, complete plan ACK progress and device/runtime integration
+remain required. The refreshed39-site inventory matches all prior semantic
+entries with current five-file hashes and diagnostic function locations checked.
+
 The same source `e597dfe` subsequently passed the full71-case selected metadata,
 memory and caller regression on each interpreter (71 each, no failures/errors/
 skips, unchanged source and rehashed evidence). A separate test-only single-
