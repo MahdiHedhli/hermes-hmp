@@ -12,8 +12,8 @@ satisfy primitive guards. The helper returns the original full nine-field tuple.
 
 The 23 synthetic tests cover zero/max size, root/current owner, wrong object
 and primitive types, nonregular modes, permissions, ownership, link counts,
-size drift and unbounded/coercible policy input. They are authored but unrun;
-lint passes. No native provenance or dispatch qualification follows from them.
+size drift and unbounded/coercible policy input. All23 passed on each supported interpreter, with unchanged source and rehashed
+source/log/XML evidence; lint passes. No native provenance or dispatch qualification follows from them.
 
 A future actual consumer must retain and bind the actual pending native return,
 original declared expected row/size, canonical leaf component and original

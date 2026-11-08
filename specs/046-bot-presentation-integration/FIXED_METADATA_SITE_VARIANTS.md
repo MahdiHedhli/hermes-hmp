@@ -12,7 +12,8 @@ components and coercible/foreign fields before use. Existing plan tests now
 check every original variant allocation; ten negative cases cover malformed or
 foreign containers/variants/walks, owner and ordinal drift, copied site identity,
 unknown roles, wrong operations, swapped rows and boolean components. These19
-plan tests are unrun. Lint and the plugin surface scan pass. Independent source
+plan tests passed on each supported interpreter with unchanged source and
+source/log/XML hashes verified. Lint and the plugin surface scan pass. Independent source
 review found no new blocker in this DATA preparation.
 
 This tail does not prove the complete canonical sequence or independent

@@ -95,7 +95,8 @@ were performed. See the current native session-authority source note.
 Fixed-site DATA preparation `e285873` adds original row variants allocated with
 the plan before descriptor acquisition. Structural role/op/component checks,
 current resource and latched-consumer variant joins are source-reviewed, with
-no new concrete DATA preparation blocker;19 plan tests are authored but unrun.
+no new concrete DATA preparation blocker;19 plan tests now pass on each
+supported interpreter, with unchanged source and source/log/XML hashes rechecked.
 The tail is not full canonical-order or original-plan proof. Future fixed
 callers must carry actual plan/variant returns across callbacks and bind all
 predecessors/resources/actor/budget phases. No dispatcher, effect site or walker
@@ -103,11 +104,15 @@ finish-guard change is introduced; this code remains separate and uninstalled.
 
 The next source draft `872e0fb` adds original-actor eligibility before caller
 custody allocation/latching while retaining the later ACTIVE sample. Independent
-source review found no new blocker; unchanged wrong-actor control and repaired
-causal cases remain unrun behind the serial regression. Uninstalled leaf-policy
+source review found no new blocker. An unchanged-production cross-thread control
+then failed on each interpreter: actual rejection and zero native calls still
+changed preparation and metadata-progress state. Those failures remain failures.
+The early-actor repair passed the same case on each interpreter with all nine
+observed shared-state fields unchanged; it did not add effect authority. Uninstalled leaf-policy
 preparation `d85d5d2` preserves declared regular-file type/owner/link/size/mode
-checks in primitive DATA;23 negative tests are authored but unrun. Source review
-found policy parity, not native-result/declaration provenance or admission. It
+checks in primitive DATA;23 tests pass on each supported interpreter, with
+unchanged source and rehashed evidence. This proves selected policy checks,
+not native-result/declaration provenance or admission. It
 excludes anchor/configuration policies; actual leaf/ancestor consumers, original
 mtime/hash/EOF checks, complete plan ACK progress and device/runtime integration
 remain required. The refreshed39-site inventory matches all prior semantic
@@ -126,10 +131,14 @@ custody before a final conditional memory-only detach. Both before/after cases
 now pass on each interpreter (2 each), with payload reclaimed and no invented
 retirement/ACK marker. Lint and plugin-surface checks pass. The broader73-case
 repair regression now passes on Python3.14.9 (zero failures/errors/skips,
-unchanged source and every source/log/XML hash rechecked); its Python3.11.15
-run is in progress. Independent repair review found no new blocker for the
-single interruption. Wrong-actor/repeated-interruption coverage, actual-site
-integration and physical/runtime qualification remain open. This is not a completed image-delivery feature.
+unchanged source and every source/log/XML hash rechecked). The same73 cases
+also passed on Python3.11.15 with zero failures/errors/skips, unchanged source
+and all source/log/XML hashes rechecked. Independent repair review found no new blocker for the
+single interruption. Combined fixed-variant caller and broader isolation/
+repeated-interruption coverage, actual-site integration and physical/runtime
+qualification remain open. The older73-case baseline does not cover the later
+cross-thread preparation defect; the separate repair/control evidence above
+must not be replaced by that passing baseline. This is not a completed image-delivery feature.
 
 Separate caller source `e597dfe` has now passed13 memory cases and seven actual
 synthetic native caller cases on each supported interpreter (20 each), with

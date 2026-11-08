@@ -240,3 +240,17 @@ these sites have been migrated to the new caller. The actor-preflight draft is
 source-reviewed but its causal tests are pending; the original control remains
 separate. Leaf/final-ancestor policies, actual walker ACK cursor integration,
 remaining operations and enumeration still require implementation and verification.
+
+## Latest bounded verification checkpoint
+
+The73-case selected regression at `779312e` passes on each supported interpreter.
+It did not cover the later cross-thread defect: unchanged production control
+`be854ed` confirms a rejected0C worker still mutates preparation and metadata
+progress on both versions. Production repair `872e0fb` with identical diagnostic
+instrumentation (`7105740`) passes the same case on each with all nine observed
+shared-state fields unchanged. Each original control remains one failure, not
+a qualification pass. The23 declared-leaf and19 fixed-variant DATA tests also
+pass on both versions, with unchanged sources and verified source/log/XML/
+checkpoint bindings. A selected combined actual-caller run on `cc9603e` is in
+progress. These are isolated source results, not full walker/native/runtime or
+physical image/bot-character acceptance. No live host/device changes occurred.
