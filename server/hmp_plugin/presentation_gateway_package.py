@@ -540,7 +540,7 @@ class GatewayPackageOwner:
             for name in ("/", *meta.root[1:].split("/")):
                 row, fd = StartupArtifactOwner._open(self, name, parent, True, native_registration)
                 held.append((row, fd))
-                info = StartupArtifactOwner._fstat(self, fd, s)
+                info = StartupArtifactOwner._fstat(self, fd, s, native_registration)
                 mode = stat.S_IMODE(info.st_mode)
                 _require(info.st_uid in (0, s.context[1])
                          and not mode & (stat.S_ISUID | stat.S_ISGID)
@@ -550,8 +550,10 @@ class GatewayPackageOwner:
             GatewayPackageOwner._walk(self, parent, "", result, file_rows, directory_rows,
                                       native_registration)
             for name, parent, fd, signature in ancestors:
-                _require(_identity(StartupArtifactOwner._fstat(self, fd, s), True) == signature
-                         and _identity(StartupArtifactOwner._stat(self, name, parent, s), True)
+                _require(_identity(StartupArtifactOwner._fstat(
+                    self, fd, s, native_registration), True) == signature
+                         and _identity(StartupArtifactOwner._stat(
+                             self, name, parent, s, native_registration), True)
                          == signature)
         except BaseException:
             failed = True
@@ -571,12 +573,12 @@ class GatewayPackageOwner:
         s = _native_walk_scope(self, native_registration)
         root_cell = self._root_cell
         _require(prefix.count("/") <= 32)
-        before = _identity(StartupArtifactOwner._fstat(self, fd, s), True)
+        before = _identity(StartupArtifactOwner._fstat(self, fd, s, native_registration), True)
         directory_rows.append((prefix, before))
         for name in GatewayPackageOwner._names(self, fd, native_registration):
             _require(name not in _PRIVATE and not name.startswith(".env."))
             path = prefix + name
-            info = StartupArtifactOwner._stat(self, name, fd, s)
+            info = StartupArtifactOwner._stat(self, name, fd, s, native_registration)
             _require(len(result) < _MAX_ENTRIES)
             if stat.S_ISREG(info.st_mode):
                 result.append((path, "file"))
@@ -586,17 +588,19 @@ class GatewayPackageOwner:
                 result.append((path, "directory"))
                 row, child = StartupArtifactOwner._open(self, name, fd, True, native_registration)
                 try:
-                    child_info = StartupArtifactOwner._fstat(self, child, s)
+                    child_info = StartupArtifactOwner._fstat(self, child, s, native_registration)
                     _require(_identity(child_info, True) == _identity(info, True)
                              and child_info.st_uid in (0, s.context[1])
                              and not child_info.st_mode & (0o022 | stat.S_ISUID | stat.S_ISGID))
                     GatewayPackageOwner._walk(self, child, path + "/", result,
                                              file_rows, directory_rows, native_registration)
-                    _require(_identity(StartupArtifactOwner._stat(self, name, fd, s), True)
+                    _require(_identity(StartupArtifactOwner._stat(
+                        self, name, fd, s, native_registration), True)
                              == _identity(info, True))
                 finally:
                     StartupArtifactOwner._close(self, row, child, s, root_cell)
-        _require(_identity(StartupArtifactOwner._fstat(self, fd, s), True) == before)
+        _require(_identity(StartupArtifactOwner._fstat(
+            self, fd, s, native_registration), True) == before)
 
     def _origins(self):
         s = GatewayPackageOwner._guard(self)

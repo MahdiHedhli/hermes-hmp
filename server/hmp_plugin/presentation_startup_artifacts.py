@@ -1046,18 +1046,30 @@ class StartupArtifactOwner:
         finally:
             data = None
 
-    def _stat(self, name, parent, s):
-        _require(_owner_guard(self) is s)
+    def _stat(self, name, parent, s, native_registration=None):
+        _require(_native_walk_scope(self, native_registration) is s)
+        root, cell = self._root_cell, self._cell
+        registry = (None if native_registration is None
+                    else native_registration.lineage.ledger.scopes)
+        _native_registration_tail(self, s, cell, root, native_registration, registry)
         _native_relative_arguments(s, name, parent)
         value = os.stat(name, dir_fd=parent, follow_symlinks=False)
-        _require(type(value) is os.stat_result and _owner_guard(self) is s)
+        _require(type(value) is os.stat_result
+                 and _native_walk_scope(self, native_registration) is s)
+        _native_registration_tail(self, s, cell, root, native_registration, registry)
         return value
 
-    def _fstat(self, fd, s):
-        _require(_owner_guard(self) is s)
+    def _fstat(self, fd, s, native_registration=None):
+        _require(_native_walk_scope(self, native_registration) is s)
+        root, cell = self._root_cell, self._cell
+        registry = (None if native_registration is None
+                    else native_registration.lineage.ledger.scopes)
+        _native_registration_tail(self, s, cell, root, native_registration, registry)
         _native_descriptor_argument(s, fd)
         value = os.fstat(fd)
-        _require(type(value) is os.stat_result and _owner_guard(self) is s)
+        _require(type(value) is os.stat_result
+                 and _native_walk_scope(self, native_registration) is s)
+        _native_registration_tail(self, s, cell, root, native_registration, registry)
         return value
 
     def _readlink(self, name, parent, hop, phase, index, before_state, start,
@@ -1138,7 +1150,7 @@ class StartupArtifactOwner:
             for name in ("/", *path[1:].split("/")[:-1]):
                 row, fd = StartupArtifactOwner._open(self, name, parent, True, native_registration)
                 held.append((row, fd))
-                info = StartupArtifactOwner._fstat(self, fd, s)
+                info = StartupArtifactOwner._fstat(self, fd, s, native_registration)
                 mode = stat.S_IMODE(info.st_mode)
                 _require(stat.S_ISDIR(info.st_mode) and info.st_uid in (0, s.context[1])
                          and not mode & (stat.S_ISUID | stat.S_ISGID)
@@ -1146,7 +1158,7 @@ class StartupArtifactOwner:
                 parents.append((name, parent, fd, _identity(info, True)))
                 parent = fd
             name = path.rsplit("/", 1)[1]
-            leaf = StartupArtifactOwner._stat(self, name, parent, s)
+            leaf = StartupArtifactOwner._stat(self, name, parent, s, native_registration)
             identity = _identity(leaf)
             _require(self._count_cell is progress and runtime.count[0] is progress)
             if hop is None:
@@ -1165,10 +1177,13 @@ class StartupArtifactOwner:
                         native_registration,
                     )
                     progress = observation.after
-            _require(_identity(StartupArtifactOwner._stat(self, name, parent, s)) == identity)
+            _require(_identity(StartupArtifactOwner._stat(
+                self, name, parent, s, native_registration)) == identity)
             for item, ancestor, fd, signature in parents:
-                _require(_identity(StartupArtifactOwner._fstat(self, fd, s), True) == signature
-                         and _identity(StartupArtifactOwner._stat(self, item, ancestor, s), True)
+                _require(_identity(StartupArtifactOwner._fstat(
+                    self, fd, s, native_registration), True) == signature
+                         and _identity(StartupArtifactOwner._stat(
+                             self, item, ancestor, s, native_registration), True)
                          == signature)
             _require(_native_walk_scope(self, native_registration) is s
                      and self._count_cell is progress)
@@ -1333,7 +1348,7 @@ class StartupArtifactOwner:
             for name in ("/", *expected.path[1:].split("/")[:-1]):
                 row, fd = StartupArtifactOwner._open(self, name, parent, True, native_registration)
                 held.append((row, fd))
-                info = StartupArtifactOwner._fstat(self, fd, s)
+                info = StartupArtifactOwner._fstat(self, fd, s, native_registration)
                 signature = _identity(info, True)
                 mode = stat.S_IMODE(info.st_mode)
                 _require(stat.S_ISDIR(info.st_mode) and info.st_uid in (0, s.context[1])
@@ -1344,7 +1359,7 @@ class StartupArtifactOwner:
             if _configuration(self):
                 _require(info.st_uid == s.context[1] and stat.S_IMODE(info.st_mode) == 0o700)
             name = expected.path.rsplit("/", 1)[1]
-            before = StartupArtifactOwner._stat(self, name, parent, s)
+            before = StartupArtifactOwner._stat(self, name, parent, s, native_registration)
             original = _identity(before)
             _require(stat.S_ISREG(before.st_mode) and before.st_uid in (0, s.context[1])
                      and before.st_nlink == 1
@@ -1358,7 +1373,8 @@ class StartupArtifactOwner:
                 source_mtime = int(timestamp)  # exact CPython path_stats conversion, not ns floor
             row, fd = StartupArtifactOwner._open(self, name, parent, False, native_registration)
             held.append((row, fd))
-            _require(_identity(StartupArtifactOwner._fstat(self, fd, s)) == original)
+            _require(_identity(StartupArtifactOwner._fstat(
+                self, fd, s, native_registration)) == original)
             digest = hashlib.sha256()
             header = b""
             capture_header = (not anchor and not _configuration(self)
@@ -1395,8 +1411,10 @@ class StartupArtifactOwner:
             if anchor:
                 read_effects.append(s.reads[-1])
             count_cell, counted = self._count_cell, self._bytes_read
-            _require(data == b"" and _identity(StartupArtifactOwner._fstat(self, fd, s)) == original
-                     and _identity(StartupArtifactOwner._stat(self, name, parent, s)) == original)
+            _require(data == b"" and _identity(StartupArtifactOwner._fstat(
+                self, fd, s, native_registration)) == original
+                     and _identity(StartupArtifactOwner._stat(
+                         self, name, parent, s, native_registration)) == original)
             _require(_native_walk_scope(self, native_registration) is s)
             actual_hash = digest.hexdigest()
             _require(_native_walk_scope(self, native_registration) is s
@@ -1407,8 +1425,10 @@ class StartupArtifactOwner:
                                                    source_observations)
             for name, parent, directory, signature in directories:
                 _require(
-                    _identity(StartupArtifactOwner._fstat(self, directory, s), True) == signature
-                    and _identity(StartupArtifactOwner._stat(self, name, parent, s), True)
+                    _identity(StartupArtifactOwner._fstat(
+                        self, directory, s, native_registration), True) == signature
+                    and _identity(StartupArtifactOwner._stat(
+                        self, name, parent, s, native_registration), True)
                     == signature
                 )
             _require(_native_walk_scope(self, native_registration) is s)

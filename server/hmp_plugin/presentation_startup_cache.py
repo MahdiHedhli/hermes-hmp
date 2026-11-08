@@ -163,7 +163,7 @@ def _is_missing(owner, name, parent, scope, native_registration=None):
 
     _require(_native_walk_scope(owner, native_registration) is scope)
     try:
-        value = StartupArtifactOwner._stat(owner, name, parent, scope)
+        value = StartupArtifactOwner._stat(owner, name, parent, scope, native_registration)
     except FileNotFoundError as error:
         _require(type(error) is FileNotFoundError and type(error.errno) is int
                  and error.errno == errno.ENOENT and type(error.filename) is str
@@ -181,9 +181,10 @@ def _ancestors_current(owner, scope, ancestors, native_registration=None):
 
     _require(_native_walk_scope(owner, native_registration) is scope)
     for component, ancestor, fd, original in ancestors:
-        _require(_identity(StartupArtifactOwner._fstat(owner, fd, scope), True) == original
+        _require(_identity(StartupArtifactOwner._fstat(
+            owner, fd, scope, native_registration), True) == original
                  and _identity(StartupArtifactOwner._stat(
-                     owner, component, ancestor, scope), True) == original)
+                     owner, component, ancestor, scope, native_registration), True) == original)
     _require(_native_walk_scope(owner, native_registration) is scope)
 
 
@@ -207,7 +208,8 @@ def _probe(source, owner, phase, index, native_registration=None):
     try:
         record, parent = StartupArtifactOwner._open(owner, "/", None, True, native_registration)
         held.append((record, parent))
-        signature = _directory(StartupArtifactOwner._fstat(owner, parent, scope), scope.context)
+        signature = _directory(StartupArtifactOwner._fstat(
+            owner, parent, scope, native_registration), scope.context)
         ancestors.append(("/", None, parent, signature))
         path = source.paths[index]
         parts = path[1:].split("/")
@@ -227,7 +229,8 @@ def _probe(source, owner, phase, index, native_registration=None):
             expected = _directory(info, scope.context)
             record, fd = StartupArtifactOwner._open(owner, name, parent, True, native_registration)
             held.append((record, fd))
-            _require(_directory(StartupArtifactOwner._fstat(owner, fd, scope), scope.context)
+            _require(_directory(StartupArtifactOwner._fstat(
+                owner, fd, scope, native_registration), scope.context)
                      == expected)
             ancestors.append((name, parent, fd, expected))
             parent = fd

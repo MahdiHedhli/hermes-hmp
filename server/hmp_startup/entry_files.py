@@ -533,7 +533,7 @@ class EntryFileSnapshotOwner:
             for name in ("/", *root[1:].split("/")):
                 row, fd = StartupArtifactOwner._open(io, name, parent, True, native_registration)
                 held.append((row, fd))
-                info = StartupArtifactOwner._fstat(io, fd, s)
+                info = StartupArtifactOwner._fstat(io, fd, s, native_registration)
                 mode = stat.S_IMODE(info.st_mode)
                 _require(info.st_uid in (0, s.context[1])
                          and not mode & (stat.S_ISUID | stat.S_ISGID)
@@ -543,8 +543,10 @@ class EntryFileSnapshotOwner:
             EntryFileSnapshotOwner._walk(self, io, parent, "", entries, files, directories,
                                          native_registration)
             for name, parent_fd, fd, signature in ancestors:
-                _require(_identity(StartupArtifactOwner._fstat(io, fd, s), True) == signature
-                         and _identity(StartupArtifactOwner._stat(io, name, parent_fd, s), True)
+                _require(_identity(StartupArtifactOwner._fstat(
+                    io, fd, s, native_registration), True) == signature
+                         and _identity(StartupArtifactOwner._stat(
+                             io, name, parent_fd, s, native_registration), True)
                          == signature)
             result = _Tree(tuple(sorted(entries)), tuple(sorted(files)),
                            tuple(sorted(directories)),
@@ -575,17 +577,20 @@ class EntryFileSnapshotOwner:
             for name in ("/", *path[1:].split("/")[:-1]):
                 row, fd = StartupArtifactOwner._open(io, name, parent, True, native_registration)
                 held.append((row, fd))
-                info = StartupArtifactOwner._fstat(io, fd, s)
+                info = StartupArtifactOwner._fstat(io, fd, s, native_registration)
                 mode = stat.S_IMODE(info.st_mode)
                 _require(info.st_uid in (0, s.context[1])
                          and not mode & (stat.S_ISUID | stat.S_ISGID)
                          and (not mode & 0o022 or (info.st_uid == 0 and bool(mode & stat.S_ISVTX))))
                 ancestors.append((name, parent, fd, _identity(info, True)))
                 parent = fd
-            leaf = _identity(StartupArtifactOwner._stat(io, path.rsplit("/", 1)[1], parent, s))
+            leaf = _identity(StartupArtifactOwner._stat(
+                io, path.rsplit("/", 1)[1], parent, s, native_registration))
             for name, parent_fd, fd, signature in ancestors:
-                _require(_identity(StartupArtifactOwner._fstat(io, fd, s), True) == signature
-                         and _identity(StartupArtifactOwner._stat(io, name, parent_fd, s), True)
+                _require(_identity(StartupArtifactOwner._fstat(
+                    io, fd, s, native_registration), True) == signature
+                         and _identity(StartupArtifactOwner._stat(
+                             io, name, parent_fd, s, native_registration), True)
                          == signature)
             EntryFileSnapshotOwner._io_current(self, io, native_registration)
             result = leaf, tuple((name, signature) for name, _, _, signature in ancestors)
@@ -609,12 +614,12 @@ class EntryFileSnapshotOwner:
         s, cell, io_cell = io._origin, io._root_cell, io._cell
         registry = (None if native_registration is None
                     else native_registration.lineage.ledger.scopes)
-        signature = _identity(StartupArtifactOwner._fstat(io, fd, s), True)
+        signature = _identity(StartupArtifactOwner._fstat(io, fd, s, native_registration), True)
         directories.append((prefix, signature))
         for name in EntryFileSnapshotOwner._names(self, io, fd, native_registration):
             path = prefix + name
             _require(path.count("/") <= 32 and len(entries) < 20000)
-            info = StartupArtifactOwner._stat(io, name, fd, s)
+            info = StartupArtifactOwner._stat(io, name, fd, s, native_registration)
             if stat.S_ISREG(info.st_mode):
                 entries.append((path, "file"))
                 files.append((path, _identity(info)))
@@ -623,7 +628,7 @@ class EntryFileSnapshotOwner:
                 entries.append((path, "directory"))
                 row, child = StartupArtifactOwner._open(io, name, fd, True, native_registration)
                 try:
-                    current = StartupArtifactOwner._fstat(io, child, s)
+                    current = StartupArtifactOwner._fstat(io, child, s, native_registration)
                     _require(_identity(current, True) == _identity(info, True)
                              and current.st_uid in (0, s.context[1])
                              and not current.st_mode & (0o022 | stat.S_ISUID | stat.S_ISGID))
@@ -636,7 +641,8 @@ class EntryFileSnapshotOwner:
                     except BaseException:
                         row.unknown = io._unknown = self._unknown = True
                         raise
-        _require(_identity(StartupArtifactOwner._fstat(io, fd, s), True) == signature)
+        _require(_identity(StartupArtifactOwner._fstat(
+            io, fd, s, native_registration), True) == signature)
         EntryFileSnapshotOwner._io_current(self, io, native_registration)
         _native_registration_tail(io, s, io_cell, cell, native_registration, registry)
 

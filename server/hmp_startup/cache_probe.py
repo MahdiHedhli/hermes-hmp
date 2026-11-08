@@ -306,13 +306,16 @@ class RuntimeCacheProbeOwner:
                               or (info.st_uid == 0 and bool(info.st_mode & stat.S_ISVTX))))
                 row, fd = StartupArtifactOwner._open(self, name, parent, True, native_registration)
                 held.append((row, fd))
-                _require(_identity(StartupArtifactOwner._fstat(self, fd, s), True) == signature)
+                _require(_identity(StartupArtifactOwner._fstat(
+                    self, fd, s, native_registration), True) == signature)
                 ancestors.append((name, parent, fd, signature))
                 parent = fd
             _require(type(result) is CacheProbeData)
             for name, parent, fd, signature in ancestors:
-                _require(_identity(StartupArtifactOwner._fstat(self, fd, s), True) == signature
-                         and _identity(StartupArtifactOwner._stat(self, name, parent, s), True)
+                _require(_identity(StartupArtifactOwner._fstat(
+                    self, fd, s, native_registration), True) == signature
+                         and _identity(StartupArtifactOwner._stat(
+                             self, name, parent, s, native_registration), True)
                          == signature)
         except BaseException:
             failed = True

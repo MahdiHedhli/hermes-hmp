@@ -531,3 +531,24 @@ pass. This does not capture the original native open function, grant per-operati
 or descriptor authority, reserve cleanup capacity, enforce the aggregate quota or
 complete the other five native operations. Original raw-return/claim custody and
 all runtime/service/physical requirements remain open.
+
+## Original registration at native metadata boundaries — unqualified candidate
+
+All39 fixed stat/fstat sites forward their caller-held registration through
+package/file/link/cache/probe and entry metadata/tree paths. Both boundaries
+validate that same registration before the native call, retain original scope/
+root/cell/registry, capture actual returned stat_result locally and repeat the
+held registration join after callback-bearing currentness. Final joins are pure;
+legacy None registrations retain the previous supported path. Existing metadata
+exception handling and original known-descriptor cleanup remain unchanged.
+
+Sixteen composed package/artifact cases cover each operation with normal, copied,
+missing and post-return coherently replaced registration. A synthetic C-call
+observer counts actual unchanged native functions at the fixed method's frame;
+pre-refusal must observe zero calls, late refusal exactly one call plus actual
+stat_result and original known descriptor closure. No native function is mocked.
+Child script parses and Ruff/static scanner/diff checks pass; tests remain unrun.
+Line-wrap edits preserve the parsed AST. This is registration forwarding only:
+original native callable/typed argument-resource/step/result claims, bounded raw
+slots, quota/reserved cleanup, remaining operations and actual runtime/service/
+physical delivery are still unfinished. Native absence/fallback is not inferred.
