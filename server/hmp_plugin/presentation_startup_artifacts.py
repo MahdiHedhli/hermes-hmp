@@ -606,7 +606,8 @@ def _begin_native_declared_walk(owner, registration, expected):
     _require(type(plan) is _NativeDeclaredWalk and plan.expected is expected
              and plan.owner is owner and plan.scope is registration.scope
              and plan.cell is registration.cell and plan.root is registration.root
-             and plan.index == index and type(plan.declaration) is tuple
+             and type(plan.index) is int and plan.index == index
+             and type(plan.declaration) is tuple
              and len(plan.declaration) == len(walks)
              and plan.declaration[index] is expected
              and type(plan.state) is list and len(plan.state) == 1
@@ -622,7 +623,11 @@ def _begin_native_declared_walk(owner, registration, expected):
 
 
 def _finish_native_declared_walk(owner, registration, held):
+    _require(type(registration) is _NativeScopeRegistration
+             and type(held) is tuple and len(held) == 5)
     plan, walks, progress, index, state = held
+    _require(type(plan) is _NativeDeclaredWalk and type(walks) is tuple
+             and type(index) is int and 0 <= index < len(walks))
     _native_registration_tail(owner, registration.scope, registration.cell,
                               registration.root, registration,
                               registration.lineage.ledger.scopes)
