@@ -6,12 +6,14 @@ inventory/loader qualification or permission to load keys or publish images.
 """
 from __future__ import annotations
 
+import builtins
 import hashlib
 import os
 import stat
+import sys
 import threading
 from dataclasses import dataclass
-from types import FunctionType
+from types import BuiltinFunctionType, FunctionType, ModuleType
 from typing import NamedTuple
 
 from .presentation_gateway_activation import GatewayActivationOwner
@@ -639,6 +641,62 @@ def _finish_native_declared_walk(owner, registration, held):
     progress[0] = index + 1
 
 
+def _capture_native_work_origin(owner, registration):
+    """Original DATA for fixed callers; never select or perform an operation."""
+    if registration is None:
+        return None
+    from hmp_startup.gateway_entry import _NativeFileLineage, _NativeIOOrigin
+
+    _require(type(registration) is _NativeScopeRegistration and registration.owner is owner
+             and type(registration.lineage) is _NativeFileLineage
+             and type(registration.lineage.native) is _NativeIOOrigin)
+    native = registration.lineage.native
+    _native_work_origin_tail(owner, registration, native)
+    return native
+
+
+def _native_work_origin_tail(owner, registration, native):
+    """Pure original namespace/value join; no runtime or effect grant."""
+    if native is None:
+        _require(registration is None)
+        return
+    _require(type(registration) is _NativeScopeRegistration and registration.owner is owner
+             and type(registration.scope) is _Scope and type(sys) is ModuleType)
+    modules = vars(sys).get('modules')
+    _require(type(modules) is dict)
+    entry = modules.get('hmp_startup.gateway_entry')
+    _require(type(entry) is ModuleType)
+    names = vars(entry)
+    _require(type(registration.lineage) is names.get('_NativeFileLineage')
+             and type(native) is names.get('_NativeIOOrigin')
+             and registration.lineage.native is native
+             and registration.scope.native_files is registration.lineage
+             and type(native.namespace) is ModuleType and native.namespace is os
+             and type(native.native) is ModuleType
+             and modules.get('os') is native.namespace and modules.get('posix') is native.native
+             and type(builtins) is ModuleType and modules.get('builtins') is builtins
+             and type(native.operations) is tuple and len(native.operations) == 6
+             and type(native.flags) is tuple and len(native.flags) == 5
+             and type(native.errors) is tuple and len(native.errors) == 3
+             and type(native.result_type) is type)
+    namespace, original = vars(native.namespace), vars(native.native)
+    for index, name in enumerate(('open', 'read', 'close', 'stat', 'fstat', 'readlink')):
+        function = native.operations[index]
+        _require(type(function) is BuiltinFunctionType and function.__self__ is native.native
+                 and type(function.__name__) is str and function.__name__ == name
+                 and namespace.get(name) is function and original.get(name) is function)
+    for index, name in enumerate(('O_RDONLY', 'O_NOFOLLOW', 'O_CLOEXEC',
+                                  'O_NONBLOCK', 'O_DIRECTORY')):
+        flag = native.flags[index]
+        _require(type(flag) is int and namespace.get(name) is flag and original.get(name) is flag)
+    _require(namespace.get('stat_result') is native.result_type
+             and original.get('stat_result') is native.result_type)
+    error_names = vars(builtins)
+    for index, name in enumerate(('OSError', 'FileNotFoundError', 'PermissionError')):
+        _require(type(native.errors[index]) is type
+                 and error_names.get(name) is native.errors[index])
+
+
 def _native_relative_arguments(s, name, parent):
     """Primitive shape only; does not grant path/descriptor or step authority."""
     if s.native_files is None:
@@ -917,6 +975,9 @@ class StartupArtifactOwner:
         return s
 
     def _open(self, name, parent, directory, native_registration=None):
+        native = _capture_native_work_origin(self, native_registration)
+        open_call = None if native is None else native.operations[0]
+        native_flags = None if native is None else native.flags
         s = _native_walk_scope(self, native_registration)
         root_cell, owner_cell = self._root_cell, self._cell
         registry = (None if native_registration is None
@@ -930,18 +991,30 @@ class StartupArtifactOwner:
         s.records.append(row)  # original descriptor allocation before open
         fd = None
         row.attempted = True
-        flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK
-        if directory:
-            flags |= os.O_DIRECTORY
+        if native is None:
+            flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK
+            if directory:
+                flags |= os.O_DIRECTORY
+        else:
+            _native_work_origin_tail(self, native_registration, native)
+            _require(native_flags is native.flags)
+            flags = native_flags[0] | native_flags[1] | native_flags[2] | native_flags[3]
+            if directory:
+                flags |= native_flags[4]
         try:
             _native_registration_tail(self, s, owner_cell, root_cell,
                                       native_registration, registry)
-            fd = os.open(name, flags, dir_fd=parent)
+            _native_work_origin_tail(self, native_registration, native)
+            _require(native is None or open_call is native.operations[0])
+            if native is None:
+                open_call = os.open
+            fd = open_call(name, flags, dir_fd=parent)
             _require(type(fd) is int and fd >= 0)
             row.fd = fd
             _require(_native_walk_scope(self, native_registration) is s)
             _native_registration_tail(self, s, owner_cell, root_cell,
                                       native_registration, registry)
+            _native_work_origin_tail(self, native_registration, native)
             return row, fd
         except BaseException:
             row.unknown = self._unknown = True
@@ -986,6 +1059,8 @@ class StartupArtifactOwner:
             raise
 
     def _read(self, fd, count, s, native_registration=None):
+        native = _capture_native_work_origin(self, native_registration)
+        read_call = None if native is None else native.operations[1]
         _require(type(s) is _Scope)
         _native_descriptor_argument(s, fd)
         if type(self) is StartupArtifactOwner:
@@ -1015,7 +1090,11 @@ class StartupArtifactOwner:
         data = None
         try:
             _native_registration_tail(self, s, owner_cell, root, native_registration, registry)
-            data = os.read(fd, count)
+            _native_work_origin_tail(self, native_registration, native)
+            _require(native is None or read_call is native.operations[1])
+            if native is None:
+                read_call = os.read
+            data = read_call(fd, count)
             _require(type(data) is bytes)
             runtime = s.runtime
             same = (self._scope is s and self._origin is s and self._bytes_read is before
@@ -1043,6 +1122,7 @@ class StartupArtifactOwner:
                           (source_read.result[0] is source_return
                            and source_read.root.reads[-1] is source_read)))
             _native_registration_tail(self, s, owner_cell, root, native_registration, registry)
+            _native_work_origin_tail(self, native_registration, native)
             return data
         except BaseException:
             self._unknown = True
@@ -1053,33 +1133,53 @@ class StartupArtifactOwner:
             data = None
 
     def _stat(self, name, parent, s, native_registration=None):
+        native = _capture_native_work_origin(self, native_registration)
+        stat_call = None if native is None else native.operations[3]
+        result_type = None if native is None else native.result_type
         _require(_native_walk_scope(self, native_registration) is s)
         root, cell = self._root_cell, self._cell
         registry = (None if native_registration is None
                     else native_registration.lineage.ledger.scopes)
         _native_registration_tail(self, s, cell, root, native_registration, registry)
         _native_relative_arguments(s, name, parent)
-        value = os.stat(name, dir_fd=parent, follow_symlinks=False)
-        _require(type(value) is os.stat_result
+        _native_work_origin_tail(self, native_registration, native)
+        _require(native is None or stat_call is native.operations[3])
+        _require(native is None or result_type is native.result_type)
+        if native is None:
+            stat_call = os.stat
+        value = stat_call(name, dir_fd=parent, follow_symlinks=False)
+        _require(type(value) is (os.stat_result if native is None else result_type)
                  and _native_walk_scope(self, native_registration) is s)
         _native_registration_tail(self, s, cell, root, native_registration, registry)
+        _native_work_origin_tail(self, native_registration, native)
         return value
 
     def _fstat(self, fd, s, native_registration=None):
+        native = _capture_native_work_origin(self, native_registration)
+        fstat_call = None if native is None else native.operations[4]
+        result_type = None if native is None else native.result_type
         _require(_native_walk_scope(self, native_registration) is s)
         root, cell = self._root_cell, self._cell
         registry = (None if native_registration is None
                     else native_registration.lineage.ledger.scopes)
         _native_registration_tail(self, s, cell, root, native_registration, registry)
         _native_descriptor_argument(s, fd)
-        value = os.fstat(fd)
-        _require(type(value) is os.stat_result
+        _native_work_origin_tail(self, native_registration, native)
+        _require(native is None or fstat_call is native.operations[4])
+        _require(native is None or result_type is native.result_type)
+        if native is None:
+            fstat_call = os.fstat
+        value = fstat_call(fd)
+        _require(type(value) is (os.stat_result if native is None else result_type)
                  and _native_walk_scope(self, native_registration) is s)
         _native_registration_tail(self, s, cell, root, native_registration, registry)
+        _native_work_origin_tail(self, native_registration, native)
         return value
 
     def _readlink(self, name, parent, hop, phase, index, before_state, start,
                   native_registration=None):
+        native = _capture_native_work_origin(self, native_registration)
+        readlink_call = None if native is None else native.operations[5]
         s = _native_walk_scope(self, native_registration)
         runtime = s.runtime
         _require(type(runtime) is _RuntimeSource and self._ready is False
@@ -1104,7 +1204,13 @@ class StartupArtifactOwner:
         runtime.reads.append(record)  # owned attempt before the syscall
         record.attempted = self._reading = True
         try:
-            data = os.readlink(name, dir_fd=parent)  # bytes input => bytes output
+            _native_registration_tail(self, s, owner_cell, root,
+                                      native_registration, native_registry)
+            _native_work_origin_tail(self, native_registration, native)
+            _require(native is None or readlink_call is native.operations[5])
+            if native is None:
+                readlink_call = os.readlink
+            data = readlink_call(name, dir_fd=parent)  # bytes input => bytes output
             _require(type(data) is bytes)
             after = start[2] + len(data)  # actual result before postchecks, including refusals
             counted = (self, s, after)
@@ -1129,6 +1235,7 @@ class StartupArtifactOwner:
             observed = _ReadlinkObservation(record, start, counted, data)
             _native_registration_tail(self, s, owner_cell, root,
                                       native_registration, native_registry)
+            _native_work_origin_tail(self, native_registration, native)
             return observed
         except BaseException:
             record.unknown = self._unknown = True

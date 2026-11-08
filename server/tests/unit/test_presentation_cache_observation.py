@@ -56,7 +56,7 @@ if case in ('permission','not_directory','loop_error','wrong_enoent','unknown_st
             if case=='count_copy' and foreign_count is None:
                 foreign_count=tuple(list(io._count_cell));io._count_cell=foreign_count
     trace_synthetic_boundary(a.StartupArtifactOwner._stat.__code__,
-                             'value = os.stat(',disturbed_stat)
+                             'value = stat_call(',disturbed_stat)
 actual_close=a.os.close
 lost=False
 if case=='close_unknown':

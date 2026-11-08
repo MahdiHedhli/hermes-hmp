@@ -8,10 +8,12 @@ from hmp_plugin.presentation_startup_artifacts import (
     ExpectedArtifact,
     StartupArtifactOwner,
     _capture_native_scope,
+    _capture_native_work_origin,
     _Descriptor,
     _HashedArtifact,
     _native_registration_tail,
     _native_walk_scope,
+    _native_work_origin_tail,
     _ReadEffect,
     _Scope,
 )
@@ -256,6 +258,8 @@ class DeclaredCacheReadOwner:
 
     def _read(self, fd, requested, s, native_registration=None):
         global _ATTEMPTS, _RESULTS
+        native = _capture_native_work_origin(self, native_registration)
+        read_call = None if native is None else native.operations[1]
         _require(_native_walk_scope(self, native_registration) is s
                  and self._started is True and self._ready is False
                  and self._reading is False and self._read_claim is None
@@ -279,7 +283,11 @@ class DeclaredCacheReadOwner:
         data = None
         try:
             _native_registration_tail(self, s, cell, root, native_registration, registry)
-            data = os.read(fd, requested)
+            _native_work_origin_tail(self, native_registration, native)
+            _require(native is None or read_call is native.operations[1])
+            if native is None:
+                read_call = os.read
+            data = read_call(fd, requested)
             _require(type(data) is bytes)
             length = len(data)
             after = (self, s, before[2] + length)
@@ -308,6 +316,7 @@ class DeclaredCacheReadOwner:
                      and _ATTEMPTS is attempts and _RESULTS is results
                      and effect.after is after and effect.returned is True)
             _native_registration_tail(self, s, cell, root, native_registration, registry)
+            _native_work_origin_tail(self, native_registration, native)
             return data
         except BaseException:
             effect.unknown = self._unknown = True

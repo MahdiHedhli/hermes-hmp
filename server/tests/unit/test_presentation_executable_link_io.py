@@ -39,7 +39,7 @@ if mutation in ("io_read_unknown","io_count_copy","io_scope_drift","io_read_reti
             current=actual_link(name,dir_fd=parent)
             a.os.symlink(current+b'x',b'changed-link',dir_fd=parent)
             a.os.replace(b'changed-link',name,src_dir_fd=parent,dst_dir_fd=parent)
-    trace_synthetic_boundary(link_code,'data = os.readlink(',before_link_call)
+    trace_synthetic_boundary(link_code,'data = readlink_call(',before_link_call)
     trace_synthetic_boundary(link_code,'_require(type(data) is bytes)',before_link_return)
 else:
     actual_owned_readlink=a.StartupArtifactOwner._readlink

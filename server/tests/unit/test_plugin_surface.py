@@ -588,3 +588,21 @@ def test_native_scope_type_joins_remain_exact_lazy_and_local(
 ) -> None:
     _append(pkg, module, body)
     assert (("S1", module) not in _rules(pkg)) is ok
+
+
+@pytest.mark.parametrize('module,body,ok', [
+    ('presentation_startup_artifacts.py',
+     'def f():\n    from hmp_startup.gateway_entry import _NativeIOOrigin\n', True),
+    ('presentation_startup_artifacts.py',
+     'from hmp_startup.gateway_entry import _NativeIOOrigin\n', False),
+    ('presentation_source_digest.py',
+     'def f():\n    from hmp_startup.gateway_entry import _NativeIOOrigin\n', False),
+    ('presentation_startup_artifacts.py',
+     'def f():\n    from hmp_startup.gateway_entry import _NativeIOOrigin, _native_io_origin\n',
+     False),
+])
+def test_native_work_origin_type_join_stays_closed(
+    pkg: Path, module: str, body: str, ok: bool
+) -> None:
+    _append(pkg, module, body)
+    assert (("S1", module) not in _rules(pkg)) is ok

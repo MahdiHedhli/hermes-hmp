@@ -56,21 +56,21 @@ if case in ('stat_permission','stat_structure','open_error','fstat_error','close
                 if case=='stat_permission':raise PermissionError(errno.EACCES,'synthetic',name)
                 raise NotADirectoryError(errno.ENOTDIR,'synthetic',name)
         trace_synthetic_boundary(RuntimeCacheProbeOwner._stat_known.__code__,
-                                 'result = os.stat(',fault_stat)
+                                 'result = stat_call(',fault_stat)
     if case=='open_error':
         def fault_open(frame):
             if frame.f_locals['self'] is owner and frame.f_locals['name']=='/':
                 fault_calls.append(case)
                 raise PermissionError(errno.EACCES,'synthetic','/')
         trace_synthetic_boundary(pm.StartupArtifactOwner._open.__code__,
-                                 'fd = os.open(',fault_open)
+                                 'fd = open_call(',fault_open)
     if case=='fstat_error':
         def fault_fstat(frame):
             if frame.f_locals['self'] is owner and not fault_calls:
                 fault_calls.append(case)
                 raise OSError(errno.EIO,'synthetic')
         trace_synthetic_boundary(pm.StartupArtifactOwner._fstat.__code__,
-                                 'value = os.fstat(',fault_fstat)
+                                 'value = fstat_call(',fault_fstat)
     if case=='close_ack':
         close_attempts=[]
         def close_observed(frame):

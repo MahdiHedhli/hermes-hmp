@@ -585,3 +585,33 @@ root/ledger/claim still match; actual attempt/result/effect and byte progress
 remain retained, unknown is latched, and no replay or fallback is authorized.
 This preserves existing cleanup semantics rather than treating pointer retirement
 as a successful acknowledgment of the refused native result.
+
+## Held native work callees — unqualified executable candidate
+
+Five fixed work operations now select their literal-index original native
+function locally before callback-bearing work guards: open/read/stat/fstat/
+readlink, including the distinct declared-cache read and fresh-probe stat paths.
+Open retains original flags; metadata paths retain original result type and the
+probe's exact missing-error class. A typed capture and pure original namespace
+join check actual os/posix function identities, flags, result/error classes and
+original registration lineage. Each fixed boundary rejoins its local callee
+immediately before direct dispatch and the origin after post-return callbacks.
+No generic operation-selection or caller-supplied callable interface was added.
+Supported legacy None paths retain alias selection and avoid entry-only imports.
+
+Thirty-five composed fixed-operation cases are prepared: positive actual calls,
+origin copies, os substitution before admission, and os/posix/flag/result-type
+substitution after the final work guard. Negative cases require zero actual
+selected native calls and zero foreign hooks; original known resources must still
+close. Four scanner cases keep the new lazy type join exact and local. Synthetic
+pre-call fault selectors now name the actual shared dispatch lines, preserving
+fault timing instead of silently selecting the unused legacy branch. Existing
+actual-return/progress/debt cases remain required. Tests have not run.
+
+This is executable callee custody only, not completed native IO authority. Actual
+per-operation actor/step/resource/result claims, preallocated raw returns, shared
+attempt budget and independently reserved original close remain unfinished. The
+current close path still uses a later os.close lookup: namespace drift can cause
+foreign cleanup dispatch or leak. That source limitation is not a deployed
+incident finding; no operational/factory/service/device or release readiness is
+claimed, and this source must not be deployed as fully owned native IO.

@@ -13,11 +13,13 @@ from hmp_plugin.presentation_startup_artifacts import (
     ExpectedArtifact,
     StartupArtifactOwner,
     _capture_native_scope,
+    _capture_native_work_origin,
     _Descriptor,
     _HashedArtifact,
     _identity,
     _native_registration_tail,
     _native_walk_scope,
+    _native_work_origin_tail,
     _Scope,
 )
 
@@ -201,20 +203,36 @@ class RuntimeCacheProbeOwner:
         return s
 
     def _stat_known(self, name, parent, s, native_registration=None):
+        native = _capture_native_work_origin(self, native_registration)
+        stat_call = None if native is None else native.operations[3]
+        result_type = None if native is None else native.result_type
+        missing_type = FileNotFoundError if native is None else native.errors[1]
         # Only exact ENOENT becomes sampled missing data. No read/permission or
         # structural error is relabeled as a cache miss here.
         result = None
         missing = False
         _require(_native_walk_scope(self, native_registration) is s)
+        root, cell = self._root_cell, self._cell
+        registry = (None if native_registration is None
+                    else native_registration.lineage.ledger.scopes)
+        _native_registration_tail(self, s, cell, root, native_registration, registry)
         try:
-            result = os.stat(name, dir_fd=parent, follow_symlinks=False)
-        except FileNotFoundError as exc:
-            _require(type(exc) is FileNotFoundError and type(exc.errno) is int
+            _native_work_origin_tail(self, native_registration, native)
+            _require(native is None or (stat_call is native.operations[3]
+                     and result_type is native.result_type and missing_type is native.errors[1]))
+            if native is None:
+                stat_call = os.stat
+            result = stat_call(name, dir_fd=parent, follow_symlinks=False)
+        except missing_type as exc:
+            _require(type(exc) is missing_type
+                     and type(exc.errno) is int
                      and exc.errno == errno.ENOENT and type(exc.filename) is str
                      and exc.filename == name)
             missing = True
         _require(_native_walk_scope(self, native_registration) is s)
-        _require(missing or type(result) is os.stat_result)
+        _require(missing or type(result) is (os.stat_result if native is None else result_type))
+        _native_registration_tail(self, s, cell, root, native_registration, registry)
+        _native_work_origin_tail(self, native_registration, native)
         return result
 
     def observe(self):
