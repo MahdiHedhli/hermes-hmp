@@ -512,10 +512,24 @@ def prepare(frame):
     assert phase.current[0] is phase.idle and phase.result[0] is None
     assert foreign_calls==[] and not owner._failed and not owner._unknown
     seen.append(True)
-trace_synthetic_boundary(a.StartupArtifactOwner._file.__code__,
-                         'info = StartupArtifactOwner._fstat(self, fd, s, native_registration)',
-                         prepare)
-owner.read()
+# Run the hook as an ordinary fixture call, not inside another trace callback.
+# A nested ACK line trace is otherwise suppressed on the Python 3.11 floor.
+assert sys.gettrace() is None
+original_fstat=vars(a.StartupArtifactOwner)['_fstat']
+original_file_code=a.StartupArtifactOwner._file.__code__
+def at_original_fstat(actual_owner,fd,scope,registration=None):
+    if actual_owner is owner and not seen:
+        frame=sys._getframe(1)
+        assert frame.f_code is original_file_code
+        assert frame.f_locals['self'] is owner
+        assert frame.f_locals['native_registration'] is registration
+        assert frame.f_locals['fd'] is fd
+        prepare(frame)
+    return original_fstat(actual_owner,fd,scope,registration)
+a.StartupArtifactOwner._fstat=at_original_fstat
+try:owner.read()
+finally:a.StartupArtifactOwner._fstat=original_fstat
+assert vars(a.StartupArtifactOwner)['_fstat'] is original_fstat
 assert seen==[True] and owner._ready
 assert owner.completed_binding()[4] is owner._original_buffer
 owner.release()

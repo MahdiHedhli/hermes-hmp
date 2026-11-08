@@ -316,3 +316,17 @@ final ACK state is checked. They require original debt/marker/cursor history,
 raw/backlink retirement, duplicate/copied-commit refusal and sticky late failure
 without rewind. They do not cover every store interruption or lost return.
 All35 cases are unrun; the earlier29-case producer run remains untouched.
+
+## Test-only ACK entry hook preparation
+
+A test-only descendant replaces the outer line-trace callback with an ordinary
+fixture wrapper around the class `_fstat` entry. It asserts the exact original
+`_file` caller frame, owner, registration and FD before invoking the same case
+body, delegates to the held original class function, and restores that exact
+function in finally. Captured native OS callables and production bytes are
+unchanged. This removes the known Python3.11 nested-trace suppression so later
+ACK store-level faults can be observed directly; no inner-trace pass is inferred.
+
+The normal ACK and late-ACK-fault cases are selected as a current/floor entry
+hook preflight before a larger interruption matrix. The35-case source selection
+is retained; no active test was stopped or changed. Preflight is unrun.
