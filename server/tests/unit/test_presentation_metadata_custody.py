@@ -200,3 +200,47 @@ def test_post_descriptor_line_fault_refuses_without_foreign_callbacks(fault):
     assert injected == [True]
     assert calls == []
     assert marker.owner_link[0] is payload
+
+
+def test_cell_replacement_after_last_marker_return_is_not_adopted():
+    """Trace the actual final marker return, not an assumed C-profile event."""
+    import ast
+    import inspect
+    import sys
+
+    from hmp_plugin.presentation_metadata_custody import _marker_tail
+
+    owner, origin, marker, payload, _ = allocation()
+    held_cell = origin.members[0].__get__(payload)
+    foreign_cell = [object()]
+    source = inspect.getsource(_directory_payload_cells)
+    calls = [node for node in ast.walk(ast.parse(source))
+             if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+             and node.func.id == '_marker_tail']
+    assert len(calls) >= 2
+    previous, observed, injected = sys.gettrace(), [], []
+
+    def interrupt(frame, event, arg):
+        if (frame.f_code is _marker_tail.__code__ and event == 'return'
+                and frame.f_back.f_code is _directory_payload_cells.__code__):
+            assert arg is marker
+            assert frame.f_locals['payload'] is payload
+            observed.append(True)
+            if len(observed) == len(calls):
+                assert origin.members[0].__get__(payload) is held_cell
+                sys.settrace(previous)
+                origin.members[0].__set__(payload, foreign_cell)
+                injected.append(True)
+        return interrupt
+
+    try:
+        sys.settrace(interrupt)
+        with pytest.raises(ArtifactObservationError):
+            _directory_payload_cells(owner, origin, marker, payload)
+    finally:
+        sys.settrace(previous)
+    assert observed == [True] * len(calls)
+    assert injected == [True]
+    assert origin.members[0].__get__(payload) is foreign_cell
+    assert marker.owner_link[0] is payload
+    assert marker.state == [False, False, False]
