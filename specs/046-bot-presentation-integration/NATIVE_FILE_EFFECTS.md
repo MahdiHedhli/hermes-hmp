@@ -139,3 +139,41 @@ proposal with the following mandatory clarifications, now part of this contract:
 This is bounded contract acceptance, with no reviewer tests or writes. It is not
 implementation acceptance, operational RSS/latency qualification, kernel outcome
 proof, source fallback, deployed startup or physical character-image completion.
+
+## Exact source integration map
+
+At1a49174, the following sites must all participate; migrating only ordinary
+artifact helpers would omit real operations:
+
+- `gateway_entry.GatewayEntryOwner.start` and its actual original invocation/
+  retained binding provide the entry anchor. Retain one typed lineage before its
+  first admitted entry-bound IO operation. No completed historical binding or new
+  digest context creates another allowance. Creation itself performs no file IO.
+- `presentation_startup_artifacts._Scope` carries the original typed lineage as
+  an additional explicit field. A legacy scope has no lineage and stays on its
+  existing path; absence cannot be inferred as native qualification.
+- `presentation_source_digest.retain/current` binds the actual original entry
+  and shared lineage for package/artifact source phases. The manually constructed
+  SourceDigestContext in `runtime_reader.RuntimeSourceReadOwner.retain` must reuse
+  that lineage rather than reset it.
+- `cache_probe.RuntimeCacheProbeOwner.retain` creates a scope with no source
+  digest; `cache_reader.DeclaredCacheReadOwner.retain` does too. Both must receive
+  the same actual entry-derived lineage through their original continuation,
+  independently of source hashing. No late caller-supplied entry reconstruction.
+- `StartupArtifactOwner._open/_close/_read/_stat/_fstat/_readlink` are shared
+  native boundaries. Migrate typed entry-bound calls through the fixed dispatcher
+  and preserve legacy dispatch distinctly. Descriptor allocation must hold close
+  reservation and raw-return storage before open; cleanup uses those originals.
+- `DeclaredCacheReadOwner._read` performs its own direct os.read rather than using
+  the ordinary `_read`; it needs the same dispatcher and exact original pending
+  read-claim acknowledgement. Its existing effect/result history and4096-call
+  cap remain required alongside the shared aggregate operation cap.
+- `RuntimeCacheProbeOwner._stat_known` catches current stat outcomes. A raised
+  dispatcher category cannot silently become absence/permission or source fallback.
+  Existing diagnostic provenance needs explicit migration; kernel proof stays open.
+
+The implementation must document which original scope/claim holds every raw
+native return until its fixed consumer acknowledgement, including allocation
+failure and work-guard retirement. Generic private callbacks or a consumer-supplied
+success flag do not satisfy this map. No implementation or test pass is implied
+by this source inventory.
