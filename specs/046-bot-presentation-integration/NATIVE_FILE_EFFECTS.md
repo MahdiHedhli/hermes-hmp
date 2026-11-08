@@ -447,3 +447,20 @@ after allocation. Seven added callback cases cover foreign-origin zero-getter
 refusal, coherent scope replacement and lifecycle/attempt/IO fact/count drift at
 publication. Entry coverage is now23 prepared cases; no test pass is claimed.
 Independent repair review and exact qualification remain required.
+
+## Original declared-file identity — unqualified source increment
+
+Entry-bound_file now requires the exact ExpectedArtifact object from its retained
+original declaration tuple (or the validated package manifest's files), checks
+existing primitive path/size/hash constraints, then rejoins its held registration
+before any file acquisition. Equal copied declarations and unlisted paths cannot
+be substituted. Legacy operator/configuration reads preserve their prior guards
+and do not acquire this entry authority.
+
+Eight prepared package/artifact cases exercise normal, copied, unlisted and
+foreign expectations. Invalid cases assert unchanged original count/descriptors
+and zero foreign hooks outside catch boundaries, so early unrelated refusal
+cannot masquerade as a causal pass. Child scripts parse; tests have not run.
+Independent review and exact current/floor qualification remain required. This
+check is a prerequisite for fixed per-step claims, not a replacement for them,
+raw-operation custody, resource accounting or runtime/image authority.

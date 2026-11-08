@@ -1169,6 +1169,18 @@ class StartupArtifactOwner:
 
     def _file(self, expected, native_registration=None):
         s = _native_walk_scope(self, native_registration)
+        if native_registration is not None:
+            from .presentation_gateway_package import GatewayPackageOwner, _Manifest
+
+            _require(type(expected) is ExpectedArtifact)
+            declared = s.expected
+            if type(self) is GatewayPackageOwner:
+                _require(type(declared) is _Manifest)
+                declared = declared.files
+            _require(type(declared) is tuple and 0 < len(declared) <= _MAX_FILES
+                     and any(original is expected for original in declared))
+            _expected((expected,))  # exact primitive path/size/hash checks before effects
+            _require(_native_walk_scope(self, native_registration) is s)
         anchor = type(expected) is OperatorApprovalPath
         declared_reader = None
         if anchor:
