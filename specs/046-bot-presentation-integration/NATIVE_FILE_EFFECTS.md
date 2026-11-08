@@ -393,3 +393,12 @@ entry metadata/tree walkers are not yet migrated. Per-step/consumer claims, raw
 six-operation dispatch, diagnostic-plan ordinals, quota/reserved cleanup, separate
 enumeration effect custody and runtime/device image delivery remain unfinished.
 Existing exact missing-path checks are preserved; no fallback is added.
+
+Bounded independent read-only review found no new forwarding/tail/cleanup-gate
+defect in58e3478. Eleven added isolated source-active cases assert actual held
+registration forwarding, copied/missing argument refusal, paired replacement at
+cache-pass/link-path final callbacks, and metadata recheck fact/registration
+replacement with unchanged byte/read counts. Both child injection scripts parse;
+these cases have not executed. Existing wrong-ENOENT/name/permission behavior and
+exact source selection remain required in affected regression. This is not a
+claim of complete registration threading or native effect admission.
