@@ -1,3 +1,12 @@
+# November 8: selected-cache decode source awaiting tests
+
+The isolated source now owns original native cache decoding and filename-fix
+results without executing code or authorizing source fallback. Bounded independent
+source review accepted the repaired custody and publication joins. Nineteen
+synthetic cases are prepared, not run. This does not qualify operational native
+parsing, complete loader admission or physical character/image delivery. See
+[scope and remaining qualification](specs/046-bot-presentation-integration/OWNED_CACHE_DECODE.md).
+
 # November 7: declared cache reader awaiting causal qualification
 
 The isolated declared-cache reader now retains original native read results and

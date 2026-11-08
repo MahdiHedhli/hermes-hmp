@@ -60,6 +60,7 @@ class DeclaredCacheReadOwner:
         owner._retaining = True
         owner._bytes_read = 0
         owner._fact = None
+        owner._decoder_owner = owner._decoder_cell = owner._decoder_fact = None
         owner._attempts = activation._cache_read_attempts = _ATTEMPTS
         owner._results = activation._cache_read_results = _RESULTS
         buffer = bytearray()

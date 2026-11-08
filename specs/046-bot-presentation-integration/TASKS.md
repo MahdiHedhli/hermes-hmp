@@ -87,8 +87,8 @@ See [fixed startup factory contract](GATEWAY_STARTUP_FACTORY.md).
 - [ ] **PS1-SELECTED-CACHE-DECODE** Implement fixed actual-successful-reader-only
       native decode/fixer custody with recomputed original selection evidence,
       ephemeral payload handling and historical effect facts. Independent bounded
-      contract review accepted this separate increment; implementation/tests remain
-      pending. Known-unavailability/fallback and operational resource gates stay
+      contract and source review accepted this separate increment;19 causal
+      cases prepared, not run. Current/floor/broader tests remain pending. Known-unavailability/fallback and operational resource gates stay
       open. [Contract and exact limits](OWNED_CACHE_DECODE.md).
 - [ ] **PS1-LOADER** Enforce actual platform runtime/current and future import policy;
       snapshot DATA cannot mint startup admission.

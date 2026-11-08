@@ -1,6 +1,6 @@
-# Owned selected-cache decode — proposed next source step
+# Owned selected-cache decode — source implementation awaiting tests
 
-This is a proposal, not executable qualification. The declared-cache reader's
+The fixed source implementation is present but untested; no executable qualification is claimed. The declared-cache reader's
 broader startup suite remains active in a different, frozen worktree. This branch
 must not imply completed loader, source-fallback, resource or native admission.
 
@@ -75,3 +75,21 @@ Native parser/worker/CPU/RSS/deadline gates remain mandatory before operational 
 No executable decoder or test pass is claimed by this review. The next concrete
 step is the fixed original-owner implementation and bounded synthetic causal
 matrix, in this isolated branch, while the reader baseline stays frozen.
+
+## Implementation checkpoint
+
+The isolated branch now implements actual-successful-reader-only decode with
+original selection recomputation, native load/fix return slots held in immutable
+scope, temporary snapshot/view ownership, original buffer destruction on admitted
+refusal, single-use actor/lifecycle checks, and historical result facts. The final
+root filename join follows the last callback and precedes fact publication.
+Historical queries deliberately do not certify later immutable filename graphs.
+
+Independent bounded source review accepted the repaired implementation. Full
+Ruff, surface/privacy and diff checks pass. Nineteen synthetic causal cases are
+prepared, NOT RUN while the parent reader shared-startup suite is active. They
+cover native accepted trailing data, EOF/bad tag/non-code refusal, root/nested
+filenames, wrong thread/replay, original/foreign slot and buffer cleanup, native
+function/metadata substitutions with zero foreign calls, and publication-time
+filename drift. Current/floor/broader and operational resource/native qualification
+remain pending. No code execution, source fallback or live host/device action.
