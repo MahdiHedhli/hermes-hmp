@@ -255,3 +255,18 @@ checkpoint bindings. Four selected combined actual-caller cases on `cc9603e`
 now pass on each interpreter, with unchanged source and verified source/log/XML
 bindings. The broader121-case selected regression is running serially. These are isolated source results, not full walker/native/runtime or
 physical image/bot-character acceptance. No live host/device changes occurred.
+
+## Combined source regression and pending constructor control
+
+At `cc9603e`, all121 selected metadata operation/memory/caller/plan/resource/leaf
+cases pass on Python3.14.9, with zero failures/errors/skips and unchanged source;
+all current source, receipt, log and XML hashes were rechecked. The identical
+Python3.11.15 selection is running serially. These tests do not include the
+separate plugin snapshot constructor control (`5d25af8`, production unchanged).
+Source review found that `_native_metadata_snapshot` constructs a typed snapshot
+but does not rejoin returned fields to its held native-derived identity/mtime.
+The synthetic actual-caller constructor-drift control is reviewed and unrun;
+its outcome may show altered acceptance or safe refusal, and missing causal
+checkpoints remain inconclusive. No product fix or live-exposure claim is made.
+Do not treat the121-case pass as clearing this unexecuted scenario. Actual
+all-role/all-site integration, runtime/service and physical acceptance remain open.

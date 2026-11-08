@@ -141,8 +141,13 @@ also passed on Python3.11.15 with zero failures/errors/skips, unchanged source
 and all source/log/XML hashes rechecked. Independent repair review found no new blocker for the
 single interruption. Four selected combined actual-caller cases on `cc9603e`
 now pass on each interpreter: normal, wrong actor and before/after-detach
-interruption, with unchanged source and rehashed evidence. A broader121-case
-selected regression of that exact source is running serially. Other isolation/
+interruption, with unchanged source and rehashed evidence. The broader121-case
+selected regression of that exact source now passes on Python3.14.9, with zero
+failures/errors/skips, unchanged source and every source/log/XML hash rechecked.
+The Python3.11.15 run is active. A separate reviewed plugin snapshot-constructor
+drift control remains unrun: source inspection found a missing returned-field
+join to held native-derived identity/mtime; runtime acceptance is not yet proven.
+The121-case pass does not cover or clear that pending control. Other isolation/
 repeated-interruption cases, actual-site integration and physical/runtime
 qualification remain open. The older73-case baseline does not cover the later
 cross-thread preparation defect; the separate repair/control evidence above
