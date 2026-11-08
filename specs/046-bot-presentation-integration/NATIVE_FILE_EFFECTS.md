@@ -402,3 +402,21 @@ replacement with unchanged byte/read counts. Both child injection scripts parse;
 these cases have not executed. Existing wrong-ENOENT/name/permission behavior and
 exact source selection remain required in affected regression. This is not a
 claim of complete registration threading or native effect admission.
+
+## Fresh cache-probe registration — unqualified source increment
+
+The standalone metadata-probe owner captures its actual scope registration and
+root/cell/count before actor admission, threads them through the owned observation
+and exact-stat helper, and validates the held registration at work checkpoints.
+Status-query publication also captures before callbacks and ends with a pure
+held registration join. Original resource cleanup remains independent of new
+work guards; exact missing errno/name/type rules remain unchanged.
+
+Nine new isolated cases cover normal/copy/missing arguments, actor replacement,
+stat registration substitution, final publication replacement, and current-query
+registration/fact replacement with no new bytes or resources. Both child scripts
+parse; tests have not run. Independent review and affected probe regression remain
+required. No new native operation/path authority, diagnostic fallback, quota/
+cleanup enforcement or runtime/image admission is implemented by this step.
+Entry metadata/tree threading and all per-step/consumer/native-effect work remain
+open; earlier cache/link results do not qualify this new source.

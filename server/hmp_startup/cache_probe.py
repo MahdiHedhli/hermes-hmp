@@ -12,9 +12,12 @@ from hmp_plugin.presentation_gateway_package import _Tree
 from hmp_plugin.presentation_startup_artifacts import (
     ExpectedArtifact,
     StartupArtifactOwner,
+    _capture_native_scope,
     _Descriptor,
     _HashedArtifact,
     _identity,
+    _native_registration_tail,
+    _native_walk_scope,
     _Scope,
 )
 
@@ -197,12 +200,12 @@ class RuntimeCacheProbeOwner:
                  and GatewayContinuationOwner._seal(parent[0]) is parent[2])
         return s
 
-    def _stat_known(self, name, parent, s):
+    def _stat_known(self, name, parent, s, native_registration=None):
         # Only exact ENOENT becomes sampled missing data. No read/permission or
         # structural error is relabeled as a cache miss here.
         result = None
         missing = False
-        _require(RuntimeCacheProbeOwner._guard(self) is s)
+        _require(_native_walk_scope(self, native_registration) is s)
         try:
             result = os.stat(name, dir_fd=parent, follow_symlinks=False)
         except FileNotFoundError as exc:
@@ -210,7 +213,7 @@ class RuntimeCacheProbeOwner:
                      and exc.errno == errno.ENOENT and type(exc.filename) is str
                      and exc.filename == name)
             missing = True
-        _require(RuntimeCacheProbeOwner._guard(self) is s)
+        _require(_native_walk_scope(self, native_registration) is s)
         _require(missing or type(result) is os.stat_result)
         return result
 
@@ -219,6 +222,7 @@ class RuntimeCacheProbeOwner:
         _require(self._started is False and self._retaining is False and self._ready is False
                  and self._admitting is False)
         root, cell, count = _ROOT, _CELL, self._count_cell
+        native_registration = _capture_native_scope(s, cell, root)
         selected = s.parent[1]
         path, proof = selected.plan_row.location.path, selected.proof
         self._admitting = True
@@ -242,29 +246,34 @@ class RuntimeCacheProbeOwner:
         self._started = True
         failed = False
         try:
-            return RuntimeCacheProbeOwner._observe_owned(self, s, selected, path, proof)
+            return RuntimeCacheProbeOwner._observe_owned(
+                self, s, selected, path, proof, native_registration, root, cell, count)
         except BaseException:
             self._failed = failed = True
         if failed:
             raise CacheProbeError(self) from None
 
-    def _observe_owned(self, s, selected, path, proof):
+    def _observe_owned(self, s, selected, path, proof, native_registration, root, cell, count):
         global _FACT
-        root, count = _ROOT, self._count_cell
+        _require(_native_walk_scope(self, native_registration) is s
+                 and _ROOT is root and _CELL is cell and self._count_cell is count)
+        native_registry = native_registration.lineage.ledger.scopes
         held, ancestors = [], []
         failed = False
         result = None
         try:
-            _require(RuntimeCacheProbeOwner._guard(self) is s and type(path) is str)
+            _require(_native_walk_scope(self, native_registration) is s and type(path) is str)
             parts = path[1:].split('/')
             _require(path.startswith('/') and 1 <= len(parts) <= 64
                      and all(part not in ('', '.', '..') for part in parts))
             parent = None
             for position, name in enumerate(('/', *parts)):
-                info = RuntimeCacheProbeOwner._stat_known(self, name, parent, s)
+                info = RuntimeCacheProbeOwner._stat_known(
+                    self, name, parent, s, native_registration)
                 if info is None:
                     _require(position > 0
-                             and RuntimeCacheProbeOwner._stat_known(self, name, parent, s) is None)
+                             and RuntimeCacheProbeOwner._stat_known(
+                                 self, name, parent, s, native_registration) is None)
                     result = CacheProbeData('missing_component', position - 1, None,
                                             tuple(item[3] for item in ancestors))
                     break
@@ -317,7 +326,7 @@ class RuntimeCacheProbeOwner:
             raise CacheProbeError(self) from None
         resources, records = tuple(held), tuple(s.records)
         fact = (self, s, result, resources, count, records, selected, path, proof, root)
-        _require(RuntimeCacheProbeOwner._guard(self) is s and _ROOT is root
+        _require(_native_walk_scope(self, native_registration) is s and _ROOT is root
                  and self._count_cell is count and self._bytes_read == 0
                  and self._started is True and self._retaining is False
                  and self._ready is False and self._fact is None and _FACT is None
@@ -328,6 +337,7 @@ class RuntimeCacheProbeOwner:
                  and all(type(row) is _Descriptor and row.fd is fd and row.closed is True
                          and row.close_attempted is True and row.unknown is False
                          for row, fd in resources))
+        _native_registration_tail(self, s, cell, root, native_registration, native_registry)
         self._fact = _FACT = s.activation._runtime_cache_probe_fact = fact
         self._ready = True
         return self
@@ -336,7 +346,9 @@ class RuntimeCacheProbeOwner:
     def current_binding(self):
         s = RuntimeCacheProbeOwner._pure(self)
         _require(self._ready is True and self._retaining is False)
-        fact, root = _FACT, _ROOT
+        fact, root, cell = _FACT, _ROOT, _CELL
+        native_registration = _capture_native_scope(s, cell, root)
+        native_registry = native_registration.lineage.ledger.scopes
         admitted = failed = False
         try:
             actor = _context()
@@ -345,9 +357,10 @@ class RuntimeCacheProbeOwner:
             admitted = actor == s.context
             _require(admitted is True and _ROOT is root and _FACT is fact
                      and self._fact is fact and s.activation._runtime_cache_probe_fact is fact
-                     and RuntimeCacheProbeOwner._guard(self) is s
+                     and _native_walk_scope(self, native_registration) is s
                      and _FACT is fact and self._fact is fact
                      and s.activation._runtime_cache_probe_fact is fact)
+            _native_registration_tail(self, s, cell, root, native_registration, native_registry)
         except BaseException:
             failed = True
             if admitted:
