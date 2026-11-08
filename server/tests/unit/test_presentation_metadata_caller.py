@@ -163,7 +163,7 @@ assert seen==[True] and owner._ready
 assert owner.completed_binding()[4] is owner._original_buffer
 owner.release()
 assert owner._original_buffer==bytearray()
-print(json.dumps({'case':case,'runtime_admitted':False}))
+print(json.dumps({'mutation':mutation,'runtime_admitted':False}))
 '''
     monkeypatch.setattr(base, 'SCRIPT', script)
     base.test_actual_entry_and_wrapper_files(tmp_path, mutation)
