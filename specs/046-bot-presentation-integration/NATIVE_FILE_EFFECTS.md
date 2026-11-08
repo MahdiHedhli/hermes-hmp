@@ -67,3 +67,48 @@ by independent contract/security review. Do not alter live hosts, grants,
 providers, devices or release state. The ongoing fixture/broad verification roots
 remain frozen. Actual presentation-service admission and physical bot-image
 rendering remain separate unfinished requirements.
+
+## Concrete resource and outcome proposal for second review
+
+Use one original entry-bound lineage across package/artifact/runtime-source/cache
+read/probe/link scopes; fresh SourceDigestContext objects do not reset it. Bind it
+in the original invocation/entry allocation before its first admitted operation,
+then carry the same lineage in typed original IO scope cells. Legacy configuration,
+operator approval and recipe acquisition remain explicit separate phases: no
+retrospective native-effect credit is invented for their earlier operations.
+
+Proposed hard cap:1,048,576 total operation attempts including all six operations,
+ancestors, probes, EOF, failures and cleanup. This is an upper source bound, not
+an operational memory or latency qualification. Before each open, reserve capacity
+for that open plus exactly one possible close of its original descriptor record.
+Other work consumes only unreserved capacity. A known returned descriptor keeps
+its reserved close even if later result allocation or work authority fails.
+Open-unknown debt cannot be converted into permission to close a guessed fd.
+No budget renewal or next-phase reset is allowed. Implementation must use bounded
+O(1) append/custody with a bounded final traversal, not quadratic prefix copies.
+
+Preallocate the attempt record, raw return slot and result-allocation slot BEFORE
+native entry. Write actual native fd/bytes/stat_result/None into the held raw slot
+immediately on return, before tuple/count/receipt allocation. Keep a known fd
+closeable through its original reserved record even if any later allocation fails.
+Retain raw bytes/stat results only until the same original fixed consumer has
+acknowledged the exact returned allocation. Then clear raw references and retain
+bounded category/actual length/count/result-claim identity, never payload history.
+The fixed consumer must own any metadata/payload needed by its existing receipts;
+retirement cannot manufacture a new success or erase unknown debt.
+
+For exceptions, store no exception, traceback, message, repr, filename or errno.
+Record only that the actual held native boundary raised, plus a closed category
+based on exact originally captured exception-type identity when available. A
+foreign subclass has only the generic raised category and receives no attribute
+access. Clear exception/data aliases and raise a fresh refusal outside its handler.
+All raised categories, including exact FileNotFoundError, remain non-fallback.
+
+Cleanup checks original process/UID/thread, descriptor/allocation, held native
+close builtin, reserved capacity and original cleanup custody. It does not call
+live work guards or require current os aliases after work retirement. Close has
+one attempted transition and an actual returned slot before later checks; loss
+of acknowledgement retains unknown debt without automatic replay or closure credit.
+
+Second review must accept or amend these exact storage, cap, retirement, exception
+and cleanup choices before code is described as implementing the frozen contract.
