@@ -985,17 +985,20 @@ class StartupArtifactOwner:
             row.unknown = self._unknown = True
             raise
 
-    def _read(self, fd, count, s):
+    def _read(self, fd, count, s, native_registration=None):
         _require(type(s) is _Scope)
         _native_descriptor_argument(s, fd)
         if type(self) is StartupArtifactOwner:
             _require(self._ready is False and self._attempt_cell is not None)
-        _require(_owner_guard(self) is s and type(count) is int
+        _require(_native_walk_scope(self, native_registration) is s and type(count) is int
                  and 0 < count <= 65536 and type(self._bytes_read) is int)
         before, cell = self._bytes_read, self._count_cell
         _require(type(cell) is tuple and len(cell) == 3 and cell[0] is self
                  and cell[1] is s and type(cell[2]) is int and cell[2] == before)
         root, owner_cell = self._root_cell, self._cell
+        registry = (None if native_registration is None
+                    else native_registration.lineage.ledger.scopes)
+        _native_registration_tail(self, s, owner_cell, root, native_registration, registry)
         effect = None
         read_index = None
         if s.reads is not None:
@@ -1011,6 +1014,7 @@ class StartupArtifactOwner:
         self._reading = True
         data = None
         try:
+            _native_registration_tail(self, s, owner_cell, root, native_registration, registry)
             data = os.read(fd, count)
             _require(type(data) is bytes)
             runtime = s.runtime
@@ -1032,11 +1036,13 @@ class StartupArtifactOwner:
             self._reading = False
             _require(same and (effect is None or (len(s.reads) == read_index + 1
                       and s.reads[read_index] is effect))
-                     and len(data) <= count and _owner_guard(self) is s
+                     and len(data) <= count
+                     and _native_walk_scope(self, native_registration) is s
                      and self._bytes_read is after and self._count_cell is after_cell
                      and (source_read is None or
                           (source_read.result[0] is source_return
                            and source_read.root.reads[-1] is source_read)))
+            _native_registration_tail(self, s, owner_cell, root, native_registration, registry)
             return data
         except BaseException:
             self._unknown = True
@@ -1383,9 +1389,11 @@ class StartupArtifactOwner:
             while remaining:
                 _require(_native_walk_scope(self, native_registration) is s)
                 _require(progress is None or self._count_cell is progress)
-                data = (StartupArtifactOwner._read(self, fd, min(remaining, 65536), s)
+                data = (StartupArtifactOwner._read(
+                    self, fd, min(remaining, 65536), s, native_registration)
                         if declared_reader is None else
-                        declared_reader._read(self, fd, min(remaining, 65536), s))
+                        declared_reader._read(
+                            self, fd, min(remaining, 65536), s, native_registration))
                 if source_root is not None:
                     source_observations.append(source_digest.capture(source_root))
                 if anchor:
@@ -1404,8 +1412,9 @@ class StartupArtifactOwner:
                 data = None
                 _require(_native_walk_scope(self, native_registration) is s)
             _require(progress is None or self._count_cell is progress)
-            data = (StartupArtifactOwner._read(self, fd, 1, s) if declared_reader is None
-                    else declared_reader._read(self, fd, 1, s))
+            data = (StartupArtifactOwner._read(self, fd, 1, s, native_registration)
+                    if declared_reader is None else
+                    declared_reader._read(self, fd, 1, s, native_registration))
             if source_root is not None:
                 source_observations.append(source_digest.capture(source_root))
             if anchor:

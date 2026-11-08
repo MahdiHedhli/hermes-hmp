@@ -552,3 +552,26 @@ Line-wrap edits preserve the parsed AST. This is registration forwarding only:
 original native callable/typed argument-resource/step/result claims, bounded raw
 slots, quota/reserved cleanup, remaining operations and actual runtime/service/
 physical delivery are still unfinished. Native absence/fallback is not inferred.
+
+## Original registration at native byte reads — unqualified candidate
+
+The fixed artifact/source reader and distinct declared-cache reader now consume
+the same caller-held registration at admission, immediately before native read,
+and after return/currentness before data publication. All four payload/EOF file
+call sites forward it. Actual returned byte accounting and prior result/effect
+allocation behavior stay intact; late registration refusal does not erase those
+facts. Cleanup still follows the prior original known-resource path. Legacy None
+callers retain their existing behavior; this creates no alternate cache fallback.
+
+Twelve composed cases are prepared: package/artifact and declared-cache readers,
+normal/copied/missing/late-coherent-copy. Actual unchanged native read calls are
+counted at the fixed reader frame. Pre-admission refusal must have zero reads;
+late refusal observes actual positive byte return, retained progress and unknown
+debt. Declared-cache late refusal requires its original 65,536-byte result and
+attempt record. No returned payload is retained by diagnostic lists, only lengths.
+Static scanner/Ruff/diff and both child-script parses pass; tests remain unrun.
+
+This is registration custody only. Raw returns are not yet preallocated original
+native-result claims, and the original native callable, resource/step/consumer
+binding, quota/reserved close, cleanup after root retirement and actual native
+runtime/service/physical feature qualification remain unfinished.

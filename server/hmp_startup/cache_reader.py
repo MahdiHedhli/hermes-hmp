@@ -10,6 +10,7 @@ from hmp_plugin.presentation_startup_artifacts import (
     _capture_native_scope,
     _Descriptor,
     _HashedArtifact,
+    _native_registration_tail,
     _native_walk_scope,
     _ReadEffect,
     _Scope,
@@ -253,15 +254,18 @@ class DeclaredCacheReadOwner:
         else:
             _require(self._bytes_read == 0)
 
-    def _read(self, fd, requested, s):
+    def _read(self, fd, requested, s, native_registration=None):
         global _ATTEMPTS, _RESULTS
-        _require(DeclaredCacheReadOwner._guard(self) is s
+        _require(_native_walk_scope(self, native_registration) is s
                  and self._started is True and self._ready is False
                  and self._reading is False and self._read_claim is None
                  and type(fd) is int and fd >= 0
                  and type(requested) is int and 0 < requested <= 65536
                  and len(_ATTEMPTS) < 4096 and len(_ATTEMPTS) == len(_RESULTS))
         root, cell, before = _ROOT, _CELL, self._count_cell
+        registry = (None if native_registration is None
+                    else native_registration.lineage.ledger.scopes)
+        _native_registration_tail(self, s, cell, root, native_registration, registry)
         prior_attempts, prior_results = _ATTEMPTS, _RESULTS
         expected_results = prior_results
         effect = _ReadEffect(before)
@@ -274,6 +278,7 @@ class DeclaredCacheReadOwner:
         self._read_claim = attempt
         data = None
         try:
+            _native_registration_tail(self, s, cell, root, native_registration, registry)
             data = os.read(fd, requested)
             _require(type(data) is bytes)
             length = len(data)
@@ -298,10 +303,11 @@ class DeclaredCacheReadOwner:
             expected_results = results
             self._count_cell, self._bytes_read = after, after[2]
             self._reading = False
-            _require(length <= requested and DeclaredCacheReadOwner._guard(self) is s
+            _require(length <= requested and _native_walk_scope(self, native_registration) is s
                      and _ROOT is root and _CELL is cell and self._count_cell is after
                      and _ATTEMPTS is attempts and _RESULTS is results
                      and effect.after is after and effect.returned is True)
+            _native_registration_tail(self, s, cell, root, native_registration, registry)
             return data
         except BaseException:
             effect.unknown = self._unknown = True
