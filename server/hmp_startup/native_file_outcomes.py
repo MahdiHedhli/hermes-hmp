@@ -9,7 +9,9 @@ from __future__ import annotations
 
 import errno
 from enum import Enum
+from types import MemberDescriptorType
 
+_BASE_ERROR = OSError
 _FILE_NOT_FOUND = FileNotFoundError
 _ERRNO_MEMBER = OSError.errno
 _FILENAME_MEMBER = OSError.filename
@@ -23,7 +25,14 @@ class _StatReport(Enum):
 
 def _reported_stat_condition(error, original_name):
     """Inspect only exact native exception slots; retain none of their values."""
-    if type(error) is not _FILE_NOT_FOUND or type(original_name) is not str:
+    if (type(_ERRNO_MEMBER) is not MemberDescriptorType
+            or type(_FILENAME_MEMBER) is not MemberDescriptorType
+            or _ERRNO_MEMBER.__objclass__ is not _BASE_ERROR
+            or _FILENAME_MEMBER.__objclass__ is not _BASE_ERROR
+            or _ERRNO_MEMBER.__name__ != "errno"
+            or _FILENAME_MEMBER.__name__ != "filename"
+            or type(_ENOENT) is not int
+            or type(error) is not _FILE_NOT_FOUND or type(original_name) is not str):
         return _StatReport.REFUSED
     # Native member descriptors bypass instance dictionaries and Python getters.
     number = _ERRNO_MEMBER.__get__(error, _FILE_NOT_FOUND)

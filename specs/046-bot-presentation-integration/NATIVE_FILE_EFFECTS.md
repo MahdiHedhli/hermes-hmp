@@ -258,3 +258,10 @@ origin. No exception or traceback is retained by the result. Calling the helper
 with a constructed exception proves no actual operation or kernel condition.
 No production route imports it and no authority, fallback or image delivery is
 implemented by this checkpoint.
+
+The next source increment rejects foreign captured descriptors and non-integer
+ENOENT before invoking any descriptor. Exact MemberDescriptorType, OSError
+owner and fixed slot names are required. Three synthetic dependency-substitution
+cases bring the selected test set to18; none have executed yet. This validates
+local capture shape only. Joining those captures to the original interpreter
+origin remains required at native-owner integration, with actual claim custody.

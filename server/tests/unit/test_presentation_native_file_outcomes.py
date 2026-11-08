@@ -86,3 +86,24 @@ def test_closed_stat_diagnostic_category(case):
                 if case == 'reported_missing' else _StatReport.REFUSED)
     assert _reported_stat_condition(error, original) is expected
     assert calls == []
+
+
+@pytest.mark.parametrize("slot", ("_ERRNO_MEMBER", "_FILENAME_MEMBER", "_ENOENT"))
+def test_foreign_capture_refuses_before_descriptor_callback(monkeypatch, slot):
+    from hmp_startup import native_file_outcomes as outcomes
+
+    calls = []
+
+    class Foreign:
+        def __get__(self, *args):
+            calls.append("descriptor")
+            raise AssertionError("foreign descriptor")
+
+        def __eq__(self, other):
+            calls.append("equal")
+            raise AssertionError("foreign constant")
+
+    monkeypatch.setattr(outcomes, slot, Foreign())
+    error = FileNotFoundError(errno.ENOENT, "synthetic", "component")
+    assert outcomes._reported_stat_condition(error, "component") is _StatReport.REFUSED
+    assert calls == []
