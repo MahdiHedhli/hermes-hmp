@@ -332,8 +332,11 @@ def _configuration(owner):
     if type(owner) is GatewayRecipeOwner:
         return True
     from hmp_startup.gateway_approval import GatewayApprovalOwner
-    _require(type(owner) is GatewayApprovalOwner)
-    return True
+    if type(owner) is GatewayApprovalOwner:
+        return True
+    from hmp_startup.runtime_reader import RuntimeSourceReadOwner
+    _require(type(owner) is RuntimeSourceReadOwner)
+    return False
 
 
 def _owner_guard(owner):
@@ -349,8 +352,11 @@ def _owner_guard(owner):
     if type(owner) is GatewayRecipeOwner:
         return GatewayRecipeOwner._guard(owner)
     from hmp_startup.gateway_approval import GatewayApprovalOwner
-    _require(type(owner) is GatewayApprovalOwner)
-    return GatewayApprovalOwner._guard(owner)
+    if type(owner) is GatewayApprovalOwner:
+        return GatewayApprovalOwner._guard(owner)
+    from hmp_startup.runtime_reader import RuntimeSourceReadOwner
+    _require(type(owner) is RuntimeSourceReadOwner)
+    return RuntimeSourceReadOwner._guard(owner)
 
 
 def _root(owner, activation):
@@ -366,8 +372,11 @@ def _root(owner, activation):
     if type(owner) is GatewayRecipeOwner:
         return activation._recipe_cell
     from hmp_startup.gateway_approval import GatewayApprovalOwner
-    _require(type(owner) is GatewayApprovalOwner)
-    return activation._approval_cell
+    if type(owner) is GatewayApprovalOwner:
+        return activation._approval_cell
+    from hmp_startup.runtime_reader import RuntimeSourceReadOwner
+    _require(type(owner) is RuntimeSourceReadOwner)
+    return activation._runtime_read_cell
 
 
 def _append_configuration(owner, data):
@@ -383,6 +392,12 @@ def _append_configuration(owner, data):
                 from hmp_startup.gateway_approval import GatewayApprovalOwner
                 _require(type(owner) is GatewayApprovalOwner)
                 GatewayApprovalOwner._append(owner, data)
+    elif type(owner) is not StartupArtifactOwner:
+        from .presentation_gateway_package import GatewayPackageOwner
+        if type(owner) is not GatewayPackageOwner:
+            from hmp_startup.runtime_reader import RuntimeSourceReadOwner
+            _require(type(owner) is RuntimeSourceReadOwner)
+            RuntimeSourceReadOwner._append(owner, data)
 
 
 class StartupArtifactOwner:
@@ -957,6 +972,13 @@ class StartupArtifactOwner:
                      and len(s.expected) == 1 and s.expected[0] is expected)
         else:
             _require(type(expected) is ExpectedArtifact)
+            if not _configuration(self) and type(self) is not StartupArtifactOwner:
+                from .presentation_gateway_package import GatewayPackageOwner
+                if type(self) is not GatewayPackageOwner:
+                    from hmp_startup.runtime_reader import RuntimeSourceReadOwner
+                    if type(self) is RuntimeSourceReadOwner:
+                        _require(expected is s.expected[0] and self._started is True
+                                 and self._ready is False)
         root_cell = self._root_cell
         held, directories, read_effects = [], [], []
         source_root = source_effect = source_buffer = None

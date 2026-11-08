@@ -221,6 +221,7 @@ class _ModuleScanner(ast.NodeVisitor):
             local_types = {
                 "hmp_startup.entry_files": {"EntryFileSnapshotOwner"},
                 "hmp_startup.gateway_approval": {"GatewayApprovalOwner"},
+                "hmp_startup.runtime_reader": {"RuntimeSourceReadOwner"},
                 "hmp_startup.runtime_files": {"ExecutableLinkPlan", "RuntimeFilePlan"},
             }
             cache_joins = {
@@ -229,8 +230,11 @@ class _ModuleScanner(ast.NodeVisitor):
                 "hmp_startup.runtime_files": {"RuntimeFilePlan", "_inside", "_path"},
             }
             if (self.name == "presentation_source_digest.py" and self._function_depth > 0
-                    and module == "hmp_startup.gateway_entry" and names
-                    and set(names) <= {"GatewayEntryOwner", "_interpreter_current"}):
+                    and names
+                    and ((module == "hmp_startup.gateway_entry"
+                          and set(names) <= {"GatewayEntryOwner", "_interpreter_current"})
+                         or (module == "hmp_startup.runtime_reader"
+                             and set(names) <= {"RuntimeSourceReadOwner"}))):
                 return
             if (self.name == "presentation_startup_cache.py"
                     and self._function_depth > 0 and names

@@ -145,6 +145,7 @@ class GatewayActivationOwner:
         owner._entry_files_attempt_cell = None
         owner._approval_owner = owner._approval_cell = owner._approval_fact_cell = None
         owner._continuation_owner = owner._continuation_cell = None
+        owner._runtime_read_owner = owner._runtime_read_cell = None
         owner._selection_owner = owner._selection_cell = owner._selection_fact_cell = None
         owner._package_owner = owner._package_cell = owner._package_fact_cell = None
         owner._recipe_owner = owner._recipe_cell = None

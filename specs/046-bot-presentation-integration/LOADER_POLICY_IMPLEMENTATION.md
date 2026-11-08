@@ -144,3 +144,12 @@ a dedicated basetemp. An earlier run passed but warned while pytest attempted
 to remove pre-existing protected temporary evidence directories; no protection
 was bypassed and that warning log is retained privately. No production runtime
 gate is implemented by these tests or this contract.
+
+## Fresh source-read implementation in qualification
+
+A separately bounded runtime source reader is implemented and independently
+reviewed in [RUNTIME_SOURCE_READ.md](RUNTIME_SOURCE_READ.md).130 focused reader/
+scanner cases and15 actual Python3.11 child cases pass; broad startup checks
+are active/pending. It uses
+original source selection, fresh read/digest effects and a final immutable
+snapshot/content seal. It is not a code loader, cache writer or admission gate.

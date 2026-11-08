@@ -51,6 +51,11 @@ See [fixed startup factory contract](GATEWAY_STARTUP_FACTORY.md).
       absence/nonfile observations under original mode/magic/location before
       any runtime use; reseal held allocations after callbacks. See
       [implementation and runtime limits](SOURCE_CACHE_INPUTS.md).
+- [ ] **PS1-RUNTIME-SOURCE-READ** Fresh original-continuation source phase with
+      independent IO/read-effect budget, final content seal and original-buffer
+      cleanup. Implementation and bounded source review accepted;130 focused
+      reader/scanner checks and15 actual floor child cases passed. Broad startup
+      qualification remains active/pending. [Contract and runtime limits](RUNTIME_SOURCE_READ.md).
 - [ ] **PS1-LOADER** Enforce actual platform runtime/current and future import policy;
       snapshot DATA cannot mint startup admission.
       Next reviewed executable slice: original source-hash builtin/key/machinery,

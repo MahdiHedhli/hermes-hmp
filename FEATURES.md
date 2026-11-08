@@ -1,3 +1,16 @@
+# November 7: fresh runtime source read
+
+An original-continuation source reader now owns a separate bounded read phase,
+refuses caller-selected paths and changed source, retains original chunk/EOF
+facts, and checks final bytes against full SHA256 before publication. Failure
+and release clear the captured original mutable buffer while preserving foreign
+replacements. Independent bounded source review accepted;130 focused reader/
+scanner checks and15 actual Python3.11 child cases pass with source unchanged.
+The broader startup regression run is active, not yet a pass. This does not
+compile/execute code, write caches, admit native/key services or deliver images.
+Bot-character delivery and host-local images remain unfinished; no live change.
+See [contract and memory limits](specs/046-bot-presentation-integration/RUNTIME_SOURCE_READ.md).
+
 # November 7: cache-write runtime prerequisite
 
 The actual CPython SourceLoader write-effect contract is now covered by17

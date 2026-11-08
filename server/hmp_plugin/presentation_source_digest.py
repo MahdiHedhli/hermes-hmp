@@ -62,8 +62,11 @@ def _types(owner, scope, expected):
     from .presentation_gateway_package import GatewayPackageOwner
     from .presentation_startup_artifacts import ExpectedArtifact, StartupArtifactOwner, _Scope
 
-    _require(type(owner) in (GatewayPackageOwner, StartupArtifactOwner)
-             and type(scope) is _Scope and type(expected) is ExpectedArtifact)
+    allowed = type(owner) in (GatewayPackageOwner, StartupArtifactOwner)
+    if not allowed:
+        from hmp_startup.runtime_reader import RuntimeSourceReadOwner
+        allowed = type(owner) is RuntimeSourceReadOwner
+    _require(allowed and type(scope) is _Scope and type(expected) is ExpectedArtifact)
 
 
 def retain(entry, activation):
@@ -220,15 +223,14 @@ def _consume(root, length, observations):
 
 
 def _held(root, buffer):
-    from .presentation_gateway_package import GatewayPackageOwner
-    from .presentation_startup_artifacts import ExpectedArtifact, StartupArtifactOwner, _Scope
+    from .presentation_startup_artifacts import ExpectedArtifact, _Scope
 
     _require(type(root) is _DigestRoot and type(root.effect) is _DigestEffect
              and type(root.context) is SourceDigestContext and type(root.scope) is _Scope
-             and type(root.owner) in (GatewayPackageOwner, StartupArtifactOwner)
              and type(root.expected) is ExpectedArtifact and type(root.expected.size) is int
              and type(root.context.effects) is list and type(buffer) is bytearray
              and root.buffer is buffer)
+    _types(root.owner, root.scope, root.expected)
     effect = root.effect
     _require(effect.context is root.context and effect.owner is root.owner
              and effect.scope is root.scope and effect.expected is root.expected
