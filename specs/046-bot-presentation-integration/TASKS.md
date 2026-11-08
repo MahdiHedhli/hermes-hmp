@@ -84,6 +84,12 @@ See [fixed startup factory contract](GATEWAY_STARTUP_FACTORY.md).
       Source-only phase complete; operational resource qualification remains open. This does
       not cover known native unavailability, source fallback or code decoding.
       [Contract and review limits](DECLARED_CACHE_READ.md).
+- [ ] **PS1-SELECTED-CACHE-DECODE** Implement fixed actual-successful-reader-only
+      native decode/fixer custody with recomputed original selection evidence,
+      ephemeral payload handling and historical effect facts. Independent bounded
+      contract review accepted this separate increment; implementation/tests remain
+      pending. Known-unavailability/fallback and operational resource gates stay
+      open. [Contract and exact limits](OWNED_CACHE_DECODE.md).
 - [ ] **PS1-LOADER** Enforce actual platform runtime/current and future import policy;
       snapshot DATA cannot mint startup admission.
       Next reviewed executable slice: original source-hash builtin/key/machinery,
