@@ -996,6 +996,111 @@ def _prepare_declared_metadata_plan(owner, registration, walk):
                                        definitions, [0, None])
 
 
+def _native_declared_metadata_plan_tail(owner, registration, held):
+    """Held original file plan joins only; no operation or ACK permission."""
+    _require(type(registration) is _NativeScopeRegistration
+             and type(held) is tuple and len(held) == 6)
+    walk, walks, progress, index, state, metadata = held
+    _require(type(walk) is _NativeDeclaredWalk and type(walks) is tuple
+             and type(index) is int and 0 <= index < len(walks)
+             and registration.file_walks is walks and walks[index] is walk
+             and registration.file_progress is progress
+             and type(progress) is list and len(progress) == 1 and progress[0] is index
+             and walk.owner is owner and walk.scope is registration.scope
+             and walk.cell is registration.cell and walk.root is registration.root
+             and walk.state is state and type(state) is list and len(state) == 1
+             and type(state[0]) is int and state[0] == 1
+             and type(metadata) is _NativeDeclaredMetadataPlan
+             and metadata.owner is owner and metadata.scope is registration.scope
+             and metadata.walk is walk and metadata.expected is walk.expected
+             and type(walk.metadata_slot) is list and len(walk.metadata_slot) == 1
+             and walk.metadata_slot[0] is metadata
+             and type(metadata.definitions) is tuple and len(metadata.definitions) <= 16384
+             and type(metadata.progress) is list and len(metadata.progress) == 2
+             and type(metadata.progress[0]) is int
+             and 0 <= metadata.progress[0] < len(metadata.definitions)
+             and metadata.progress[1] is None)
+    _native_work_registration_tail(owner, registration)
+    return metadata
+
+
+def _native_metadata_component_tail(owner, registration, walk, descriptor, index):
+    """Original live opened component/parent chain, never numeric FD membership."""
+    _require(type(registration) is _NativeScopeRegistration
+             and type(walk) is _NativeDeclaredWalk
+             and type(walk.components) is tuple and len(walk.components) <= 4096
+             and type(index) is int and -1 <= index < len(walk.components))
+    current = descriptor
+    for position in range(index, -1, -1):
+        component = walk.components[position]
+        _require(type(component) is str and type(current) is _NativeOpenedDescriptor)
+        close = _native_descriptor_opened(current, registration.native_ledger)
+        allocation = current.allocation
+        _require(allocation.owner is owner and allocation.scope is registration.scope
+                 and allocation.registration is registration
+                 and allocation.native is registration.native_origin
+                 and type(allocation.arguments) is tuple and len(allocation.arguments) == 3
+                 and type(allocation.arguments[0]) is str
+                 and allocation.arguments[0] == component
+                 and type(allocation.arguments[1]) is int
+                 and allocation.refused[0] is False
+                 and close.state[0] is False and close.state[1] is False
+                 and close.raw[0] is close.unset and close.result[0] is None)
+        flags = allocation.native.flags
+        _require(type(flags) is tuple and len(flags) == 5 and type(flags[4]) is int
+                 and bool(allocation.arguments[1] & flags[4]) is
+                 (position < len(walk.components) - 1))
+        parent = allocation.parent
+        if position == 0:
+            _require(component == '/' and parent is None and allocation.arguments[2] is None)
+        else:
+            _require(type(parent) is _NativeOpenedDescriptor
+                     and allocation.arguments[2] is parent.fd)
+        current = parent
+    _require(current is None)
+    return descriptor
+
+
+class _NativeMetadataResource(NamedTuple):
+    """Bound original resource DATA; no admission, syscall, debit or ACK."""
+    owner: object
+    registration: _NativeScopeRegistration
+    held_walk: tuple
+    metadata: _NativeDeclaredMetadataPlan
+    site: tuple
+    ordinal: int
+    descriptor: object
+    arguments: tuple
+
+    def __repr__(self):
+        return '<NativeMetadataResource unqualified original DATA redacted>'
+
+
+def _prepare_native_metadata_resource(owner, registration, held, descriptor, name=None):
+    """Capture this actual site/resource before the future admission callback."""
+    metadata = _native_declared_metadata_plan_tail(owner, registration, held)
+    ordinal = metadata.progress[0]
+    site = metadata.definitions[ordinal]
+    _require(type(site) is tuple and len(site) == 3 and type(site[0]) is int
+             and site[0] in (3, 4) and type(site[1]) is str and type(site[2]) is int)
+    walk, operation, component = held[0], site[0], site[2]
+    _require(type(walk.components) is tuple and 0 <= component < len(walk.components))
+    _native_work_origin_tail(owner, registration, registration.native_origin)
+    if operation == 4:
+        _require(name is None)
+        _native_metadata_component_tail(owner, registration, walk, descriptor, component)
+        arguments = (descriptor.fd,)
+    else:
+        _require(type(name) is str and type(walk.components[component]) is str
+                 and name == walk.components[component])
+        _native_metadata_component_tail(owner, registration, walk, descriptor, component - 1)
+        arguments = (name, None if descriptor is None else descriptor.fd)
+    _require(_native_declared_metadata_plan_tail(owner, registration, held) is metadata
+             and metadata.progress[0] is ordinal and metadata.definitions[ordinal] is site)
+    return _NativeMetadataResource(owner, registration, held, metadata, site, ordinal,
+                                   descriptor, arguments)
+
+
 def _begin_native_declared_walk(owner, registration, expected):
     _require(type(registration) is _NativeScopeRegistration)
     walks, progress = registration.file_walks, registration.file_progress
