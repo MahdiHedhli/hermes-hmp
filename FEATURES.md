@@ -1,3 +1,21 @@
+## November 8 — presentation integration checkpoint
+
+Cache/link registration source `11ff67b` passed 55 selected cases on each of
+Python 3.14.9 and 3.11.15. Fresh-probe source `9a4ed59` passed 27 on each.
+Receipt, source, log and XML bindings were verified; earlier failed candidates
+remain preserved. Entry metadata source `7b9b097` passed 108 selected current
+cases; its floor run is still active. Declaration membership `9e6f02a` has
+independent bounded source acceptance and eight cases queued, not yet passed.
+These later candidates are separate from the public review branch's integrated
+`34b862e` source and are not installed.
+
+Bot characters and host-local images remain unfinished. Original per-step and
+consumer claims, fixed native operations and separate enumeration effects,
+shared quota/reserved cleanup, runtime/key/service wiring and physical delivery
+remain open. These are HMP integration tasks; no upstream prerequisite has been
+established. Source tests are not whole-plugin, device or release qualification.
+The latest iPad launch was rejected as Locked before execution, not a crash.
+
 ## November 8 — selected registration checks passed; device features unchanged
 
 The separate source candidates passed on actual Python3.14.9 and3.11.15:
