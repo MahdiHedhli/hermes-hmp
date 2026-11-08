@@ -10,6 +10,7 @@ import _imp
 import builtins
 import importlib._bootstrap_external
 import importlib.util
+import marshal
 import os
 import sys
 import threading
@@ -190,6 +191,59 @@ def _same_source_compile(origin, current):
     return all(a is b for a, b in zip(origin, current, strict=True))
 
 
+class _CacheDecodeOrigin(NamedTuple):
+    module: ModuleType
+    function: FunctionType
+    code: CodeType
+    marshal_module: ModuleType
+    loads: BuiltinFunctionType
+    code_type: type
+    native: ModuleType
+    fix_filename: BuiltinFunctionType
+
+    def __repr__(self):
+        return "<OriginalInterpreterCacheDecoder redacted>"
+
+
+def _cache_decode_origin(source_hash):
+    _require(type(source_hash) is _SourceHashOrigin and type(sys.modules) is dict
+             and type(source_hash.module) is ModuleType
+             and type(marshal) is ModuleType and sys.modules.get("marshal") is marshal)
+    module = source_hash.module
+    _require(sys.modules.get("_frozen_importlib_external") is module
+             and sys.modules.get("importlib._bootstrap_external") is module)
+    function = vars(module).get("_compile_bytecode")
+    _require(type(function) is FunctionType and function.__globals__ is vars(module)
+             and type(function.__module__) is str
+             and function.__module__ == "_frozen_importlib_external"
+             and type(function.__code__) is CodeType)
+    names = function.__code__.co_names
+    _require(type(names) is tuple and all(type(name) is str for name in names)
+             and all(name in names for name in
+                     ("marshal", "loads", "_code_type", "_imp", "_fix_co_filename")))
+    native = vars(module).get("_imp")
+    _require(type(native) is ModuleType and native is _imp
+             and sys.modules.get("_imp") is native
+             and vars(module).get("marshal") is marshal
+             and vars(module).get("_code_type") is CodeType)
+    loads, fixer = vars(marshal).get("loads"), vars(native).get("_fix_co_filename")
+    for function_value, owner, name, module_name in (
+            (loads, marshal, "loads", "marshal"),
+            (fixer, native, "_fix_co_filename", "_imp")):
+        _require(type(function_value) is BuiltinFunctionType
+                 and function_value.__self__ is owner
+                 and type(function_value.__name__) is str and function_value.__name__ == name
+                 and type(function_value.__module__) is str
+                 and function_value.__module__ == module_name)
+    return _CacheDecodeOrigin(module, function, function.__code__, marshal, loads,
+                              CodeType, native, fixer)
+
+
+def _same_cache_decode(origin, current):
+    _require(type(origin) is _CacheDecodeOrigin and type(current) is _CacheDecodeOrigin)
+    return all(a is b for a, b in zip(origin, current, strict=True))
+
+
 class _InterpreterOrigin(NamedTuple):
     implementation: SimpleNamespace
     version: object
@@ -200,6 +254,7 @@ class _InterpreterOrigin(NamedTuple):
     cache_policy: _CachePolicyOrigin
     source_hash: _SourceHashOrigin
     source_compile: _SourceCompileOrigin
+    cache_decode: _CacheDecodeOrigin
 
     def __repr__(self):
         return "<OriginalInterpreterOrigin redacted>"
@@ -232,7 +287,8 @@ def _interpreter():
     cache = _cache_policy()
     source_hash = _source_hash_origin(cache.module)
     return _InterpreterOrigin(implementation, version, flags, data, bytecode, magic,
-                              cache, source_hash, _source_compile_origin(source_hash))
+                              cache, source_hash, _source_compile_origin(source_hash),
+                              _cache_decode_origin(source_hash))
 
 
 def _interpreter_current(origin):
@@ -246,7 +302,8 @@ def _interpreter_current(origin):
              and current.cache_policy.module is origin.cache_policy.module
              and _cache_values(current.cache_policy) == _cache_values(origin.cache_policy)
              and _same_source_hash(origin.source_hash, current.source_hash)
-             and _same_source_compile(origin.source_compile, current.source_compile))
+             and _same_source_compile(origin.source_compile, current.source_compile)
+             and _same_cache_decode(origin.cache_decode, current.cache_decode))
     return origin
 
 
