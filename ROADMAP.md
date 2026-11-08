@@ -35,13 +35,24 @@ was refused before publication. Fixed directory-policy DATA source `d537500`
 passed20 cases on each interpreter. Exact source/log/XML hashes were rechecked.
 Latched-cohort preparation `a19560a` separates structural joins from unclaimed
 admission; all14 dedicated cases passed on Python3.14.9 with unchanged source
-and rehashed source/log/XML evidence. Python3.11.15 is running separately.
-Next fixed ACTIVE-state guard `a131932` checks original ledger/phase identity,
-one debit with close reservations, original result slots and retained failure
-evidence. Finite independent review found no new concrete defect after adding
-the failure-slot check. Its20 guard-only cases await the earlier serial lane;
-no admission/native-call/result/ACK qualification is claimed. Scanner policy
-is unchanged. Actual metadata admission/debit/native calls, fixed result
+and rehashed source/log/XML evidence. All14 also passed on Python3.11.15,
+with source/log/XML hashes rechecked. Fixed ACTIVE-state guard `a131932` passed
+all20 cases on Python3.14.9 with unchanged source and rehashed evidence; its
+minimum-version suite is running. Finite review found no new concrete defect
+after the explicit phase/failure-slot checks. These remain guard-only passes.
+
+Separate uninstalled source now binds the original consumer once and admits a
+fixed directory intent under the captured actor/ledger. Producer candidate
+`f47a1be` retains the actual captured-fstat return before snapshot/envelope
+allocation, with distinct ACTIVE/returned/PENDING checks. Review caught two
+producer defects before execution: pending must retire the in-flight call,
+and error handling must clear raw aliases and raise a fresh owner-attributed
+refusal. Both are corrected in source; dedicated execution is pending. Its29
+cases retain all earlier unrun26 cases and add actual synthetic-descriptor
+return/snapshot-failure/foreign-slot checks. The suite is serialized behind the
+running floor suite. No fixed metadata policy ACK, site advancement, complete
+operation migration, native runtime or physical character pass is claimed.
+Scanner policy is unchanged. Actual metadata admission/debit/native calls, fixed result
 policy/ACK, tree/link/diagnostic plans and full operation-budget integration remain
 unfinished; no host activation or physical feature pass is claimed. This cache is Python
 bytecode custody for character startup, not a delivered chat-image feature.
