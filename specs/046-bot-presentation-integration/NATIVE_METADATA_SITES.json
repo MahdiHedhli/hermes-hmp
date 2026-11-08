@@ -1,0 +1,585 @@
+{
+  "schema": 1,
+  "purpose": "review inventory only; not runtime plan, permission or admission",
+  "sourceBase": "8afe009f93044387a352c4f642c1162296eba789",
+  "sources": {
+    "server/hmp_plugin/presentation_startup_artifacts.py": "86fae9f5d3327ddc73316f6e75a5bc0d9cec93aa3db3833a8cc818e9956c8013",
+    "server/hmp_plugin/presentation_gateway_package.py": "f602dedee29d69ba354556bd8b7de2e4574bdb3c9c8e524938438a32b7f0a41b",
+    "server/hmp_plugin/presentation_startup_cache.py": "ec6d54e0b0de476f7a2d13b8896f6c3db9650ca519452ae1b6cb3642a35b4682",
+    "server/hmp_startup/entry_files.py": "bd286f8922817a41a4103637c2b7d8eecc1f58f2a7fa0794ed0cc8d4ba6d1989",
+    "server/hmp_startup/cache_probe.py": "1a300f89f7df85f4484c4326c94c3a046b9874b348e71b73d98cb6a643562f67"
+  },
+  "sites": [
+    {
+      "path": "server/hmp_plugin/presentation_startup_artifacts.py",
+      "scope": "StartupArtifactOwner._link_path",
+      "kind": "fstat",
+      "siteOrdinal": 0,
+      "line": 3386,
+      "arguments": [
+        "self",
+        "fd",
+        "s",
+        "native_registration"
+      ],
+      "keywords": {}
+    },
+    {
+      "path": "server/hmp_plugin/presentation_startup_artifacts.py",
+      "scope": "StartupArtifactOwner._link_path",
+      "kind": "stat",
+      "siteOrdinal": 0,
+      "line": 3394,
+      "arguments": [
+        "self",
+        "name",
+        "parent",
+        "s",
+        "native_registration"
+      ],
+      "keywords": {}
+    },
+    {
+      "path": "server/hmp_plugin/presentation_startup_artifacts.py",
+      "scope": "StartupArtifactOwner._link_path",
+      "kind": "stat",
+      "siteOrdinal": 1,
+      "line": 3413,
+      "arguments": [
+        "self",
+        "name",
+        "parent",
+        "s",
+        "native_registration"
+      ],
+      "keywords": {}
+    },
+    {
+      "path": "server/hmp_plugin/presentation_startup_artifacts.py",
+      "scope": "StartupArtifactOwner._link_path",
+      "kind": "fstat",
+      "siteOrdinal": 1,
+      "line": 3416,
+      "arguments": [
+        "self",
+        "fd",
+        "s",
+        "native_registration"
+      ],
+      "keywords": {}
+    },
+    {
+      "path": "server/hmp_plugin/presentation_startup_artifacts.py",
+      "scope": "StartupArtifactOwner._link_path",
+      "kind": "stat",
+      "siteOrdinal": 2,
+      "line": 3418,
+      "arguments": [
+        "self",
+        "item",
+        "ancestor",
+        "s",
+        "native_registration"
+      ],
+      "keywords": {}
+    },
+    {
+      "path": "server/hmp_plugin/presentation_startup_artifacts.py",
+      "scope": "StartupArtifactOwner._file",
+      "kind": "fstat",
+      "siteOrdinal": 0,
+      "line": 3587,
+      "arguments": [
+        "self",
+        "fd",
+        "s",
+        "native_registration"
+      ],
+      "keywords": {}
+    },
+    {
+      "path": "server/hmp_plugin/presentation_startup_artifacts.py",
+      "scope": "StartupArtifactOwner._file",
+      "kind": "stat",
+      "siteOrdinal": 0,
+      "line": 3598,
+      "arguments": [
+        "self",
+        "name",
+        "parent",
+        "s",
+        "native_registration"
+      ],
+      "keywords": {}
+    },
+    {
+      "path": "server/hmp_plugin/presentation_startup_artifacts.py",
+      "scope": "StartupArtifactOwner._file",
+      "kind": "fstat",
+      "siteOrdinal": 1,
+      "line": 3612,
+      "arguments": [
+        "self",
+        "fd",
+        "s",
+        "native_registration"
+      ],
+      "keywords": {}
+    },
+    {
+      "path": "server/hmp_plugin/presentation_startup_artifacts.py",
+      "scope": "StartupArtifactOwner._file",
+      "kind": "fstat",
+      "siteOrdinal": 2,
+      "line": 3697,
+      "arguments": [
+        "self",
+        "fd",
+        "s",
+        "native_registration"
+      ],
+      "keywords": {}
+    },
+    {
+      "path": "server/hmp_plugin/presentation_startup_artifacts.py",
+      "scope": "StartupArtifactOwner._file",
+      "kind": "stat",
+      "siteOrdinal": 1,
+      "line": 3699,
+      "arguments": [
+        "self",
+        "name",
+        "parent",
+        "s",
+        "native_registration"
+      ],
+      "keywords": {}
+    },
+    {
+      "path": "server/hmp_plugin/presentation_startup_artifacts.py",
+      "scope": "StartupArtifactOwner._file",
+      "kind": "fstat",
+      "siteOrdinal": 3,
+      "line": 3711,
+      "arguments": [
+        "self",
+        "directory",
+        "s",
+        "native_registration"
+      ],
+      "keywords": {}
+    },
+    {
+      "path": "server/hmp_plugin/presentation_startup_artifacts.py",
+      "scope": "StartupArtifactOwner._file",
+      "kind": "stat",
+      "siteOrdinal": 2,
+      "line": 3713,
+      "arguments": [
+        "self",
+        "name",
+        "parent",
+        "s",
+        "native_registration"
+      ],
+      "keywords": {}
+    },
+    {
+      "path": "server/hmp_plugin/presentation_gateway_package.py",
+      "scope": "GatewayPackageOwner._tree",
+      "kind": "fstat",
+      "siteOrdinal": 0,
+      "line": 543,
+      "arguments": [
+        "self",
+        "fd",
+        "s",
+        "native_registration"
+      ],
+      "keywords": {}
+    },
+    {
+      "path": "server/hmp_plugin/presentation_gateway_package.py",
+      "scope": "GatewayPackageOwner._tree",
+      "kind": "fstat",
+      "siteOrdinal": 1,
+      "line": 553,
+      "arguments": [
+        "self",
+        "fd",
+        "s",
+        "native_registration"
+      ],
+      "keywords": {}
+    },
+    {
+      "path": "server/hmp_plugin/presentation_gateway_package.py",
+      "scope": "GatewayPackageOwner._tree",
+      "kind": "stat",
+      "siteOrdinal": 0,
+      "line": 555,
+      "arguments": [
+        "self",
+        "name",
+        "parent",
+        "s",
+        "native_registration"
+      ],
+      "keywords": {}
+    },
+    {
+      "path": "server/hmp_plugin/presentation_gateway_package.py",
+      "scope": "GatewayPackageOwner._walk",
+      "kind": "fstat",
+      "siteOrdinal": 0,
+      "line": 577,
+      "arguments": [
+        "self",
+        "fd",
+        "s",
+        "native_registration"
+      ],
+      "keywords": {}
+    },
+    {
+      "path": "server/hmp_plugin/presentation_gateway_package.py",
+      "scope": "GatewayPackageOwner._walk",
+      "kind": "stat",
+      "siteOrdinal": 0,
+      "line": 582,
+      "arguments": [
+        "self",
+        "name",
+        "fd",
+        "s",
+        "native_registration"
+      ],
+      "keywords": {}
+    },
+    {
+      "path": "server/hmp_plugin/presentation_gateway_package.py",
+      "scope": "GatewayPackageOwner._walk",
+      "kind": "fstat",
+      "siteOrdinal": 1,
+      "line": 592,
+      "arguments": [
+        "self",
+        "child",
+        "s",
+        "native_registration"
+      ],
+      "keywords": {}
+    },
+    {
+      "path": "server/hmp_plugin/presentation_gateway_package.py",
+      "scope": "GatewayPackageOwner._walk",
+      "kind": "stat",
+      "siteOrdinal": 1,
+      "line": 598,
+      "arguments": [
+        "self",
+        "name",
+        "fd",
+        "s",
+        "native_registration"
+      ],
+      "keywords": {}
+    },
+    {
+      "path": "server/hmp_plugin/presentation_gateway_package.py",
+      "scope": "GatewayPackageOwner._walk",
+      "kind": "fstat",
+      "siteOrdinal": 2,
+      "line": 603,
+      "arguments": [
+        "self",
+        "fd",
+        "s",
+        "native_registration"
+      ],
+      "keywords": {}
+    },
+    {
+      "path": "server/hmp_plugin/presentation_startup_cache.py",
+      "scope": "_is_missing",
+      "kind": "stat",
+      "siteOrdinal": 0,
+      "line": 166,
+      "arguments": [
+        "owner",
+        "name",
+        "parent",
+        "scope",
+        "native_registration"
+      ],
+      "keywords": {}
+    },
+    {
+      "path": "server/hmp_plugin/presentation_startup_cache.py",
+      "scope": "_ancestors_current",
+      "kind": "fstat",
+      "siteOrdinal": 0,
+      "line": 184,
+      "arguments": [
+        "owner",
+        "fd",
+        "scope",
+        "native_registration"
+      ],
+      "keywords": {}
+    },
+    {
+      "path": "server/hmp_plugin/presentation_startup_cache.py",
+      "scope": "_ancestors_current",
+      "kind": "stat",
+      "siteOrdinal": 0,
+      "line": 186,
+      "arguments": [
+        "owner",
+        "component",
+        "ancestor",
+        "scope",
+        "native_registration"
+      ],
+      "keywords": {}
+    },
+    {
+      "path": "server/hmp_plugin/presentation_startup_cache.py",
+      "scope": "_probe",
+      "kind": "fstat",
+      "siteOrdinal": 0,
+      "line": 211,
+      "arguments": [
+        "owner",
+        "parent",
+        "scope",
+        "native_registration"
+      ],
+      "keywords": {}
+    },
+    {
+      "path": "server/hmp_plugin/presentation_startup_cache.py",
+      "scope": "_probe",
+      "kind": "fstat",
+      "siteOrdinal": 1,
+      "line": 232,
+      "arguments": [
+        "owner",
+        "fd",
+        "scope",
+        "native_registration"
+      ],
+      "keywords": {}
+    },
+    {
+      "path": "server/hmp_startup/entry_files.py",
+      "scope": "EntryFileSnapshotOwner._tree",
+      "kind": "fstat",
+      "siteOrdinal": 0,
+      "line": 536,
+      "arguments": [
+        "io",
+        "fd",
+        "s",
+        "native_registration"
+      ],
+      "keywords": {}
+    },
+    {
+      "path": "server/hmp_startup/entry_files.py",
+      "scope": "EntryFileSnapshotOwner._tree",
+      "kind": "fstat",
+      "siteOrdinal": 1,
+      "line": 546,
+      "arguments": [
+        "io",
+        "fd",
+        "s",
+        "native_registration"
+      ],
+      "keywords": {}
+    },
+    {
+      "path": "server/hmp_startup/entry_files.py",
+      "scope": "EntryFileSnapshotOwner._tree",
+      "kind": "stat",
+      "siteOrdinal": 0,
+      "line": 548,
+      "arguments": [
+        "io",
+        "name",
+        "parent_fd",
+        "s",
+        "native_registration"
+      ],
+      "keywords": {}
+    },
+    {
+      "path": "server/hmp_startup/entry_files.py",
+      "scope": "EntryFileSnapshotOwner._metadata",
+      "kind": "fstat",
+      "siteOrdinal": 0,
+      "line": 581,
+      "arguments": [
+        "io",
+        "fd",
+        "s",
+        "native_registration"
+      ],
+      "keywords": {}
+    },
+    {
+      "path": "server/hmp_startup/entry_files.py",
+      "scope": "EntryFileSnapshotOwner._metadata",
+      "kind": "stat",
+      "siteOrdinal": 0,
+      "line": 588,
+      "arguments": [
+        "io",
+        "path.rsplit('/', 1)[1]",
+        "parent",
+        "s",
+        "native_registration"
+      ],
+      "keywords": {}
+    },
+    {
+      "path": "server/hmp_startup/entry_files.py",
+      "scope": "EntryFileSnapshotOwner._metadata",
+      "kind": "fstat",
+      "siteOrdinal": 1,
+      "line": 591,
+      "arguments": [
+        "io",
+        "fd",
+        "s",
+        "native_registration"
+      ],
+      "keywords": {}
+    },
+    {
+      "path": "server/hmp_startup/entry_files.py",
+      "scope": "EntryFileSnapshotOwner._metadata",
+      "kind": "stat",
+      "siteOrdinal": 1,
+      "line": 593,
+      "arguments": [
+        "io",
+        "name",
+        "parent_fd",
+        "s",
+        "native_registration"
+      ],
+      "keywords": {}
+    },
+    {
+      "path": "server/hmp_startup/entry_files.py",
+      "scope": "EntryFileSnapshotOwner._walk",
+      "kind": "fstat",
+      "siteOrdinal": 0,
+      "line": 619,
+      "arguments": [
+        "io",
+        "fd",
+        "s",
+        "native_registration"
+      ],
+      "keywords": {}
+    },
+    {
+      "path": "server/hmp_startup/entry_files.py",
+      "scope": "EntryFileSnapshotOwner._walk",
+      "kind": "stat",
+      "siteOrdinal": 0,
+      "line": 624,
+      "arguments": [
+        "io",
+        "name",
+        "fd",
+        "s",
+        "native_registration"
+      ],
+      "keywords": {}
+    },
+    {
+      "path": "server/hmp_startup/entry_files.py",
+      "scope": "EntryFileSnapshotOwner._walk",
+      "kind": "fstat",
+      "siteOrdinal": 1,
+      "line": 633,
+      "arguments": [
+        "io",
+        "child",
+        "s",
+        "native_registration"
+      ],
+      "keywords": {}
+    },
+    {
+      "path": "server/hmp_startup/entry_files.py",
+      "scope": "EntryFileSnapshotOwner._walk",
+      "kind": "fstat",
+      "siteOrdinal": 2,
+      "line": 647,
+      "arguments": [
+        "io",
+        "fd",
+        "s",
+        "native_registration"
+      ],
+      "keywords": {}
+    },
+    {
+      "path": "server/hmp_startup/cache_probe.py",
+      "scope": "RuntimeCacheProbeOwner._observe_owned",
+      "kind": "fstat",
+      "siteOrdinal": 0,
+      "line": 344,
+      "arguments": [
+        "self",
+        "fd",
+        "s",
+        "native_registration"
+      ],
+      "keywords": {}
+    },
+    {
+      "path": "server/hmp_startup/cache_probe.py",
+      "scope": "RuntimeCacheProbeOwner._observe_owned",
+      "kind": "fstat",
+      "siteOrdinal": 1,
+      "line": 350,
+      "arguments": [
+        "self",
+        "fd",
+        "s",
+        "native_registration"
+      ],
+      "keywords": {}
+    },
+    {
+      "path": "server/hmp_startup/cache_probe.py",
+      "scope": "RuntimeCacheProbeOwner._observe_owned",
+      "kind": "stat",
+      "siteOrdinal": 0,
+      "line": 352,
+      "arguments": [
+        "self",
+        "name",
+        "parent",
+        "s",
+        "native_registration"
+      ],
+      "keywords": {}
+    }
+  ],
+  "diagnosticBoundaries": [
+    "hmp_plugin.presentation_startup_cache._is_missing",
+    "hmp_startup.cache_probe.RuntimeCacheProbeOwner._stat_known"
+  ],
+  "remaining": [
+    "independent original site-plan allocation",
+    "fixed per-site consumer policies",
+    "all six operation integration and separate enumeration effects"
+  ]
+}

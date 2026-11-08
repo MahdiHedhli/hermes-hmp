@@ -51,14 +51,18 @@ and error handling must clear raw aliases and raise a fresh owner-attributed
 refusal. Both are corrected in source; dedicated execution is pending. Its29
 cases retain all earlier unrun26 cases and add actual synthetic-descriptor
 return/snapshot-failure/foreign-slot checks. All29 passed on Python3.14.9 with
-unchanged source and rehashed source/log/XML evidence; Python3.11.15 is running.
-This qualifies the sampled original directory intent/admission/pending-return
-slice only. Separate consumer `6f5d4e1` and ACK `520b08d` have finite source review
+unchanged source and rehashed source/log/XML evidence; all29 also passed on
+Python3.11.15 with unchanged source and rehashed evidence. This qualifies the
+sampled original directory intent/admission/pending-return slice only. Separate consumer `6f5d4e1` and ACK `520b08d` have finite source review
 with no new concrete blocker, but their35-case selection remains unrun. A
-test-only ordinary-fstat entry hook `fcf9eac` is selected for two current/floor
-ACK preflight cases after producer floor qualification; it avoids known nested
-trace suppression without replacing captured native OS functions. Per-store
-interruptions and lost-return tests remain open. No fixed metadata policy/ACK
+test-only ordinary-fstat entry hook `fcf9eac` passed both selected normal/late-ACK
+cases on each interpreter with source/evidence rehashed. Captured native OS
+functions are unchanged. First/last store-interruption preflights on `8f12da7`
+are now running before its45-case matrix; lost-return coverage remains open.
+The [caller contract](https://github.com/MahdiHedhli/hermes-hmp/blob/feat/startup-bytecode-headers-20261107/specs/046-bot-presentation-integration/NATIVE_METADATA_RESULT_CUSTODY.md)
+records the exact finish-cursor, configuration-policy and abort/lost-return
+migration requirements. They are local work, not upstream blockers. The dated
+39-site inventory is published as review data, never runtime authority. No fixed metadata policy/ACK
 execution qualification, integrated site advancement, complete
 operation migration, native runtime or physical character pass is claimed.
 Scanner policy is unchanged. Actual metadata admission/debit/native calls, fixed result

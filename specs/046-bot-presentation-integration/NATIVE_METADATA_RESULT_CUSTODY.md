@@ -1,0 +1,99 @@
+# Fixed metadata custody and caller integration
+
+This describes isolated, uninstalled source candidates on November 8, 2026.
+The server/scanner implementation on this documentation branch remains
+`34b862e`; these designs are not integrated or deployed. Current selected test
+results appear in [FEATURES](../../FEATURES.md). Source tests do not establish
+runtime, device, feature or release acceptance.
+
+## Verified preparation and remaining execution
+
+- Original metadata plans/resources/intents and constructor closure have scoped
+  current/floor passes; their scope is preserved in FEATURES.
+- `a19560a`:14 structural cohort cases pass on each supported interpreter.
+- `a131932`:20 synthetic ACTIVE-state cases pass on each interpreter. They do
+  not prove actual actor admission or a native operation.
+- `f47a1be`:29 directory-intent/admission/pending-return cases pass on current
+  Python and29 also pass on minimum Python, with unchanged source and rehashed
+  source/log/XML evidence. This is a synthetic descriptor flow, not a gateway
+  or phone test.
+- Consumer `6f5d4e1` and ACK `520b08d` have finite source review, with execution
+  pending. Their one-use commit and ACK markers alone are not completion proof.
+- Test-only entry hook `fcf9eac` passed its two normal/late-ACK cases on each
+  interpreter with source/evidence rehashed. Store faults `8f12da7` leave
+  production bytes unchanged. First/last-line preflights are running before
+  crediting the authored45-case matrix. No full-matrix, runtime or performance
+  pass follows from the entry-hook result.
+
+## Fixed producer, policy and ACK contract
+
+1. Hold the actual original owner/scope/registration, declared walk/site/ordinal,
+   descriptor allocation and fixed consumer before admission. A string, copied
+   tuple, matching FD or reconstructed receipt supplies no authority.
+2. Use captured native functions and exact result/error classes. Each fixed
+   actor-check stage samples its captured PID/UID/thread once with original
+   input closure before/after; no resampling repairs an observed mismatch.
+3. Reserve original preparation before actor sampling; debit one aggregate work
+   unit while retaining all close reservations. Publish ACTIVE before the fixed
+   native call. Retain its actual raw return before callbacks or allocation.
+4. Rejoin the actual return around snapshot/envelope construction. PENDING owns
+   the original result while its ended native call has no in-flight pointer.
+   No new work or descriptor close is admitted by a result merely existing.
+5. Latch the actual pending producer return once, apply the fixed policy to its
+   original snapshot/UID and retain the actual policy commit. Directory policy
+   preserves type, ownership, set-ID and write/sticky rules. No fake stat_result
+   or data-only identity tuple substitutes for that consumer.
+6. ACK keeps actual return/commit through final closure, retires raw/snapshot/
+   envelope and the raw-bearing consumption backlink, advances only the exact
+   original cursor and then restores IDLE. Caller verifies the complete closed
+   commit and drops its producer-envelope alias before further work.
+7. An ACK marker alone is partial history. Failure preserves debit, attempts,
+   markers and any cursor stores already made; no rewind, refund or replay.
+   Only original held data/pointers are retired; foreign replacements survive.
+   Outward errors are bounded, owner-attributed and do not forward original
+   raw-bearing exceptions. Clean wrong-actor refusal must preserve rightful
+   ownership and is distinct from drift or an unknown native outcome.
+
+## Caller evidence and exact local prerequisites
+
+The inspected `_file` directory loop still invokes `_fstat`, computes directory
+identity and checks mode/UID from the returned stat object. The shared path also
+uses `info.st_uid/st_mode` for configuration-specific parent checks. The current
+consumer admits only original RuntimeSourceReadOwner/DeclaredCacheReadOwner
+scopes. Configuration, tree and link policies require their own fixed consumers;
+class-name similarity or a generic dispatcher is not a substitute.
+
+`_finish_native_declared_walk` currently requires metadata cursor0, explicitly
+asserting that the new plan remains unwired. The plan already declares initial
+directory, leaf and final ancestor observations. Do not relax this check or
+pretend a partially consumed plan completed. A migrated finish must require
+all declared sites to have actual completed original ACKs and no pending result.
+Do not skip old metadata calls by shrinking the plan or jump its cursor to the
+end after file hashing.
+
+The fixed caller must retain its actual prepared operation/consumer before
+calling the producer and carry the actual returned envelope and commit through
+policy/ACK. Its abort/lost-return path remains to be implemented and causally
+qualified: it must preserve original debt and partial ACK history, retire only
+independently held original data and never adopt a current replacement as a
+returned receipt. Clean wrong-actor admission ends an uncharged intent; safely
+releasing its owned preparation without rearming that intent also needs an
+explicit reviewed path. These are local implementation requirements, not a new
+upstream API blocker or a request to broaden permissions.
+
+## Full scope remains open
+
+The [dated inventory](NATIVE_METADATA_SITES.json) records39 stat/fstat syntax
+sites and source hashes against `8afe009`. It is review data, never runtime
+permission. Revalidate it against any migrated source. Both distinct missing-
+stat diagnostics must preserve exact native exception/errno/name handling;
+EACCES/ENOTDIR and ordinary fstat failure never become missing/fallback authority.
+
+Remaining work includes per-store/drift/foreign-slot/lost-return evidence, fixed
+caller and every metadata/tree/link/diagnostic migration, all six operation
+boundaries plus separate enumeration, original aggregate quotas/reserved cleanup,
+complete startup/factory/service/key/runtime, CPU/RSS/deadline and physical
+character delivery. The existing minimum-version60-second timeout remains open;
+no deadline extension or narrower fixture closes it. Host-local chat images are
+separate from this startup/character path and retain their own deployment and
+physical acceptance gates.
