@@ -1,23 +1,30 @@
-## November 8 — 1,426 startup cases passed; image features still unfinished
+## November 8 — 1,434 startup cases passed; later cleanup candidate has failures
 
-Repaired source `77ae4dc` passed all 1,426 configured startup cases on Python
-3.14.9 with zero failures, errors or skips. Source, receipt, log and XML hashes
-were independently rechecked. Its 183 focused cases also passed on Python 3.14.9
-and 3.11.15. The original `9e6f02a` 1,398-case failure remains preserved separately;
-this later result does not relabel it as passing.
+Open-registration source `1aa605d` passed all 1,434 configured startup cases on
+Python 3.14.9 with zero failures, errors or skips; its eight focused cases passed
+on both Python 3.14.9 and 3.11.15. Exact source/receipt/log/XML bindings were
+verified. Earlier `77ae4dc` retains its separate 1,426-case pass and 183 focused
+passes on each interpreter. The original `9e6f02a` failed run remains preserved.
 
-Later open/read/callee/actor candidates remain separate and uninstalled. Actor
-repair `ca41d91` and cache-return tests `744d75d` have bounded source-review
-acceptance, with execution queued. Reserved-close implementation is dirty WIP:
-review defects are being repaired and transition tests are being added. No complete
-native IO, cleanup, quota, factory, runtime/key/service or device qualification is claimed.
+Later coupled open/close source `5439fee` is frozen for testing. Its active
+412-case focused run has reported failures; terminal diagnostics are pending.
+Unrun intermediate queues were consolidated into this descendant only after
+ancestry and selected-case coverage checks; no active test was interrupted and
+no unrun candidate is claimed passing. Its floor and full regression runs depend
+on resolving the focused failures. No complete native IO/cleanup/quota/runtime
+or device qualification is claimed.
+
+A separate uninstalled reader prototype is implementing original-result custody,
+fixed consumer acknowledgment and explicit EOF accounting. Static checks and a
+bounded refusal-path source review are not behavioral qualification. Remaining
+metadata/link/diagnostic sites and directory enumeration remain unfinished.
 
 Device-local sections/static icons and selected-bot readiness are implemented in
 app source, with physical qualification pending. Desktop character parity and
 host-local image delivery remain unfinished. No upstream prerequisite has been
 established for the remaining HMP integration. Public integrated code remains
-`34b862e`; these are local qualification candidates, with no new deployment.
-
+`34b862e`; these are local candidates, with no new deployment. The connected iPad
+still refused automated launch as locked; no launch/crash acceptance is claimed.
 # BI1 integration tasks
 
 ## Native interface reuse audit
