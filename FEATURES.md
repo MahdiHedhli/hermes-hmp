@@ -3,15 +3,16 @@
 The isolated native-file-effects branch now carries one immutable original-entry
 lineage across package/artifact, source-read, cache-probe and cache-read scopes.
 Fresh digest contexts retain that same allocation; legacy scopes retain no lineage.
-Ten copied/foreign/legacy-context and retained-constructor refusal cases are
-prepared, not run. Syntax and full Ruff pass; bounded independent source review
-accepted the corrected allocation-only increment. This is an identity
+Ten copied/foreign/legacy-context and retained-constructor cases passed on
+actual Python3.14.9 and3.11.15, zero failures/errors/skips, with unchanged source.
+Syntax/full Ruff and bounded independent source review accepted the corrected
+allocation-only increment. The broader affected regression remains required. This is an identity
 binding prerequisite, not an operation/effect receipt, budget, fallback, working
 presentation service or phone image delivery.
 
-The prior fixture candidate passed164 focused cases; its separate1,280-case broad
-regression is still running on frozen1a49174. Those results do not qualify the new
-lineage field. No host/device/settings, install or release change is made.
+The prior fixture candidate passed164 focused and1,280 configured startup cases
+on1a49174. Those results do not qualify the new lineage field; the10+10 results
+above cover only the new increment's selected causals. No host/device/settings, install or release change is made.
 
 # November 8: combined integration not qualified
 

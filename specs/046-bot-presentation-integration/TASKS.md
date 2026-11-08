@@ -897,6 +897,7 @@ historical, not an alternative live authorization path or resolved incident.
       this work cannot mark startup, service delivery or physical images complete.
 
 - [ ] Qualify the first shared original-lineage source implementation across all
-      listed scopes; ten new causals and existing inheritance assertions are
-      prepared, not run. Bounded source review accepted corrected0ebe76e;
-      current/floor/affected regression remain required. No operation/effect authority is implemented.
+      listed scopes. Ten new causals passed on actual3.14.9 and3.11.15 with
+      source unchanged; bounded source review accepted corrected0ebe76e.
+      Existing modified inheritance assertions and broader affected regression
+      remain required. No operation/effect authority is implemented.
