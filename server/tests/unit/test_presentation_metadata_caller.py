@@ -235,6 +235,7 @@ original_fstat=vars(a.StartupArtifactOwner)['_fstat']
 original_file_code=a.StartupArtifactOwner._file.__code__
 def at_original_fstat(actual_owner,fd,scope,registration=None):
     if actual_owner is owner and not seen:
+        sys.settrace(None)
         frame=sys._getframe(1)
         assert frame.f_code is original_file_code
         assert frame.f_locals['native_registration'] is registration
@@ -249,8 +250,22 @@ def at_original_fstat(actual_owner,fd,scope,registration=None):
             raise
     return original_fstat(actual_owner,fd,scope,registration)
 a.StartupArtifactOwner._fstat=at_original_fstat
+preflight_events=[]
+def preflight_trace(frame,event,arg):
+    if event=='exception' and frame.f_code.co_filename.endswith(('.py',)):
+        error_type=arg[0]
+        preflight_events.append((Path(frame.f_code.co_filename).name,
+                                 frame.f_code.co_name,frame.f_lineno,error_type.__name__))
+    return preflight_trace
+if case.startswith('lost_return_interrupt_'):sys.settrace(preflight_trace)
 try:owner.read()
-finally:a.StartupArtifactOwner._fstat=original_fstat
+finally:
+    sys.settrace(None)
+    a.StartupArtifactOwner._fstat=original_fstat
+    if case.startswith('lost_return_interrupt_'):
+        path=Path(sys.argv[1])/'caller-preflight-exceptions.json'
+        diagnostic_fd=os.open(path,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
+        with os.fdopen(diagnostic_fd,'w') as stream:json.dump(preflight_events,stream)
 assert seen==[True] and owner._ready
 assert owner.completed_binding()[4] is owner._original_buffer
 owner.release()
