@@ -895,3 +895,8 @@ historical, not an alternative live authorization path or resolved incident.
       preserving actual outcomes, descriptor custody, byte progress and unknown debt.
 - [ ] Complete current/floor/affected causals and independent security review;
       this work cannot mark startup, service delivery or physical images complete.
+
+- [ ] Qualify the first shared original-lineage source implementation across all
+      listed scopes; ten new causals and existing inheritance assertions are
+      prepared, not run. Bounded source review accepted corrected0ebe76e;
+      current/floor/affected regression remain required. No operation/effect authority is implemented.

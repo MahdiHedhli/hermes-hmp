@@ -177,3 +177,26 @@ native return until its fixed consumer acknowledgement, including allocation
 failure and work-guard retirement. Generic private callbacks or a consumer-supplied
 success flag do not satisfy this map. No implementation or test pass is implied
 by this source inventory.
+
+## First implementation checkpoint — unqualified
+
+Corrected source0ebe76e adds only the original immutable entry allocation and explicit
+lineage propagation through every listed scope, including probe/cache scopes
+without a digest context. Digest currentness rejects copied/foreign lineage and
+requires the scope to hold the actual original allocation. Ten refusal/normal and retained-constructor substitution cases, receipt-layout
+regression and stronger existing phase-inheritance assertions are prepared but
+unrun. Syntax/full Ruff pass; bounded independent source review accepted this
+allocation-only increment after the repairs below.
+
+No operation budget/dispatcher, native result claim, cleanup reservation or
+fallback is implemented by this part. The full contract and all remaining
+implementation/verification requirements remain open; this is not a narrower
+replacement for the required runtime or image-delivery end state.
+
+The initial untestedf17bf42 placed the field on a receipt rather than the scope,
+breaking constructors and shifting positional source timestamps. Review caught
+this before execution/deployment. Corrected0ebe76e restores the exact original
+receipt field order, adds only a trailing scope field, and explicitly joins probe/
+cache/source scope lineage through the original entry getter. Static AST layout
+comparison passed; constructor/receipt behavior still awaits the actual tests.
+No earlier lint or syntax check is represented as a runtime qualification.

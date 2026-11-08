@@ -1,3 +1,18 @@
+# November 8: shared original file lineage under source qualification
+
+The isolated native-file-effects branch now carries one immutable original-entry
+lineage across package/artifact, source-read, cache-probe and cache-read scopes.
+Fresh digest contexts retain that same allocation; legacy scopes retain no lineage.
+Ten copied/foreign/legacy-context and retained-constructor refusal cases are
+prepared, not run. Syntax and full Ruff pass; bounded independent source review
+accepted the corrected allocation-only increment. This is an identity
+binding prerequisite, not an operation/effect receipt, budget, fallback, working
+presentation service or phone image delivery.
+
+The prior fixture candidate passed164 focused cases; its separate1,280-case broad
+regression is still running on frozen1a49174. Those results do not qualify the new
+lineage field. No host/device/settings, install or release change is made.
+
 # November 8: combined integration not qualified
 
 The combined startup suite failed 215 cases and passed 1,065 on source1ab9910.
