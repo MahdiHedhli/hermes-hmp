@@ -38,7 +38,8 @@ qualification remain pending. No live host/device/settings/grants/provider actio
 
 The combined source1ab9910 suite failed215 cases and passed1,065. Fixture alias
 spies conflict with the new continuity checks; initial test-only migration passes
-four normal paths and74 operator/link checks. Residual and refined-monitor checks
-are active/pending. The source is not integrated-qualified, and no failed case is
+four normal paths and74 operator/link checks. The144-case residual run completed
+with125 passes and19 failures, no skips/errors and unchanged source. The separate
+reviewed164-case refined-monitor suite is running; its result remains pending. The source is not integrated-qualified, and no failed case is
 assumed resolved merely because it resembles a fixture issue. Production guards
 remain intact.

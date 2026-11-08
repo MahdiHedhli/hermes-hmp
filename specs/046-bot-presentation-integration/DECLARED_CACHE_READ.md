@@ -1,4 +1,31 @@
-# Declared cache byte reader — focused source qualification
+# Declared cache byte reader — qualification and remaining limits
+
+## Current status — November 8, 2026
+
+The reader baseline passed141 current checks (14 reader and127 scanner),14 actual
+Python3.11.15 child cases and the1,244-case shared startup run on `faf6a81` with
+unchanged source. Independent bounded source review accepted the effect-custody
+repair described below. Those are isolated/historical source results, not current
+production or physical qualification.
+
+A later output-path collision lost the original raw1,244-case binding. The
+successful log and prior in-session binding inspection remain; the missing record
+is not reconstructed. The later combined `1ab9910` run failed215 cases and passed
+1,065. Its144-case residual rerun passed125 and failed19, including three reader
+fault cases. The reviewed fixture migration is now running separately; these
+failures are not treated as resolved before its terminal result.
+
+The migrated `read_error` fixture injects loss of acknowledgement after a second
+actual native read. It retains a known acknowledged65KiB prefix and unknown debt;
+that count is not total kernel-consumed bytes or proof of a kernel EIO. No native
+error class/errno alone establishes kernel entry. Typed unavailability, fallback,
+aggregate resources, operational startup and physical delivery remain open.
+
+## Historical implementation and review record
+
+The following checkpoints preserve their original order and scope. Statements
+that work was uncommitted, untested or awaiting review describe those checkpoints;
+the focused results above supersede them for that reader baseline only.
 
 This branch adds one bounded fresh read of a cache artifact selected from the
 actual original continuation. It accepts an original continuation and row index,

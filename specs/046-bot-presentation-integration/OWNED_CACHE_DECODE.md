@@ -1,8 +1,20 @@
-# Owned selected-cache decode — source implementation awaiting tests
+# Owned selected-cache decode — source qualification, integration incomplete
 
-The fixed source implementation is present but untested; no executable qualification is claimed. The declared-cache reader's
-broader startup suite remains active in a different, frozen worktree. This branch
-must not imply completed loader, source-fallback, resource or native admission.
+## Current status — November 8, 2026
+
+Baseline `b892880` passed19 current synthetic cases and19 actual Python3.11.15
+child cases with corrected exact source/test/interpreter receipt bindings. Bounded
+independent source review accepted the repaired custody/publication checks. The
+later combined `1ab9910` run failed215 cases and passed1,065; the fixture refinement
+is still being tested. Isolated results do not qualify that combined integration,
+code execution, fallback, resources, operational native admission or phone images.
+
+## Historical contract and prequalification review
+
+The following records the contract and checkpoints before focused qualification.
+At the initial checkpoint this implementation was untested while the reader suite
+ran separately. Later focused results supersede pending-test statements for their
+exact baseline only; runtime and physical requirements remain mandatory.
 
 The next owner would accept only an actual completed DeclaredCacheReadOwner,
 whose actual original selected input attempt chooses cache. No caller bytes,
