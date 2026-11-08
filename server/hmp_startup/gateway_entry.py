@@ -405,6 +405,8 @@ class _NativeFileLedger(NamedTuple):
     inflight: list
     failed: list
     scopes: list
+    failure: list
+    preparation: list
 
     def __repr__(self):
         return "<OriginalNativeFileLedger storage-only redacted>"
@@ -422,7 +424,9 @@ def _native_file_ledger_shape(ledger):
              and ledger.inflight[0] is None
              and type(ledger.failed) is list and len(ledger.failed) == 1
              and type(ledger.failed[0]) is bool
-             and type(ledger.scopes) is list and len(ledger.scopes) <= 1048576)
+             and type(ledger.scopes) is list and len(ledger.scopes) <= 1048576
+             and type(ledger.failure) is list and len(ledger.failure) == 1
+             and type(ledger.preparation) is list and len(ledger.preparation) == 3)
 
 
 class _NativeFileLineage(NamedTuple):
@@ -509,7 +513,7 @@ class GatewayEntryOwner:
             _require(all(type(v) is int for v in context))
             interpreter = _interpreter()
             ledger = _NativeFileLedger(owner, interpreter.native_io, context,
-                                       [], [0, 0], [None], [False], [])
+                                       [], [0, 0], [None], [False], [], [None], [None, None, None])
             native_files = _NativeFileLineage(owner, interpreter.native_io, context, ledger)
             s = _Invocation(context, main, file, vars(main).get("__spec__"),
                             sys.argv, _arguments(sys.argv),

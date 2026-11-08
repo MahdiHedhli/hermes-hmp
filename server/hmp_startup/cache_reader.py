@@ -9,7 +9,7 @@ from hmp_plugin.presentation_startup_artifacts import (
     StartupArtifactOwner,
     _capture_native_scope,
     _capture_native_work_origin,
-    _Descriptor,
+    _descriptor_closed_in_scope,
     _HashedArtifact,
     _native_actor_context,
     _native_post_actor_state,
@@ -179,8 +179,7 @@ class DeclaredCacheReadOwner:
                      and len(records) == len(_READY[7]) and len(reads) == len(_READY[8])
                      and all(a is b for a, b in zip(records, _READY[7], strict=True))
                      and all(a is b for a, b in zip(reads, _READY[8], strict=True))
-                     and all(type(row) is _Descriptor and row.closed is True
-                             and row.close_attempted is True and row.unknown is False
+                     and all(_descriptor_closed_in_scope(row, s)
                              for row in records)
                      and all(type(row) is _ReadEffect and row.returned is True
                              and row.unknown is False for row in reads))
@@ -409,8 +408,7 @@ class DeclaredCacheReadOwner:
                      and receipt.sha256 == selected.cache.sha256
                      and receipt.bytecode_header == selected.cache.bytecode_header
                      and self._bytes_read == s.expected[0].size and len(buffer) == self._bytes_read
-                     and all(type(row) is _Descriptor and row.closed is True
-                             and row.close_attempted is True and row.unknown is False
+                     and all(_descriptor_closed_in_scope(row, s)
                              for row in records)
                      and all(type(row) is _ReadEffect and row.returned is True
                              and row.unknown is False for row in reads)
@@ -422,8 +420,7 @@ class DeclaredCacheReadOwner:
                      and all(a is b for a, b in zip(s.reads, reads, strict=True))
                      and _sha_current(origin) is origin and buffer == snapshot
                      and _ATTEMPTS is ready[9] and _RESULTS is ready[10]
-                     and all(type(row) is _Descriptor and row.closed is True
-                             and row.close_attempted is True and row.unknown is False
+                     and all(_descriptor_closed_in_scope(row, s)
                              for row in records)
                      and all(type(row) is _ReadEffect and row.returned is True
                              and row.unknown is False for row in reads)

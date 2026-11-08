@@ -19,7 +19,7 @@ from .presentation_gateway_activation import _LATE_MODULES, GatewayActivationOwn
 from .presentation_startup_artifacts import (
     ExpectedArtifact,
     StartupArtifactOwner,
-    _Descriptor,
+    _descriptor_closed_in_scope,
     _expected,
     _Scope,
 )
@@ -299,8 +299,7 @@ class StartupSelectionOwner:
                  and type(root[3]) is tuple and len(root[3]) == 2 and root[3][0] is self
                  and type(root[3][1]) is bytearray and self._buffer is root[3][1]
                  and len(root[3][1]) == 0 and type(s.records) is list
-                 and all(type(row) is _Descriptor and row.closed is True
-                         and row.unknown is False and row.close_attempted is True
+                 and all(_descriptor_closed_in_scope(row, s)
                          for row in s.records))
         prefix = 0
         if s.parent is not None:

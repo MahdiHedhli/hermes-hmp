@@ -23,7 +23,8 @@ from hmp_plugin.presentation_startup_artifacts import (
     ExpectedArtifact,
     StartupArtifactOwner,
     _capture_native_scope,
-    _Descriptor,
+    _descriptor_closed_in_scope,
+    _descriptor_refused,
     _expected,
     _HashedArtifact,
     _identity,
@@ -331,8 +332,7 @@ class EntryFileSnapshotOwner:
                      and io._bytes_read is file_fact[3][2]
                      and io._fact_cell is file_fact and activation._artifact_fact_cell is file_fact
                      and io._hashes is file_fact[2] and io._count_cell is file_fact[3]
-                     and all(type(row) is _Descriptor and row.closed is True
-                             and row.unknown is False and row.close_attempted is True
+                     and all(_descriptor_closed_in_scope(row, io._origin)
                              for row in io._origin.records)
                      and all(type(row) is _Scan and row.closed is True and row.unknown is False
                              and row.close_attempted is True for row in inputs.scans)
@@ -557,7 +557,8 @@ class EntryFileSnapshotOwner:
                 try:
                     StartupArtifactOwner._close(io, row, fd, s, root_cell)
                 except BaseException:
-                    row.unknown = io._unknown = self._unknown = True
+                    _descriptor_refused(row)
+                    io._unknown = self._unknown = True
                     cleanup_failed = True
             if cleanup_failed:
                 raise EntryFilesError(self)
@@ -600,7 +601,8 @@ class EntryFileSnapshotOwner:
                 try:
                     StartupArtifactOwner._close(io, row, fd, s, cell)
                 except BaseException:
-                    row.unknown = io._unknown = self._unknown = True
+                    _descriptor_refused(row)
+                    io._unknown = self._unknown = True
                     failed = True
             if failed:
                 raise EntryFilesError(self)
@@ -639,7 +641,8 @@ class EntryFileSnapshotOwner:
                     try:
                         StartupArtifactOwner._close(io, row, child, s, cell)
                     except BaseException:
-                        row.unknown = io._unknown = self._unknown = True
+                        _descriptor_refused(row)
+                        io._unknown = self._unknown = True
                         raise
         _require(_identity(StartupArtifactOwner._fstat(
             io, fd, s, native_registration), True) == signature)

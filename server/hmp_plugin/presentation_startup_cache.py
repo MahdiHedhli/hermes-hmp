@@ -299,7 +299,7 @@ def observe_pass(source, owner, phase, previous, native_registration=None):
 
 
 def seal(source, owner, before, after):
-    from .presentation_startup_artifacts import _Descriptor
+    from .presentation_startup_artifacts import _descriptor_closed_in_scope
 
     owned_current(source, owner)
     _require(type(before) is _CachePass and type(after) is _CachePass
@@ -325,8 +325,7 @@ def seal(source, owner, before, after):
                      and type(effect.result) is _Missing and effect.result is result.missing[index]
                      and effect.result.path is source.paths[index]
                      and type(effect.descriptors) is tuple
-                     and all(type(row) is _Descriptor and row.closed is True
-                             and row.close_attempted is True and row.unknown is False
+                     and all(_descriptor_closed_in_scope(row, owner._origin)
                              and any(original is row for original in owner._origin.records)
                              for row in effect.descriptors))
     return source

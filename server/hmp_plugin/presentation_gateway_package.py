@@ -22,7 +22,8 @@ from .presentation_gateway_recipe import GatewayRecipeOwner, _same_recipe_bindin
 from .presentation_startup_artifacts import (
     ExpectedArtifact,
     StartupArtifactOwner,
-    _Descriptor,
+    _descriptor_closed_in_scope,
+    _descriptor_refused,
     _expected,
     _HashedArtifact,
     _identity,
@@ -349,7 +350,7 @@ class GatewayPackageOwner:
             _require(_same_origins(origins, GatewayPackageOwner._origins(owner)))
             _native_registration_tail(owner, s, scope_cell, scope_root,
                                       native_registration, native_registry)
-            _require(all(type(r) is _Descriptor and r.closed is True and r.unknown is False
+            _require(all(_descriptor_closed_in_scope(r, s)
                          for r in s.records)
                      and all(type(r) is _Scan and r.closed is True and r.unknown is False
                              for r in meta.scans))
@@ -407,8 +408,7 @@ class GatewayPackageOwner:
                  and type(s.context) is tuple and len(s.context) == 3
                  and all(type(value) is int for value in s.context)
                  and type(s.records) is list and type(s.expected.scans) is list
-                 and all(type(row) is _Descriptor and row.closed is True
-                         and row.unknown is False and row.close_attempted is True
+                 and all(_descriptor_closed_in_scope(row, s)
                          for row in s.records)
                  and all(type(row) is _Scan and row.closed is True and row.unknown is False
                          and row.close_attempted is True for row in s.expected.scans))
@@ -562,7 +562,8 @@ class GatewayPackageOwner:
                 try:
                     StartupArtifactOwner._close(self, row, fd, s, root_cell)
                 except BaseException:
-                    row.unknown = self._unknown = failed = True
+                    _descriptor_refused(row)
+                    self._unknown = failed = True
         if failed:
             raise PackageInventoryError(self) from None
         _require(_native_walk_scope(self, native_registration) is s)

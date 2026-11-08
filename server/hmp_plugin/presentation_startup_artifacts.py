@@ -29,6 +29,10 @@ class ArtifactObservationError(Exception):
         self.failed_owner = owner
 
 
+class _NativeActorMismatchError(ArtifactObservationError):
+    """Actual original actor differs; no reservation or file call is consumed."""
+
+
 def _require(value):
     if value is not True:
         raise ArtifactObservationError
@@ -95,6 +99,98 @@ class _Descriptor:
     close_attempted: bool = False
     closed: bool = False
     unknown: bool = False
+
+
+class _NativeFilePreparation(NamedTuple):
+    """Original preparation latch retained on failure, not a file-effect grant."""
+    owner: object
+    registration: object
+    ledger: object
+    counts: list
+    before: tuple
+    index: int
+    allocation: list
+
+    def __repr__(self):
+        return "<NativeFilePreparation original transition DATA redacted>"
+
+
+class _NativeCloseAllocation(NamedTuple):
+    """Internal preallocated cleanup DATA; construction alone grants nothing.
+
+    The coupled dispatcher must register this exact allocation before open and
+    retain its original reference independently of mutable descriptor mirrors.
+    The isolated candidate dispatcher consumes these cells; qualification remains open.
+    """
+    owner: object
+    scope: object
+    registration: object
+    ledger: object
+    context: tuple
+    close_call: object
+    actor_calls: tuple
+    actor_modules: tuple
+    open_slot: list
+    reservation: object
+    state: list
+    unset: object
+    raw: list
+    result: list
+
+    def __repr__(self):
+        return "<NativeCloseAllocation unbound DATA redacted>"
+
+
+class _NativeOpenAllocation(NamedTuple):
+    """Original open intent/raw-return storage, not admission or a receipt."""
+    owner: object
+    scope: object
+    registration: object
+    ledger: object
+    parent: object
+    arguments: tuple
+    native: object
+    context: tuple
+    index: int
+    pending: object
+    raw: list
+    result: list
+    refused: list
+    close: _NativeCloseAllocation
+
+    def __repr__(self):
+        return "<NativeOpenAllocation unbound DATA redacted>"
+
+
+class _NativeOpenedDescriptor(NamedTuple):
+    """Immutable actual-result wrapper; requires independent original-claim joins.
+
+    This type intentionally supplies no writable status properties. Consumers
+    must use the coupled proof validator, not infer closed credit from shape.
+    The coupled validator and consumers remain subject to qualification.
+    """
+    allocation: _NativeOpenAllocation
+    fd: int
+    close: _NativeCloseAllocation
+
+    @property
+    def attempted(self):
+        return True
+
+    @property
+    def close_attempted(self):
+        return self.close.state[0]
+
+    @property
+    def closed(self):
+        return self.close.raw[0] is None and self.close.state[0] is True
+
+    @property
+    def unknown(self):
+        return self.allocation.refused[0] or self.close.state[1]
+
+    def __repr__(self):
+        return "<NativeOpenedDescriptor actual-result DATA redacted>"
 
 
 class _Scope(NamedTuple):
@@ -492,6 +588,10 @@ def _native_scope_current(owner, record):
              and type(record.lineage) is _NativeFileLineage
              and type(record.lineage.ledger) is _NativeFileLedger)
     s, lineage, cell, root = record.scope, record.lineage, record.cell, record.root
+    _require(type(lineage.ledger.inflight) is list and len(lineage.ledger.inflight) == 1
+             and lineage.ledger.inflight[0] is None
+             and type(lineage.ledger.failed) is list and len(lineage.ledger.failed) == 1
+             and lineage.ledger.failed[0] is False)
     registry, index = lineage.ledger.scopes, record.index
     slot = s.native_registration_slot
     _require(type(slot) is list and len(slot) == 1 and slot[0] is record)
@@ -756,6 +856,280 @@ def _native_work_origin_tail(owner, registration, native):
                  and error_names.get(name) is native.errors[index])
 
 
+def _allocate_native_file_open(owner, registration, parent, arguments, pending):
+    """Preallocate original intent and one close reservation; no file operation.
+
+    Candidate dispatch only. Admission consumes an attempt even if later
+    preparation refuses; there is no release/retry path that launders that debt.
+    Parent validity is rechecked at allocation; coupled dispatch must rejoin the
+    same original parent again after its last callback and before the file call.
+    """
+    native = _capture_native_work_origin(owner, registration)
+    _require(native is not None and type(arguments) is tuple and len(arguments) == 3
+             and type(arguments[0]) is str and type(arguments[1]) is int
+             and arguments[2] is parent
+             and type(pending) is _Descriptor and pending.fd is None
+             and pending.attempted is True and pending.close_attempted is False
+             and pending.closed is False and pending.unknown is False)
+    parent_claim = _native_parent_descriptor(registration, arguments[0], parent)
+    ledger = registration.native_ledger
+    _require(type(ledger.attempts) is list and type(ledger.counts) is list
+             and len(ledger.counts) == 2
+             and all(type(value) is int for value in ledger.counts)
+             and 0 <= ledger.counts[0] <= 1048574
+             and 0 <= ledger.counts[1] <= 1048574 - ledger.counts[0]
+             and type(ledger.inflight) is list and len(ledger.inflight) == 1
+             and ledger.inflight[0] is None
+             and type(ledger.failed) is list and len(ledger.failed) == 1
+             and ledger.failed[0] is False and len(ledger.attempts) < 1048576)
+    attempts, counts = ledger.attempts, ledger.counts
+    used, reserved, index = counts[0], counts[1], len(attempts)
+    inflight, failed, failure = ledger.inflight, ledger.failed, ledger.failure
+    _require(type(failure) is list and len(failure) == 1 and failure[0] is None)
+    token = ledger.preparation
+    _require(type(token) is list and len(token) == 3)
+    preparation = None
+    actor_mismatch = False
+    try:
+        _require(ledger.inflight is inflight and inflight[0] is None
+                 and ledger.failed is failed and failed[0] is False
+                 and ledger.failure is failure and failure[0] is None
+                 and ledger.preparation is token and ledger.attempts is attempts
+                 and len(attempts) == index and ledger.counts is counts and len(counts) == 2
+                 and counts[0] is used and counts[1] is reserved)
+        inflight[0] = token
+        token[0], token[1], token[2] = owner, registration, pending
+        try:
+            _native_actor_context(native.actor_calls, (native.native, native.thread_native),
+                                  registration.context)
+        except _NativeActorMismatchError:
+            actor_mismatch = True
+            raise
+        preparation = _NativeFilePreparation(owner, registration, ledger, counts,
+                                             (used, reserved), index, [None])
+        token[2] = preparation
+        open_slot, raw, result = [None], [None], [None]
+        unset, reservation = object(), object()
+        close = _NativeCloseAllocation(owner, registration.scope, registration, ledger,
+                                       registration.context, native.operations[2],
+                                       native.actor_calls, (native.native, native.thread_native),
+                                       open_slot, reservation, [False, False], unset,
+                                       [unset], [None])
+        allocation = _NativeOpenAllocation(owner, registration.scope, registration, ledger,
+                                           parent_claim, arguments, native, registration.context,
+                                           index, pending, raw, result, [False], close)
+        preparation.allocation[0] = allocation
+        open_slot[0] = allocation
+        _native_work_origin_tail(owner, registration, native)
+        _require(ledger.inflight is inflight and inflight[0] is token
+                 and ledger.failed is failed and failed[0] is False
+                 and ledger.failure is failure and failure[0] is None
+                 and ledger.attempts is attempts and len(attempts) == index
+                 and ledger.counts is counts and len(counts) == 2
+                 and counts[0] is used and counts[1] is reserved
+                 and type(used) is int and type(reserved) is int
+                 and 0 <= used <= 1048574 and 0 <= reserved <= 1048574 - used)
+        attempts.append(allocation)
+        counts[0] = used + 1
+        counts[1] = reserved + 1
+        _require(ledger.inflight is inflight and inflight[0] is token
+                 and ledger.attempts is attempts and attempts[index] is allocation
+                 and ledger.counts is counts and len(counts) == 2
+                 and type(counts[0]) is int and counts[0] == used + 1
+                 and type(counts[1]) is int and counts[1] == reserved + 1)
+        return allocation
+    except BaseException:
+        if not actor_mismatch:
+            if failure[0] is None:
+                failure[0] = preparation if preparation is not None else token
+            failed[0] = True
+        raise
+    finally:
+        if ledger.inflight is inflight and inflight[0] is token:
+            inflight[0] = None
+
+
+def _native_file_allocation_original(allocation, original_ledger):
+    """Original claim joins only: deliberately independent of current work roots."""
+    _require(type(allocation) is _NativeOpenAllocation
+             and allocation.ledger is original_ledger)
+    registration, ledger, close = allocation.registration, allocation.ledger, allocation.close
+    _require(type(registration) is _NativeScopeRegistration
+             and type(registration.type_pins) is tuple and len(registration.type_pins) == 3
+             and all(type(pin) is type for pin in registration.type_pins)
+             and type(ledger) is registration.type_pins[1]
+             and type(allocation.native) is registration.type_pins[2])
+    _require(registration.owner is allocation.owner and registration.scope is allocation.scope
+             and registration.native_ledger is ledger
+             and registration.native_origin is allocation.native
+             and allocation.context is registration.context
+             and type(ledger) is registration.type_pins[1]
+             and type(ledger.attempts) is list and type(allocation.index) is int
+             and 0 <= allocation.index < len(ledger.attempts)
+             and ledger.attempts[allocation.index] is allocation
+             and type(close) is _NativeCloseAllocation
+             and close.owner is allocation.owner and close.scope is allocation.scope
+             and close.registration is registration and close.ledger is ledger
+             and close.context is allocation.context
+             and close.close_call is allocation.native.operations[2]
+             and close.actor_calls is allocation.native.actor_calls
+             and type(close.actor_modules) is tuple and len(close.actor_modules) == 2
+             and close.actor_modules[0] is allocation.native.native
+             and close.actor_modules[1] is allocation.native.thread_native
+             and type(close.open_slot) is list and len(close.open_slot) == 1
+             and close.open_slot[0] is allocation
+             and type(allocation.raw) is list and len(allocation.raw) == 1
+             and type(allocation.result) is list and len(allocation.result) == 1
+             and type(allocation.refused) is list and len(allocation.refused) == 1
+             and type(allocation.refused[0]) is bool
+             and type(close.state) is list and len(close.state) == 2
+             and all(type(value) is bool for value in close.state)
+             and type(close.raw) is list and len(close.raw) == 1
+             and type(close.result) is list and len(close.result) == 1)
+    return close
+
+
+def _native_descriptor_opened(descriptor, original_ledger):
+    """Internal actual-open result joins; shape alone is not external authority."""
+    _require(type(descriptor) is _NativeOpenedDescriptor and type(descriptor.fd) is int
+             and descriptor.fd >= 0)
+    allocation = descriptor.allocation
+    close = _native_file_allocation_original(allocation, original_ledger)
+    _require(descriptor.close is close
+             and allocation.raw[0] is descriptor.fd
+             and type(allocation.result[0]) is tuple and len(allocation.result[0]) == 2
+             and allocation.result[0][0] is allocation and allocation.result[0][1] is descriptor)
+    return close
+
+
+def _native_parent_descriptor(registration, name, parent):
+    """Select only an original live parent from this fixed caller's own scope."""
+    _require(type(registration) is _NativeScopeRegistration and type(name) is str
+             and type(parent) in (int, type(None)))
+    if parent is None:
+        _require(name == "/")
+        return None
+    _require(parent >= 0 and type(registration.scope) is _Scope)
+    records = registration.scope.records
+    _require(type(records) is list and len(records) <= 1048576)
+    found = None
+    for descriptor in records:
+        if type(descriptor) is _NativeOpenedDescriptor and descriptor.fd is parent:
+            close = _native_descriptor_opened(descriptor, registration.native_ledger)
+            if close.state[0] is True:
+                continue  # an earlier closed descriptor may have reused this fd number
+            _require(found is None and descriptor.allocation.scope is registration.scope
+                     and descriptor.allocation.ledger is registration.native_ledger
+                     and close.state[1] is False and close.raw[0] is close.unset
+                     and close.result[0] is None)
+            found = descriptor
+    _require(found is not None)
+    return found
+
+
+def _native_descriptor_closed(descriptor, original_ledger):
+    """Actual original open/result/close proof, never mutable pending-row credit."""
+    close = _native_descriptor_opened(descriptor, original_ledger)
+    _require(descriptor.allocation.refused[0] is False
+             and close.raw[0] is None and close.state[0] is True and close.state[1] is False
+             and type(close.result[0]) is tuple and len(close.result[0]) == 3
+             and close.result[0][0] is close and close.result[0][1] is descriptor.fd
+             and close.result[0][2] is None)
+    return True
+
+
+def _descriptor_closed_in_scope(row, scope):
+    """Fixed consumer's held scope selects native proof versus legacy status."""
+    try:
+        _require(type(scope) is _Scope)
+        if scope.native_files is None:
+            return (type(row) is _Descriptor and row.closed is True
+                    and row.close_attempted is True and row.unknown is False)
+        slot = scope.native_registration_slot
+        _require(type(slot) is list and len(slot) == 1
+                 and type(slot[0]) is _NativeScopeRegistration)
+        registration = slot[0]
+        _require(registration.scope is scope and registration.lineage is scope.native_files
+                 and type(registration.type_pins) is tuple and len(registration.type_pins) == 3
+                 and all(type(pin) is type for pin in registration.type_pins)
+                 and type(registration.lineage) is registration.type_pins[0]
+                 and type(registration.native_ledger) is registration.type_pins[1]
+                 and registration.lineage.ledger is registration.native_ledger
+                 and type(row) is _NativeOpenedDescriptor
+                 and type(row.allocation) is _NativeOpenAllocation
+                 and row.allocation.scope is scope)
+        return _native_descriptor_closed(row, registration.native_ledger)
+    except ArtifactObservationError:
+        return False
+
+
+def _descriptor_refused(row):
+    """Withdraw work credit only; never manufacture close success."""
+    if type(row) is _NativeOpenedDescriptor:
+        _require(type(row.allocation) is _NativeOpenAllocation)
+        row.allocation.refused[0] = True
+    else:
+        _require(type(row) is _Descriptor)
+        row.unknown = True
+
+
+def _close_native_file_known(owner, allocation, fd, original_ledger):
+    """Consume the original reserved cleanup, with no current-work-root lookup."""
+    close = _native_file_allocation_original(allocation, original_ledger)
+    _require(allocation.owner is owner and type(fd) is int and fd >= 0
+             and allocation.raw[0] is fd and close.state[0] is False
+             and close.state[1] is False and close.raw[0] is close.unset
+             and close.result[0] is None)
+    ledger = original_ledger
+    counts, inflight = ledger.counts, ledger.inflight
+    failed, failure = ledger.failed, ledger.failure
+    _require(type(failed) is list and len(failed) == 1 and type(failed[0]) is bool
+             and type(failure) is list and len(failure) == 1)
+    _require(type(counts) is list and len(counts) == 2
+             and all(type(value) is int for value in counts)
+             and 0 <= counts[0] < 1048576 and 0 < counts[1] <= 1048576 - counts[0]
+             and type(inflight) is list and len(inflight) == 1
+             and inflight[0] is None)
+    used, reserved = counts
+    close_call, token = close.close_call, close.reservation
+    actor_mismatch = False
+    try:
+        inflight[0] = close
+        try:
+            _native_actor_context(close.actor_calls, close.actor_modules, close.context)
+        except _NativeActorMismatchError:
+            actor_mismatch = True
+            raise
+        _require(_native_file_allocation_original(allocation, original_ledger) is close
+                 and allocation.raw[0] is fd and close.state[0] is False
+                 and close.state[1] is False and close.raw[0] is close.unset
+                 and close.reservation is token and close.close_call is close_call
+                 and ledger.counts is counts and counts[0] is used and counts[1] is reserved
+                 and ledger.inflight is inflight
+                 and inflight[0] is close)
+        used_after, reserved_after = used + 1, reserved - 1
+        close.state[0] = True
+        counts[0], counts[1] = used_after, reserved_after
+        value = close_call(fd)
+        close.raw[0] = value  # retain actual return before allocating receipt DATA
+        _require(value is None)
+        close.result[0] = (close, fd, value)
+        _require(_native_file_allocation_original(allocation, original_ledger) is close
+                 and ledger.inflight is inflight and inflight[0] is close
+                 and ledger.counts is counts and len(counts) == 2
+                 and counts[0] is used_after and counts[1] is reserved_after)
+    except BaseException:
+        if not actor_mismatch:
+            if failure[0] is None:
+                failure[0] = close
+            close.state[1] = True
+            failed[0] = True
+        raise
+    finally:
+        if ledger.inflight is inflight and inflight[0] is close:
+            inflight[0] = None
+
+
 def _native_pre_actor_state(owner, arguments):
     """Bounded original owner/argument mirrors, not an operation permission."""
     names = vars(owner)
@@ -789,7 +1163,9 @@ def _native_actor_context(functions, modules, expected):
              and functions[1].__self__ is modules[0] and functions[1].__name__ == 'geteuid'
              and functions[2].__self__ is modules[1] and functions[2].__name__ == 'get_ident')
     actual = (functions[0](), functions[1](), functions[2]())
-    _require(all(type(value) is int for value in actual) and actual == expected)
+    _require(all(type(value) is int for value in actual))
+    if actual != expected:
+        raise _NativeActorMismatchError
     return actual
 
 
@@ -930,8 +1306,7 @@ class StartupArtifactOwner:
             _require(all(type(v) is int for v in context) and context == s.context)
             _require(_native_walk_scope(owner, native_registration) is s
                      and owner._count_cell is owner._initial_count_cell
-                     and all(type(row) is _Descriptor and row.closed is True
-                             and row.unknown is False and row.close_attempted is True
+                     and all(_descriptor_closed_in_scope(row, s)
                              for row in s.records))
             runtime = s.runtime
             cache_before = cache_after = None
@@ -986,8 +1361,7 @@ class StartupArtifactOwner:
                      and all(type(row) is _HashedArtifact and row.owner is owner
                              and row.scope is s and row.expected is expected
                              for row, expected in zip(hashes, s.expected, strict=True))
-                     and all(type(row) is _Descriptor and row.closed is True
-                             and row.unknown is False and row.close_attempted is True
+                     and all(_descriptor_closed_in_scope(row, s)
                              for row in s.records)
                      and owner._facts is None and owner._hashes is None
                      and owner._fact_cell is None and activation._artifact_fact_cell is None)
@@ -1086,6 +1460,7 @@ class StartupArtifactOwner:
         row = _Descriptor()
         s.records.append(row)  # original descriptor allocation before open
         fd = None
+        allocation = None
         row.attempted = True
         if native is None:
             flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK
@@ -1105,8 +1480,11 @@ class StartupArtifactOwner:
             if native is None:
                 open_call = os.open
             if native is not None:
+                allocation = _allocate_native_file_open(
+                    self, native_registration, parent, (name, flags, parent), row)
                 records = s.records
                 record_prefix = tuple(records)
+                record_index = len(record_prefix) - 1
                 arguments = (name, parent, directory, flags, open_call)
                 held_state = _native_pre_actor_state(self, arguments)
                 _native_actor_context(native.actor_calls, (native.native, native.thread_native),
@@ -1123,25 +1501,89 @@ class StartupArtifactOwner:
                          and len(records) == len(record_prefix)
                          and all(actual is original for actual, original in
                                  zip(records, record_prefix, strict=True))
-                         and records[-1] is row)
+                         and records[-1] is row
+                         and _native_file_allocation_original(
+                             allocation, native_registration.native_ledger) is allocation.close
+                         and _native_parent_descriptor(native_registration, name, parent)
+                             is allocation.parent
+                         and allocation.ledger.inflight[0] is None)
+                allocation.ledger.inflight[0] = allocation
             fd = open_call(name, flags, dir_fd=parent)
+            if allocation is not None:
+                allocation.raw[0] = fd  # actual return, before wrapper/receipt allocation
             _require(type(fd) is int and fd >= 0)
-            row.fd = fd
+            if allocation is None:
+                row.fd = fd
+            else:
+                descriptor = _NativeOpenedDescriptor(allocation, fd, allocation.close)
+                opened_result = (allocation, descriptor)
+                _require(records is s.records and len(records) == len(record_prefix)
+                         and all(actual is original for actual, original in
+                                 zip(records, record_prefix, strict=True))
+                         and records[record_index] is allocation.pending
+                         and allocation.close.state[0] is False
+                         and allocation.close.state[1] is False
+                         and allocation.close.raw[0] is allocation.close.unset
+                         and allocation.close.result[0] is None)
+                allocation.result[0] = opened_result
+                records[record_index] = descriptor
+                row = descriptor
+                _require(allocation.ledger.inflight[0] is allocation)
+                allocation.ledger.inflight[0] = None
             _require(_native_walk_scope(self, native_registration) is s)
             _native_registration_tail(self, s, owner_cell, root_cell,
                                       native_registration, registry)
             _native_work_origin_tail(self, native_registration, native)
+            if allocation is not None:
+                _require(_native_file_allocation_original(
+                             allocation, native_registration.native_ledger) is allocation.close
+                         and allocation.raw[0] is fd and allocation.result[0] is opened_result
+                         and records is s.records and records[record_index] is row
+                         and row is descriptor and row.close.state[0] is False
+                         and row.close.state[1] is False
+                         and row.close.raw[0] is row.close.unset and row.close.result[0] is None)
             return row, fd
         except BaseException:
-            row.unknown = self._unknown = True
-            if type(fd) is int and row.fd is fd and row.close_attempted is False:
+            _descriptor_refused(row)
+            self._unknown = True
+            if allocation is not None:
+                allocation.refused[0] = True
+                if allocation.ledger.inflight[0] is allocation:
+                    allocation.ledger.inflight[0] = None
+                if type(fd) is int and allocation.raw[0] is fd:
+                    try:
+                        _close_native_file_known(self, allocation, fd,
+                                                 native_registration.native_ledger)
+                    except BaseException:
+                        allocation.close.state[1] = True
+                if allocation.ledger.failure[0] is None:
+                    allocation.ledger.failure[0] = allocation
+                allocation.ledger.failed[0] = True
+            elif type(fd) is int and row.fd is fd and row.close_attempted is False:
                 try:
                     StartupArtifactOwner._close(self, row, fd, s, root_cell)
                 except BaseException:
-                    row.unknown = self._unknown = True
+                    _descriptor_refused(row)
+                    self._unknown = True
             raise
 
     def _close(self, row, fd, s, root_cell):
+        if type(row) is _NativeOpenedDescriptor:
+            _require(type(s) is _Scope and type(row.allocation) is _NativeOpenAllocation
+                     and row.allocation.scope is s and row.allocation.owner is self
+                     and type(row.allocation.registration) is _NativeScopeRegistration)
+            registration = row.allocation.registration
+            _require(registration.scope is s and registration.owner is self
+                     and registration.lineage is s.native_files
+                     and type(registration.type_pins) is tuple and len(registration.type_pins) == 3
+                     and all(type(pin) is type for pin in registration.type_pins)
+                     and type(s.native_files) is registration.type_pins[0]
+                     and type(registration.native_ledger) is registration.type_pins[1]
+                     and s.native_files.ledger is registration.native_ledger
+                     and row.fd is fd
+                     and _native_descriptor_opened(row, registration.native_ledger) is row.close)
+            _close_native_file_known(self, row.allocation, fd, registration.native_ledger)
+            return
         # Cleanup may run after a failed guard, but only on the original context.
         _require(type(s) is _Scope and type(s.context) is tuple and len(s.context) == 3
                  and all(type(v) is int for v in s.context))
@@ -1171,7 +1613,8 @@ class StartupArtifactOwner:
             _require(self._root_cell is root_cell and _root(self, s.activation) is root_cell
                      and GatewayActivationOwner._retained_scope(s.activation) is s.activation_scope)
         except BaseException:
-            row.unknown = self._unknown = True
+            _descriptor_refused(row)
+            self._unknown = True
             raise
 
     def _read(self, fd, count, s, native_registration=None):
@@ -1465,7 +1908,8 @@ class StartupArtifactOwner:
                 try:
                     StartupArtifactOwner._close(self, row, fd, s, root)
                 except BaseException:
-                    row.unknown = self._unknown = True
+                    _descriptor_refused(row)
+                    self._unknown = True
                     failed = True
         if failed:
             raise ArtifactObservationError(self) from None
@@ -1728,7 +2172,8 @@ class StartupArtifactOwner:
                 try:
                     StartupArtifactOwner._close(self, row, fd, s, root_cell)
                 except BaseException:
-                    row.unknown = self._unknown = True
+                    _descriptor_refused(row)
+                    self._unknown = True
                     failed = True
         if failed:
             raise ArtifactObservationError(self) from None

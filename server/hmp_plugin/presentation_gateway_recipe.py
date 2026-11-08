@@ -11,7 +11,7 @@ from .presentation_gateway_activation import GatewayActivationOwner
 from .presentation_startup_artifacts import (
     ExpectedArtifact,
     StartupArtifactOwner,
-    _Descriptor,
+    _descriptor_closed_in_scope,
     _expected,
     _Scope,
 )
@@ -172,8 +172,7 @@ class GatewayRecipeOwner:
                      and owner._bytes_read is actual_count[2]
                      and owner._bytes_read == s.expected.configuration_cell[3][2]
                      + recipe_size + sum(row.size for row in rows)
-                     and all(type(row) is _Descriptor and row.closed is True
-                             and row.close_attempted is True and row.unknown is False
+                     and all(_descriptor_closed_in_scope(row, s)
                              for row in s.records)
                      and owner._fact_cell is None and activation._recipe_fact_cell is None
                      and owner._ready is False)
@@ -212,8 +211,7 @@ class GatewayRecipeOwner:
                  and self._reading is False and self._active is None
                  and type(s.context) is tuple and len(s.context) == 3
                  and all(type(v) is int for v in s.context) and type(s.records) is list
-                 and all(type(row) is _Descriptor and row.closed is True
-                         and row.close_attempted is True and row.unknown is False
+                 and all(_descriptor_closed_in_scope(row, s)
                          for row in s.records))
         parent = StartupSelectionOwner._retained_binding(s.expected.configuration)
         approval = _approved_recipe(s.expected.configuration)

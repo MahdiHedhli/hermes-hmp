@@ -684,3 +684,27 @@ checks and the plugin-surface scanner pass. Independent review is pending; the
 serialized prior regression remains running. Native close reservation, runtime
 binding, bot character delivery, local image delivery and physical qualification
 remain incomplete. No deployment or installed-feature claim follows.
+
+## Coupled reserved-close candidate — November 8
+
+This source candidate implements original open/close storage and one reserved
+cleanup per admitted open, actual raw returns before result-wrapper allocation,
+immutable opened descriptors and native closure proof in all inventoried startup
+consumers. Continuation resources retain their original file scope; directory
+iterator resources keep their separate contract. Legacy configuration/approval
+reads retain the legacy descriptor path.
+
+Entry-preallocated preparation storage excludes reentrancy before actor sampling
+and allocation. Only the actor helper's explicit actual-context mismatch remains
+non-consuming; every later exception, including the same exception class, retains
+original failure/debt and blocks further work. Actual known-FD cleanup uses its
+held original reservation even after work/root/namespace refusal. Unknown close
+never retries. Partial interrupted debit is retained, not reset as fresh capacity.
+
+Thirty-four causal tests are prepared but unrun. Bounded source review does not
+qualify them, the coupled consumer regressions, the Python floor or runtime/device
+behavior. The wrappers/helpers are internal DATA with independently held scope and
+original ledger requirements; an arbitrary self-consistent wrapper grants no
+external authority. Open/close metering does not complete the six-operation budget.
+Scandir/next/iterator-close, full loader/factory/key/transport binding and physical
+character/local-media delivery remain unfinished. No deployment occurred.

@@ -20,7 +20,7 @@ from hmp_plugin.presentation_startup_artifacts import (
     ExpectedArtifact,
     OperatorApprovalPath,
     StartupArtifactOwner,
-    _Descriptor,
+    _descriptor_closed_in_scope,
     _OperatorFileReceipt,
     _ReadEffect,
     _Scope,
@@ -312,9 +312,8 @@ class GatewayApprovalOwner:
         _require(type(receipt) is _OperatorFileReceipt and receipt.owner is self
                  and receipt.scope is s and type(receipt.descriptors) is tuple
                  and len(receipt.descriptors) == len(s.records) > 0
-                 and all(actual is held and type(held) is _Descriptor
-                         and held.closed is True and held.close_attempted is True
-                         and held.unknown is False for actual, held in zip(
+                 and all(actual is held and _descriptor_closed_in_scope(held, s)
+                         for actual, held in zip(
                              s.records, receipt.descriptors, strict=True))
                  and type(receipt.reads) is tuple and len(receipt.reads) == len(s.reads) >= 2
                  and all(actual is held for actual, held in zip(

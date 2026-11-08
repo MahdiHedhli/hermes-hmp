@@ -10,6 +10,7 @@ from types import BuiltinFunctionType, MethodDescriptorType, ModuleType
 from hmp_plugin.presentation_startup_artifacts import (
     StartupArtifactOwner,
     _capture_native_scope,
+    _descriptor_closed_in_scope,
     _native_walk_scope,
     _Scope,
 )
@@ -282,8 +283,7 @@ class RuntimeSourceReadOwner:
                      and receipt.source_mtime == selected.source.receipt.source_mtime
                      and self._bytes_read == s.expected[0].size
                      and len(buffer) == self._bytes_read
-                     and all(row.closed is True and row.close_attempted is True
-                             and row.unknown is False for row in s.records))
+                     and all(_descriptor_closed_in_scope(row, s) for row in s.records))
             # The immutable snapshot is a bounded temporary (not retained in a
             # receipt). Native SHA origin and the final pure byte comparison
             # cover same-length mutation across callbacks/GIL release.

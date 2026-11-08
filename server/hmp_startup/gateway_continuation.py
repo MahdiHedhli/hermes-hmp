@@ -20,7 +20,7 @@ from hmp_plugin.presentation_gateway_recipe import GatewayRecipeOwner, _same_rec
 from hmp_plugin.presentation_startup_artifacts import (
     ExpectedArtifact,
     StartupArtifactOwner,
-    _Descriptor,
+    _descriptor_closed_in_scope,
     _HashedArtifact,
     _Scope,
 )
@@ -202,12 +202,13 @@ class GatewayContinuationOwner:
                      and activation._continuation_cell is partial)
             io = _runtime_fact(snapshot._fact_cell, snapshot, inputs)
             _require(type(io._origin.records) is list and type(inputs.scans) is list)
-            rows = [ab[0].records, rb[0].records, inputs.plugin_binding[0].records,
-                    io._origin.records, inputs.scans]
+            rows = [(ab[0].records, ab[0]), (rb[0].records, rb[0]),
+                    (inputs.plugin_binding[0].records, inputs.plugin_binding[0]),
+                    (io._origin.records, io._origin), (inputs.scans, None)]
             source = _ContinuationSource(
                 entry, eb, approval, ab, recipe, rb, snapshot, snapshot._root_cell,
                 snapshot._fact_cell, inputs, io._origin, io._cell, io._root_cell,
-                tuple((items, tuple(items)) for items in rows),
+                tuple((items, tuple(items), scope) for items, scope in rows),
                 _native_origins(rb[0].activation_scope), inputs.cache_context_slot[0])
             owner._source = source
             root = (owner, activation, source)
@@ -269,13 +270,18 @@ class GatewayContinuationOwner:
                  and type(s.resources) is tuple)
         _require(_same_package(s.inputs.plugin_binding,
                                GatewayPackageOwner._retained_binding(s.inputs.plugin)))
-        for items, originals in s.resources:
+        for resource in s.resources:
+            _require(type(resource) is tuple and len(resource) == 3)
+            items, originals, file_scope = resource
             _require(type(items) is list and type(originals) is tuple
                      and len(items) == len(originals)
-                     and all(actual is held and type(held) in (_Descriptor, _Scan)
-                             and held.closed is True and held.close_attempted is True
-                             and held.unknown is False
-                             for actual, held in zip(items, originals, strict=True)))
+                     and (file_scope is None or (type(file_scope) is _Scope
+                          and items is file_scope.records))
+                     and all(actual is held and (
+                         (type(held) is _Scan and held.closed is True
+                          and held.close_attempted is True and held.unknown is False)
+                         if file_scope is None else _descriptor_closed_in_scope(held, file_scope))
+                         for actual, held in zip(items, originals, strict=True)))
         _require(s.inputs.cache_context_slot[0] is s.cache_context_fact)
         _native_current(s)
         _api_state(s.approval_binding[0].parent)

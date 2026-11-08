@@ -14,7 +14,8 @@ from hmp_plugin.presentation_startup_artifacts import (
     StartupArtifactOwner,
     _capture_native_scope,
     _capture_native_work_origin,
-    _Descriptor,
+    _descriptor_closed_in_scope,
+    _descriptor_refused,
     _HashedArtifact,
     _identity,
     _native_actor_context,
@@ -181,9 +182,9 @@ class RuntimeCacheProbeOwner:
                      and len(s.records) == len(_FACT[5])
                      and all(a is b for a, b in zip(s.records, _FACT[5], strict=True))
                      and all(type(item) is tuple and len(item) == 2
-                             and type(item[0]) is _Descriptor and type(item[1]) is int
-                             and item[0].fd is item[1] and item[0].closed is True
-                             and item[0].close_attempted is True and item[0].unknown is False
+                             and type(item[1]) is int
+                             and _descriptor_closed_in_scope(item[0], s)
+                             and item[0].fd is item[1]
                              for item in _FACT[3]))
         else:
             _require(self._ready is False and _FACT is None and self._fact is None
@@ -358,7 +359,8 @@ class RuntimeCacheProbeOwner:
                 try:
                     StartupArtifactOwner._close(self, row, fd, s, root)
                 except BaseException:
-                    row.unknown = self._unknown = failed = True
+                    _descriptor_refused(row)
+                    self._unknown = failed = True
         if failed:
             self._failed = True
             raise CacheProbeError(self) from None
@@ -372,8 +374,7 @@ class RuntimeCacheProbeOwner:
                  and selected.proof is proof and len(s.records) == len(records)
                  and all(actual is original for actual, original
                          in zip(s.records, records, strict=True))
-                 and all(type(row) is _Descriptor and row.fd is fd and row.closed is True
-                         and row.close_attempted is True and row.unknown is False
+                 and all(_descriptor_closed_in_scope(row, s) and row.fd is fd
                          for row, fd in resources))
         _native_registration_tail(self, s, cell, root, native_registration, native_registry)
         self._fact = _FACT = s.activation._runtime_cache_probe_fact = fact

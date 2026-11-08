@@ -1,9 +1,15 @@
 # Native reserved file close — coupled implementation tasks
 
-Status: implementation not started. Source baseline `744d75d`; the companion
-JSON records exact source hashes and lexical sites, not completed graph proof.
-This implements the existing reviewed file-effect contract. It neither replaces
-bot-character/local-media delivery nor establishes an upstream prerequisite.
+Status: coupled implementation in progress, not qualified or deployed. The isolated
+candidate now wires immutable holders, raw-result capture, reserved close and
+scope-aware descriptor consumers. Thirty-four causal cases are prepared but unrun.
+Independent review has raised publication/reentrancy defects that were amended;
+preallocated latches and sticky transition failures are implemented; the distinct
+non-consuming actor-mismatch outcome and original authority anchors remain under review.
+Source baseline `744d75d`; the companion JSON records baseline source hashes and
+lexical sites, not completed graph proof. This implements the existing reviewed
+file-effect contract. It neither replaces bot-character/local-media delivery nor
+establishes an upstream prerequisite.
 
 - [ ] NC1: preallocate original open/result/close claims in the original ledger;
   reserve one cleanup attempt before open, under the shared ceiling. Bind the
