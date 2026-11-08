@@ -6,6 +6,7 @@ from types import FunctionType, ModuleType
 from typing import NamedTuple
 
 from .presentation_startup_artifacts import (
+    ArtifactObservationError,
     StartupArtifactOwner,
     _native_actor_context,
     _native_declared_metadata_cohort_tail,
@@ -436,7 +437,6 @@ def _charged_directory_operation_tail(owner, consumer):
              and ledger.counts[0] is operation.budget[3]
              and ledger.counts[1] is operation.budget[2]
              and type(ledger.inflight) is list and len(ledger.inflight) == 1
-             and ledger.inflight[0] is operation
              and type(ledger.failed) is list and len(ledger.failed) == 1
              and ledger.failed[0] is False
              and type(phase.current) is list and len(phase.current) == 1
@@ -461,6 +461,7 @@ def _active_directory_operation_tail(owner, consumer):
     operation = _charged_directory_operation_tail(owner, consumer)
     result = operation.result
     _require(operation.state[1] is False and operation.ended[0] is False
+             and operation.ledger.inflight[0] is operation
              and operation.phase.current[0] is operation.phase.active
              and result.raw[0] is result.unset
              and all(cell[0] is None for cell in (result.category, result.snapshot,
@@ -616,6 +617,7 @@ def _returned_directory_operation_tail(owner, consumer, operation, raw):
     _require(_charged_directory_operation_tail(owner, consumer) is operation
              and operation.state[1] is True and operation.ended[0] is True
              and operation.phase.current[0] is operation.phase.active
+             and operation.ledger.inflight[0] is operation
              and type(raw) is operation.native.result_type
              and operation.result.raw[0] is raw
              and all(cell[0] is None for cell in (operation.result.category,
@@ -633,6 +635,7 @@ def _pending_directory_return_tail(owner, consumer, actual):
              and actual.consumer is consumer
              and operation.state[1] is True and operation.ended[0] is True
              and phase.current[0] is phase.pending
+             and operation.ledger.inflight[0] is None
              and result.envelope[0] is actual
              and type(actual.raw) is operation.native.result_type
              and result.raw[0] is actual.raw
@@ -671,6 +674,7 @@ def _produce_directory_metadata(owner, consumer):
         result.category[0] = category
         result.snapshot[0] = snapshot
         result.envelope[0] = actual
+        ledger.inflight[0] = None  # native call ended; pending result stays separately owned
         phase.current[0] = phase.pending
         _require(_pending_directory_return_tail(owner, consumer, actual) is actual)
         return actual
@@ -705,4 +709,8 @@ def _produce_directory_metadata(owner, consumer):
         if (type(ledger.inflight) is list and len(ledger.inflight) == 1
                 and ledger.inflight[0] is operation):
             ledger.inflight[0] = None
-        raise
+    finally:
+        raw = result.unset
+        snapshot = None
+        actual = None
+    raise ArtifactObservationError('directory metadata observation refused') from None
