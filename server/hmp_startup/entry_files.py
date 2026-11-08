@@ -21,10 +21,13 @@ from hmp_plugin.presentation_gateway_recipe import GatewayRecipeOwner, _same_rec
 from hmp_plugin.presentation_startup_artifacts import (
     ExpectedArtifact,
     StartupArtifactOwner,
+    _capture_native_scope,
     _Descriptor,
     _expected,
     _HashedArtifact,
     _identity,
+    _native_registration_tail,
+    _native_walk_scope,
 )
 
 from . import gateway_entry
@@ -254,12 +257,15 @@ class EntryFileSnapshotOwner:
                 _require(inputs.io_slot[0] is None)
                 inputs.io_slot[0] = io
             io_scope, io_cell, io_root = io._origin, io._cell, io._root_cell
-            before = tuple((root, EntryFileSnapshotOwner._tree(owner, io, root))
-                           for root, _ in packages)
+            native_registration = _capture_native_scope(io_scope, io_cell, io_root)
+            native_registry = (None if native_registration is None
+                               else native_registration.lineage.ledger.scopes)
+            before = tuple((root, EntryFileSnapshotOwner._tree(
+                owner, io, root, native_registration)) for root, _ in packages)
             _require(all(tree.entries == entries for (_, tree), (_, entries)
                          in zip(before, packages, strict=True)))
-            loose_before = tuple((row.path, EntryFileSnapshotOwner._metadata(owner, io, row.path))
-                                 for row in loose)
+            loose_before = tuple((row.path, EntryFileSnapshotOwner._metadata(
+                owner, io, row.path, native_registration)) for row in loose)
             if prior:
                 prior_metadata = {root + '/' + path: identity for root, tree in before
                                   for path, identity in tree.files}
@@ -267,15 +273,15 @@ class EntryFileSnapshotOwner:
                     _require(path not in prior_metadata or prior_metadata[path] == value[0])
                     prior_metadata[path] = value[0]
                 _require(all(prior_metadata[row.expected.path] == row.identity for row in prior))
-            EntryFileSnapshotOwner._io_current(owner, io)
+            EntryFileSnapshotOwner._io_current(owner, io, native_registration)
             StartupArtifactOwner.complete(io)
             file_fact, file_attempt = io._fact_cell, io._attempt_cell
-            after = tuple((root, EntryFileSnapshotOwner._tree(owner, io, root))
+            after = tuple((root, EntryFileSnapshotOwner._tree(owner, io, root, native_registration))
                           for root, _ in packages)
             _require(before == after and type(file_fact) is tuple
                      and len(file_fact) == (5 if linked else 4))
-            loose_after = tuple((row.path, EntryFileSnapshotOwner._metadata(owner, io, row.path))
-                                for row in loose)
+            loose_after = tuple((row.path, EntryFileSnapshotOwner._metadata(
+                owner, io, row.path, native_registration)) for row in loose)
             _require(loose_before == loose_after)
             metadata = {root + '/' + path: identity for root, tree in after
                         for path, identity in tree.files}
@@ -294,7 +300,7 @@ class EntryFileSnapshotOwner:
                 EntryFileSnapshotOwner._pure_current(owner, inputs, cell)
             origins = EntryFileSnapshotOwner._origins(owner)
             _require(_same_origins(origins, EntryFileSnapshotOwner._origins(owner)))
-            EntryFileSnapshotOwner._io_current(owner, io)
+            EntryFileSnapshotOwner._io_current(owner, io, native_registration)
             if plan is not None:
                 _require(_same_origins(dependency_origins, loaded_origins(plan)))
                 EntryFileSnapshotOwner._pure_current(owner, inputs, cell)
@@ -338,6 +344,10 @@ class EntryFileSnapshotOwner:
             fact = (owner, inputs, io, file_fact, snapshot, origin_snapshot)
             if plan is not None:
                 fact += (loose_after, io._cache_fact)  # original ancestry and cache observations
+            _native_registration_tail(io, io_scope, io_cell, io_root,
+                                      native_registration, native_registry)
+            _require(owner._inputs is inputs and owner._root_cell is cell
+                     and owner._fact_cell is None and activation._entry_files_fact_cell is None)
             owner._fact_cell = activation._entry_files_fact_cell = fact
             owner._ready = True
             return owner
@@ -422,19 +432,27 @@ class EntryFileSnapshotOwner:
         eb = inputs.entry_binding
         _require(GatewayEntryOwner._invocation_state(inputs.entry, eb[0], eb[1]) is eb[0])
 
-    def _io_current(self, io):
+    def _io_current(self, io, native_registration=None):
+        _require(type(io) is StartupArtifactOwner)
+        io_scope, io_cell, io_root = io._origin, io._cell, io._root_cell
         inputs = EntryFileSnapshotOwner._current(self)
         _require(type(io) is StartupArtifactOwner and type(inputs.io_slot) is list
                  and len(inputs.io_slot) == 1 and inputs.io_slot[0] is io
                  and io._origin.activation._artifact_owner is io)
         cell = self._root_cell
-        StartupArtifactOwner._guard(io)
+        _require(_native_walk_scope(io, native_registration) is io_scope)
         EntryFileSnapshotOwner._pure_current(self, inputs, cell)
         _require(inputs.io_slot[0] is io)
+        registry = (None if native_registration is None
+                    else native_registration.lineage.ledger.scopes)
+        _native_registration_tail(io, io_scope, io_cell, io_root, native_registration, registry)
         return inputs
 
-    def _names(self, io, fd):
-        inputs = EntryFileSnapshotOwner._io_current(self, io)
+    def _names(self, io, fd, native_registration=None):
+        inputs = EntryFileSnapshotOwner._io_current(self, io, native_registration)
+        io_scope, io_cell, io_root = io._origin, io._cell, io._root_cell
+        registry = (None if native_registration is None
+                    else native_registration.lineage.ledger.scopes)
         scan = _Scan()
         inputs.scans.append(scan)
         iterator = None
@@ -444,7 +462,7 @@ class EntryFileSnapshotOwner:
             scan.iterator = iterator
             names = []
             while True:
-                EntryFileSnapshotOwner._io_current(self, io)
+                EntryFileSnapshotOwner._io_current(self, io, native_registration)
                 _require(type(self._seen) is int)
                 before_count = self._seen
                 try:
@@ -458,7 +476,7 @@ class EntryFileSnapshotOwner:
                 _require(type(name) is str and name not in ("", ".", "..") and "/" not in name)
                 _require(len(name.encode("utf-8")) <= 1024 and self._seen <= 40000)
                 names.append(name)
-            return sorted(names)
+            result = sorted(names)
         except BaseException:
             scan.unknown = self._unknown = True
             raise
@@ -468,7 +486,7 @@ class EntryFileSnapshotOwner:
                 try:
                     context = (os.getpid(), os.geteuid(), threading.get_ident())
                     _require(all(type(value) is int for value in context)
-                             and context == io._origin.context and scan.iterator is iterator
+                             and context == io_scope.context and scan.iterator is iterator
                              and any(row is scan for row in inputs.scans))
                     iterator.close()
                     scan.closed = True
@@ -476,14 +494,20 @@ class EntryFileSnapshotOwner:
                     scan.unknown = self._unknown = True
                     raise
 
-    def _tree(self, io, root=None):
-        inputs = EntryFileSnapshotOwner._io_current(self, io)
+        EntryFileSnapshotOwner._io_current(self, io, native_registration)
+        _native_registration_tail(io, io_scope, io_cell, io_root, native_registration, registry)
+        return result
+
+    def _tree(self, io, root=None, native_registration=None):
+        inputs = EntryFileSnapshotOwner._io_current(self, io, native_registration)
         if root is None:
             root = inputs.root
         _require(type(root) is str and (root is inputs.root or
                  (inputs.runtime_plan is not None
                   and any(root is row.path for row in inputs.runtime_plan.packages))))
-        s, root_cell = io._origin, io._root_cell
+        s, root_cell, io_cell = io._origin, io._root_cell, io._cell
+        registry = (None if native_registration is None
+                    else native_registration.lineage.ledger.scopes)
         held, ancestors, entries, files, directories = [], [], [], [], []
         try:
             parent = None
@@ -497,12 +521,14 @@ class EntryFileSnapshotOwner:
                          and (not mode & 0o022 or (info.st_uid == 0 and bool(mode & stat.S_ISVTX))))
                 ancestors.append((name, parent, fd, _identity(info, True)))
                 parent = fd
-            EntryFileSnapshotOwner._walk(self, io, parent, "", entries, files, directories)
+            EntryFileSnapshotOwner._walk(self, io, parent, "", entries, files, directories,
+                                         native_registration)
             for name, parent_fd, fd, signature in ancestors:
                 _require(_identity(StartupArtifactOwner._fstat(io, fd, s), True) == signature
                          and _identity(StartupArtifactOwner._stat(io, name, parent_fd, s), True)
                          == signature)
-            return _Tree(tuple(sorted(entries)), tuple(sorted(files)), tuple(sorted(directories)),
+            result = _Tree(tuple(sorted(entries)), tuple(sorted(files)),
+                           tuple(sorted(directories)),
                          tuple((name, signature) for name, _, _, signature in ancestors))
         finally:
             cleanup_failed = False
@@ -515,9 +541,15 @@ class EntryFileSnapshotOwner:
             if cleanup_failed:
                 raise EntryFilesError(self)
 
-    def _metadata(self, io, path):
-        EntryFileSnapshotOwner._io_current(self, io)
-        s, cell = io._origin, io._root_cell
+        EntryFileSnapshotOwner._io_current(self, io, native_registration)
+        _native_registration_tail(io, s, io_cell, root_cell, native_registration, registry)
+        return result
+
+    def _metadata(self, io, path, native_registration=None):
+        EntryFileSnapshotOwner._io_current(self, io, native_registration)
+        s, cell, io_cell = io._origin, io._root_cell, io._cell
+        registry = (None if native_registration is None
+                    else native_registration.lineage.ledger.scopes)
         held, ancestors = [], []
         try:
             parent = None
@@ -536,8 +568,8 @@ class EntryFileSnapshotOwner:
                 _require(_identity(StartupArtifactOwner._fstat(io, fd, s), True) == signature
                          and _identity(StartupArtifactOwner._stat(io, name, parent_fd, s), True)
                          == signature)
-            EntryFileSnapshotOwner._io_current(self, io)
-            return leaf, tuple((name, signature) for name, _, _, signature in ancestors)
+            EntryFileSnapshotOwner._io_current(self, io, native_registration)
+            result = leaf, tuple((name, signature) for name, _, _, signature in ancestors)
         finally:
             failed = False
             for row, fd in reversed(held):
@@ -549,12 +581,18 @@ class EntryFileSnapshotOwner:
             if failed:
                 raise EntryFilesError(self)
 
-    def _walk(self, io, fd, prefix, entries, files, directories):
-        EntryFileSnapshotOwner._io_current(self, io)
-        s, cell = io._origin, io._root_cell
+        EntryFileSnapshotOwner._io_current(self, io, native_registration)
+        _native_registration_tail(io, s, io_cell, cell, native_registration, registry)
+        return result
+
+    def _walk(self, io, fd, prefix, entries, files, directories, native_registration=None):
+        EntryFileSnapshotOwner._io_current(self, io, native_registration)
+        s, cell, io_cell = io._origin, io._root_cell, io._cell
+        registry = (None if native_registration is None
+                    else native_registration.lineage.ledger.scopes)
         signature = _identity(StartupArtifactOwner._fstat(io, fd, s), True)
         directories.append((prefix, signature))
-        for name in EntryFileSnapshotOwner._names(self, io, fd):
+        for name in EntryFileSnapshotOwner._names(self, io, fd, native_registration):
             path = prefix + name
             _require(path.count("/") <= 32 and len(entries) < 20000)
             info = StartupArtifactOwner._stat(io, name, fd, s)
@@ -571,7 +609,8 @@ class EntryFileSnapshotOwner:
                              and current.st_uid in (0, s.context[1])
                              and not current.st_mode & (0o022 | stat.S_ISUID | stat.S_ISGID))
                     EntryFileSnapshotOwner._walk(
-                        self, io, child, path + "/", entries, files, directories)
+                        self, io, child, path + "/", entries, files, directories,
+                        native_registration)
                 finally:
                     try:
                         StartupArtifactOwner._close(io, row, child, s, cell)
@@ -579,6 +618,8 @@ class EntryFileSnapshotOwner:
                         row.unknown = io._unknown = self._unknown = True
                         raise
         _require(_identity(StartupArtifactOwner._fstat(io, fd, s), True) == signature)
+        EntryFileSnapshotOwner._io_current(self, io, native_registration)
+        _native_registration_tail(io, s, io_cell, cell, native_registration, registry)
 
     def _origins(self):
         inputs = EntryFileSnapshotOwner._current(self)

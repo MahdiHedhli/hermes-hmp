@@ -420,3 +420,20 @@ required. No new native operation/path authority, diagnostic fallback, quota/
 cleanup enforcement or runtime/image admission is implemented by this step.
 Entry metadata/tree threading and all per-step/consumer/native-effect work remain
 open; earlier cache/link results do not qualify this new source.
+
+## Entry metadata/tree registration — unqualified source increment
+
+The entry snapshot captures the retained IO owner's actual scope registration
+before metadata work and threads it through IO-current checks, before/after
+trees, recursive directory walks, enumerations and loose-file metadata. Final
+entry publication rejoins held IO registration/roots after origin callbacks.
+Metadata/tree/name results are returned only after known cleanup and a final
+work check plus pure original registration join. Iterator cleanup uses the held
+original context and remains independent of a new work guard.
+
+Sixteen new isolated cases cover normal/copied/missing forwarding into four
+walkers and paired replacement at post-cleanup or final entry-origin callbacks.
+The child scripts parse; tests have not run. This draft includes the exact
+present-leaf probe repair from9a4ed59. Independent review and affected regression
+remain required. No step/consumer/native operation authority, quota/reserved
+cleanup, complete enumeration origin or runtime/key/image admission is implied.

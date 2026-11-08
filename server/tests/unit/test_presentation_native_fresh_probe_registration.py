@@ -127,3 +127,39 @@ raise SystemExit(0)
 
     monkeypatch.setattr(runner, 'test_actual_entry_and_wrapper_files', injected_run)
     probe.test_fresh_cache_probe(tmp_path, monkeypatch, 'missing')
+
+
+@pytest.mark.parametrize('kind', ('directory', 'declared'))
+def test_present_probe_leaf_rechecks_keep_original_registration(tmp_path, monkeypatch, kind):
+    from . import test_presentation_cache_probe as probe
+    from . import test_presentation_entry_files as runner
+
+    actual_run = runner.test_actual_entry_and_wrapper_files
+    marker = 'owner=RuntimeCacheProbeOwner.retain(continuation,index)'
+    injected = r'''
+record=owner._origin.native_registration_slot[0]
+actual_stat=RuntimeCacheProbeOwner._stat_known
+calls=[]
+def observed_stat(target,name,parent,s,native_registration=None):
+    assert target is owner and native_registration is record
+    calls.append(name)
+    return actual_stat(target,name,parent,s,native_registration)
+RuntimeCacheProbeOwner._stat_known=observed_stat
+try:
+    owner.observe()
+    assert owner._ready and owner._fact[2].state==EXPECTED
+    leaf=owner._origin.parent[1].plan_row.location.path.rsplit('/',1)[1]
+    assert calls.count(leaf)==2
+finally:RuntimeCacheProbeOwner._stat_known=actual_stat
+assert owner._bytes_read==0 and all(row.closed for row in owner._origin.records)
+print(json.dumps({'mutation':mutation,'runtime_admitted':False}))
+raise SystemExit(0)
+'''.replace('EXPECTED', repr('directory' if kind == 'directory' else 'declared_regular'))
+
+    def injected_run(directory, mutation):
+        assert runner.SCRIPT.count(marker) == 1
+        monkeypatch.setattr(runner, 'SCRIPT', runner.SCRIPT.replace(marker, marker + injected))
+        actual_run(directory, mutation)
+
+    monkeypatch.setattr(runner, 'test_actual_entry_and_wrapper_files', injected_run)
+    probe.test_fresh_cache_probe(tmp_path, monkeypatch, kind)

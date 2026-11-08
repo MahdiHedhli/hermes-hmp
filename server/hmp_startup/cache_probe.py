@@ -294,7 +294,8 @@ class RuntimeCacheProbeOwner:
                         _require(identity == selected.cache.identity)
                         state = 'declared_regular'
                     _require(_identity(RuntimeCacheProbeOwner._stat_known(
-                        self, name, parent, s), state == 'directory') == identity)
+                        self, name, parent, s, native_registration),
+                        state == 'directory') == identity)
                     result = CacheProbeData(state, position - 1, identity,
                                             tuple(item[3] for item in ancestors))
                     break
