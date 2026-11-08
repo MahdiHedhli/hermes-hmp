@@ -13,7 +13,7 @@ from .test_presentation_gateway_approval import operator_composed_script
                                  'copied_operation', 'wrong_result_consumer',
                                  'active', 'active_wrong_phase', 'active_failed',
                                  'active_missing_debit', 'active_wrong_result',
-                                 'active_failure_record'))
+                                 'active_failure_record', 'latch_postpublication_failure'))
 def test_original_metadata_operation(tmp_path, monkeypatch, case):
     script, mutation = operator_composed_script('links')
     script = script.replace('GatewayPackageOwner.verify_recipe(recipe)',
@@ -61,7 +61,8 @@ def prepare(frame):
         assert case in ('normal','latched','copied_consumer','wrong_pending',
                         'copied_operation','wrong_result_consumer',
                         'active','active_wrong_phase','active_failed',
-                        'active_missing_debit','active_wrong_result','active_failure_record')
+                        'active_missing_debit','active_wrong_result','active_failure_record',
+                        'latch_postpublication_failure')
         assert resource.descriptor is descriptor
         assert resource.metadata is held[5] and resource.held_walk is held
         assert resource.arguments[0] is descriptor.fd
@@ -95,7 +96,25 @@ def prepare(frame):
             except a.ArtifactObservationError:pass
             else:raise AssertionError('copied consumer latched')
             assert progress[1] is None and result.consumer[0] is consumer
-            assert m._latch_directory_consumer(owner,consumer) is consumer
+            if case=='latch_postpublication_failure':
+                original_tail=m._latched_directory_resource_tail
+                injected=[]
+                def refuse_after_publication(actual_owner,actual_consumer):
+                    assert actual_owner is owner and actual_consumer is consumer
+                    assert progress[1] is consumer
+                    assert original_tail(actual_owner,actual_consumer) is resource
+                    injected.append(True)
+                    raise a.ArtifactObservationError()
+                m._latched_directory_resource_tail=refuse_after_publication
+                try:
+                    try:m._latch_directory_consumer(owner,consumer)
+                    except a.ArtifactObservationError:pass
+                    else:raise AssertionError('post-publication failure swallowed')
+                finally:m._latched_directory_resource_tail=original_tail
+                assert injected==[True] and result.consumer[0] is consumer
+                assert result.raw[0] is result.unset
+            else:
+                assert m._latch_directory_consumer(owner,consumer) is consumer
             assert progress[1] is consumer
             try:m._latch_directory_consumer(owner,consumer)
             except a.ArtifactObservationError:pass
@@ -111,9 +130,11 @@ def prepare(frame):
                 try:returned=m._latched_directory_resource_tail(owner,candidate_consumer)
                 except a.ArtifactObservationError:
                     assert case not in ('latched','active','active_wrong_phase','active_failed',
-                                       'active_missing_debit','active_wrong_result','active_failure_record')
+                                       'active_missing_debit','active_wrong_result',
+                                       'active_failure_record','latch_postpublication_failure')
                 else:
-                    assert (case=='latched' or case.startswith('active')) and returned is resource
+                    assert (case in ('latched','latch_postpublication_failure')
+                            or case.startswith('active')) and returned is resource
                 # Latched structural validation never renews unclaimed admission.
                 try:a._native_declared_metadata_plan_tail(owner,registration,held)
                 except a.ArtifactObservationError:pass

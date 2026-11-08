@@ -181,3 +181,9 @@ directly. Existing synthetic ACTIVE setup remains explicitly guard-only. No
 actor sampling, debit, native fstat or ACK occurs here; producer, abandonment
 and full end-to-end qualification remain required. Static checks pass; dedicated
 execution and finite independent review are pending.
+
+A dedicated post-publication fault case wraps only the final structural check,
+verifies the actual original slot before raising, restores that function in
+finally, and requires the published slot/result to remain intact and a second
+latch to refuse. Fixture-only cleanup then permits the existing source read to
+complete. This is authored causal coverage, not yet an observed pass.
