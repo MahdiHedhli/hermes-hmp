@@ -158,9 +158,10 @@ def _directory(info, context):
     return _identity(info, True)
 
 
-def _is_missing(owner, name, parent, scope):
-    from .presentation_startup_artifacts import StartupArtifactOwner, _owner_guard
+def _is_missing(owner, name, parent, scope, native_registration=None):
+    from .presentation_startup_artifacts import StartupArtifactOwner, _native_walk_scope
 
+    _require(_native_walk_scope(owner, native_registration) is scope)
     try:
         value = StartupArtifactOwner._stat(owner, name, parent, scope)
     except FileNotFoundError as error:
@@ -168,26 +169,35 @@ def _is_missing(owner, name, parent, scope):
                  and error.errno == errno.ENOENT and type(error.filename) is str
                  and error.filename == name)
         code, filename = error.errno, error.filename
-        _require(_owner_guard(owner) is scope and error.errno is code
+        _require(_native_walk_scope(owner, native_registration) is scope and error.errno is code
                  and error.filename is filename)
         return None
+    _require(_native_walk_scope(owner, native_registration) is scope)
     return value
 
 
-def _ancestors_current(owner, scope, ancestors):
-    from .presentation_startup_artifacts import StartupArtifactOwner, _identity
+def _ancestors_current(owner, scope, ancestors, native_registration=None):
+    from .presentation_startup_artifacts import StartupArtifactOwner, _identity, _native_walk_scope
 
+    _require(_native_walk_scope(owner, native_registration) is scope)
     for component, ancestor, fd, original in ancestors:
         _require(_identity(StartupArtifactOwner._fstat(owner, fd, scope), True) == original
                  and _identity(StartupArtifactOwner._stat(
                      owner, component, ancestor, scope), True) == original)
+    _require(_native_walk_scope(owner, native_registration) is scope)
 
 
-def _probe(source, owner, phase, index):
-    from .presentation_startup_artifacts import StartupArtifactOwner, _owner_guard
+def _probe(source, owner, phase, index, native_registration=None):
+    from .presentation_startup_artifacts import (
+        StartupArtifactOwner,
+        _native_registration_tail,
+        _native_walk_scope,
+    )
 
-    scope = _owner_guard(owner)
-    count, root = owner._count_cell, owner._root_cell
+    scope = _native_walk_scope(owner, native_registration)
+    count, root, owner_cell = owner._count_cell, owner._root_cell, owner._cell
+    native_registry = (None if native_registration is None
+                       else native_registration.lineage.ledger.scopes)
     effect = _ProbeEffect(source, phase, index, count)
     source.effects.append(effect)  # intent before any acquisition or metadata syscall
     effect.attempted = True
@@ -204,11 +214,11 @@ def _probe(source, owner, phase, index):
         _require(1 <= len(parts) <= 64)
         for position, name in enumerate(parts):
             _require(owner._count_cell is count)
-            info = _is_missing(owner, name, parent, scope)
+            info = _is_missing(owner, name, parent, scope, native_registration)
             if info is None:
-                _ancestors_current(owner, scope, ancestors)
-                _require(_is_missing(owner, name, parent, scope) is None)
-                _ancestors_current(owner, scope, ancestors)
+                _ancestors_current(owner, scope, ancestors, native_registration)
+                _require(_is_missing(owner, name, parent, scope, native_registration) is None)
+                _ancestors_current(owner, scope, ancestors, native_registration)
                 result = _Missing(path, position,
                                   tuple((component, identity) for component, _, _, identity
                                         in ancestors))
@@ -233,18 +243,25 @@ def _probe(source, owner, phase, index):
     if failed:
         effect.unknown = owner._unknown = True
         raise CacheObservationError from None
-    _require(_owner_guard(owner) is scope and owner._root_cell is root
+    _require(_native_walk_scope(owner, native_registration) is scope and owner._root_cell is root
              and owner._count_cell is count)
     effect.result = result
     effect.descriptors = tuple(record for record, _ in held)
     effect.returned = True
+    _native_registration_tail(owner, scope, owner_cell, root,
+                              native_registration, native_registry)
     return result, effect
 
 
-def observe_pass(source, owner, phase, previous):
-    from .presentation_startup_artifacts import _owner_guard
+def observe_pass(source, owner, phase, previous, native_registration=None):
+    from .presentation_startup_artifacts import _native_registration_tail, _native_walk_scope
 
-    _require(type(phase) is int and phase in (0, 1) and _owner_guard(owner).cache is source)
+    _require(type(phase) is int and phase in (0, 1))
+    scope = _native_walk_scope(owner, native_registration)
+    root, owner_cell = owner._root_cell, owner._cell
+    native_registry = (None if native_registration is None
+                       else native_registration.lineage.ledger.scopes)
+    _require(scope.cache is source)
     owned_current(source, owner)
     count = owner._count_cell
     before_slot, after_slot = source.before, source.after
@@ -254,7 +271,7 @@ def observe_pass(source, owner, phase, previous):
                  and source.after[0] is None and len(source.effects) == len(source.paths)))
     missing, effects = [], []
     for index in range(len(source.paths)):
-        value, effect = _probe(source, owner, phase, index)
+        value, effect = _probe(source, owner, phase, index, native_registration)
         missing.append(value)
         effects.append(effect)
         _require(owner._count_cell is count and (phase == 0 or source.before[0] is previous))
@@ -265,12 +282,15 @@ def observe_pass(source, owner, phase, previous):
             _missing_shape(before)
             _missing_shape(after)
             _require(before == after)
-    _require(_owner_guard(owner).cache is source and owner._count_cell is count
+    _require(_native_walk_scope(owner, native_registration) is scope
+             and scope.cache is source and owner._count_cell is count
              and (phase == 0 or source.before[0] is previous))
     _require(source.before is before_slot and source.after is after_slot
              and len(before_slot) == len(after_slot) == 1
              and ((phase == 0 and before_slot[0] is None and after_slot[0] is None)
                   or (phase == 1 and before_slot[0] is previous and after_slot[0] is None)))
+    _native_registration_tail(owner, scope, owner_cell, root,
+                              native_registration, native_registry)
     (before_slot if phase == 0 else after_slot)[0] = result
     return result
 

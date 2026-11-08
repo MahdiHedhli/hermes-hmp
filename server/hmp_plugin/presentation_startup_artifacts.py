@@ -486,8 +486,6 @@ def _native_scope_current(owner, record):
 
 
 def _register_native_scope(owner, s, cell, root):
-    from hmp_startup.gateway_entry import GatewayEntryOwner, _NativeFileLineage
-
     _require(type(s) is _Scope)
     slot = s.native_registration_slot
     _require((s.native_files is None and slot is None)
@@ -498,6 +496,8 @@ def _register_native_scope(owner, s, cell, root):
              and owner._cell is cell and owner._root_cell is root)
     if s.native_files is None:
         return None
+    from hmp_startup.gateway_entry import GatewayEntryOwner, _NativeFileLineage
+
     lineage = s.native_files
     _require(type(lineage) is _NativeFileLineage
              and GatewayEntryOwner._native_file_lineage(lineage.entry) is lineage)
@@ -692,12 +692,12 @@ class StartupArtifactOwner:
             cache_before = cache_after = None
             if s.cache is not None:
                 from .presentation_startup_cache import observe_pass
-                cache_before = observe_pass(s.cache, owner, 0, None)
+                cache_before = observe_pass(s.cache, owner, 0, None, native_registration)
             before = after = link_fact = None
             if runtime is not None:
                 _require(runtime.before[0] is None and runtime.after[0] is None
                          and runtime.reads == [])
-                before = StartupArtifactOwner._link_snapshot(owner, 0, None)
+                before = StartupArtifactOwner._link_snapshot(owner, 0, None, native_registration)
                 _require(runtime.before[0] is None)
                 runtime.before[0] = before
             collected = []
@@ -710,7 +710,7 @@ class StartupArtifactOwner:
             if runtime is not None:
                 _require(runtime.before[0] is before)
                 _link_reads_current(runtime, before)
-                after = StartupArtifactOwner._link_snapshot(owner, 1, before)
+                after = StartupArtifactOwner._link_snapshot(owner, 1, before, native_registration)
                 _require(runtime.before[0] is before and runtime.after[0] is None
                          and before.links == after.links and before.target == after.target)
                 runtime.after[0] = after
@@ -725,7 +725,7 @@ class StartupArtifactOwner:
                                                    targets[0], owner._count_cell)
             if s.cache is not None:
                 from .presentation_startup_cache import seal
-                cache_after = observe_pass(s.cache, owner, 1, cache_before)
+                cache_after = observe_pass(s.cache, owner, 1, cache_before, native_registration)
                 _require(seal(s.cache, owner, cache_before, cache_after) is s.cache)
             count = owner._count_cell
             _require(_native_walk_scope(owner, native_registration) is s
@@ -953,8 +953,9 @@ class StartupArtifactOwner:
         _require(type(value) is os.stat_result and _owner_guard(self) is s)
         return value
 
-    def _readlink(self, name, parent, hop, phase, index, before_state, start):
-        s = _owner_guard(self)
+    def _readlink(self, name, parent, hop, phase, index, before_state, start,
+                  native_registration=None):
+        s = _native_walk_scope(self, native_registration)
         runtime = s.runtime
         _require(type(runtime) is _RuntimeSource and self._ready is False
                  and self._attempt_cell is not None and type(name) is bytes
@@ -972,6 +973,8 @@ class StartupArtifactOwner:
                  and len(start) == 3 and start[0] is self and start[1] is s
                  and type(start[2]) is int and self._bytes_read is start[2])
         root, owner_cell = self._root_cell, self._cell
+        native_registry = (None if native_registration is None
+                           else native_registration.lineage.ledger.scopes)
         record = _LinkRead(hop, phase, position, start)
         runtime.reads.append(record)  # owned attempt before the syscall
         record.attempted = self._reading = True
@@ -991,28 +994,34 @@ class StartupArtifactOwner:
                 runtime.count[0] = counted
             self._reading = False
             _require(same and len(data) < runtime.bound and data == hop.target
-                     and after <= _MAX_TOTAL and _owner_guard(self) is s
+                     and after <= _MAX_TOTAL and _native_walk_scope(self, native_registration) is s
                      and len(runtime.reads) == position + 1
                      and runtime.reads[position] is record
                      and runtime.count[0] is counted and self._count_cell is counted
                      and self._bytes_read is after
                      and ((phase == 0 and runtime.before[0] is None)
                           or (phase == 1 and runtime.before[0] is before_state)))
-            return _ReadlinkObservation(record, start, counted, data)
+            observed = _ReadlinkObservation(record, start, counted, data)
+            _native_registration_tail(self, s, owner_cell, root,
+                                      native_registration, native_registry)
+            return observed
         except BaseException:
             record.unknown = self._unknown = True
             raise
         finally:
             self._reading = False
 
-    def _link_path(self, path, hop, phase, index, before_state, start, observe=True):
-        s = _owner_guard(self)
+    def _link_path(self, path, hop, phase, index, before_state, start, observe=True,
+                   native_registration=None):
+        s = _native_walk_scope(self, native_registration)
         runtime = s.runtime
         _require(type(runtime) is _RuntimeSource and self._count_cell is start
                  and ((hop is None and path is runtime.link.target.path)
                       or (hop is not None and runtime.link.hops[index] is hop
                           and path is hop.path)))
-        root = self._root_cell
+        root, owner_cell = self._root_cell, self._cell
+        native_registry = (None if native_registration is None
+                           else native_registration.lineage.ledger.scopes)
         held, parents = [], []
         result = observation = None
         progress = start
@@ -1046,6 +1055,7 @@ class StartupArtifactOwner:
                 if observe:
                     observation = StartupArtifactOwner._readlink(
                         self, os.fsencode(name), parent, hop, phase, index, before_state, progress,
+                        native_registration,
                     )
                     progress = observation.after
             _require(_identity(StartupArtifactOwner._stat(self, name, parent, s)) == identity)
@@ -1053,7 +1063,8 @@ class StartupArtifactOwner:
                 _require(_identity(StartupArtifactOwner._fstat(self, fd, s), True) == signature
                          and _identity(StartupArtifactOwner._stat(self, item, ancestor, s), True)
                          == signature)
-            _require(_owner_guard(self) is s and self._count_cell is progress)
+            _require(_native_walk_scope(self, native_registration) is s
+                     and self._count_cell is progress)
             result = identity, tuple((name, signature) for name, _, _, signature in parents)
         except BaseException:
             failed = True
@@ -1066,18 +1077,24 @@ class StartupArtifactOwner:
                     failed = True
         if failed:
             raise ArtifactObservationError(self) from None
-        _require(_owner_guard(self) is s and self._count_cell is progress
+        _require(_native_walk_scope(self, native_registration) is s and self._count_cell is progress
                  and runtime.count[0] is progress)
+        _native_registration_tail(self, s, owner_cell, root,
+                                  native_registration, native_registry)
         return result, observation, progress
 
-    def _link_snapshot(self, phase, before_state):
-        s = _owner_guard(self)
+    def _link_snapshot(self, phase, before_state, native_registration=None):
+        s = _native_walk_scope(self, native_registration)
+        root, owner_cell = self._root_cell, self._cell
+        native_registry = (None if native_registration is None
+                           else native_registration.lineage.ledger.scopes)
         runtime = s.runtime
         progress = self._count_cell
         links, reads = [], []
         for index, hop in enumerate(runtime.link.hops):
             metadata, observation, progress = StartupArtifactOwner._link_path(
                 self, hop.path, hop, phase, index, before_state, progress,
+                native_registration=native_registration,
             )
             links.append((hop, metadata))
             reads.append(observation)
@@ -1085,9 +1102,12 @@ class StartupArtifactOwner:
                 _require(runtime.before[0] is before_state)
         target, _, progress = StartupArtifactOwner._link_path(
             self, runtime.link.target.path, None, phase, 0, before_state, progress,
+            native_registration=native_registration,
         )
         snapshot = _LinkSnapshot(runtime, phase, tuple(links), target, tuple(reads), progress)
         _link_reads_current(runtime, snapshot)
+        _native_registration_tail(self, s, owner_cell, root,
+                                  native_registration, native_registry)
         return snapshot
 
     def seal_link_observation(self, expected):
@@ -1108,22 +1128,33 @@ class StartupArtifactOwner:
         return fact
 
     def recheck_link_metadata(self):
-        s = _owner_guard(self)
-        _require(self._ready is True and type(self._fact_cell) is tuple
+        _require(type(self) is StartupArtifactOwner and type(self._origin) is _Scope)
+        root, owner_cell, held_fact = self._root_cell, self._cell, self._fact_cell
+        native_registration = _capture_native_scope(self._origin, owner_cell, root)
+        native_registry = (None if native_registration is None
+                           else native_registration.lineage.ledger.scopes)
+        s = _native_walk_scope(self, native_registration)
+        _require(self._ready is True and self._fact_cell is held_fact
+                 and type(self._fact_cell) is tuple
                  and len(self._fact_cell) == 5)
         fact = self._fact_cell[4]
         runtime = s.runtime
         progress = self._count_cell
         for index, (hop, previous) in enumerate(fact.after.links):
             metadata, _, progress = StartupArtifactOwner._link_path(
-                self, hop.path, hop, 1, index, fact.before, progress, False,
+                self, hop.path, hop, 1, index, fact.before, progress, False, native_registration,
             )
             _require(metadata == previous)
         metadata, _, progress = StartupArtifactOwner._link_path(
             self, runtime.link.target.path, None, 1, 0, fact.before, progress, False,
+            native_registration,
         )
-        _require(metadata == fact.after.target and _owner_guard(self) is s
+        _require(metadata == fact.after.target
+                 and _native_walk_scope(self, native_registration) is s
                  and self._fact_cell[4] is fact and self._count_cell is fact.count)
+        _require(StartupArtifactOwner.seal_link_observation(self, held_fact) is fact)
+        _native_registration_tail(self, s, owner_cell, root,
+                                  native_registration, native_registry)
         return fact
 
     def seal_cache_observation(self):

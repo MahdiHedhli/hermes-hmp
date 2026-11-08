@@ -193,6 +193,7 @@ except Exception: pass
 else: raise AssertionError("package verification reminted")
 if mutation == "normal" or mutation.startswith("history_"):
     assert not owner._uncertain
+assert "hmp_startup.gateway_entry" not in sys.modules  # legacy has no entry dependency
 print(json.dumps({"mutation": mutation, "passed": True, "runtime_admitted": False}))
 '''
 

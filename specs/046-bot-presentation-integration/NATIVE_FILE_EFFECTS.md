@@ -375,3 +375,21 @@ and unchanged owner guards, requires both native fieldsNone in the legacy branch
 and applies strict original-slot capture only to entry-bound registrations. This
 is compatibility repair, not a relaxation of operator approval or native scope
 authority. Exact repaired runs and independent review remain required.
+
+## Cache and link registration forwarding — unqualified source checkpoint
+
+A separate increment forwards the complete method's captured registration through
+cache before/after passes, individual probes, missing-path and ancestor checks,
+and link snapshots/path/readlink observations. Recheck-link captures from the
+original scope before callbacks. Work guards consume that same held registration;
+final metadata publication uses pure held registration joins and existing link
+seals. Cleanup keeps the original descriptor/root path and does not acquire a
+new live work guard. The reviewed legacy import-isolation repair fromfffa1b3 is
+carried here with the explicit no-entry-import legacy assertion.
+
+No new test run qualifies these changes yet. Focused forwarding/refusal causals
+and independent source review are required. Separate fresh cache-probe owner and
+entry metadata/tree walkers are not yet migrated. Per-step/consumer claims, raw
+six-operation dispatch, diagnostic-plan ordinals, quota/reserved cleanup, separate
+enumeration effect custody and runtime/device image delivery remain unfinished.
+Existing exact missing-path checks are preserved; no fallback is added.
