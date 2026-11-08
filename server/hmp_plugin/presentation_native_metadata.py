@@ -474,7 +474,7 @@ def _latched_directory_resource_tail(owner, consumer):
     return resource
 
 
-def _charged_directory_operation_tail(owner, consumer):
+def _charged_directory_history_tail(owner, consumer):
     """Rejoin an already-debited directory intent; never admit work.
 
     The future producer must hold its original consumer across admission. A
@@ -483,7 +483,7 @@ def _charged_directory_operation_tail(owner, consumer):
     """
     _latched_directory_resource_tail(owner, consumer)
     operation = consumer.operation
-    ledger, phase, result = operation.ledger, operation.phase, operation.result
+    ledger, phase = operation.ledger, operation.phase
     _require(type(operation.state) is list and len(operation.state) == 3
              and operation.state[0] is True and type(operation.state[1]) is bool
              and operation.state[2] is False
@@ -512,8 +512,15 @@ def _charged_directory_operation_tail(owner, consumer):
              and type(ledger.failure) is list and len(ledger.failure) == 1
              and ledger.failure[0] is None
              and type(phase.result) is list and len(phase.result) == 1
-             and phase.result[0] is operation
-             and type(result.raw) is list and len(result.raw) == 1
+             and phase.result[0] is operation)
+    return operation
+
+
+def _charged_directory_operation_tail(owner, consumer):
+    """Charged history plus current payload DATA; never independent custody."""
+    operation = _charged_directory_history_tail(owner, consumer)
+    result = operation.result
+    _require(type(result.raw) is list and len(result.raw) == 1
              and all(type(cell) is list and len(cell) == 1
                      for cell in (result.category, result.snapshot,
                                   result.acknowledged, result.envelope))
@@ -746,6 +753,11 @@ def _produce_directory_metadata(owner, consumer):
         # ACTIVE closure can execute descriptor joins. Rejoin the held original
         # capsule/cells afterward; never dispatch using a recaptured replacement.
         joined_cells = _directory_payload_cells(owner, origin, marker, payload)
+        # Rejoin registration/material/lifecycle/native bindings and debit after
+        # the last callback-bearing custody check, without payload properties.
+        _require(_charged_directory_history_tail(owner, consumer) is operation)
+        _require(all(descriptor.__get__(payload, origin.payload_type) is cell
+                     for descriptor, cell in zip(origin.members, cells, strict=True)))
         _require(result.custody_origin is origin
                  and result.custody_link is marker.owner_link
                  and result.custody_slot is marker.marker_slot
@@ -760,7 +772,11 @@ def _produce_directory_metadata(owner, consumer):
                  and operation.state[2] is False and operation.ended[0] is False
                  and raw_cell[0] is result.unset
                  and category_cell[0] is snapshot_cell[0] is envelope_cell[0] is None
-                 and cells.consumption[0] is None)
+                 and cells.consumption[0] is None
+                 and type(result.acknowledged) is list and len(result.acknowledged) == 1
+                 and result.acknowledged[0] is None
+                 and type(consumer.commit) is list and len(consumer.commit) == 1
+                 and consumer.commit[0] is None)
         raw = callee(arguments[0])
         raw_cell[0] = raw  # retain the actual C return before allocating/validating
         operation.state[1] = True
