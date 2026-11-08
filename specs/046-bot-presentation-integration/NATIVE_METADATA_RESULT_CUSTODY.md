@@ -129,3 +129,7 @@ A separate descendant now binds the unused original operation to a fixed initial
 ## Constructor-return material closure repair
 
 Finite review found the initial consumer factory rechecked resource/lifetime but omitted a final code/module/class closure after consumer allocation. This isolated successor captures class/module names and the actual file-owner type and applies an import-free material tail immediately before and after consumer publication. It rejoins original function code/globals, scope origin, class exports, fixed file function/class and original registry module identities. This is preparation-only source, not a syscall bypass or a qualified native consumer; causal constructor-return drift tests and replacement execution are required. The earlier9-case candidate remains frozen and separate.
+
+## Fixed directory policy DATA
+
+An isolated descendant now implements the existing POSIX directory checks over an exact primitive stat snapshot: directory type, root/current UID, no setuid/setgid, and no group/world write except root-owned sticky directories. It uses literal POSIX bit operations to avoid a new mutable stat-helper callback during future pending consumption. Twenty authored scalar/foreign-hook cases cover allowed roots/owner directories and unsafe modes/types/owners. It returns five-field identity DATA only; actual native-return provenance, one-use consumption, work debit and ACK remain separate unimplemented requirements. No mode/provider/grant/job or host setting changes occur.

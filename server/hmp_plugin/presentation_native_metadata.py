@@ -11,6 +11,7 @@ from .presentation_startup_artifacts import (
     _native_read_lifecycle_tail,
     _native_work_origin_tail,
     _NativeMetadataResource,
+    _NativeMetadataSnapshot,
     _NativeScopeRegistration,
     _prepare_native_metadata_resource,
     _require,
@@ -308,3 +309,23 @@ def _prepare_directory_consumer(owner, operation):
     _require(_directory_material_tail(owner, consumer) is consumer
              and result.consumer[0] is consumer)
     return consumer
+
+
+def _directory_identity(snapshot, actor_uid):
+    """Fixed POSIX directory policy DATA; not a native result or an ACK.
+
+    A future consumer must first prove this snapshot came from its held actual
+    native return. Constructing a valid-looking snapshot supplies no work credit.
+    """
+    _require(type(snapshot) is _NativeMetadataSnapshot and type(actor_uid) is int
+             and actor_uid >= 0 and type(snapshot.identity) is tuple
+             and len(snapshot.identity) == 9
+             and all(type(value) is int for value in snapshot.identity))
+    identity = snapshot.identity
+    mode, uid = identity[2], identity[3]
+    # POSIX mode bits match the existing _file policy. Literal integer operations
+    # avoid adding a mutable stat-module callback inside pending consumption.
+    _require(mode & 0o170000 == 0o040000 and uid in (0, actor_uid)
+             and not mode & 0o6000
+             and (not mode & 0o022 or (uid == 0 and mode & 0o1000 != 0)))
+    return identity[:5]
