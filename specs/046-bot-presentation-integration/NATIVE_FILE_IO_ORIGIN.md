@@ -35,3 +35,10 @@ interpreter/source receipt bindings were independently validated; source hashes
 remained unchanged through branch reconciliation. Full Ruff, surface/privacy
 and diff checks pass. Combined broader startup and native/operational
 qualification remain pending. No live host/device/settings/grants/provider action occurred.
+
+The combined source1ab9910 suite failed215 cases and passed1,065. Fixture alias
+spies conflict with the new continuity checks; initial test-only migration passes
+four normal paths and74 operator/link checks. Residual and refined-monitor checks
+are active/pending. The source is not integrated-qualified, and no failed case is
+assumed resolved merely because it resembles a fixture issue. Production guards
+remain intact.

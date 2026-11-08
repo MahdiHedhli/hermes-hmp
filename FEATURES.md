@@ -1,3 +1,12 @@
+# November 8: combined integration not qualified
+
+The combined startup suite failed 215 cases and passed 1,065 on source1ab9910.
+Focused decoder and native-binding checks remain valid but do not establish an
+integrated pass. Four normal paths and74 operator/link checks passed after
+moving fixture observations away from canonical native aliases. A further reviewed
+monitoring refinement is untested;144 residual original failures are running.
+Production checks remain unchanged. Character/local-image delivery stays open.
+
 # November 8: original file bindings captured, not syscall outcomes
 
 The isolated startup source retains originally observed POSIX C file bindings,
