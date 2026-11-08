@@ -80,6 +80,7 @@ class _HashedArtifact(NamedTuple):
     bytecode_header: bytes
     source_hash: bytes = b""
     source_digest: object = None
+    native_files: object = None
     source_mtime: int | None = None
 
     def __repr__(self):
@@ -481,7 +482,8 @@ class StartupArtifactOwner:
             digest_context = None if source is None else source.owner._origin.source_digest
             s = _Scope(activation, activation._scope, expected,
                        (os.getpid(), os.geteuid(), threading.get_ident()), [], source, runtime,
-                       None if digest_context is None else [], cache, digest_context)
+                       None if digest_context is None else [], cache, digest_context,
+                       None if digest_context is None else digest_context.native_files)
             owner._scope = owner._origin = s
             owner._cell = (owner, s)
             owner._root_cell = (activation, owner, s)

@@ -103,9 +103,11 @@ class RuntimeSourceReadOwner:
                      and _sha_current(hash_origin) is hash_origin)
             digest_context = SourceDigestContext(root[2].entry, root[2].entry_binding,
                                                  root[2].entry_binding[0].interpreter,
-                                                 activation, [])
+                                                 activation, [],
+                                                 root[2].entry_binding[0].native_files)
             scope = _Scope(activation, root[2].io_scope.activation_scope, (expected,),
-                           context, [], reads=[], source_digest=digest_context)
+                           context, [], reads=[], source_digest=digest_context,
+                           native_files=digest_context.native_files)
             scope = scope._replace(parent=(root, selected, buffer,
                                           scope.records, scope.reads, hash_origin))
             owner._origin = owner._scope = scope

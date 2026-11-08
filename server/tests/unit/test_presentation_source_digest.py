@@ -113,6 +113,8 @@ except Exception:
     script = script[:script.rfind('print(json.dumps')]
     script += r'''
 context=plugin._origin.source_digest
+assert plugin._origin.native_files is context.native_files is entry._scope.native_files
+assert checked._fact_cell[2]._origin.native_files is context.native_files
 assert context is not None and checked._fact_cell[2]._origin.source_digest is context
 receipts=(*plugin._fact[4],*checked._fact_cell[3][2])
 count=0

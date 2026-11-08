@@ -88,7 +88,8 @@ class RuntimeCacheProbeOwner:
                      and owner._root_cell is partial
                      and activation._runtime_cache_probe_cell is partial)
             scope = _Scope(activation, root[2].io_scope.activation_scope,
-                           (selected.plan_row.source,), context, [], parent=(root, selected))
+                           (selected.plan_row.source,), context, [], parent=(root, selected),
+                           native_files=root[2].entry_binding[0].native_files)
             cell = (owner, scope)
             runtime_root = (activation, owner, scope)
             owner._scope = owner._origin = scope

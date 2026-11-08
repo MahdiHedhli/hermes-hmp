@@ -41,6 +41,8 @@ if case=='retain_context_buffer_swap':
         print(json.dumps({'mutation':mutation,'runtime_admitted':False}));raise SystemExit(0)
     else:raise AssertionError('retain adopted replacement buffer')
 owner=RuntimeSourceReadOwner.retain(continuation,index)
+assert owner._origin.native_files is continuation._source.entry_binding[0].native_files
+assert owner._origin.source_digest.native_files is owner._origin.native_files
 original=owner._original_buffer
 if case=='changed_source':(dep_root/'__init__.py').write_bytes(b'CHANGED_SYNTHETIC_SOURCE_ONLY\n')
 if case in ('count_copy','source_fact_copy'):
