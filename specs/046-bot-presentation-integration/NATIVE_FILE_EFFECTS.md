@@ -497,3 +497,18 @@ retain an unused declaration record; no payload read is inferred from that DATA.
 Five composed package cases are prepared: normal original allocation and
 completion, replay, out-of-order row, Boolean progress and already-started refusal.
 Tests have not run. Source-only review and affected regression remain required.
+
+## Combined regression failure — exact local import scanner repair
+
+The frozen9e6f02a combined startup run has recorded failures and remains active;
+no terminal result or full cause is claimed. A separate static comparison confirms
+two S1 violations: startup artifact registration lazily imports GatewayEntryOwner,
+_NativeFileLineage and _NativeFileLedger, but the scanner had no exact allowance
+for that HMP-owned sibling module. This made otherwise positive scanner fixtures
+fail from the baseline package. The separate repair permits only these three type
+names lazily in presentation_startup_artifacts.py. Eager imports, module imports,
+wildcards, helper functions and other plugin modules remain closed. Nine additional
+positive/negative scanner cases are prepared. Static scanner and Ruff pass; pytest
+qualification is pending the existing serial lane. Other combined failures must
+still be assessed from the actual terminal JUnit/tracebacks. No production guard,
+upstream Hermes import or runtime permission was relaxed.

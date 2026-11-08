@@ -557,3 +557,34 @@ def test_unreviewed_parser_import_variants_remain_closed(pkg: Path, statement: s
 def test_startup_type_imports_stay_closed(pkg: Path, module: str, body: str, ok: bool) -> None:
     _append(pkg, module, body)
     assert (("S1", module) not in _rules(pkg)) is ok
+
+
+@pytest.mark.parametrize(
+    "module,body,ok",
+    [
+        ("presentation_startup_artifacts.py",
+         "def f():\n    from hmp_startup.gateway_entry import GatewayEntryOwner\n", True),
+        ("presentation_startup_artifacts.py",
+         "def f():\n    from hmp_startup.gateway_entry import _NativeFileLineage\n", True),
+        ("presentation_startup_artifacts.py",
+         "def f():\n    from hmp_startup.gateway_entry import _NativeFileLedger\n", True),
+        ("presentation_startup_artifacts.py",
+         "from hmp_startup.gateway_entry import _NativeFileLedger\n", False),
+        ("presentation_startup_artifacts.py",
+         "def f():\n    from hmp_startup.gateway_entry import _native_file_ledger_shape\n",
+         False),
+        ("presentation_startup_artifacts.py",
+         "def f():\n    from hmp_startup.gateway_entry import *\n", False),
+        ("presentation_startup_artifacts.py",
+         "def f():\n    import hmp_startup.gateway_entry\n", False),
+        ("reads.py",
+         "def f():\n    from hmp_startup.gateway_entry import _NativeFileLedger\n", False),
+        ("presentation_startup_selection.py",
+         "def f():\n    from hmp_startup.gateway_entry import _NativeFileLedger\n", False),
+    ],
+)
+def test_native_scope_type_joins_remain_exact_lazy_and_local(
+    pkg: Path, module: str, body: str, ok: bool
+) -> None:
+    _append(pkg, module, body)
+    assert (("S1", module) not in _rules(pkg)) is ok

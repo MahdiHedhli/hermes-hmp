@@ -219,6 +219,9 @@ class _ModuleScanner(ast.NodeVisitor):
         # circular entry/IO join lazy and closed to its exact required types.
         if root == "hmp_startup":
             local_types = {
+                "hmp_startup.gateway_entry": {
+                    "GatewayEntryOwner", "_NativeFileLineage", "_NativeFileLedger",
+                },
                 "hmp_startup.entry_files": {"EntryFileSnapshotOwner"},
                 "hmp_startup.gateway_approval": {"GatewayApprovalOwner"},
                 "hmp_startup.runtime_reader": {"RuntimeSourceReadOwner"},
