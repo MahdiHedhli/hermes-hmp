@@ -14,7 +14,8 @@ from .test_presentation_gateway_approval import operator_composed_script
                                  "read_entry_copy", "final_hash_copy",
                                  "final_read_copy", "final_context_remove",
                                  "linear_reads", "late_old_read", "negative_mtime",
-                                 "rounding_mtime"))
+                                 "rounding_mtime", "early_eof", "duplicate_eof", "eof_count_copy",
+                                 "post_eof_append", "hash_eof_drift"))
 def test_original_source_digest_reads(tmp_path, monkeypatch, case):
     script, mutation = operator_composed_script('links')
     assert 'GatewayPackageOwner.verify_recipe(recipe)' in script
@@ -27,7 +28,7 @@ from hmp_plugin import presentation_source_digest as sd
 source_case=CASE_VALUE
 positive_cases=('normal','split_reads','replay','final_hash_copy',
                 'final_read_copy','final_context_remove','linear_reads','negative_mtime',
-                'rounding_mtime')
+                'rounding_mtime','early_eof','duplicate_eof','post_eof_append')
 foreign_calls=[]
 if source_case in ('negative_mtime','rounding_mtime'):
     import os
@@ -77,6 +78,44 @@ if source_case=='linear_reads':
         return actual_read_result(*args)
     sd._read_result=counted
 actual_finish=sd.finish
+if source_case in ('early_eof','duplicate_eof','eof_count_copy',
+                   'post_eof_append','hash_eof_drift'):
+    def early(root,buffer,count,observations):
+        if root is None:return actual_finish(root,buffer,count,observations)
+        assert sd.consume_eof(root,buffer,count,observations) is count
+        assert root.effect.eof is count
+        consumed=root.effect.consumed
+        if source_case=='duplicate_eof':
+            try:sd.consume_eof(root,buffer,count,observations)
+            except sd.SourceDigestError:pass
+            else:raise AssertionError('EOF consumed twice')
+            assert root.effect.consumed==consumed
+        if source_case=='eof_count_copy':
+            captured[:]=[root]
+            return actual_finish(root,buffer,tuple(list(count)),observations)
+        if source_case=='post_eof_append':
+            before=bytes(buffer)
+            try:actual_append(root,buffer,b'',observations)
+            except sd.SourceDigestError:pass
+            else:raise AssertionError('append accepted after EOF')
+            assert bytes(buffer)==before and root.effect.consumed==consumed
+        if source_case=='hash_eof_drift':
+            import sys
+            captured[:]=[root]
+            actual_builtin=root.context.interpreter.source_hash.builtin
+            hits=[]
+            def drift(frame,event,arg):
+                if event=='c_return' and arg is actual_builtin:
+                    hits.append(True)
+                    root.effect.eof=tuple(list(count))
+            previous=sys.getprofile()
+            sys.setprofile(drift)
+            try:return actual_finish(root,buffer,count,observations)
+            finally:
+                sys.setprofile(previous)
+                assert hits==[True], 'hash boundary not exercised'
+        return actual_finish(root,buffer,count,observations)
+    sd.finish=early
 if source_case=='hash_lost_ack':
     def lost(root,buffer,count,observations):
         actual_finish(root,buffer,count,observations)

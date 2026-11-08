@@ -13,7 +13,7 @@ import stat
 import sys
 import threading
 from dataclasses import dataclass
-from types import BuiltinFunctionType, FunctionType, ModuleType
+from types import BuiltinFunctionType, CodeType, FunctionType, MethodDescriptorType, ModuleType
 from typing import NamedTuple
 
 from .presentation_gateway_activation import GatewayActivationOwner
@@ -101,6 +101,164 @@ class _Descriptor:
     unknown: bool = False
 
 
+class _NativeReadFileStep(NamedTuple):
+    """Original declared-file read cursor; not a new or renewable allowance."""
+    owner: object
+    scope: object
+    registration: object
+    walk: object
+    expected: ExpectedArtifact
+    descriptor: object
+    parents: tuple
+    digest: object
+    hash_kind: type
+    hash_update: object
+    buffer: object
+    buffer_aliases: tuple
+    source: object
+    observations: object
+    code: object
+    material: object
+    material_code: object
+    material_module: object
+    owner_type: type
+    progress: list
+    eof: list
+
+    def __repr__(self):
+        return "<NativeReadFileStep unbound original-cursor DATA redacted>"
+
+
+class _NativeReadConsumer(NamedTuple):
+    """Original fixed-file read step DATA; construction is not consumption.
+
+    The experimental runtime-source consumer joins original owner/step/progress
+    allocations. Construction or a code object alone never acknowledges bytes.
+    """
+    owner: object
+    scope: object
+    registration: object
+    walk: object
+    file_step: _NativeReadFileStep
+    expected: ExpectedArtifact
+    descriptor: object
+    ordinal: int
+    requested: int
+    before_count: tuple
+    remaining: int
+    digest: object
+    buffer: object
+    source: object
+    observations: object
+    effect: object
+    code: object
+    material: object
+    material_code: object
+    material_module: object
+    owner_type: type
+    result: list
+    progress: list
+    operation: list
+    committed: list
+    consumption: list
+
+    def __repr__(self):
+        return "<NativeReadConsumer unbound original-step DATA redacted>"
+
+
+class _NativeFileResultClaim(NamedTuple):
+    """Preallocated original result/consumer DATA; not an ACK or work grant.
+
+    The pending-operation integration must retain the raw allocation until this
+    exact fixed consumer acknowledges it, then retire payload references without
+    retiring original unknown/debit history. Only runtime-source reads are wired
+    experimentally; remaining operation consumers are unfinished.
+    """
+    attempt: list
+    consumer: object
+    unset: object
+    raw: list
+    category: list
+    length: list
+    acknowledged: list
+    envelope: list
+
+    def __repr__(self):
+        return "<NativeFileResultClaim unbound DATA redacted>"
+
+
+class _NativeFileOperation(NamedTuple):
+    """Original fixed read/stat/fstat/readlink intent; no generic dispatcher."""
+    owner: object
+    scope: object
+    registration: object
+    ledger: object
+    native: object
+    context: tuple
+    operation: int
+    callee: object
+    arguments: tuple
+    descriptor: object
+    consumer: object
+    index: int
+    budget: tuple
+    ended: list
+    state: list
+    result: _NativeFileResultClaim
+
+    def __repr__(self):
+        return "<NativeFileOperation unbound DATA redacted>"
+
+
+class _NativeReadResult(NamedTuple):
+    """Private original pending read result; never a bytes-compatible proxy."""
+    operation: _NativeFileOperation
+    result: _NativeFileResultClaim
+    consumer: _NativeReadConsumer
+    raw: bytes
+    after_count: tuple
+    step: _NativeReadFileStep
+    effect: object
+    effect_index: int
+    source_read: object
+    source_read_kind: type
+    source_return: object
+    commit_cell: list
+    consumption_cell: list
+    effect_cell: list
+    raw_cell: list
+    length_cell: list
+    category_cell: list
+    ack_cell: list
+    consumer_result_cell: list
+    consumer_operation_cell: list
+    consumer_progress_cell: list
+    step_progress_cell: list
+    attempt_cell: list
+    envelope_cell: list
+
+    def __repr__(self):
+        return "<NativeReadResult pending unbound DATA redacted>"
+
+
+class _NativeRuntimeReadCommit(NamedTuple):
+    """Fixed consumer's raw-free progress evidence; not caller success DATA."""
+    operation: _NativeFileOperation
+    result: _NativeFileResultClaim
+    consumer: _NativeReadConsumer
+    step: _NativeReadFileStep
+    count: tuple
+    ordinal: int
+    remaining: int
+    eof: bool
+    consumption_token: object
+    source_observation: tuple
+    source_consumed: int
+
+    def __repr__(self):
+        return "<NativeRuntimeReadCommit unqualified progress redacted>"
+
+
 class _NativeFilePreparation(NamedTuple):
     """Original preparation latch retained on failure, not a file-effect grant."""
     owner: object
@@ -126,6 +284,7 @@ class _NativeCloseAllocation(NamedTuple):
     scope: object
     registration: object
     ledger: object
+    phase: object
     context: tuple
     close_call: object
     actor_calls: tuple
@@ -206,6 +365,7 @@ class _Scope(NamedTuple):
     source_digest: object = None
     native_files: object = None
     native_registration_slot: object = None
+    material_origin: object = None
 
     def __repr__(self):
         return "<StartupArtifactScope redacted>"
@@ -533,6 +693,7 @@ class _NativeDeclaredWalk(NamedTuple):
     index: int
     components: tuple
     state: list
+    read_step: list
 
     def __repr__(self):
         return "<OriginalDeclaredFileWalk not-operation-authority redacted>"
@@ -553,6 +714,8 @@ class _NativeScopeRegistration(NamedTuple):
     native_origin: object
     type_pins: tuple
     entry_module: ModuleType
+    native_phase: object
+    phase_type: type
 
     def __repr__(self):
         return "<OriginalNativeScopeRegistration DATA redacted>"
@@ -588,7 +751,14 @@ def _native_scope_current(owner, record):
              and type(record.lineage) is _NativeFileLineage
              and type(record.lineage.ledger) is _NativeFileLedger)
     s, lineage, cell, root = record.scope, record.lineage, record.cell, record.root
-    _require(type(lineage.ledger.inflight) is list and len(lineage.ledger.inflight) == 1
+    phase = lineage.ledger.phase
+    _require(phase is record.native_phase and type(record.phase_type) is type
+             and type(phase) is record.phase_type
+             and type(phase.current) is list and len(phase.current) == 1
+             and phase.current[0] is phase.idle
+             and type(phase.result) is list and len(phase.result) == 1
+             and phase.result[0] is None
+             and type(lineage.ledger.inflight) is list and len(lineage.ledger.inflight) == 1
              and lineage.ledger.inflight[0] is None
              and type(lineage.ledger.failed) is list and len(lineage.ledger.failed) == 1
              and lineage.ledger.failed[0] is False)
@@ -648,10 +818,12 @@ def _register_native_scope(owner, s, cell, root):
         declaration = declaration.files
     _expected(declaration)
     walks = tuple(_NativeDeclaredWalk(owner, s, cell, root, declaration, expected,
-                                     ordinal, ("/", *expected.path[1:].split("/")), [0])
+                                     ordinal, ("/", *expected.path[1:].split("/")), [0], [None])
                   for ordinal, expected in enumerate(declaration))
     progress = [0]
     ledger, native_origin = lineage.ledger, lineage.native
+    native_phase = ledger.phase
+    phase_type = type(native_phase)
     type_pins = (type(lineage), type(ledger), type(native_origin))
     _require(type(sys) is ModuleType)
     modules = vars(sys).get('modules')
@@ -665,13 +837,15 @@ def _register_native_scope(owner, s, cell, root):
              and entry_names.get('_NativeIOOrigin') is type_pins[2])
     record = _NativeScopeRegistration(lineage, owner, s, cell, root, s.context, index,
                                       walks, progress, ledger, native_origin,
-                                      type_pins, entry_module)
+                                      type_pins, entry_module, native_phase, phase_type)
     _require(type(record) is _NativeScopeRegistration and record.lineage is lineage
              and record.owner is owner and record.scope is s
              and record.cell is cell and record.root is root
              and record.context is s.context and record.index is index
              and record.native_ledger is ledger and record.native_origin is native_origin
              and record.type_pins is type_pins and record.entry_module is entry_module
+             and record.native_phase is native_phase and record.phase_type is phase_type
+             and ledger.phase is native_phase and type(native_phase) is phase_type
              and lineage.ledger is ledger and lineage.native is native_origin
              and modules.get('hmp_startup.gateway_entry') is entry_module
              and owner._scope is s and owner._origin is s
@@ -786,7 +960,10 @@ def _native_work_registration_tail(owner, registration):
              and type(registration.native_ledger) is pins[1]
              and type(registration.native_origin) is pins[2])
     _require(registration.lineage.ledger is registration.native_ledger
-             and registration.lineage.native is registration.native_origin)
+             and registration.lineage.native is registration.native_origin
+             and registration.native_ledger.phase is registration.native_phase
+             and type(registration.phase_type) is type
+             and type(registration.native_phase) is registration.phase_type)
     registry = registration.native_ledger.scopes
     _require(type(registry) is list and type(registration.index) is int
              and 0 <= registration.index < len(registry)
@@ -911,7 +1088,8 @@ def _allocate_native_file_open(owner, registration, parent, arguments, pending):
         open_slot, raw, result = [None], [None], [None]
         unset, reservation = object(), object()
         close = _NativeCloseAllocation(owner, registration.scope, registration, ledger,
-                                       registration.context, native.operations[2],
+                                       registration.native_phase, registration.context,
+                                       native.operations[2],
                                        native.actor_calls, (native.native, native.thread_native),
                                        open_slot, reservation, [False, False], unset,
                                        [unset], [None])
@@ -970,6 +1148,7 @@ def _native_file_allocation_original(allocation, original_ledger):
              and type(close) is _NativeCloseAllocation
              and close.owner is allocation.owner and close.scope is allocation.scope
              and close.registration is registration and close.ledger is ledger
+             and close.phase is registration.native_phase and ledger.phase is close.phase
              and close.context is allocation.context
              and close.close_call is allocation.native.operations[2]
              and close.actor_calls is allocation.native.actor_calls
@@ -1081,6 +1260,11 @@ def _close_native_file_known(owner, allocation, fd, original_ledger):
              and close.state[1] is False and close.raw[0] is close.unset
              and close.result[0] is None)
     ledger = original_ledger
+    phase = close.phase
+    _require(type(phase.current) is list and len(phase.current) == 1
+             and (phase.current[0] is phase.idle or phase.current[0] is phase.failed)
+             and type(phase.result) is list and len(phase.result) == 1
+             and phase.result[0] is None)
     counts, inflight = ledger.counts, ledger.inflight
     failed, failure = ledger.failed, ledger.failure
     _require(type(failed) is list and len(failed) == 1 and type(failed[0]) is bool
@@ -1105,8 +1289,9 @@ def _close_native_file_known(owner, allocation, fd, original_ledger):
                  and close.state[1] is False and close.raw[0] is close.unset
                  and close.reservation is token and close.close_call is close_call
                  and ledger.counts is counts and counts[0] is used and counts[1] is reserved
-                 and ledger.inflight is inflight
-                 and inflight[0] is close)
+                 and ledger.inflight is inflight and inflight[0] is close
+                 and ledger.phase is phase and phase.result[0] is None
+                 and (phase.current[0] is phase.idle or phase.current[0] is phase.failed))
         used_after, reserved_after = used + 1, reserved - 1
         close.state[0] = True
         counts[0], counts[1] = used_after, reserved_after
@@ -1128,6 +1313,864 @@ def _close_native_file_known(owner, allocation, fd, original_ledger):
     finally:
         if ledger.inflight is inflight and inflight[0] is close:
             inflight[0] = None
+
+
+def _native_read_walk_tail(owner, registration, walk, expected, step):
+    """Original declared-walk membership; no step construction or file effect."""
+    _require(type(registration) is _NativeScopeRegistration and registration.owner is owner
+             and type(registration.scope) is _Scope and type(walk) is _NativeDeclaredWalk
+             and walk.owner is owner and walk.scope is registration.scope
+             and walk.cell is registration.cell and walk.root is registration.root
+             and type(expected) is ExpectedArtifact and walk.expected is expected
+             and type(walk.index) is int and type(registration.file_walks) is tuple
+             and 0 <= walk.index < len(registration.file_walks)
+             and registration.file_walks[walk.index] is walk
+             and type(walk.declaration) is tuple and walk.declaration is registration.scope.expected
+             and walk.index < len(walk.declaration) and walk.declaration[walk.index] is expected
+             and type(registration.file_progress) is list and len(registration.file_progress) == 1
+             and type(registration.file_progress[0]) is int
+             and registration.file_progress[0] == walk.index
+             and type(walk.state) is list and len(walk.state) == 1
+             and type(walk.state[0]) is int and walk.state[0] == 1
+             and type(walk.read_step) is list and len(walk.read_step) == 1
+             and walk.read_step[0] is step)
+    _native_work_registration_tail(owner, registration)
+    return walk
+
+
+def _native_declared_leaf_tail(owner, registration, walk, expected, descriptor):
+    """Exact original leaf and bounded parent chain for this declared file."""
+    _require(type(walk) is _NativeDeclaredWalk and walk.expected is expected
+             and type(walk.components) is tuple and 1 <= len(walk.components) <= 64)
+    current = descriptor
+    leaf = True
+    for component in reversed(walk.components):
+        _require(type(component) is str and type(current) is _NativeOpenedDescriptor)
+        close = _native_descriptor_opened(current, registration.native_ledger)
+        allocation = current.allocation
+        _require(allocation.owner is owner and allocation.scope is registration.scope
+                 and type(allocation.arguments) is tuple and len(allocation.arguments) == 3
+                 and type(allocation.arguments[0]) is str and allocation.arguments[0] == component
+                 and type(allocation.arguments[1]) is int
+                 and close.state[0] is False and close.state[1] is False
+                 and close.raw[0] is close.unset)
+        directory_flag = allocation.native.flags[4]
+        _require(type(directory_flag) is int
+                 and bool(allocation.arguments[1] & directory_flag) is (not leaf))
+        parent = allocation.parent
+        if parent is None:
+            _require(component == '/' and allocation.arguments[2] is None)
+        else:
+            _require(type(parent) is _NativeOpenedDescriptor
+                     and allocation.arguments[2] is parent.fd)
+        current, leaf = parent, False
+    _require(current is None)
+    return descriptor
+
+
+def _native_read_lifecycle_tail(owner, registration, parents):
+    """Import-free current owner/activation/continuation lifetime closure."""
+    _require(type(registration) is _NativeScopeRegistration and registration.owner is owner
+             and type(registration.scope) is _Scope
+             and type(parents) is tuple and len(parents) == 7)
+    scope = registration.scope
+    activation, activation_scope, root, continuation, kind, source, source_kind = parents
+    _require(type(activation) is GatewayActivationOwner and activation is scope.activation
+             and activation_scope is scope.activation_scope
+             and type(scope.parent) is tuple and len(scope.parent) == 6
+             and scope.parent[0] is root and type(root) is tuple and len(root) == 3
+             and root[0] is continuation and root[1] is activation and root[2] is source
+             and type(kind) is type and type(continuation) is kind
+             and type(source_kind) is type and type(source) is source_kind)
+    own, active, parent = vars(owner), vars(activation), vars(continuation)
+    _require(type(own) is dict and type(active) is dict and type(parent) is dict
+             and own.get('_failed') is False and own.get('_unknown') is False
+             and own.get('_ready') is False and own.get('_released') is False
+             and own.get('_retaining') is False and own.get('_started') is True
+             and type(own.get('_reading')) is bool
+             and active.get('_scope') is activation_scope and active.get('_ready') is True
+             and active.get('_retired') is False and active.get('_uncertain') is False
+             and active.get('_continuation_owner') is continuation
+             and active.get('_continuation_cell') is root
+             and parent.get('_root') is root and parent.get('_source') is source
+             and parent.get('_ready') is True and parent.get('_failed') is False
+             and parent.get('_retired') is False)
+    _native_work_registration_tail(owner, registration)
+    return scope
+
+
+def _native_read_accumulator_tail(owner, step, before):
+    """Original fixed reader accumulators before admission; no callback or IO."""
+    _require(type(step) is _NativeReadFileStep and step.owner is owner
+             and type(step.scope) is _Scope and type(step.scope.parent) is tuple
+             and len(step.scope.parent) == 6 and type(before) is tuple and len(before) == 3
+             and before[0] is owner and before[1] is step.scope
+             and type(before[2]) is int and before[2] >= 0
+             and type(step.buffer) is bytearray and len(step.buffer) == before[2]
+             and step.scope.parent[2] is step.buffer
+             and type(step.scope.parent[5]) is tuple and len(step.scope.parent[5]) == 4
+             and step.scope.parent[5][2] is step.hash_kind
+             and type(step.hash_kind) is type and type(step.digest) is step.hash_kind
+             and type(step.hash_update) is MethodDescriptorType
+             and step.hash_update.__objclass__ is step.hash_kind
+             and step.hash_update.__name__ == 'update'
+             and vars(step.hash_kind).get('update') is step.hash_update)
+    own = vars(owner)
+    _require(type(own) is dict and type(step.buffer_aliases) is tuple
+             and all(type(name) is str for name in step.buffer_aliases)
+             and step.buffer_aliases in (('_buffer',), ('_buffer', '_original_buffer'))
+             and all(own.get(name) is step.buffer for name in step.buffer_aliases))
+    return step
+
+
+def _new_native_read_file_step(
+    owner, registration, walk, expected, descriptor, digest, source, observations
+):
+    """Fixed runtime/cache reader construction only; never a nominated callable."""
+    from hmp_startup.cache_reader import DeclaredCacheReadOwner
+    from hmp_startup.runtime_reader import RuntimeSourceReadOwner
+
+    _require(type(registration) is _NativeScopeRegistration and registration.owner is owner
+             and type(walk) is _NativeDeclaredWalk and walk.owner is owner
+             and walk.scope is registration.scope and walk.expected is expected
+             and type(walk.read_step) is list and len(walk.read_step) == 1
+             and walk.read_step[0] is None and type(expected) is ExpectedArtifact
+             and type(observations) is list)
+    _native_read_walk_tail(owner, registration, walk, expected, None)
+    scope = _native_scope_current(owner, registration).scope
+    _native_read_walk_tail(owner, registration, walk, expected, None)
+    if type(owner) is RuntimeSourceReadOwner:
+        owner_type, module_name = RuntimeSourceReadOwner, 'hmp_startup.runtime_reader'
+        buffer = owner._original_buffer
+        buffer_aliases = ('_buffer', '_original_buffer')
+    else:
+        _require(type(owner) is DeclaredCacheReadOwner)
+        owner_type, module_name = DeclaredCacheReadOwner, 'hmp_startup.cache_reader'
+        buffer = owner._buffer
+        buffer_aliases = ('_buffer',)
+    origin = scope.material_origin
+    _require(type(origin) is tuple and len(origin) == 6 and origin[3] is owner_type)
+    material, file_function = origin[0], origin[4]
+    modules = vars(sys).get('modules')
+    _require(type(modules) is dict)
+    module = modules.get(module_name)
+    _require(type(module) is ModuleType and type(owner_type) is type
+             and type(material) is FunctionType and material.__code__ is origin[1]
+             and material.__globals__ is origin[2] and vars(module) is origin[2]
+             and type(file_function) is FunctionType and file_function.__code__ is origin[5]
+             and vars(StartupArtifactOwner).get('_file') is file_function
+             and type(buffer) is bytearray and len(buffer) == 0)
+    hash_origin = scope.parent[5]
+    _require(type(hash_origin) is tuple and len(hash_origin) == 4
+             and type(hash_origin[2]) is type and type(digest) is hash_origin[2])
+    hash_kind = hash_origin[2]
+    hash_update = vars(hash_kind).get('update')
+    _require(type(hash_update) is MethodDescriptorType and hash_update.__objclass__ is hash_kind
+             and hash_update.__name__ == 'update')
+    before = owner._count_cell
+    _require(type(before) is tuple and len(before) == 3 and before[0] is owner
+             and before[1] is scope and type(before[2]) is int and before[2] == 0)
+    _native_declared_leaf_tail(owner, registration, walk, expected, descriptor)
+    parent_root = scope.parent[0]
+    parents = (scope.activation, scope.activation_scope, parent_root, parent_root[0],
+               type(parent_root[0]), parent_root[2], type(parent_root[2]))
+    _native_read_lifecycle_tail(owner, registration, parents)
+    step = _NativeReadFileStep(owner, scope, registration, walk, expected, descriptor, parents,
+                               digest, hash_kind, hash_update, buffer, buffer_aliases, source,
+                               observations, file_function.__code__, material, material.__code__,
+                               module, owner_type, [0, expected.size, before, None], [False])
+    _require(_native_scope_current(owner, registration).scope is scope
+             and walk.read_step[0] is None and owner._count_cell is before
+             and vars(owner_type).get('_material_guard') is material
+             and material.__code__ is step.material_code and material.__globals__ is vars(module)
+             and vars(StartupArtifactOwner).get('_file') is file_function
+             and file_function.__code__ is step.code and len(buffer) == 0)
+    _native_read_walk_tail(owner, registration, walk, expected, None)
+    _native_declared_leaf_tail(owner, registration, walk, expected, descriptor)
+    _native_read_lifecycle_tail(owner, registration, parents)
+    _native_read_accumulator_tail(owner, step, before)
+    walk.read_step[0] = step
+    _native_work_origin_tail(owner, registration, registration.native_origin)
+    _native_read_walk_tail(owner, registration, walk, expected, step)
+    _native_read_accumulator_tail(owner, step, before)
+    return step
+
+
+def _new_native_read_consumer(owner, step, descriptor, requested):
+    """Bind the next exact original file cursor; no read or ACK is performed."""
+    _require(type(step) is _NativeReadFileStep and step.owner is owner
+             and type(step.walk) is _NativeDeclaredWalk
+             and type(step.registration) is _NativeScopeRegistration
+             and type(step.progress) is list and len(step.progress) == 4
+             and type(step.eof) is list and len(step.eof) == 1 and step.eof[0] is False
+             and type(step.progress[0]) is int and step.progress[0] >= 0
+             and type(step.progress[1]) is int and step.progress[1] >= 0
+             and step.progress[2] is owner._count_cell and step.progress[3] is None
+             and type(requested) is int
+             and requested == (min(step.progress[1], 65536) if step.progress[1] else 1)
+             and type(descriptor) is _NativeOpenedDescriptor and descriptor is step.descriptor)
+    registration = step.registration
+    _native_read_walk_tail(owner, registration, step.walk, step.expected, step)
+    _require(_native_scope_current(owner, registration).scope is step.scope)
+    _native_read_walk_tail(owner, registration, step.walk, step.expected, step)
+    close = _native_descriptor_opened(descriptor, registration.native_ledger)
+    _require(descriptor.allocation.scope is step.scope and step.walk.read_step[0] is step
+             and close.state[0] is False and close.state[1] is False
+             and close.raw[0] is close.unset)
+    ordinal, remaining, before, _ = step.progress
+    consumer = _NativeReadConsumer(owner, step.scope, registration, step.walk, step, step.expected,
+                                   descriptor, ordinal, requested, before, remaining, step.digest,
+                                   step.buffer, step.source, step.observations, [None], step.code,
+                                   step.material, step.material_code, step.material_module,
+                                   step.owner_type, [None], [None], [None], [None], [None])
+    _require(_native_scope_current(owner, registration).scope is step.scope
+             and step.progress[0] is ordinal and step.progress[1] is remaining
+             and step.progress[2] is before and step.progress[3] is None
+             and step.walk.read_step[0] is step and step.eof[0] is False)
+    _native_read_walk_tail(owner, registration, step.walk, step.expected, step)
+    _native_declared_leaf_tail(owner, registration, step.walk, step.expected, descriptor)
+    _native_read_lifecycle_tail(owner, registration, step.parents)
+    _require(_native_descriptor_opened(descriptor, registration.native_ledger) is close
+             and close.state[0] is False and close.state[1] is False
+             and close.raw[0] is close.unset)
+    step.progress[3] = consumer
+    _native_work_origin_tail(owner, registration, registration.native_origin)
+    _native_read_walk_tail(owner, registration, step.walk, step.expected, step)
+    _require(step.progress[3] is consumer)
+    _native_read_accumulator_tail(owner, step, before)
+    return consumer
+
+
+def _native_read_input_tail(owner, consumer, operation=None):
+    """Original prepared consumer/effect before actual read admission."""
+    _require(type(consumer) is _NativeReadConsumer and consumer.owner is owner
+             and type(consumer.registration) is _NativeScopeRegistration
+             and type(consumer.file_step) is _NativeReadFileStep)
+    registration, step = consumer.registration, consumer.file_step
+    _native_read_walk_tail(owner, registration, consumer.walk, consumer.expected, step)
+    _native_work_origin_tail(owner, registration, registration.native_origin)
+    _native_read_lifecycle_tail(owner, registration, step.parents)
+    _native_read_accumulator_tail(owner, step, consumer.before_count)
+    _native_declared_leaf_tail(owner, registration, consumer.walk, consumer.expected,
+                               consumer.descriptor)
+    _require(step.descriptor is consumer.descriptor and step.owner is owner
+             and step.scope is registration.scope
+             and step.registration is registration and consumer.scope is step.scope
+             and type(step.progress) is list and len(step.progress) == 4
+             and type(step.eof) is list and len(step.eof) == 1 and step.eof[0] is False
+             and step.progress[0] is consumer.ordinal and step.progress[1] is consumer.remaining
+             and step.progress[2] is consumer.before_count and step.progress[3] is consumer
+             and type(consumer.ordinal) is int and consumer.ordinal >= 0
+             and type(consumer.remaining) is int and consumer.remaining >= 0
+             and type(consumer.requested) is int
+             and consumer.requested == (min(consumer.remaining, 65536) if consumer.remaining else 1)
+             and type(consumer.before_count) is tuple and len(consumer.before_count) == 3
+             and consumer.before_count[0] is owner and consumer.before_count[1] is step.scope
+             and type(consumer.before_count[2]) is int
+             and owner._count_cell is consumer.before_count
+             and owner._bytes_read is consumer.before_count[2] and owner._reading is True
+             and type(consumer.result) is list and len(consumer.result) == 1
+             and type(consumer.operation) is list and len(consumer.operation) == 1
+             and type(consumer.progress) is list and len(consumer.progress) == 1
+             and consumer.progress[0] is None
+             and type(consumer.committed) is list and len(consumer.committed) == 1
+             and consumer.committed[0] is None
+             and type(consumer.consumption) is list and len(consumer.consumption) == 1
+             and consumer.consumption[0] is None
+             and type(consumer.effect) is list and len(consumer.effect) == 1
+             and type(consumer.effect[0]) is _ReadEffect
+             and consumer.effect[0].before is consumer.before_count
+             and consumer.effect[0].after is None and consumer.effect[0].returned is False
+             and consumer.effect[0].unknown is False
+             and type(step.scope.reads) is list and len(step.scope.reads) > 0
+             and step.scope.reads[-1] is consumer.effect[0]
+             and type(consumer.descriptor) is _NativeOpenedDescriptor)
+    close = _native_descriptor_opened(consumer.descriptor, registration.native_ledger)
+    _require(consumer.descriptor.allocation.scope is step.scope
+             and close.state[0] is False and close.state[1] is False
+             and close.raw[0] is close.unset)
+    if operation is None:
+        _require(consumer.operation[0] is None and consumer.result[0] is None)
+    else:
+        _require(type(operation) is _NativeFileOperation and operation.consumer is consumer
+                 and operation.owner is owner and operation.scope is step.scope
+                 and operation.registration is registration
+                 and operation.ledger is registration.native_ledger
+                 and operation.native is registration.native_origin
+                 and operation.descriptor is consumer.descriptor
+                 and type(operation.result) is _NativeFileResultClaim
+                 and consumer.operation[0] is operation and consumer.result[0] is operation.result
+                 and type(operation.result.attempt) is list and len(operation.result.attempt) == 1
+                 and operation.result.attempt[0] is operation
+                 and type(operation.state) is list and len(operation.state) == 3
+                 and operation.state[1] is False and operation.state[2] is False
+                 and operation.result.raw[0] is operation.result.unset
+                 and operation.result.acknowledged[0] is None)
+    return registration
+
+
+def _prepare_native_read_operation(owner, consumer):
+    """Allocate original operation DATA before the caller admits or debits it."""
+    registration = _native_read_input_tail(owner, consumer)
+    ledger, native = registration.native_ledger, registration.native_origin
+    counts, attempts = ledger.counts, ledger.attempts
+    _require(type(counts) is list and len(counts) == 2
+             and all(type(value) is int for value in counts)
+             and 0 <= counts[0] < 1048576 and 0 <= counts[1] < 1048576 - counts[0]
+             and type(attempts) is list and len(attempts) < 1048576)
+    used, reserved, index = counts[0], counts[1], len(attempts)
+    unset = object()
+    result = _NativeFileResultClaim([None], consumer, unset, [unset], [None], [None],
+                                    [None], [None])
+    operation = _NativeFileOperation(owner, registration.scope, registration, ledger, native,
+                                     registration.context, 1, native.operations[1],
+                                     (consumer.descriptor.fd, consumer.requested),
+                                     consumer.descriptor, consumer, index,
+                                     (counts, used, reserved, used + 1), [False],
+                                     [False, False, False], result)
+    result.attempt[0] = operation
+    _native_read_input_tail(owner, consumer)
+    _require(ledger.counts is counts and counts[0] is used and counts[1] is reserved
+             and ledger.attempts is attempts and len(attempts) == index)
+    consumer.result[0] = result
+    consumer.operation[0] = operation
+    return operation
+
+
+def _admit_native_read(owner, consumer, operation):
+    """Prepare/debit one fixed read; performs no file call or acknowledgment."""
+    registration = _native_read_input_tail(owner, consumer, operation)
+    ledger, native = registration.native_ledger, registration.native_origin
+    phase = registration.native_phase
+    counts, inflight, attempts = ledger.counts, ledger.inflight, ledger.attempts
+    failed, failure, token = ledger.failed, ledger.failure, ledger.preparation
+    _require(type(counts) is list and len(counts) == 2
+             and all(type(value) is int for value in counts)
+             and 0 <= counts[0] < 1048576 and 0 <= counts[1] < 1048576 - counts[0]
+             and type(inflight) is list and len(inflight) == 1 and inflight[0] is None
+             and type(attempts) is list and len(attempts) < 1048576
+             and type(failed) is list and len(failed) == 1 and failed[0] is False
+             and type(failure) is list and len(failure) == 1 and failure[0] is None
+             and type(token) is list and len(token) == 3
+             and phase.current[0] is phase.idle and phase.result[0] is None)
+    _require(type(operation.budget) is tuple and len(operation.budget) == 4
+             and operation.budget[0] is counts and counts[0] is operation.budget[1]
+             and counts[1] is operation.budget[2] and type(operation.budget[3]) is int
+             and operation.budget[3] == operation.budget[1] + 1
+             and type(operation.index) is int and len(attempts) == operation.index
+             and operation.state[0] is False)
+    used, reserved, index = counts[0], counts[1], operation.index
+    actor_mismatch = False
+    actor_state = actor_arguments = None
+    try:
+        inflight[0] = token
+        token[0], token[1], token[2] = owner, registration, consumer
+        phase.result[0] = token
+        phase.current[0] = phase.active
+        actor_arguments = (consumer, operation, operation.callee, *operation.arguments)
+        actor_state = _native_pre_actor_state(owner, actor_arguments)
+        try:
+            _native_actor_context(native.actor_calls, (native.native, native.thread_native),
+                                  registration.context)
+        except _NativeActorMismatchError:
+            actor_mismatch = True
+            raise
+        _native_post_actor_state(owner, actor_state, actor_arguments)
+        _native_read_input_tail(owner, consumer, operation)
+        token[2] = operation
+        _require(ledger.counts is counts and counts[0] is used and counts[1] is reserved
+                 and ledger.attempts is attempts and len(attempts) == index
+                 and ledger.inflight is inflight and inflight[0] is token
+                 and ledger.phase is phase and phase.result[0] is token
+                 and phase.current[0] is phase.active and failed[0] is False)
+        attempts.append(operation)
+        counts[0] = operation.budget[3]
+        operation.state[0] = True
+        phase.result[0] = operation
+        inflight[0] = operation
+        _require(_native_read_ready_tail(owner, consumer, operation) is operation)
+        return operation
+    except BaseException:
+        unchanged_inputs = False
+        if actor_mismatch:
+            try:
+                _native_post_actor_state(owner, actor_state, actor_arguments)
+                _native_read_input_tail(owner, consumer, operation)
+                unchanged_inputs = True
+            except BaseException:
+                unchanged_inputs = False
+        clean_mismatch = (actor_mismatch and unchanged_inputs and operation.state[0] is False
+                          and ledger.counts is counts
+                          and len(counts) == 2 and counts[0] is used and counts[1] is reserved
+                          and ledger.attempts is attempts and len(attempts) == index
+                          and failed[0] is False and failure[0] is None
+                          and inflight[0] is token and phase.result[0] is token
+                          and phase.current[0] is phase.active)
+        if not clean_mismatch:
+            if failure[0] is None:
+                failure[0] = operation if operation is not None else token
+            failed[0] = True
+            if operation is not None:
+                operation.state[2] = True
+            if (phase.current[0] is phase.active or phase.current[0] is phase.idle):
+                phase.current[0] = phase.failed
+        else:
+            phase.current[0] = phase.idle
+        if phase.result[0] is token or (operation is not None and phase.result[0] is operation):
+            phase.result[0] = None  # preparation ended; no native file call occurred here
+        if inflight[0] is token or (operation is not None and inflight[0] is operation):
+            inflight[0] = None
+        raise
+
+
+def _native_read_ready_tail(owner, consumer, operation):
+    """Same held admitted operation immediately before its fixed native call."""
+    registration = _native_read_input_tail(owner, consumer, operation)
+    ledger, phase = registration.native_ledger, registration.native_phase
+    _require(operation.state[0] is True and type(operation.index) is int
+             and type(ledger.attempts) is list and 0 <= operation.index < len(ledger.attempts)
+             and ledger.attempts[operation.index] is operation
+             and operation.context is registration.context
+             and type(operation.operation) is int and operation.operation == 1
+             and operation.callee is registration.native_origin.operations[1]
+             and type(operation.arguments) is tuple and len(operation.arguments) == 2
+             and operation.arguments[0] is consumer.descriptor.fd
+             and operation.arguments[1] is consumer.requested
+             and type(operation.budget) is tuple and len(operation.budget) == 4
+             and ledger.counts is operation.budget[0]
+             and type(ledger.counts) is list and len(ledger.counts) == 2
+             and ledger.counts[0] is operation.budget[3]
+             and ledger.counts[1] is operation.budget[2]
+             and type(ledger.inflight) is list and len(ledger.inflight) == 1
+             and ledger.inflight[0] is operation
+             and type(ledger.failed) is list and len(ledger.failed) == 1
+             and ledger.failed[0] is False
+             and phase.current[0] is phase.active and phase.result[0] is operation)
+    return operation
+
+
+def _abandon_native_read(owner, operation, raw, envelope):
+    """Fixed producer failure handoff after its native call has ended; never ACK."""
+    try:
+        _require(type(operation) is _NativeFileOperation and operation.owner is owner
+                 and type(operation.result) is _NativeFileResultClaim
+                 and type(operation.registration) is _NativeScopeRegistration
+                 and operation.ledger is operation.registration.native_ledger
+                 and type(operation.ended) is list and len(operation.ended) == 1
+                 and operation.ended[0] is True)
+        ledger, result = operation.ledger, operation.result
+        phase = operation.registration.native_phase
+        operation.state[2] = True
+        if ledger.failure[0] is None:
+            ledger.failure[0] = operation
+        ledger.failed[0] = True
+        if result.acknowledged[0] is not None:
+            # Keep actual ACK history. A partial/lost consumer acknowledgment
+            # closes the lineage without rewriting it as an unconsumed read.
+            if (phase.result[0] is operation
+                    or (phase.result[0] is None and phase.current[0] is phase.pending
+                        and ledger.inflight[0] is None)):
+                result.category[0] = 'returned_bytes_ack_unconfirmed'
+                if type(raw) is bytes and result.raw[0] is raw:
+                    result.raw[0] = result.unset
+                if envelope is not None and result.envelope[0] is envelope:
+                    result.envelope[0] = None
+                phase.result[0] = None
+                phase.current[0] = phase.failed
+            if ledger.inflight[0] is operation:
+                ledger.inflight[0] = None
+            return
+        if type(raw) is bytes and result.raw[0] is raw:
+            result.length[0] = len(raw)
+            result.category[0] = 'returned_bytes_abandoned'
+            result.raw[0] = result.unset
+        elif result.raw[0] is result.unset:
+            result.category[0] = ('returned_bytes_abandoned'
+                                  if operation.state[1] is True and type(result.length[0]) is int
+                                  else 'read_unconfirmed')
+        if envelope is not None and result.envelope[0] is envelope:
+            result.envelope[0] = None
+        if phase.result[0] is operation:
+            phase.result[0] = None
+            phase.current[0] = phase.failed
+        if ledger.inflight[0] is operation:
+            ledger.inflight[0] = None
+    finally:
+        raw = envelope = None
+
+
+def _native_read_result_tail(owner, envelope):
+    """Import-free original pending-read joins; no ACK or fresh work authority."""
+    _require(type(envelope) is _NativeReadResult)
+    operation, result, consumer = envelope.operation, envelope.result, envelope.consumer
+    _require(type(operation) is _NativeFileOperation
+             and type(result) is _NativeFileResultClaim and type(consumer) is _NativeReadConsumer
+             and operation.owner is owner and consumer.owner is owner
+             and operation.result is result and operation.consumer is consumer
+             and result.consumer is consumer and type(result.attempt) is list
+             and len(result.attempt) == 1 and result.attempt[0] is operation
+             and type(consumer.result) is list and len(consumer.result) == 1
+             and consumer.result[0] is result
+             and result.attempt is envelope.attempt_cell
+             and result.raw is envelope.raw_cell and result.length is envelope.length_cell
+             and result.category is envelope.category_cell
+             and result.acknowledged is envelope.ack_cell
+             and result.envelope is envelope.envelope_cell
+             and type(envelope.envelope_cell) is list and len(envelope.envelope_cell) == 1
+             and envelope.envelope_cell[0] is envelope
+             and consumer.result is envelope.consumer_result_cell
+             and consumer.operation is envelope.consumer_operation_cell
+             and type(consumer.operation) is list and len(consumer.operation) == 1
+             and consumer.operation[0] is operation
+             and consumer.progress is envelope.consumer_progress_cell
+             and consumer.committed is envelope.commit_cell
+             and type(envelope.commit_cell) is list and len(envelope.commit_cell) == 1
+             and consumer.consumption is envelope.consumption_cell
+             and type(envelope.consumption_cell) is list and len(envelope.consumption_cell) == 1
+             and consumer.effect is envelope.effect_cell
+             and type(envelope.effect_cell) is list and len(envelope.effect_cell) == 1
+             and envelope.effect_cell[0] is envelope.effect
+             and type(envelope.effect) is _ReadEffect
+             and type(operation.registration) is _NativeScopeRegistration)
+    registration = operation.registration
+    _native_work_registration_tail(owner, registration)
+    ledger, native = registration.native_ledger, registration.native_origin
+    scope = registration.scope
+    phase = registration.native_phase
+    _require(operation.registration is consumer.registration
+             and operation.ledger is ledger and operation.native is native
+             and operation.context is registration.context
+             and operation.scope is scope and consumer.scope is scope
+             and type(phase.current) is list and len(phase.current) == 1
+             and phase.current[0] is phase.pending
+             and type(phase.result) is list and len(phase.result) == 1
+             and phase.result[0] is operation
+             and type(ledger.inflight) is list and len(ledger.inflight) == 1
+             and ledger.inflight[0] is None
+             and type(ledger.failed) is list and len(ledger.failed) == 1
+             and ledger.failed[0] is False and type(ledger.attempts) is list
+             and type(operation.index) is int and 0 <= operation.index < len(ledger.attempts)
+             and ledger.attempts[operation.index] is operation
+             and type(operation.operation) is int and operation.operation == 1
+             and operation.callee is native.operations[1]
+             and type(operation.arguments) is tuple and len(operation.arguments) == 2
+             and type(operation.arguments[0]) is int and operation.arguments[0] >= 0
+             and type(operation.arguments[1]) is int and 0 < operation.arguments[1] <= 65536
+             and type(operation.state) is list and len(operation.state) == 3
+             and operation.state[0] is True and operation.state[1] is True
+             and operation.state[2] is False
+             and type(operation.ended) is list and len(operation.ended) == 1
+             and operation.ended[0] is True
+             and type(result.raw) is list and len(result.raw) == 1
+             and type(envelope.raw) is bytes and result.raw[0] is envelope.raw
+             and len(envelope.raw) <= operation.arguments[1]
+             and type(result.length) is list and len(result.length) == 1
+             and type(result.length[0]) is int and result.length[0] == len(result.raw[0])
+             and type(result.category) is list and len(result.category) == 1
+             and type(result.category[0]) is str and result.category[0] == 'returned_bytes'
+             and type(result.acknowledged) is list and len(result.acknowledged) == 1
+             and result.acknowledged[0] is None
+             and type(consumer.before_count) is tuple and len(consumer.before_count) == 3
+             and consumer.before_count[0] is owner and consumer.before_count[1] is scope
+             and type(consumer.before_count[2]) is int
+             and type(consumer.progress) is list and len(consumer.progress) == 1)
+    after = envelope.after_count
+    _require(consumer.progress[0] is after and type(after) is tuple and len(after) == 3
+             and after[0] is owner and after[1] is scope
+             and type(after[2]) is int and after[2] == consumer.before_count[2] + result.length[0]
+             and owner._count_cell is after and owner._bytes_read is after[2]
+             and envelope.effect.before is consumer.before_count and envelope.effect.after is after
+             and envelope.effect.returned is True and envelope.effect.unknown is False
+             and type(envelope.effect_index) is int and envelope.effect_index >= 0
+             and type(scope.reads) is list and len(scope.reads) == envelope.effect_index + 1
+             and scope.reads[envelope.effect_index] is envelope.effect
+             and type(consumer.requested) is int and consumer.requested is operation.arguments[1]
+             and type(consumer.ordinal) is int and consumer.ordinal >= 0
+             and type(consumer.remaining) is int and consumer.remaining >= 0
+             and type(consumer.expected) is ExpectedArtifact
+             and type(consumer.walk) is _NativeDeclaredWalk
+             and consumer.walk.owner is owner and consumer.walk.scope is scope
+             and consumer.walk.expected is consumer.expected
+             and type(consumer.walk.state) is list and len(consumer.walk.state) == 1
+             and type(consumer.walk.state[0]) is int and consumer.walk.state[0] == 1
+             and type(registration.file_walks) is tuple
+             and type(consumer.walk.index) is int
+             and 0 <= consumer.walk.index < len(registration.file_walks)
+             and registration.file_walks[consumer.walk.index] is consumer.walk
+             and type(consumer.descriptor) is _NativeOpenedDescriptor
+             and operation.descriptor is consumer.descriptor
+             and consumer.descriptor.fd is operation.arguments[0])
+    step = envelope.step
+    _require(consumer.file_step is step and type(step) is _NativeReadFileStep
+             and step.owner is owner and step.scope is scope
+             and step.registration is registration and step.walk is consumer.walk
+             and step.expected is consumer.expected and step.descriptor is consumer.descriptor
+             and step.digest is consumer.digest
+             and step.buffer is consumer.buffer and step.source is consumer.source
+             and step.observations is consumer.observations and step.code is consumer.code
+             and step.material is consumer.material and step.material_code is consumer.material_code
+             and step.material_module is consumer.material_module
+             and step.owner_type is consumer.owner_type
+             and type(step.eof) is list and len(step.eof) == 1 and step.eof[0] is False
+             and type(step.walk.read_step) is list and len(step.walk.read_step) == 1
+             and step.walk.read_step[0] is step
+             and step.progress is envelope.step_progress_cell
+             and type(step.progress) is list and len(step.progress) == 4
+             and step.progress[0] is consumer.ordinal and step.progress[1] is consumer.remaining
+             and step.progress[2] is consumer.before_count and step.progress[3] is consumer)
+    if envelope.source_read is None:
+        _require(envelope.source_read_kind is type(None) and envelope.source_return is None
+                 and step.source is None)
+    else:
+        source_read, source_return = envelope.source_read, envelope.source_return
+        _require(type(envelope.source_read_kind) is type
+                 and type(source_read) is envelope.source_read_kind
+                 and source_read.root is step.source
+                 and source_read.record is envelope.effect
+                 and source_read.before is consumer.before_count
+                 and type(source_read.index) is int
+                 and source_read.index == envelope.effect_index
+                 and type(source_read.result) is list and len(source_read.result) == 1
+                 and source_read.result[0] is source_return
+                 and type(source_return) is tuple and len(source_return) == 2
+                 and source_return[0] is after and type(source_return[1]) is int
+                 and source_return[1] == result.length[0]
+                 and type(step.source.reads) is list and len(step.source.reads) > 0
+                 and step.source.reads[-1] is source_read)
+    _native_read_lifecycle_tail(owner, registration, step.parents)
+    _native_declared_leaf_tail(owner, registration, consumer.walk, consumer.expected,
+                               consumer.descriptor)
+    origin = scope.material_origin
+    _require(type(origin) is tuple and len(origin) == 6
+             and origin[0] is consumer.material and origin[1] is consumer.material_code
+             and origin[3] is consumer.owner_type and origin[5] is consumer.code
+             and type(origin[4]) is FunctionType and origin[4].__code__ is consumer.code
+             and vars(StartupArtifactOwner).get('_file') is origin[4])
+    close = _native_descriptor_opened(consumer.descriptor, ledger)
+    _require(close.state[0] is False and close.state[1] is False
+             and close.raw[0] is close.unset and close.result[0] is None
+             and type(consumer.code) is CodeType
+             and type(consumer.material) is FunctionType
+             and type(consumer.material_code) is CodeType
+             and consumer.material.__code__ is consumer.material_code
+             and type(consumer.material_module) is ModuleType
+             and type(consumer.owner_type) is type and type(owner) is consumer.owner_type
+             and vars(consumer.owner_type).get('_material_guard') is consumer.material)
+    modules = vars(sys).get('modules')
+    namespace = vars(consumer.material_module)
+    module_name = namespace.get('__name__')
+    owner_name = consumer.owner_type.__name__
+    _require(type(modules) is dict and type(module_name) is str
+             and modules.get(module_name) is consumer.material_module
+             and consumer.material.__globals__ is namespace and namespace is origin[2]
+             and type(owner_name) is str and namespace.get(owner_name) is consumer.owner_type)
+    _native_work_origin_tail(owner, registration, native)
+    return scope
+
+
+def _native_read_result_current(owner, envelope):
+    """Fixed producer must carry this original envelope, never recapture its slot."""
+    scope = _native_read_result_tail(owner, envelope)
+    operation, consumer = envelope.operation, envelope.consumer
+    native = operation.native
+    material = consumer.material
+    _native_actor_context(native.actor_calls, (native.native, native.thread_native),
+                          operation.context)
+    _require(_native_read_result_tail(owner, envelope) is scope)
+    _require(material(owner) is scope)
+    _require(_native_read_result_tail(owner, envelope) is scope)
+    return scope
+
+
+def _consume_native_runtime_read(owner, envelope):
+    """Experimental fixed runtime-source consumer; not runtime qualification."""
+    data = source_buffer = step = operation = runtime_kind = source_digest = None
+    consumption_cell = token = arguments = actor_state = None
+    failed = cleanup_unknown = owns_consumption = False
+    try:
+        # Original pending-result and accumulator joins are import-free. Capture
+        # owned allocations before any import hook/material/actor callback.
+        _require(type(envelope) is _NativeReadResult)
+        operation, consumer, step = envelope.operation, envelope.consumer, envelope.step
+        _require(_native_read_result_tail(owner, envelope) is step.scope
+                 and vars(step.material_module).get('__name__') == 'hmp_startup.runtime_reader'
+                 and envelope.commit_cell[0] is None and step.source is not None)
+        _native_read_accumulator_tail(owner, step, consumer.before_count)
+        data, source_buffer = envelope.raw, step.source.buffer
+        _require(type(source_buffer) is bytearray)
+        runtime_kind = step.owner_type
+        consumption_cell = envelope.consumption_cell
+        _require(consumption_cell[0] is None)
+        token = object()
+        arguments = (operation, consumer, step, data, source_buffer)
+        actor_state = _native_pre_actor_state(owner, arguments)
+        _native_actor_context(operation.native.actor_calls,
+                              (operation.native.native, operation.native.thread_native),
+                              operation.context)
+        _native_post_actor_state(owner, actor_state, arguments)
+        _require(_native_read_result_tail(owner, envelope) is step.scope)
+        _native_read_accumulator_tail(owner, step, consumer.before_count)
+        _require(consumption_cell[0] is None)
+        # Reentry/duplicates cannot acquire this original one-use consumer slot.
+        consumption_cell[0] = token
+        owns_consumption = True
+        from hmp_startup.runtime_reader import RuntimeSourceReadOwner
+
+        from . import presentation_source_digest as source_digest
+
+        _require(type(owner) is RuntimeSourceReadOwner and runtime_kind is RuntimeSourceReadOwner)
+        _require(_native_read_result_current(owner, envelope) is step.scope
+                 and consumption_cell[0] is token)
+        length = len(data)
+        eof = consumer.remaining == 0
+        _require((length == 0 if eof else 0 < length <= consumer.remaining)
+                 and type(step.observations) is list
+                 and type(step.source.effect.consumed) is int
+                 and len(step.observations) == step.source.effect.consumed)
+        observation = (envelope.source_read, envelope.source_return)
+        step.observations.append(observation)
+        if eof:
+            _require(source_digest.consume_eof(
+                step.source, source_buffer, envelope.after_count, step.observations)
+                     is envelope.after_count)
+        else:
+            step.buffer.extend(data)
+            _require(_native_read_result_current(owner, envelope) is step.scope)
+            step.hash_update(step.digest, data)
+            _require(_native_read_result_current(owner, envelope) is step.scope)
+            source_digest.append(step.source, source_buffer, data, step.observations)
+        commit = _NativeRuntimeReadCommit(
+            operation, envelope.result, consumer, step, envelope.after_count,
+            consumer.ordinal + 1, consumer.remaining - length, eof, token, observation,
+            step.source.effect.consumed)
+        # Publish the actual consumer return/progress before post-effect callbacks.
+        envelope.commit_cell[0] = commit
+        _require(_native_read_result_current(owner, envelope) is step.scope)
+        _native_runtime_read_commit_tail(owner, envelope, commit, source_buffer, token)
+        # No callbacks after this final original-result/progress closure. A lost
+        # acknowledgment fails permanently through the handler, never a replay.
+        envelope.ack_cell[0] = commit
+        envelope.raw_cell[0] = envelope.result.unset
+        envelope.envelope_cell[0] = None
+        step.progress[0] = commit.ordinal
+        step.progress[1] = commit.remaining
+        step.progress[2] = commit.count
+        step.progress[3] = None
+        step.eof[0] = commit.eof
+        phase = operation.registration.native_phase
+        phase.result[0] = None
+        phase.current[0] = phase.idle
+        return commit
+    except BaseException:
+        failed = True
+        owns_consumption = (owns_consumption or
+                            (token is not None and type(consumption_cell) is list
+                             and len(consumption_cell) == 1 and consumption_cell[0] is token))
+        if owns_consumption:
+            if runtime_kind is not None and type(owner) is runtime_kind:
+                owner._failed = owner._unknown = True
+            try:
+                _abandon_native_read(owner, operation, data, envelope)
+            except BaseException:
+                cleanup_unknown = True  # bounded evidence, never exception details
+            try:
+                # Erase captured original buffers even if a module import failed.
+                zeros = bytes(65536)
+                for buffer in (step.buffer, source_buffer):
+                    _require(type(buffer) is bytearray)
+                    for start in range(0, len(buffer), len(zeros)):
+                        width = min(len(zeros), len(buffer) - start)
+                        buffer[start:start + width] = zeros[:width]
+                    buffer.clear()
+                step.source.effect.cleared = True
+                step.source.effect.unknown = True
+            except BaseException:
+                cleanup_unknown = True  # fresh outward refusal has no raw context
+    finally:
+        data = envelope = arguments = actor_state = None
+    if failed:
+        refusal = ArtifactObservationError(owner)
+        refusal.cleanup_unknown = cleanup_unknown
+        raise refusal from None
+
+
+def _native_runtime_read_commit_tail(owner, envelope, commit, source_buffer, token):
+    """Import-free final consumer progress closure while original read is pending."""
+    scope = _native_read_result_tail(owner, envelope)
+    _require(envelope.consumption_cell[0] is token
+             and type(commit) is _NativeRuntimeReadCommit and commit.consumption_token is token
+             and envelope.commit_cell[0] is commit
+             and commit.operation is envelope.operation and commit.result is envelope.result
+             and commit.consumer is envelope.consumer and commit.step is envelope.step
+             and commit.count is envelope.after_count)
+    step, consumer = commit.step, commit.consumer
+    _require(type(commit.ordinal) is int and commit.ordinal == consumer.ordinal + 1
+             and type(commit.remaining) is int
+             and commit.remaining == consumer.remaining - len(envelope.raw)
+             and type(commit.eof) is bool and commit.eof is (consumer.remaining == 0)
+             and (len(envelope.raw) == 0 if commit.eof else len(envelope.raw) > 0)
+             and type(step.buffer) is bytearray and len(step.buffer) == commit.count[2]
+             and scope.parent[2] is step.buffer and vars(owner).get('_buffer') is step.buffer
+             and vars(owner).get('_original_buffer') is step.buffer
+             and type(step.digest) is step.hash_kind
+             and vars(step.hash_kind).get('update') is step.hash_update
+             and step.source.buffer is source_buffer and type(source_buffer) is bytearray
+             and len(source_buffer) == commit.count[2]
+             and step.source.effect.buffer is source_buffer
+             and step.source.effect.size == commit.count[2]
+             and type(commit.source_consumed) is int and commit.source_consumed > 0
+             and step.source.effect.consumed is commit.source_consumed
+             and type(step.observations) is list
+             and len(step.observations) == commit.source_consumed
+             and step.observations[-1] is commit.source_observation
+             and type(commit.source_observation) is tuple and len(commit.source_observation) == 2
+             and commit.source_observation[0] is envelope.source_read
+             and commit.source_observation[1] is envelope.source_return
+             and (step.source.effect.eof is commit.count if commit.eof
+                  else step.source.effect.eof is None))
+    return scope
+
+
+def _native_runtime_read_closed_tail(owner, commit, step):
+    """Caller holds the actual fixed-consumer return, never recaptures its ACK."""
+    _require(type(commit) is _NativeRuntimeReadCommit and type(step) is _NativeReadFileStep
+             and commit.step is step and step.owner is owner
+             and type(commit.operation) is _NativeFileOperation
+             and type(commit.result) is _NativeFileResultClaim
+             and type(commit.consumer) is _NativeReadConsumer)
+    operation, result, consumer = commit.operation, commit.result, commit.consumer
+    registration = step.registration
+    _native_read_walk_tail(owner, registration, step.walk, step.expected, step)
+    _native_read_lifecycle_tail(owner, registration, step.parents)
+    _require(operation.owner is owner and operation.registration is registration
+             and operation.result is result and operation.consumer is consumer
+             and result.consumer is consumer and consumer.file_step is step
+             and type(result.acknowledged) is list and len(result.acknowledged) == 1
+             and result.acknowledged[0] is commit
+             and type(result.raw) is list and len(result.raw) == 1
+             and result.raw[0] is result.unset
+             and type(result.envelope) is list and len(result.envelope) == 1
+             and result.envelope[0] is None
+             and consumer.committed[0] is commit
+             and consumer.consumption[0] is commit.consumption_token
+             and type(operation.state) is list and len(operation.state) == 3
+             and operation.state[0] is True and operation.state[1] is True
+             and operation.state[2] is False
+             and type(commit.count) is tuple and len(commit.count) == 3
+             and owner._count_cell is commit.count and owner._bytes_read is commit.count[2]
+             and step.progress[0] is commit.ordinal and step.progress[1] is commit.remaining
+             and step.progress[2] is commit.count and step.progress[3] is None
+             and step.eof[0] is commit.eof)
+    ledger, phase = operation.ledger, registration.native_phase
+    _require(ledger is registration.native_ledger and ledger.failed[0] is False
+             and ledger.attempts[operation.index] is operation
+             and ledger.counts is operation.budget[0]
+             and ledger.counts[0] is operation.budget[3]
+             and ledger.counts[1] is operation.budget[2]
+             and ledger.inflight[0] is None
+             and phase.current[0] is phase.idle and phase.result[0] is None)
+    _native_read_accumulator_tail(owner, step, commit.count)
+    return commit
 
 
 def _native_pre_actor_state(owner, arguments):
@@ -1617,7 +2660,7 @@ class StartupArtifactOwner:
             self._unknown = True
             raise
 
-    def _read(self, fd, count, s, native_registration=None):
+    def _read(self, fd, count, s, native_registration=None, consumer=None):
         native = _capture_native_work_origin(self, native_registration)
         read_call = None if native is None else native.operations[1]
         _require(type(s) is _Scope)
@@ -1645,15 +2688,26 @@ class StartupArtifactOwner:
             from . import presentation_source_digest as source_digest
             _require(type(s.reads) is list and len(s.reads) <= 65536)
             source_read = source_digest.retain_read(s.source_digest, self, s, effect, read_index)
+        if consumer is not None:
+            _require(type(consumer) is _NativeReadConsumer and native is not None
+                     and consumer.owner is self and consumer.scope is s
+                     and consumer.before_count is cell and consumer.requested is count
+                     and type(consumer.descriptor) is _NativeOpenedDescriptor
+                     and consumer.descriptor.fd is fd
+                     and type(consumer.effect) is list and len(consumer.effect) == 1
+                     and consumer.effect[0] is None and type(effect) is _ReadEffect)
+            consumer.effect[0] = effect
         self._reading = True
         data = None
+        operation = envelope = None
+        failed_native = False
         try:
             _native_registration_tail(self, s, owner_cell, root, native_registration, registry)
             _native_work_origin_tail(self, native_registration, native)
             _require(native is None or read_call is native.operations[1])
             if native is None:
                 read_call = os.read
-            if native is not None:
+            if native is not None and consumer is None:
                 held_state = _native_pre_actor_state(self, (fd, count, read_call))
                 _native_actor_context(native.actor_calls, (native.native, native.thread_native),
                                       native_registration.context)
@@ -1666,8 +2720,20 @@ class StartupArtifactOwner:
                          and (effect is None or (effect.before is cell and effect.after is None
                               and effect.returned is False and effect.unknown is False
                               and s.reads[read_index] is effect)))
+            if consumer is not None:
+                operation = _prepare_native_read_operation(self, consumer)
+                _require(_admit_native_read(self, consumer, operation) is operation)
+                _require(read_call is operation.callee
+                         and _native_read_ready_tail(self, consumer, operation) is operation)
             data = read_call(fd, count)
+            if operation is not None:
+                operation.result.raw[0] = data  # actual C return before any result allocation
+                operation.ended[0] = True
+                operation.state[1] = True
             _require(type(data) is bytes)
+            if operation is not None:
+                operation.result.length[0] = len(data)
+                operation.result.category[0] = 'returned_bytes'
             runtime = s.runtime
             same = (self._scope is s and self._origin is s and self._bytes_read is before
                     and self._count_cell is cell and self._reading is True
@@ -1685,6 +2751,25 @@ class StartupArtifactOwner:
             if source_read is not None:
                 source_return = source_digest.observed_read(source_read, after_cell, len(data))
             self._reading = False
+            if operation is not None:
+                result_claim = operation.result
+                consumer.progress[0] = after_cell
+                step = consumer.file_step
+                envelope = _NativeReadResult(
+                    operation, result_claim, consumer, data, after_cell, step,
+                    effect, read_index, source_read, type(source_read), source_return,
+                    consumer.committed, consumer.consumption, consumer.effect, result_claim.raw,
+                    result_claim.length, result_claim.category,
+                    result_claim.acknowledged, consumer.result, consumer.operation,
+                    consumer.progress, step.progress, result_claim.attempt, result_claim.envelope)
+                result_claim.envelope[0] = envelope
+                ledger, phase = operation.ledger, operation.registration.native_phase
+                _require(same and ledger.inflight[0] is operation
+                         and phase.current[0] is phase.active and phase.result[0] is operation)
+                ledger.inflight[0] = None
+                phase.current[0] = phase.pending
+                _require(_native_read_result_current(self, envelope) is s)
+                return envelope
             _require(same and (effect is None or (len(s.reads) == read_index + 1
                       and s.reads[read_index] is effect))
                      and len(data) <= count
@@ -1696,13 +2781,44 @@ class StartupArtifactOwner:
             _native_registration_tail(self, s, owner_cell, root, native_registration, registry)
             _native_work_origin_tail(self, native_registration, native)
             return data
-        except BaseException:
-            self._unknown = True
-            if effect is not None:
-                effect.unknown = True
-            raise
+        except BaseException as error:
+            if consumer is None:
+                self._unknown = True
+                if effect is not None:
+                    effect.unknown = True
+                raise
+            failed_native = True
+            clean_unadmitted = False
+            if operation is not None:
+                ledger, phase = operation.ledger, operation.registration.native_phase
+                clean_unadmitted = (type(error) is _NativeActorMismatchError
+                                    and operation.state[0] is False and ledger.failed[0] is False
+                                    and phase.current[0] is phase.idle
+                                    and phase.result[0] is None and ledger.inflight[0] is None
+                                    and ledger.counts is operation.budget[0]
+                                    and ledger.counts[0] is operation.budget[1]
+                                    and ledger.counts[1] is operation.budget[2])
+                if clean_unadmitted:
+                    # No native read was admitted. Keep the prepared records as
+                    # evidence and retire this reader; do not invent an unknown
+                    # read or reuse its unfinished digest/cursor preparation.
+                    self._failed = True
+                    self._reading = False
+                else:
+                    operation.ended[0] = True
+                    try:
+                        _abandon_native_read(self, operation, data, envelope)
+                    except BaseException:
+                        operation.state[2] = True
+                        ledger.failed[0] = True
+            if not clean_unadmitted:
+                self._unknown = True
+                if effect is not None:
+                    effect.unknown = True
         finally:
-            data = None
+            data = envelope = None
+        if failed_native:
+            raise ArtifactObservationError(self) from None
 
     def _stat(self, name, parent, s, native_registration=None):
         native = _capture_native_work_origin(self, native_registration)
@@ -2021,6 +3137,7 @@ class StartupArtifactOwner:
             native_walk = _begin_native_declared_walk(self, native_registration, expected)
         anchor = type(expected) is OperatorApprovalPath
         declared_reader = None
+        runtime_source = False
         if anchor:
             from hmp_startup.gateway_approval import GatewayApprovalOwner
             _require(type(self) is GatewayApprovalOwner and type(s.expected) is tuple
@@ -2032,6 +3149,7 @@ class StartupArtifactOwner:
                 if type(self) is not GatewayPackageOwner:
                     from hmp_startup.runtime_reader import RuntimeSourceReadOwner
                     if type(self) is RuntimeSourceReadOwner:
+                        runtime_source = True
                         _require(expected is s.expected[0] and self._started is True
                                  and self._ready is False)
                     else:
@@ -2049,7 +3167,7 @@ class StartupArtifactOwner:
         source_mtime = None
         source_observations = []
         progress = self._count_cell if s.runtime is not None else None
-        data = digest = None
+        data = digest = native_envelope = native_step = native_commit = None
         result = None
         failed = False
         try:
@@ -2094,9 +3212,24 @@ class StartupArtifactOwner:
             capture_header = (not anchor and not _configuration(self)
                               and expected.path.endswith(".pyc"))
             remaining = before.st_size if anchor else expected.size
+            if runtime_source and native_registration is not None:
+                native_step = _new_native_read_file_step(
+                    self, native_registration, native_walk, expected, row, digest,
+                    source_root, source_observations)
             while remaining:
                 _require(_native_walk_scope(self, native_registration) is s)
                 _require(progress is None or self._count_cell is progress)
+                if native_step is not None:
+                    native_consumer = _new_native_read_consumer(
+                        self, native_step, row, min(remaining, 65536))
+                    native_envelope = StartupArtifactOwner._read(
+                        self, fd, min(remaining, 65536), s, native_registration, native_consumer)
+                    native_commit = _consume_native_runtime_read(self, native_envelope)
+                    _native_runtime_read_closed_tail(self, native_commit, native_step)
+                    _require(native_commit.eof is False)
+                    remaining, progress = native_commit.remaining, native_commit.count
+                    native_envelope = None
+                    continue
                 data = (StartupArtifactOwner._read(
                     self, fd, min(remaining, 65536), s, native_registration)
                         if declared_reader is None else
@@ -2120,11 +3253,21 @@ class StartupArtifactOwner:
                 data = None
                 _require(_native_walk_scope(self, native_registration) is s)
             _require(progress is None or self._count_cell is progress)
-            data = (StartupArtifactOwner._read(self, fd, 1, s, native_registration)
-                    if declared_reader is None else
-                    declared_reader._read(self, fd, 1, s, native_registration))
-            if source_root is not None:
-                source_observations.append(source_digest.capture(source_root))
+            if native_step is not None:
+                native_consumer = _new_native_read_consumer(self, native_step, row, 1)
+                native_envelope = StartupArtifactOwner._read(
+                    self, fd, 1, s, native_registration, native_consumer)
+                native_commit = _consume_native_runtime_read(self, native_envelope)
+                _native_runtime_read_closed_tail(self, native_commit, native_step)
+                _require(native_commit.eof is True and native_commit.remaining == 0)
+                native_envelope = None
+                data = b''  # actual empty return already consumed/ACKed above
+            else:
+                data = (StartupArtifactOwner._read(self, fd, 1, s, native_registration)
+                        if declared_reader is None else
+                        declared_reader._read(self, fd, 1, s, native_registration))
+                if source_root is not None:
+                    source_observations.append(source_digest.capture(source_root))
             if anchor:
                 read_effects.append(s.reads[-1])
             count_cell, counted = self._count_cell, self._bytes_read
@@ -2157,6 +3300,21 @@ class StartupArtifactOwner:
                 result = _HashedArtifact(self, s, expected, original, actual_hash, header,
                                          source_hash, source_root, source_mtime)
         except BaseException:
+            if runtime_source and native_registration is not None:
+                self._failed = self._unknown = True
+            if type(native_envelope) is _NativeReadResult:
+                try:
+                    # Retire only this caller's original still-pending unACKed
+                    # result. Completed ACK history must survive later refusal.
+                    pending = native_envelope.operation.registration.native_phase
+                    if (pending.current[0] is pending.pending
+                            and pending.result[0] is native_envelope.operation
+                            and native_envelope.ack_cell[0] is None
+                            and native_envelope.envelope_cell[0] is native_envelope):
+                        _abandon_native_read(self, native_envelope.operation,
+                                             native_envelope.raw, native_envelope)
+                except BaseException:
+                    self._unknown = True
             if source_effect is not None and source_effect.attempted is True:
                 source_effect.unknown = True
             failed = True
@@ -2167,7 +3325,7 @@ class StartupArtifactOwner:
                 except BaseException:
                     source_effect.unknown = self._unknown = True
                     failed = True
-            data = digest = header = None
+            data = digest = header = native_envelope = None
             for row, fd in reversed(held):
                 try:
                     StartupArtifactOwner._close(self, row, fd, s, root_cell)

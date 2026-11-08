@@ -5,7 +5,7 @@ import hashlib
 import os
 import sys
 import threading
-from types import BuiltinFunctionType, MethodDescriptorType, ModuleType
+from types import BuiltinFunctionType, FunctionType, MethodDescriptorType, ModuleType
 
 from hmp_plugin.presentation_startup_artifacts import (
     StartupArtifactOwner,
@@ -71,6 +71,11 @@ class RuntimeSourceReadOwner:
         _require(cls is RuntimeSourceReadOwner and type(continuation) is GatewayContinuationOwner
                  and type(index) is int and index >= 0
                  and _OWNER is None and _ROOT is None and _CELL is None and _READY is None)
+        material = vars(cls).get('_material_guard')
+        file_function = vars(StartupArtifactOwner).get('_file')
+        _require(type(material) is FunctionType and type(file_function) is FunctionType)
+        material_origin = (material, material.__code__, material.__globals__, cls,
+                           file_function, file_function.__code__)
         hash_origin = _sha_origin()
         root = GatewayContinuationOwner.current_binding(continuation)
         activation = root[1]
@@ -115,7 +120,7 @@ class RuntimeSourceReadOwner:
             scope = _Scope(activation, root[2].io_scope.activation_scope, (expected,),
                            context, [], reads=[], source_digest=digest_context,
                            native_files=digest_context.native_files,
-                           native_registration_slot=[None])
+                           native_registration_slot=[None], material_origin=material_origin)
             scope = scope._replace(parent=(root, selected, buffer,
                                           scope.records, scope.reads, hash_origin))
             owner._origin = owner._scope = scope
@@ -228,6 +233,21 @@ class RuntimeSourceReadOwner:
             _require(self._ready is False and _READY is None
                      and self._read_fact is None and self._receipt is None)
         return s, runtime_root, cell, selected, buffer, root
+
+    def _material_guard(self):
+        """Original material joins only; actor/phase authority belongs to fixed callers."""
+        held = RuntimeSourceReadOwner._original(self)
+        _require(self._released is False)
+        s, _, _, _, _, root = held
+        _require(root[0]._root is root and root[0]._source is root[2]
+                 and GatewayContinuationOwner._seal(root[0]) is root[2])
+        current = RuntimeSourceReadOwner._original(self)
+        _require(all(a is b for a, b in zip(held, current, strict=True))
+                 and self._released is False
+                 and root[0]._root is root and root[0]._source is root[2]
+                 and GatewayContinuationOwner._seal(root[0]) is root[2])
+        return s
+
 
     def _guard(self):
         held = RuntimeSourceReadOwner._original(self)

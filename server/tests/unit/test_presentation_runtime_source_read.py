@@ -57,11 +57,15 @@ if case in ('count_copy','source_fact_copy'):
         return receipt
     StartupArtifactOwner._file=replace_after
 if case=='same_length_buffer':
-    actual_append=RuntimeSourceReadOwner._append
-    def poison(self,data):
-        actual_append(self,data)
-        if self is owner and self._buffer:self._buffer[0]^=1
-    RuntimeSourceReadOwner._append=poison
+    import sys
+    from types import BuiltinMethodType
+    poisoned=[]
+    def poison(frame,event,arg):
+        if (event=='c_return' and type(arg) is BuiltinMethodType
+            and arg.__self__ is original and arg.__name__=='extend' and original):
+            original[0]^=1
+            poisoned.append(True)
+    sys.setprofile(poison)
 if case=='parent_source_swap':
     foreign_calls=[]
     class Foreign:
@@ -86,8 +90,8 @@ if case=='buffer_swap':
     from hmp_plugin.presentation_startup_artifacts import StartupArtifactOwner
     actual=StartupArtifactOwner._read
     replacement=bytearray(b'PRESERVE_REPLACEMENT')
-    def swap(self,fd,count,s,native_registration=None):
-        data=actual(self,fd,count,s,native_registration)
+    def swap(self,fd,count,s,native_registration=None,consumer=None):
+        data=actual(self,fd,count,s,native_registration,consumer)
         if self is owner:self._buffer=replacement
         return data
     StartupArtifactOwner._read=swap
@@ -98,6 +102,9 @@ except RuntimeReadError:
     assert len(original)==0 and owner._failed is True
     if case=='parent_source_swap':assert foreign_calls==[]
     if case=='buffer_swap':assert replacement==b'PRESERVE_REPLACEMENT'
+    if case=='same_length_buffer':
+        sys.setprofile(None)
+        assert poisoned, 'actual source buffer extend not reached'
     if case=='initial_context':
         rr._context=actual_context
         try:owner.read()

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+from types import FunctionType
 
 from hmp_plugin.presentation_gateway_activation import GatewayActivationOwner
 from hmp_plugin.presentation_startup_artifacts import (
@@ -55,6 +56,11 @@ class DeclaredCacheReadOwner:
         _require(cls is DeclaredCacheReadOwner and type(continuation) is GatewayContinuationOwner
                  and type(index) is int and index >= 0
                  and _OWNER is _ROOT is _CELL is _READY is None)
+        material = vars(cls).get('_material_guard')
+        file_function = vars(StartupArtifactOwner).get('_file')
+        _require(type(material) is FunctionType and type(file_function) is FunctionType)
+        material_origin = (material, material.__code__, material.__globals__, cls,
+                           file_function, file_function.__code__)
         parent = GatewayContinuationOwner.current_binding(continuation)
         activation = parent[1]
         _require(activation._cache_read_owner is None and activation._cache_read_cell is None
@@ -93,7 +99,7 @@ class DeclaredCacheReadOwner:
             scope = _Scope(activation, parent[2].io_scope.activation_scope, (expected,),
                            context, [], reads=[],
                            native_files=parent[2].entry_binding[0].native_files,
-                           native_registration_slot=[None])
+                           native_registration_slot=[None], material_origin=material_origin)
             scope = scope._replace(parent=(parent, selected, buffer, scope.records,
                                           scope.reads, hash_origin))
             owner._scope = owner._origin = scope
@@ -187,6 +193,30 @@ class DeclaredCacheReadOwner:
             _require(self._ready is False and _READY is None and self._fact is None
                      and s.activation._cache_read_fact is None)
         return s
+
+    def _material_guard(self):
+        """Original material joins only; actor/phase authority belongs to fixed callers."""
+        s = DeclaredCacheReadOwner._pure(self)
+        root, cell, count, fact = _ROOT, _CELL, self._count_cell, _READY
+        attempts, results = _ATTEMPTS, _RESULTS
+        parent = s.parent[0]
+        lifecycle = (self._started, self._retaining, self._admitting, self._reading)
+        claim = self._read_claim
+        _require(all(type(value) is bool for value in lifecycle))
+        _require(self._released is False and parent[0]._root is parent
+                 and parent[0]._source is parent[2]
+                 and GatewayContinuationOwner._seal(parent[0]) is parent[2]
+                 and DeclaredCacheReadOwner._pure(self) is s
+                 and self._released is False and _ROOT is root and _CELL is cell
+                 and _READY is fact and self._count_cell is count
+                 and _ATTEMPTS is attempts and _RESULTS is results
+                 and self._started is lifecycle[0] and self._retaining is lifecycle[1]
+                 and self._admitting is lifecycle[2] and self._reading is lifecycle[3]
+                 and self._read_claim is claim
+                 and parent[0]._root is parent and parent[0]._source is parent[2]
+                 and GatewayContinuationOwner._seal(parent[0]) is parent[2])
+        return s
+
 
     def _guard(self):
         s = DeclaredCacheReadOwner._pure(self)

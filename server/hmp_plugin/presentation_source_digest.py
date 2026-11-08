@@ -43,6 +43,7 @@ class _DigestEffect:
     result: bytes | None = None
     after: tuple | None = None
     consumed: int = 0
+    eof: tuple | None = None
 
 
 class _DigestRoot(NamedTuple):
@@ -253,7 +254,7 @@ def append(root, buffer, chunk, observations):
         return
     try:
         effect = _held(root, buffer)
-        _require(type(chunk) is bytes and effect.attempted is False
+        _require(type(chunk) is bytes and effect.attempted is False and effect.eof is None
                  and len(chunk) <= effect.expected.size - effect.size)
         _consume(root, len(chunk), observations)
         buffer.extend(chunk)
@@ -263,9 +264,10 @@ def append(root, buffer, chunk, observations):
         chunk = None  # do not retain source chunks in an error traceback
 
 
-def finish(root, buffer, count, observations):
+def consume_eof(root, buffer, count, observations):
+    """Consume the original empty read before later metadata/hash callbacks."""
     if root is None:
-        return b''
+        return None
     effect = _held(root, buffer)
     _require(effect.attempted is False and effect.returned is False and effect.result is None
              and effect.size == effect.expected.size and effect.owner._count_cell is count
@@ -275,15 +277,46 @@ def finish(root, buffer, count, observations):
              and count[0] is effect.owner and count[1] is effect.scope
              and effect.before[0] is effect.owner and effect.before[1] is effect.scope
              and count[2] - effect.before[2] == effect.size)
+    _require(effect.eof is None)
     _require(_consume(root, 0, observations) is count)  # original EOF return allocation
+    effect.eof = count
+    return count
+
+
+def finish(root, buffer, count, observations):
+    if root is None:
+        return b''
+    effect = _held(root, buffer)
+    # Legacy callers consume EOF here. The typed read consumer will do so before
+    # metadata work, carrying the same count into this later hash finalization.
+    if effect.eof is None:
+        consume_eof(root, buffer, count, observations)
+    effect = _held(root, buffer)
+    _require(effect.eof is count and effect.owner._count_cell is count
+             and effect.attempted is False and effect.returned is False
+             and effect.result is None and effect.size == effect.expected.size
+             and type(observations) is list and len(observations) > 0
+             and type(effect.consumed) is int and effect.consumed == len(observations)
+             and type(root.reads) is list and len(root.reads) == len(observations))
+    last = observations[-1]
+    _require(type(last) is tuple and len(last) == 2
+             and type(last[0]) is _SourceRead)
+    eof = _read_result(root, len(observations) - 1, last[0].before, last)
+    _require(eof[0] is count and eof[1] == 0)
+    consumed, reads = effect.consumed, root.reads
     origin = effect.context.interpreter.source_hash
     effect.after = count
     effect.attempted = True  # lost acknowledgement consumes this actual attempt
     try:
         result = origin.builtin(origin.key, buffer)
         effect = _held(root, buffer)
+        actual_eof = _read_result(root, consumed - 1, last[0].before, last)
         _require(effect.context.interpreter.source_hash is origin
                  and effect.owner._count_cell is count and effect.after is count
+                 and effect.eof is count and effect.consumed is consumed
+                 and root.reads is reads and len(reads) == consumed
+                 and len(observations) == consumed and observations[-1] is last
+                 and actual_eof is eof
                  and type(result) is bytes and len(result) == 8
                  and effect.returned is False and effect.result is None)
         effect.result = result

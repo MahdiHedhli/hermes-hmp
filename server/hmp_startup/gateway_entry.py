@@ -395,6 +395,19 @@ def _interpreter_current(origin):
     return origin
 
 
+class _NativeFilePhase(NamedTuple):
+    """Original opaque phase markers; metadata representation grants no work."""
+    idle: object
+    active: object
+    pending: object
+    failed: object
+    current: list
+    result: list
+
+    def __repr__(self):
+        return "<NativeFilePhase original markers redacted>"
+
+
 class _NativeFileLedger(NamedTuple):
     """Original storage allocation, not a dispatcher or operation receipt."""
     entry: object
@@ -407,6 +420,7 @@ class _NativeFileLedger(NamedTuple):
     scopes: list
     failure: list
     preparation: list
+    phase: _NativeFilePhase
 
     def __repr__(self):
         return "<OriginalNativeFileLedger storage-only redacted>"
@@ -421,7 +435,17 @@ def _native_file_ledger_shape(ledger):
              and 0 <= ledger.counts[0] <= 1048576
              and 0 <= ledger.counts[1] <= 1048576 - ledger.counts[0]
              and type(ledger.inflight) is list and len(ledger.inflight) == 1
-             and ledger.inflight[0] is None
+             and type(ledger.phase) is _NativeFilePhase
+             and type(ledger.phase.current) is list and len(ledger.phase.current) == 1
+             and type(ledger.phase.result) is list and len(ledger.phase.result) == 1
+             and any(ledger.phase.current[0] is marker for marker in (
+                 ledger.phase.idle, ledger.phase.active, ledger.phase.pending, ledger.phase.failed))
+             and (ledger.phase.current[0] is not ledger.phase.idle
+                  or (ledger.inflight[0] is None and ledger.phase.result[0] is None))
+             and (ledger.phase.current[0] is not ledger.phase.pending
+                  or (ledger.inflight[0] is None and ledger.phase.result[0] is not None))
+             and (ledger.phase.current[0] is not ledger.phase.active
+                  or (ledger.inflight[0] is not None and ledger.phase.result[0] is not None))
              and type(ledger.failed) is list and len(ledger.failed) == 1
              and type(ledger.failed[0]) is bool
              and type(ledger.scopes) is list and len(ledger.scopes) <= 1048576
@@ -512,8 +536,11 @@ class GatewayEntryOwner:
             context = (os.getpid(), os.geteuid(), threading.get_ident())
             _require(all(type(v) is int for v in context))
             interpreter = _interpreter()
+            phase = _NativeFilePhase(object(), object(), object(), object(), [None], [None])
+            phase.current[0] = phase.idle
             ledger = _NativeFileLedger(owner, interpreter.native_io, context,
-                                       [], [0, 0], [None], [False], [], [None], [None, None, None])
+                                       [], [0, 0], [None], [False], [], [None],
+                                       [None, None, None], phase)
             native_files = _NativeFileLineage(owner, interpreter.native_io, context, ledger)
             s = _Invocation(context, main, file, vars(main).get("__spec__"),
                             sys.argv, _arguments(sys.argv),
