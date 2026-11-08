@@ -286,3 +286,20 @@ foreign in-flight/failure values without foreign callbacks. This is structural
 DATA validation only: attempt node/consumer custody and real counter transitions
 remain unimplemented, and no native call is permitted merely by passing it.
 Tests on this16-case lineage set are pending the existing serialized test lane.
+
+## Original scope registry — unqualified source increment
+
+A new separate increment allocates an original scope registry in the shared
+ledger and records fixed package/artifact/runtime-source/cache-read/cache-probe
+retention paths. Legacy scopes remain distinct and record nothing. Each redacted
+registration joins original lineage, owner/scope/cell/root/context and its exact
+registry index. Actor and existing owner guards run before registration. The
+data currentness check refuses copied/foreign owner records and copied registry
+records without foreign callbacks. Eight new causal cases exercise actual probe/
+reader retention in the existing isolated entry fixture; tests are not run yet.
+
+This is scope provenance DATA, not a predeclared path/component/descriptor step or
+fixed consumer claim. Native operation dispatch, budget transitions, raw-result
+custody, reserved close enforcement and result ACK remain absent. Passing the
+registry check grants no IO or runtime admission. Other retention paths and the
+full affected regression still need qualification. No live host/device changed.

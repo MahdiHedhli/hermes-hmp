@@ -423,6 +423,64 @@ def _append_configuration(owner, data):
                 DeclaredCacheReadOwner._append(owner, data)
 
 
+class _NativeScopeRegistration(NamedTuple):
+    """Original scope provenance DATA; not an operation/consumer claim."""
+    lineage: object
+    owner: object
+    scope: _Scope
+    cell: tuple
+    root: tuple
+    context: tuple
+    index: int
+
+    def __repr__(self):
+        return "<OriginalNativeScopeRegistration DATA redacted>"
+
+
+def _native_scope_current(owner):
+    from hmp_startup.gateway_entry import GatewayEntryOwner, _NativeFileLineage
+
+    s = _owner_guard(owner)
+    if s.native_files is None:
+        return None
+    lineage = s.native_files
+    _require(type(lineage) is _NativeFileLineage
+             and GatewayEntryOwner._native_file_lineage(lineage.entry) is lineage)
+    record = vars(owner).get('_native_scope_registration')
+    _require(type(record) is _NativeScopeRegistration
+             and record.lineage is lineage and record.owner is owner
+             and record.scope is s and record.cell is owner._cell
+             and record.root is owner._root_cell and record.context is s.context
+             and type(record.index) is int and 0 <= record.index < len(lineage.ledger.scopes)
+             and lineage.ledger.scopes[record.index] is record)
+    return record
+
+
+def _register_native_scope(owner):
+    from hmp_startup.gateway_entry import GatewayEntryOwner, _NativeFileLineage
+
+    s = _owner_guard(owner)
+    if s.native_files is None:
+        return None
+    lineage = s.native_files
+    _require(type(lineage) is _NativeFileLineage
+             and GatewayEntryOwner._native_file_lineage(lineage.entry) is lineage
+             and vars(owner).get('_native_scope_registration') is None
+             and type(s.context) is tuple and len(s.context) == 3
+             and all(type(value) is int for value in s.context))
+    actor = (os.getpid(), os.geteuid(), threading.get_ident())
+    _require(all(type(value) is int for value in actor) and actor == s.context
+             and _owner_guard(owner) is s)
+    index = len(lineage.ledger.scopes)
+    _require(index < 1048576)
+    record = _NativeScopeRegistration(lineage, owner, s, owner._cell,
+                                      owner._root_cell, s.context, index)
+    lineage.ledger.scopes.append(record)
+    owner._native_scope_registration = record
+    _require(_native_scope_current(owner) is record)
+    return record
+
+
 class StartupArtifactOwner:
     @classmethod
     def observe(cls, activation, expected):
@@ -513,6 +571,7 @@ class StartupArtifactOwner:
                 _source_current(source)
                 _expected(source.expected + expected)
             StartupArtifactOwner._guard(owner)
+            _register_native_scope(owner)
             return owner
         except BaseException:
             owner._failed = True

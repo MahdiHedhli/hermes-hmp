@@ -100,6 +100,9 @@ class RuntimeCacheProbeOwner:
             _require(RuntimeCacheProbeOwner._guard(owner) is scope
                      and _ROOT is runtime_root and _CELL is cell and _OWNER is owner
                      and owner._started is False and owner._ready is False)
+            from hmp_plugin.presentation_startup_artifacts import _register_native_scope
+
+            _register_native_scope(owner)
             owner._retaining = False
             return owner
         except BaseException:

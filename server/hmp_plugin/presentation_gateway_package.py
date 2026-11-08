@@ -325,6 +325,9 @@ class GatewayPackageOwner:
             activation._package_cell = owner._root_cell
             owner._count_cell = (owner, s, owner._bytes_read)
             _require(sys.dont_write_bytecode is True)  # no unlisted caches created during entry
+            from .presentation_startup_artifacts import _register_native_scope
+
+            _register_native_scope(owner)
             before = GatewayPackageOwner._tree(owner)
             _require(type(before) is _Tree and before.entries == entries)
             hashes = tuple(StartupArtifactOwner._file(owner, artifact) for artifact in files)

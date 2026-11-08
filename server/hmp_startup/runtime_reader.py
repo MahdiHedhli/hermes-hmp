@@ -127,6 +127,9 @@ class RuntimeSourceReadOwner:
                      and owner._original_buffer is buffer
                      and owner._started is False and owner._ready is False
                      and owner._released is False and owner._read_fact is None)
+            from hmp_plugin.presentation_startup_artifacts import _register_native_scope
+
+            _register_native_scope(owner)
             owner._retaining = False
             return owner
         except BaseException:
