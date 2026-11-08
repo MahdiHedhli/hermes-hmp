@@ -34,7 +34,8 @@ def checked_open(target,name,parent,directory,native_registration=None):
 def callback_walk(target,registration):
     result=actual_walk(target,registration)
     frame=sys._getframe(1)
-    if (CHANGE=='post_return_copy' and type(target) is wanted and not replaced
+    if (CHANGE=='post_return_copy' and registration is not None
+            and type(target) is wanted and not replaced
             and frame.f_code is actual_open.__code__
             and type(frame.f_locals.get('fd')) is int):
         row=frame.f_locals['row'];fd=frame.f_locals['fd']
