@@ -68,6 +68,11 @@ See [fixed startup factory contract](GATEWAY_STARTUP_FACTORY.md).
       actual floor cases and1202 unchanged-source shared-startup cases pass;
       bounded review accepted; this is not owned decoding or execution.
       [Contract and limits](RUNTIME_CACHE_INPUT_CONTRACT.md).
+- [ ] **PS1-RUNTIME-CACHE-IO** Fresh original-row diagnostic metadata probe is
+      implemented with bounded independent source acceptance;11 current and11
+      actual floor child cases pass. Shared startup regressions pending. Cache
+      payload IO, typed failure/effect provenance and fallback authority remain
+      incomplete. See [probe scope](RUNTIME_CACHE_PROBE.md).
 - [ ] **PS1-LOADER** Enforce actual platform runtime/current and future import policy;
       snapshot DATA cannot mint startup admission.
       Next reviewed executable slice: original source-hash builtin/key/machinery,

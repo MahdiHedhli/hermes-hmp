@@ -335,7 +335,10 @@ def _configuration(owner):
     if type(owner) is GatewayApprovalOwner:
         return True
     from hmp_startup.runtime_reader import RuntimeSourceReadOwner
-    _require(type(owner) is RuntimeSourceReadOwner)
+    if type(owner) is RuntimeSourceReadOwner:
+        return False
+    from hmp_startup.cache_probe import RuntimeCacheProbeOwner
+    _require(type(owner) is RuntimeCacheProbeOwner)
     return False
 
 
@@ -355,8 +358,11 @@ def _owner_guard(owner):
     if type(owner) is GatewayApprovalOwner:
         return GatewayApprovalOwner._guard(owner)
     from hmp_startup.runtime_reader import RuntimeSourceReadOwner
-    _require(type(owner) is RuntimeSourceReadOwner)
-    return RuntimeSourceReadOwner._guard(owner)
+    if type(owner) is RuntimeSourceReadOwner:
+        return RuntimeSourceReadOwner._guard(owner)
+    from hmp_startup.cache_probe import RuntimeCacheProbeOwner
+    _require(type(owner) is RuntimeCacheProbeOwner)
+    return RuntimeCacheProbeOwner._guard(owner)
 
 
 def _root(owner, activation):
@@ -375,8 +381,11 @@ def _root(owner, activation):
     if type(owner) is GatewayApprovalOwner:
         return activation._approval_cell
     from hmp_startup.runtime_reader import RuntimeSourceReadOwner
-    _require(type(owner) is RuntimeSourceReadOwner)
-    return activation._runtime_read_cell
+    if type(owner) is RuntimeSourceReadOwner:
+        return activation._runtime_read_cell
+    from hmp_startup.cache_probe import RuntimeCacheProbeOwner
+    _require(type(owner) is RuntimeCacheProbeOwner)
+    return activation._runtime_cache_probe_cell
 
 
 def _append_configuration(owner, data):
