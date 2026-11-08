@@ -424,6 +424,22 @@ def _append_configuration(owner, data):
                 DeclaredCacheReadOwner._append(owner, data)
 
 
+class _NativeDeclaredWalk(NamedTuple):
+    """One predeclared file-walk allocation; not a native operation claim."""
+    owner: object
+    scope: _Scope
+    cell: tuple
+    root: tuple
+    declaration: tuple
+    expected: ExpectedArtifact
+    index: int
+    components: tuple
+    state: list
+
+    def __repr__(self):
+        return "<OriginalDeclaredFileWalk not-operation-authority redacted>"
+
+
 class _NativeScopeRegistration(NamedTuple):
     """Original scope provenance DATA; not an operation/consumer claim."""
     lineage: object
@@ -433,6 +449,8 @@ class _NativeScopeRegistration(NamedTuple):
     root: tuple
     context: tuple
     index: int
+    file_walks: tuple
+    file_progress: list
 
     def __repr__(self):
         return "<OriginalNativeScopeRegistration DATA redacted>"
@@ -516,7 +534,19 @@ def _register_native_scope(owner, s, cell, root):
              and len(registry) == index
              and vars(owner).get('_native_scope_registration') is None
              and s.native_registration_slot is slot and len(slot) == 1 and slot[0] is None)
-    record = _NativeScopeRegistration(lineage, owner, s, cell, root, s.context, index)
+    from .presentation_gateway_package import GatewayPackageOwner, _Manifest
+
+    declaration = s.expected
+    if type(owner) is GatewayPackageOwner:
+        _require(type(declaration) is _Manifest)
+        declaration = declaration.files
+    _expected(declaration)
+    walks = tuple(_NativeDeclaredWalk(owner, s, cell, root, declaration, expected,
+                                     ordinal, ("/", *expected.path[1:].split("/")), [0])
+                  for ordinal, expected in enumerate(declaration))
+    progress = [0]
+    record = _NativeScopeRegistration(lineage, owner, s, cell, root, s.context, index,
+                                      walks, progress)
     _require(type(record) is _NativeScopeRegistration and record.lineage is lineage
              and record.owner is owner and record.scope is s
              and record.cell is cell and record.root is root
@@ -563,6 +593,45 @@ def _native_walk_scope(owner, registration):
         _require(s.native_files is None and s.native_registration_slot is None)
         return s
     return _native_scope_current(owner, registration).scope
+
+
+def _begin_native_declared_walk(owner, registration, expected):
+    _require(type(registration) is _NativeScopeRegistration)
+    walks, progress = registration.file_walks, registration.file_progress
+    _require(type(walks) is tuple and len(walks) <= _MAX_FILES
+             and type(progress) is list and len(progress) == 1
+             and type(progress[0]) is int and 0 <= progress[0] < len(walks))
+    index = progress[0]
+    plan = walks[index]
+    _require(type(plan) is _NativeDeclaredWalk and plan.expected is expected
+             and plan.owner is owner and plan.scope is registration.scope
+             and plan.cell is registration.cell and plan.root is registration.root
+             and plan.index == index and type(plan.declaration) is tuple
+             and len(plan.declaration) == len(walks)
+             and plan.declaration[index] is expected
+             and type(plan.state) is list and len(plan.state) == 1
+             and type(plan.state[0]) is int and plan.state[0] == 0)
+    state = plan.state
+    _require(_native_scope_current(owner, registration) is registration
+             and registration.file_walks is walks and registration.file_progress is progress
+             and len(progress) == 1 and progress[0] is index
+             and walks[index] is plan and plan.state is state and len(state) == 1
+             and type(state[0]) is int and state[0] == 0)
+    state[0] = 1  # file-walk intent only, before any descriptor acquisition
+    return plan, walks, progress, index, state
+
+
+def _finish_native_declared_walk(owner, registration, held):
+    plan, walks, progress, index, state = held
+    _native_registration_tail(owner, registration.scope, registration.cell,
+                              registration.root, registration,
+                              registration.lineage.ledger.scopes)
+    _require(registration.file_walks is walks and registration.file_progress is progress
+             and type(progress) is list and len(progress) == 1 and progress[0] is index
+             and walks[index] is plan and plan.state is state and len(state) == 1
+             and type(state[0]) is int and state[0] == 1)
+    state[0] = 2
+    progress[0] = index + 1
 
 
 def _native_relative_arguments(s, name, parent):
@@ -1193,6 +1262,7 @@ class StartupArtifactOwner:
 
     def _file(self, expected, native_registration=None):
         s = _native_walk_scope(self, native_registration)
+        native_walk = None
         if native_registration is not None:
             from .presentation_gateway_package import GatewayPackageOwner, _Manifest
 
@@ -1205,6 +1275,7 @@ class StartupArtifactOwner:
                      and any(original is expected for original in declared))
             _expected((expected,))  # exact primitive path/size/hash checks before effects
             _require(_native_walk_scope(self, native_registration) is s)
+            native_walk = _begin_native_declared_walk(self, native_registration, expected)
         anchor = type(expected) is OperatorApprovalPath
         declared_reader = None
         if anchor:
@@ -1377,4 +1448,6 @@ class StartupArtifactOwner:
         _native_registration_tail(self, s, owner_cell, root_cell,
                                   native_registration, native_registry)
         _require(self._count_cell is count_cell and self._bytes_read is counted)
+        if native_walk is not None:
+            _finish_native_declared_walk(self, native_registration, native_walk)
         return result

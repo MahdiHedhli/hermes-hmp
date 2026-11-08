@@ -476,3 +476,24 @@ reject foreign path/index/Boolean behavior before native calls; they do not prov
 original descriptor membership, per-step authority or typed native outcomes.
 Fourteen normal/foreign actual composed-file cases are prepared; tests pending.
 Full operation custody, reservations and service/physical qualification remain open.
+
+## Original declared walk allocation — unqualified source candidate
+
+Native scope registration preallocates a bounded immutable tuple of file-walk
+records from its exact declaration table. Each record retains original owner,
+scope/cell/root, expected row, ordinal and path components. Legacy registrations
+return before this allocation. The original registration retains the tuple and
+progress cell; the actual fixed file path holds its selected record/state locally
+from before descriptor acquisition until after final known cleanup and receipt
+joins. Start requires the next exact row and unstarted state; successful completion
+advances once. Failed work leaves started intent for the owning refusal path.
+
+These are file-walk intent records, not individual syscall/consumer claims,
+descriptor membership or authorization derived from a mutable progress value.
+The fixed trusted callers still supply declaration order. Per-operation planning,
+original parent/resource custody, aggregate quota, reservations and native outcome
+ACK remain required before this becomes native effect authority. Cache probes may
+retain an unused declaration record; no payload read is inferred from that DATA.
+Five composed package cases are prepared: normal original allocation and
+completion, replay, out-of-order row, Boolean progress and already-started refusal.
+Tests have not run. Source-only review and affected regression remain required.
