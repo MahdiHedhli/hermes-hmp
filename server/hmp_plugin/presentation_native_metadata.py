@@ -713,4 +713,4 @@ def _produce_directory_metadata(owner, consumer):
         raw = result.unset
         snapshot = None
         actual = None
-    raise ArtifactObservationError('directory metadata observation refused') from None
+    raise ArtifactObservationError(owner) from None

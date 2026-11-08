@@ -15,7 +15,9 @@ from .test_presentation_gateway_approval import operator_composed_script
                                  'active_missing_debit', 'active_wrong_result',
                                  'active_failure_record', 'latch_postpublication_failure',
                                  'admit', 'admit_wrong_actor', 'admit_before_debit_failure',
-                                 'admit_after_debit_failure', 'admit_foreign_slot_failure'))
+                                 'admit_after_debit_failure', 'admit_foreign_slot_failure',
+                                 'produce', 'produce_snapshot_failure',
+                                 'produce_foreign_raw_failure'))
 def test_original_metadata_operation(tmp_path, monkeypatch, case):
     script, mutation = operator_composed_script('links')
     script = script.replace('GatewayPackageOwner.verify_recipe(recipe)',
@@ -65,7 +67,8 @@ def prepare(frame):
                         'active','active_wrong_phase','active_failed',
                         'active_missing_debit','active_wrong_result','active_failure_record',
                         'latch_postpublication_failure','admit','admit_wrong_actor','admit_before_debit_failure',
-                        'admit_after_debit_failure','admit_foreign_slot_failure')
+                        'admit_after_debit_failure','admit_foreign_slot_failure',
+                        'produce','produce_snapshot_failure','produce_foreign_raw_failure')
         assert resource.descriptor is descriptor
         assert resource.metadata is held[5] and resource.held_walk is held
         assert resource.arguments[0] is descriptor.fd
@@ -135,18 +138,20 @@ def prepare(frame):
                     assert case not in ('latched','active','active_wrong_phase','active_failed',
                                        'active_missing_debit','active_wrong_result',
                                        'active_failure_record','latch_postpublication_failure','admit','admit_wrong_actor','admit_before_debit_failure',
-                        'admit_after_debit_failure','admit_foreign_slot_failure')
+                        'admit_after_debit_failure','admit_foreign_slot_failure',
+                        'produce','produce_snapshot_failure','produce_foreign_raw_failure')
                 else:
                     assert (case in ('latched','latch_postpublication_failure',
                                     'admit','admit_wrong_actor','admit_before_debit_failure',
-                        'admit_after_debit_failure','admit_foreign_slot_failure')
+                        'admit_after_debit_failure','admit_foreign_slot_failure',
+                        'produce','produce_snapshot_failure','produce_foreign_raw_failure')
                             or case.startswith('active')) and returned is resource
                 # Latched structural validation never renews unclaimed admission.
                 try:a._native_declared_metadata_plan_tail(owner,registration,held)
                 except a.ArtifactObservationError:pass
                 else:raise AssertionError('latched plan renewed')
                 if case in ('admit','admit_wrong_actor','admit_before_debit_failure',
-                        'admit_after_debit_failure','admit_foreign_slot_failure'):
+                            'admit_after_debit_failure','admit_foreign_slot_failure'):
                     preparation_before=tuple(ledger.preparation)
                     if case in ('admit_before_debit_failure','admit_after_debit_failure',
                                 'admit_foreign_slot_failure'):
@@ -236,6 +241,83 @@ def prepare(frame):
                         except a.ArtifactObservationError:pass
                         else:raise AssertionError('wrong-actor intent replayed')
                         operation.ended[0]=False  # fixture-only teardown
+                        ledger.preparation[:]=preparation_before
+                if case.startswith('produce'):
+                    preparation_before=tuple(ledger.preparation)
+                    snapshot_original=m._native_metadata_snapshot
+                    captured=[];foreign_raw=object()
+                    def observe_original_metadata(actual_owner,actual_registration,native,value):
+                        assert actual_owner is owner and actual_registration is registration
+                        assert native is registration.native_origin
+                        assert type(value) is native.result_type and result.raw[0] is value
+                        assert operation.ended==[True] and operation.state==[True,True,False]
+                        assert phase.current[0] is phase.active
+                        assert ledger.inflight[0] is operation
+                        captured.append(True)
+                        observed=snapshot_original(actual_owner,actual_registration,native,value)
+                        if case=='produce_snapshot_failure':
+                            raise a.ArtifactObservationError(owner)
+                        if case=='produce_foreign_raw_failure':result.raw[0]=foreign_raw
+                        return observed
+                    m._native_metadata_snapshot=observe_original_metadata
+                    try:
+                        try:
+                            try:actual=m._produce_directory_metadata(owner,consumer)
+                            except a.ArtifactObservationError as exc:
+                                assert case!='produce'
+                                assert str(exc)=='BI1_STARTUP_ARTIFACTS_REFUSED'
+                                assert exc.failed_owner is owner
+                                assert exc.__context__ is None and exc.__cause__ is None
+                                cursor=exc.__traceback__
+                                while cursor is not None:
+                                    if (cursor.tb_frame.f_code
+                                            is m._produce_directory_metadata.__code__):
+                                        values=cursor.tb_frame.f_locals
+                                        assert values['raw'] is result.unset
+                                        assert values['snapshot'] is values['actual'] is None
+                                    cursor=cursor.tb_next
+                                assert ledger.failed==[True] and ledger.failure[0] is operation
+                                assert operation.state==[True,True,True]
+                                assert phase.current[0] is phase.failed
+                                assert phase.result==[None] and ledger.inflight==[None]
+                                expected_raw=(foreign_raw if case=='produce_foreign_raw_failure'
+                                              else result.unset)
+                                assert result.raw[0] is expected_raw
+                                assert result.snapshot==result.envelope==[None]
+                            else:
+                                assert case=='produce'
+                                assert type(actual) is m._DirectoryMetadataReturn
+                                pending=m._pending_directory_return_tail(owner,consumer,actual)
+                                assert pending is actual
+                                assert result.raw[0] is actual.raw
+                                assert result.snapshot[0] is actual.snapshot
+                                assert type(actual.raw) is registration.native_origin.result_type
+                                assert phase.current[0] is phase.pending
+                                assert ledger.inflight==[None] and phase.result[0] is operation
+                                try:m._pending_directory_return_tail(owner,consumer,actual._replace())
+                                except a.ArtifactObservationError:pass
+                                else:raise AssertionError('copied native return accepted')
+                                try:m._admit_directory_operation(owner,consumer)
+                                except a.ArtifactObservationError:pass
+                                else:raise AssertionError('pending native result admitted work')
+                                assert result.acknowledged==consumer.commit==[None]
+                            assert captured==[True]
+                            assert ledger.counts==[counts[0]+1,counts[1]]
+                            assert ledger.attempts[-1] is operation
+                        finally:m._native_metadata_snapshot=snapshot_original
+                    finally:
+                        # Dispose only this synthetic fixture; no production ACK/refund.
+                        assert ledger.attempts.pop() is operation
+                        ledger.counts[0]=counts[0]
+                        ledger.inflight[0]=None
+                        ledger.failed[0]=False
+                        ledger.failure[0]=None
+                        phase.current[0]=phase.idle
+                        phase.result[0]=None
+                        operation.state[:]=[False,False,False]
+                        operation.ended[0]=False
+                        result.raw[0]=result.unset
+                        result.snapshot[0]=result.envelope[0]=result.category[0]=None
                         ledger.preparation[:]=preparation_before
                 if case.startswith('active'):
                     # Guard-only synthetic ACTIVE state, not production admission.

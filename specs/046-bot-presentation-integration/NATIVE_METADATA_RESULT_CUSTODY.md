@@ -243,3 +243,18 @@ This candidate is unwired and unrun. Lint and closed-plugin scanner pass.
 Independent review, actual synthetic-descriptor native-call evidence, causal
 return/publication faults and current/floor qualification remain required;
 there is no installed-runtime, host update or character-delivery claim.
+
+Finite review found and corrected two producer defects before execution:
+PENDING now clears the original in-flight call pointer and requires that slot
+empty, while ACTIVE/returned wrappers retain their operation requirement.
+Failure now clears raw/snapshot/envelope local aliases in finally and raises a
+fresh bounded owner-attributed refusal outside the original handler, rather
+than forwarding the native/snapshot exception and its traceback.
+
+Three authored actual synthetic-descriptor cases observe the real retained
+stat_result at snapshot entry: normal pending publication, snapshot refusal,
+and a replaced raw slot. They require one charge, original envelope identity,
+work refusal while pending, no ACK, sticky failure where applicable, preserved
+foreign data, and no original exception context or raw producer-local aliases
+in the outward refusal. Fixture-only retirement is not a production ACK or
+refund. This29-case descendant retains all earlier26 cases and remains unrun.
