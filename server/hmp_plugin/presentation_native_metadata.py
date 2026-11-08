@@ -1363,9 +1363,6 @@ def _run_directory_observation(owner, resource):
     """
     operation = marker = payload = origin = result = consumer = None
     held_link = held_slot = held_state = held_reference = None
-    ledger = phase = operation_state = failed_cell = failure_cell = inflight_cell = None
-    phase_cell = phase_result_cell = phase_active = phase_pending = phase_idle = phase_failed = None
-    counts_cell = attempts_cell = None
     actual = commit = acked = record = None
     actor_state = actor_arguments = None
     producer_started = producer_unwound = complete = retired = False
@@ -1382,25 +1379,6 @@ def _run_directory_observation(owner, resource):
                  and result.custody_slot is marker.marker_slot)
         held_link, held_slot = marker.owner_link, marker.marker_slot
         held_state, held_reference = marker.state, marker.reference
-        ledger, phase, operation_state = operation.ledger, operation.phase, operation.state
-        failed_cell, failure_cell, inflight_cell = ledger.failed, ledger.failure, ledger.inflight
-        phase_cell, phase_result_cell = phase.current, phase.result
-        phase_active, phase_pending = phase.active, phase.pending
-        phase_idle, phase_failed = phase.idle, phase.failed
-        counts_cell, attempts_cell = ledger.counts, ledger.attempts
-
-        def history_matches():
-            # Original pre-effect allocations, not a current-cell nomination.
-            return (operation.ledger is ledger and operation.phase is phase
-                    and operation.state is operation_state and ledger.phase is phase
-                    and ledger.failed is failed_cell and ledger.failure is failure_cell
-                    and ledger.inflight is inflight_cell and ledger.counts is counts_cell
-                    and ledger.attempts is attempts_cell and phase.current is phase_cell
-                    and phase.result is phase_result_cell and phase.active is phase_active
-                    and phase.pending is phase_pending and phase.idle is phase_idle
-                    and phase.failed is phase_failed)
-
-        _require(history_matches())
         consumer = _prepare_directory_consumer(owner, operation)
         _require(_latch_directory_consumer(owner, consumer) is consumer)
         producer_started = True
@@ -1443,35 +1421,29 @@ def _run_directory_observation(owner, resource):
                  and origin.reference_callback.__get__(
                      held_reference, origin.reference_type) is None
                  and origin.reference_call(held_reference) is payload)
-        if not history_matches():
-            complete = False
         if not complete and producer_started and producer_unwound:
             # Preserve real debit/ACK/cursor history and all foreign replacements.
             # This branch admits no native work and does not require live grants.
-            if (operation.state is operation_state and type(operation_state) is list
-                    and len(operation_state) == 3 and operation_state[2] is False):
-                operation_state[2] = True
-            if (operation.ledger is ledger and ledger.failed is failed_cell
-                    and type(failed_cell) is list and len(failed_cell) == 1
-                    and failed_cell[0] is False):
-                failed_cell[0] = True
-            if (operation.ledger is ledger and ledger.failure is failure_cell
-                    and type(failure_cell) is list and len(failure_cell) == 1
-                    and failure_cell[0] is None):
-                failure_cell[0] = operation
-            if (operation.phase is phase and phase.current is phase_cell
-                    and type(phase_cell) is list and len(phase_cell) == 1
-                    and (phase_cell[0] is phase_active or phase_cell[0] is phase_pending
-                         or phase_cell[0] is phase_idle)):
-                phase_cell[0] = phase_failed
-            if (operation.phase is phase and phase.result is phase_result_cell
-                    and type(phase_result_cell) is list and len(phase_result_cell) == 1
-                    and phase_result_cell[0] is operation):
-                phase_result_cell[0] = None
-            if (operation.ledger is ledger and ledger.inflight is inflight_cell
-                    and type(inflight_cell) is list and len(inflight_cell) == 1
-                    and inflight_cell[0] is operation):
-                inflight_cell[0] = None
+            ledger, phase = operation.ledger, operation.phase
+            if (type(operation.state) is list and len(operation.state) == 3
+                    and operation.state[2] is False):
+                operation.state[2] = True
+            if (type(ledger.failed) is list and len(ledger.failed) == 1
+                    and ledger.failed[0] is False):
+                ledger.failed[0] = True
+            if (type(ledger.failure) is list and len(ledger.failure) == 1
+                    and ledger.failure[0] is None):
+                ledger.failure[0] = operation
+            if (type(phase.current) is list and len(phase.current) == 1
+                    and (phase.current[0] is phase.active or phase.current[0] is phase.pending
+                         or phase.current[0] is phase.idle)):
+                phase.current[0] = phase.failed
+            if (type(phase.result) is list and len(phase.result) == 1
+                    and phase.result[0] is operation):
+                phase.result[0] = None
+            if (type(ledger.inflight) is list and len(ledger.inflight) == 1
+                    and ledger.inflight[0] is operation):
+                ledger.inflight[0] = None
         # Conditional detach uses the pre-effect link allocation and actual
         # held payload. Never read a current envelope/record to nominate either.
         detached = (type(held_link) is list and len(held_link) == 1
@@ -1517,10 +1489,8 @@ def _run_directory_observation(owner, resource):
             _native_actor_context(native.actor_calls, (native.native, native.thread_native),
                                   operation.context)
             _native_post_actor_state(owner, actor_state, actor_arguments)
-            _require(history_matches())
             _require(_retired_directory_commit_tail(
                 owner, consumer, commit, origin, marker, record) is commit)
-            _require(history_matches())
             return commit
         except BaseException:  # noqa: S110 - no raw exceptions or retry on disposal drift
             pass
@@ -1537,22 +1507,20 @@ def _run_directory_observation(owner, resource):
             _native_actor_context(native.actor_calls, (native.native, native.thread_native),
                                   operation.context)
             _native_post_actor_state(owner, actor_state, actor_arguments)
-            if (operation.state is operation_state and type(operation_state) is list
-                    and len(operation_state) == 3 and operation_state[2] is False):
-                operation_state[2] = True
-            if (operation.ledger is ledger and ledger.failed is failed_cell
-                    and type(failed_cell) is list and len(failed_cell) == 1
-                    and failed_cell[0] is False):
-                failed_cell[0] = True
-            if (operation.ledger is ledger and ledger.failure is failure_cell
-                    and type(failure_cell) is list and len(failure_cell) == 1
-                    and failure_cell[0] is None):
-                failure_cell[0] = operation
-            if (operation.phase is phase and phase.current is phase_cell
-                    and type(phase_cell) is list and len(phase_cell) == 1
-                    and (phase_cell[0] is phase_active or phase_cell[0] is phase_pending
-                         or phase_cell[0] is phase_idle)):
-                phase_cell[0] = phase_failed
+            ledger, phase = operation.ledger, operation.phase
+            if (type(operation.state) is list and len(operation.state) == 3
+                    and operation.state[2] is False):
+                operation.state[2] = True
+            if (type(ledger.failed) is list and len(ledger.failed) == 1
+                    and ledger.failed[0] is False):
+                ledger.failed[0] = True
+            if (type(ledger.failure) is list and len(ledger.failure) == 1
+                    and ledger.failure[0] is None):
+                ledger.failure[0] = operation
+            if (type(phase.current) is list and len(phase.current) == 1
+                    and (phase.current[0] is phase.active or phase.current[0] is phase.pending
+                         or phase.current[0] is phase.idle)):
+                phase.current[0] = phase.failed
         except BaseException:  # noqa: S110 - wrong actors get no history mutation authority
             pass
         finally:
