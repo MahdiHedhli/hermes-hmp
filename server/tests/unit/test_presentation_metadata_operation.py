@@ -14,7 +14,9 @@ from .test_presentation_gateway_approval import operator_composed_script
                                  'active', 'active_wrong_phase', 'active_failed',
                                  'active_missing_debit', 'active_wrong_result',
                                  'active_failure_record', 'latch_postpublication_failure',
-                                 'admit', 'admit_wrong_actor', 'admit_before_debit_failure',
+                                 'admit', 'admit_wrong_actor', 'admit_wrong_actor_release',
+                                 'admit_wrong_actor_release_foreign',
+                                 'admit_before_debit_failure',
                                  'admit_after_debit_failure', 'admit_foreign_slot_failure',
                                  'produce', 'produce_snapshot_failure',
                                  'produce_foreign_raw_failure', 'consume',
@@ -78,7 +80,8 @@ def prepare(frame):
                         'copied_operation','wrong_result_consumer',
                         'active','active_wrong_phase','active_failed',
                         'active_missing_debit','active_wrong_result','active_failure_record',
-                        'latch_postpublication_failure','admit','admit_wrong_actor','admit_before_debit_failure',
+                        'latch_postpublication_failure','admit','admit_wrong_actor','admit_wrong_actor_release',
+                        'admit_wrong_actor_release_foreign','admit_before_debit_failure',
                         'admit_after_debit_failure','admit_foreign_slot_failure',
                         'produce','produce_snapshot_failure','produce_foreign_raw_failure',
                         'consume','consume_wrong_actor','consume_policy_failure',
@@ -161,7 +164,8 @@ def prepare(frame):
                 except a.ArtifactObservationError:
                     assert case not in ('latched','active','active_wrong_phase','active_failed',
                                        'active_missing_debit','active_wrong_result',
-                                       'active_failure_record','latch_postpublication_failure','admit','admit_wrong_actor','admit_before_debit_failure',
+                                       'active_failure_record','latch_postpublication_failure','admit','admit_wrong_actor','admit_wrong_actor_release',
+                        'admit_wrong_actor_release_foreign','admit_before_debit_failure',
                         'admit_after_debit_failure','admit_foreign_slot_failure',
                         'produce','produce_snapshot_failure','produce_foreign_raw_failure',
                         'consume','consume_wrong_actor','consume_policy_failure',
@@ -178,7 +182,8 @@ def prepare(frame):
                         'ack_interrupt_final')
                 else:
                     assert (case in ('latched','latch_postpublication_failure',
-                                    'admit','admit_wrong_actor','admit_before_debit_failure',
+                                    'admit','admit_wrong_actor','admit_wrong_actor_release',
+                        'admit_wrong_actor_release_foreign','admit_before_debit_failure',
                         'admit_after_debit_failure','admit_foreign_slot_failure',
                         'produce','produce_snapshot_failure','produce_foreign_raw_failure',
                         'consume','consume_wrong_actor','consume_policy_failure',
@@ -198,7 +203,8 @@ def prepare(frame):
                 try:a._native_declared_metadata_plan_tail(owner,registration,held)
                 except a.ArtifactObservationError:pass
                 else:raise AssertionError('latched plan renewed')
-                if case in ('admit','admit_wrong_actor','admit_before_debit_failure',
+                if case in ('admit','admit_wrong_actor','admit_wrong_actor_release',
+                        'admit_wrong_actor_release_foreign','admit_before_debit_failure',
                             'admit_after_debit_failure','admit_foreign_slot_failure'):
                     preparation_before=tuple(ledger.preparation)
                     if case in ('admit_before_debit_failure','admit_after_debit_failure',
@@ -288,7 +294,39 @@ def prepare(frame):
                         try:m._admit_directory_operation(owner,consumer)
                         except a.ArtifactObservationError:pass
                         else:raise AssertionError('wrong-actor intent replayed')
-                        operation.ended[0]=False  # fixture-only teardown
+                        if case.startswith('admit_wrong_actor_release'):
+                            if case.endswith('_foreign'):
+                                foreign_pending=consumer._replace()
+                                progress[1]=foreign_pending
+                                try:
+                                    try:m._release_ended_directory_preparation(owner,consumer)
+                                    except a.ArtifactObservationError:pass
+                                    else:raise AssertionError('foreign preparation cleared')
+                                    assert progress[1] is foreign_pending
+                                    assert consumer.consumption==[None]
+                                    assert ledger.failed==[False]
+                                finally:progress[1]=consumer
+                            assert m._release_ended_directory_preparation(
+                                owner,consumer) is consumer
+                            assert operation.ended==[True]
+                            assert operation.state==[False,False,False]
+                            assert consumer.consumption[0] is operation
+                            assert progress==[resource.ordinal,None]
+                            assert ledger.counts==list(counts)
+                            assert len(ledger.attempts)==attempts
+                            assert ledger.failed==[False] and ledger.failure==[None]
+                            try:m._release_ended_directory_preparation(owner,consumer)
+                            except a.ArtifactObservationError:pass
+                            else:raise AssertionError('ended preparation released twice')
+                            try:m._admit_directory_operation(owner,consumer)
+                            except a.ArtifactObservationError:pass
+                            else:raise AssertionError('ended intent rearmed after release')
+                            replacement=m._prepare_metadata_operation(owner,resource)
+                            assert replacement is not operation and replacement.ended==[False]
+                            assert progress==[resource.ordinal,None]
+                            assert operation.ended==[True]
+                        else:
+                            operation.ended[0]=False  # original disposable fixture teardown
                         ledger.preparation[:]=preparation_before
                 if case.startswith(('produce','consume','ack')):
                     preparation_before=tuple(ledger.preparation)

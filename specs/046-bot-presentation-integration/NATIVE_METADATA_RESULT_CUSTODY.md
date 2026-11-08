@@ -365,3 +365,12 @@ changing debit/history; foreign pending slots fail before any publication and
 are not cleared. No actor resample, refund, retry or new authority is introduced.
 This source is unreviewed/unrun/unwired. Admitted/pending/lost-return abort
 handling remains separate and incomplete.
+
+Finite read-only review found no new concrete blocker in ended-preparation
+cleanup. Two authored real wrong-thread admission cases now release the clean
+ended intent, require unchanged work/history and old-intent replay refusal,
+and allow only a new unadmitted DATA allocation for rightful-owner work. One
+first substitutes a copied pending consumer and requires refusal without
+clearing it or poisoning the ledger, then restores the disposable fixture and
+performs original cleanup. This47-case descendant retains all45 cases and is
+unrun. It does not qualify admitted/pending/lost-return abort handling.
