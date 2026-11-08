@@ -1,8 +1,9 @@
 # Fresh cache input and cached-code contract
 
-Status: next PS1-LOADER contract proposal, not implemented or admitted. The
-source compiler's broader regression run remains active; this document does not
-qualify it. No cached-code execution, cache write, listener or key service is
+Status: PS1-LOADER contract with source-only machinery and metadata subsets.
+The owned source compiler and decoder-origin baseline passed their documented
+startup regressions; the complete cache input/decode operation is not implemented
+or admitted. No cached-code execution, cache write, listener or key service is
 being enabled. This remains HMP work; no upstream blocker is established here.
 
 ## Original inputs and fresh IO

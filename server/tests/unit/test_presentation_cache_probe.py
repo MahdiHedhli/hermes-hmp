@@ -9,7 +9,9 @@ from .test_presentation_gateway_approval import operator_composed_script
 
 @pytest.mark.parametrize('case', ('missing', 'appearance', 'symlink', 'counter_copy',
                                  'directory', 'declared', 'wrong_thread', 'replay',
-                                 'final_counter', 'fact_copy', 'late_fact_copy'))
+                                 'final_counter', 'fact_copy', 'late_fact_copy',
+                                 'stat_permission', 'stat_structure', 'open_error',
+                                 'fstat_error', 'close_ack'))
 def test_fresh_cache_probe(tmp_path, monkeypatch, case):
     script, mutation = operator_composed_script('links')
     script = script.replace('GatewayPackageOwner.verify_recipe(recipe)',
@@ -41,6 +43,42 @@ if case in ('appearance','symlink'):
     path.parent.mkdir(mode=0o700)
     if case=='appearance':path.write_bytes(b'SYNTHETIC_UNAPPROVED_CACHE')
     else:path.symlink_to(dep_root/'__init__.py')
+if case in ('stat_permission','stat_structure','open_error','fstat_error','close_ack'):
+    import errno
+    fault_calls=[]
+    if case in ('stat_permission','stat_structure'):
+        actual_stat=pm.os.stat
+        def fault_stat(name,*args,**kwargs):
+            if owner._started and name=='__pycache__':
+                fault_calls.append(case)
+                if case=='stat_permission':raise PermissionError(errno.EACCES,'synthetic',name)
+                raise NotADirectoryError(errno.ENOTDIR,'synthetic',name)
+            return actual_stat(name,*args,**kwargs)
+        pm.os.stat=fault_stat
+    if case=='open_error':
+        actual_open=pm.os.open
+        def fault_open(name,*args,**kwargs):
+            if owner._started and name=='/':
+                fault_calls.append(case)
+                raise PermissionError(errno.EACCES,'synthetic',name)
+            return actual_open(name,*args,**kwargs)
+        pm.os.open=fault_open
+    if case=='fstat_error':
+        actual_fstat=pm.os.fstat
+        def fault_fstat(fd):
+            if owner._started and not fault_calls:
+                fault_calls.append(case)
+                raise OSError(errno.EIO,'synthetic')
+            return actual_fstat(fd)
+        pm.os.fstat=fault_fstat
+    if case=='close_ack':
+        actual_close=pm.os.close
+        def fault_close(fd):
+            actual_close(fd)
+            if owner._started and not fault_calls:
+                fault_calls.append(case)
+                raise OSError(errno.EIO,'synthetic lost close acknowledgement')
+        pm.os.close=fault_close
 if case=='counter_copy':
     actual=pm._context;contexts=0
     def replace_count():
@@ -69,7 +107,10 @@ if case=='wrong_thread':
     assert not owner._started and not owner._failed
 try:owner.observe()
 except CacheProbeError:
-    assert case in ('appearance','symlink','counter_copy','final_counter') and owner._failed
+    assert case in ('appearance','symlink','counter_copy','final_counter',
+                    'stat_permission','stat_structure','open_error',
+                    'fstat_error','close_ack') and owner._failed
+    assert not owner._ready and owner._fact is None and pm._FACT is None
 else:
     assert case in ('missing','directory','declared','wrong_thread','replay',
                     'fact_copy','late_fact_copy') and owner._ready
@@ -100,7 +141,29 @@ else:
         else:raise AssertionError('probe replayed')
         assert owner._fact is fact
 assert owner._bytes_read==0 and checked._fact_cell[2]._count_cell is old_count
-assert all(row.closed and row.close_attempted and not row.unknown for row in owner._origin.records)
+if case=='open_error':
+    assert fault_calls==[case] and owner._unknown
+    assert len(owner._origin.records)==1
+    row=owner._origin.records[0]
+    assert row.attempted and row.unknown and row.fd is None and not row.close_attempted
+elif case=='close_ack':
+    assert fault_calls==[case] and owner._unknown
+    unknown=[row for row in owner._origin.records if row.unknown]
+    assert len(unknown)==1 and unknown[0].close_attempted and not unknown[0].closed
+    assert all(row.closed and row.close_attempted for row in owner._origin.records
+               if row is not unknown[0])
+else:
+    if case in ('stat_permission','stat_structure','fstat_error'):
+        assert fault_calls==[case] and not owner._unknown
+        assert owner._origin.records
+    assert all(row.closed and row.close_attempted and not row.unknown
+               for row in owner._origin.records)
+if case in ('stat_permission','stat_structure','open_error','fstat_error','close_ack'):
+    calls_before=list(fault_calls)
+    try:owner.observe()
+    except CacheProbeError:pass
+    else:raise AssertionError('failed probe replayed')
+    assert fault_calls==calls_before
 print(json.dumps({'mutation':mutation,'runtime_admitted':False}))
 '''
     monkeypatch.setattr(base, 'SCRIPT', script)
