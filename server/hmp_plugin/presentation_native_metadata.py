@@ -206,6 +206,7 @@ def _unused_directory_cells_tail(owner, operation):
     registration = resource.registration
     ledger, phase = registration.native_ledger, registration.native_phase
     _require(operation.registration is registration and operation.ledger is ledger
+             and ledger.phase is phase
              and operation.phase is phase and operation.native is registration.native_origin
              and operation.context is registration.context
              and operation.callee is operation.native.operations[4]
