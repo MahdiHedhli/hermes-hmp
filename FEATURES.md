@@ -1,3 +1,13 @@
+# November 7: cache-write runtime prerequisite
+
+The actual CPython SourceLoader write-effect contract is now covered by17
+synthetic cases on each of Python3.14.9 and actual Python3.11.15. The oracle
+observes cache-hit/fallback, regenerated flags, policy/stat suppression and
+writer error semantics without writing cache files or executing returned code.
+Independent bounded review accepted; production runtime enforcement is still
+unfinished. No user-visible bot-image/local-media delivery is claimed.
+See [runtime requirements](specs/046-bot-presentation-integration/LOADER_POLICY_IMPLEMENTATION.md).
+
 # November 7: original cache-input receipt binding
 
 The consumer now joins original source receipts to cache artifacts/headers or

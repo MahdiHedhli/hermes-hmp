@@ -96,3 +96,51 @@ Original timestamp custody and pure CPython input-attempt rules are implemented
 and locally qualified in [SOURCE_CACHE_INPUTS.md](SOURCE_CACHE_INPUTS.md).
 Original cache receipt/absence binding is next. These outcomes do not establish
 successful unmarshalling, code loading or runtime admission.
+
+## Cache-write effect contract (actual interpreter oracle)
+
+The original receipt/absence binding is now source implemented in e803849; the
+older "binding is next" checkpoint above is historical. It remains sampled DATA.
+The next runtime owner must have an explicit fresh phase budget and descriptor/
+effect ownership. It cannot reopen files under a completed snapshot's allowance,
+reconstruct an original observation, or treat an input-attempt plan as execution.
+
+A dedicated synthetic SourceLoader oracle now runs with writes both enabled and
+disabled in an isolated child, restoring its own original interpreter policy.
+Unlike the earlier input oracle's permanent `-B` behavior, this observes calls to
+an in-memory `_cache_bytecode` sink. No payload code executes and no cache file is
+written. Actual behavior matters for the runtime write boundary:
+
+- A valid timestamp/hash cache hit returns without a write attempt.
+- Successful source fallback can attempt a cache write only with a cache path,
+  successful source stat and writes enabled. The actual source compilation must
+  succeed before the effect; a plan alone cannot authorize it.
+- Absent/directory/invalid-magic/short caches regenerate timestamp bytecode.
+  A stale flags2 cache regenerates flags0, not flags2.
+- A checked-hash mismatch preserves the checked hash format when regenerating;
+  unchecked-hash validation forced by `always` preserves unchecked flags1.
+- Regenerated timestamp size is the actual source-byte length, not a stale
+  declared size. Regenerated hashes must use the original native hash origin.
+- Source read/compile failure and selected invalid cache-body failure perform no
+  write. A stat failure skips cache lookup and also suppresses the write.
+- The base SourceLoader catches `NotImplementedError` from `_cache_bytecode`,
+  but a custom writer's `PermissionError` propagates. Concrete SourceFileLoader's
+  own set_data may swallow filesystem errors; do not generalize the base-class
+  oracle into proof of concrete writer completion.
+
+Runtime implementation must capture write intent before the native effect,
+retain the exact original source/cache target and actual produced header/body
+allocation, rejoin original policy/context across callbacks, and distinguish
+known completion from ambiguous/lost acknowledgement without automatic replay.
+It must also bind concrete writer/machinery origins and preserve native error
+semantics. No generic caller writer or caller-qualified path is an authority.
+The actual filesystem creation/atomic-replace/permissions/cleanup behavior and
+future-import enforcement still require implementation and causal qualification.
+
+Qualification:17 actual synthetic oracle cases pass on each of Python3.14.9
+and Python3.11.15. Independent read-only review found no blocker; explicit
+compile/read-count assertions were added and rerun. The final current run uses
+a dedicated basetemp. An earlier run passed but warned while pytest attempted
+to remove pre-existing protected temporary evidence directories; no protection
+was bypassed and that warning log is retained privately. No production runtime
+gate is implemented by these tests or this contract.
