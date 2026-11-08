@@ -342,7 +342,23 @@ class _NativeOpenedDescriptor(NamedTuple):
 
     @property
     def closed(self):
-        return self.close.raw[0] is None and self.close.state[0] is True
+        # Diagnostic mirror only; original-ledger authority still requires the
+        # coupled validator. Raw syscall return alone is not a completed ACK.
+        allocation, close = self.allocation, self.close
+        if (type(allocation) is not _NativeOpenAllocation
+                or type(close) is not _NativeCloseAllocation or type(self.fd) is not int):
+            return False
+        state, raw, result, refused = close.state, close.raw, close.result, allocation.refused
+        if not (close is allocation.close
+                and type(state) is list and len(state) == 2
+                and state[0] is True and state[1] is False
+                and type(raw) is list and len(raw) == 1 and raw[0] is None
+                and type(result) is list and len(result) == 1
+                and type(refused) is list and len(refused) == 1 and refused[0] is False):
+            return False
+        receipt = result[0]
+        return (type(receipt) is tuple and len(receipt) == 3
+                and receipt[0] is close and receipt[1] is self.fd and receipt[2] is None)
 
     @property
     def unknown(self):
@@ -3213,8 +3229,9 @@ class StartupArtifactOwner:
                               and expected.path.endswith(".pyc"))
             remaining = before.st_size if anchor else expected.size
             if runtime_source and native_registration is not None:
+                _require(type(native_walk) is tuple and len(native_walk) == 5)
                 native_step = _new_native_read_file_step(
-                    self, native_registration, native_walk, expected, row, digest,
+                    self, native_registration, native_walk[0], expected, row, digest,
                     source_root, source_observations)
             while remaining:
                 _require(_native_walk_scope(self, native_registration) is s)

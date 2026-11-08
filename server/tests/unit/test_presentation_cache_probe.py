@@ -72,17 +72,26 @@ if case in ('stat_permission','stat_structure','open_error','fstat_error','close
         trace_synthetic_boundary(pm.StartupArtifactOwner._fstat.__code__,
                                  'value = fstat_call(',fault_fstat)
     if case=='close_ack':
+        from hmp_plugin import presentation_startup_artifacts as close_module
         close_attempts=[]
         def close_observed(frame):
-            if frame.f_locals['self'] is owner:
-                close_attempts.append((frame.f_locals['row'],frame.f_locals['fd']))
-        observe_synthetic_native(pm.os.close,pm.StartupArtifactOwner._close.__code__,close_observed)
+            if frame.f_locals['owner'] is owner:
+                allocation=frame.f_locals['allocation']
+                opened=allocation.result[0]
+                assert type(opened) is tuple and len(opened)==2 and opened[0] is allocation
+                row=opened[1]
+                assert type(row) is close_module._NativeOpenedDescriptor
+                assert row.allocation is allocation
+                close_attempts.append((row,frame.f_locals['fd']))
+        observe_synthetic_native(pm.os.close,close_module._close_native_file_known.__code__,
+                                 close_observed)
         def fault_close(frame):
-            if frame.f_locals['self'] is owner and not fault_calls:
+            if frame.f_locals['owner'] is owner and not fault_calls:
+                assert frame.f_locals['close'].raw[0] is None
                 fault_calls.append(case)
                 raise OSError(errno.EIO,'synthetic lost close acknowledgement')
-        trace_synthetic_boundary(pm.StartupArtifactOwner._close.__code__,
-                                 'row.closed = True',fault_close)
+        trace_synthetic_boundary(close_module._close_native_file_known.__code__,
+                                 'close.result[0] = (close, fd, value)',fault_close)
 if case=='counter_copy':
     actual=pm._context;contexts=0
     def replace_count():
