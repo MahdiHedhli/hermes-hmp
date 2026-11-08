@@ -160,3 +160,72 @@ raise SystemExit(0)
 
     monkeypatch.setattr(runner, 'test_actual_entry_and_wrapper_files', injected_run)
     probe.test_fresh_cache_probe(tmp_path, monkeypatch, 'missing')
+
+
+@pytest.mark.parametrize('change', ('normal', 'foreign_lineage', 'copied_registration',
+                                    'paired_foreign_lineage', 'paired_foreign_native'))
+def test_origin_capture_never_adopts_matching_foreign_module_types(
+    tmp_path, monkeypatch, change
+):
+    from . import test_presentation_cache_observation as cache
+    from . import test_presentation_entry_files as runner
+
+    actual_run = runner.test_actual_entry_and_wrapper_files
+    marker = 'plugin = GatewayPackageOwner.verify_recipe(recipe)'
+    injected = r'''
+actual_stat=a.StartupArtifactOwner._stat
+calls=[];refusals=[];native_calls=[];foreign_calls=[];violations=[];old_modules=[]
+class ForeignLineage:
+    def __getattr__(self,name):foreign_calls.append('lineage_get');raise AssertionError('lineage')
+class ForeignNative:
+    def __getattr__(self,name):foreign_calls.append('native_get');raise AssertionError('native')
+def native_observed(frame):
+    if type(frame.f_locals.get('self')) is GatewayPackageOwner:native_calls.append(True)
+observe_synthetic_native(a.os.stat,actual_stat.__code__,native_observed)
+def checked_stat(target,name,parent,s,native_registration=None):
+    if native_registration is None or type(target) is not GatewayPackageOwner:
+        return actual_stat(target,name,parent,s,native_registration)
+    calls.append(True)
+    supplied=native_registration
+    if CHANGE=='normal':return actual_stat(target,name,parent,s,supplied)
+    if CHANGE in ('foreign_lineage','paired_foreign_lineage'):
+        supplied=supplied._replace(lineage=ForeignLineage())
+    elif CHANGE=='copied_registration':supplied=supplied._replace()
+    elif CHANGE=='paired_foreign_native':supplied=supplied._replace(native_origin=ForeignNative())
+    fake=type(sys)('hmp_startup.gateway_entry')
+    fake._NativeFileLineage=ForeignLineage
+    fake._NativeIOOrigin=ForeignNative
+    old_modules.append(sys.modules['hmp_startup.gateway_entry'])
+    sys.modules['hmp_startup.gateway_entry']=fake
+    if CHANGE.startswith('paired_'):
+        target._native_scope_registration=supplied
+        target._origin.native_registration_slot[0]=supplied
+        native_registration.native_ledger.scopes[native_registration.index]=supplied
+    count=target._count_cell;records=len(target._origin.records);before=len(native_calls)
+    try:return actual_stat(target,name,parent,s,supplied)
+    except BaseException:
+        refusals.append(True)
+        if len(native_calls)!=before or target._count_cell is not count:
+            violations.append('native metadata effect before provenance refusal')
+        if len(target._origin.records)!=records:violations.append('descriptor before refusal')
+        raise
+a.StartupArtifactOwner._stat=checked_stat
+try:plugin=GatewayPackageOwner.verify_recipe_source_hashes(recipe,entry)
+except Exception:assert CHANGE!='normal' and calls and refusals
+else:assert CHANGE=='normal' and calls and native_calls and plugin._ready
+finally:
+    a.StartupArtifactOwner._stat=actual_stat
+    for module in reversed(old_modules):sys.modules['hmp_startup.gateway_entry']=module
+assert foreign_calls==[] and violations==[]
+if CHANGE!='normal':assert not native_calls
+print(json.dumps({'mutation':mutation,'runtime_admitted':False}))
+raise SystemExit(0)
+'''.replace('CHANGE', repr(change))
+
+    def injected_run(directory, mutation):
+        assert runner.SCRIPT.count(marker) == 1
+        monkeypatch.setattr(runner, 'SCRIPT', runner.SCRIPT.replace(marker, injected))
+        actual_run(directory, mutation)
+
+    monkeypatch.setattr(runner, 'test_actual_entry_and_wrapper_files', injected_run)
+    cache.test_original_cache_absence_io(tmp_path, monkeypatch, 'missing_leaf')

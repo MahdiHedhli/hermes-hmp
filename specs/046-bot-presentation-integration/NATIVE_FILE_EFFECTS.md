@@ -633,3 +633,16 @@ module with missing definitions is rejected without invoking its __getattr__.
 The draft NativeIOOrigin import allowance and four associated cases were removed;
 the existing scanner boundary remains unchanged. This does not by itself anchor
 all module/code/runtime dependencies, which remain separate admission gates.
+
+Origin-capture review rejected using current entry-module type exports as the
+source of accepted types: a replacement exact module could nominate a foreign
+lineage class and trigger its getter before scope validation. The repair retains
+original lineage/ledger/native type identities, ledger/native allocations and
+entry-module identity in the original registration at qualified construction.
+Constructor publication rejoins those exact allocations. Capture first joins the
+original scope/cell/root/slot, active activation root, owner cells and original
+registry; pinned types precede nested lineage/ledger/native access. Current module
+state is only identity revalidation, never a type authority or import source.
+Five added normal/copied/foreign and paired-replacement cases include a matching
+foreign-type module plus getter traps and require zero getters/native calls.
+These repairs and tests are unqualified until independent review and execution.

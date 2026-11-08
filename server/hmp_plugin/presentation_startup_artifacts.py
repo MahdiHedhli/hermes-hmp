@@ -453,6 +453,10 @@ class _NativeScopeRegistration(NamedTuple):
     index: int
     file_walks: tuple
     file_progress: list
+    native_ledger: object
+    native_origin: object
+    type_pins: tuple
+    entry_module: ModuleType
 
     def __repr__(self):
         return "<OriginalNativeScopeRegistration DATA redacted>"
@@ -547,12 +551,29 @@ def _register_native_scope(owner, s, cell, root):
                                      ordinal, ("/", *expected.path[1:].split("/")), [0])
                   for ordinal, expected in enumerate(declaration))
     progress = [0]
+    ledger, native_origin = lineage.ledger, lineage.native
+    type_pins = (type(lineage), type(ledger), type(native_origin))
+    _require(type(sys) is ModuleType)
+    modules = vars(sys).get('modules')
+    _require(type(modules) is dict)
+    entry_module = modules.get('hmp_startup.gateway_entry')
+    _require(type(entry_module) is ModuleType)
+    entry_names = vars(entry_module)
+    _require(entry_names.get('GatewayEntryOwner') is GatewayEntryOwner
+             and entry_names.get('_NativeFileLineage') is type_pins[0]
+             and entry_names.get('_NativeFileLedger') is type_pins[1]
+             and entry_names.get('_NativeIOOrigin') is type_pins[2])
     record = _NativeScopeRegistration(lineage, owner, s, cell, root, s.context, index,
-                                      walks, progress)
+                                      walks, progress, ledger, native_origin,
+                                      type_pins, entry_module)
     _require(type(record) is _NativeScopeRegistration and record.lineage is lineage
              and record.owner is owner and record.scope is s
              and record.cell is cell and record.root is root
              and record.context is s.context and record.index is index
+             and record.native_ledger is ledger and record.native_origin is native_origin
+             and record.type_pins is type_pins and record.entry_module is entry_module
+             and lineage.ledger is ledger and lineage.native is native_origin
+             and modules.get('hmp_startup.gateway_entry') is entry_module
              and owner._scope is s and owner._origin is s
              and owner._cell is cell and owner._root_cell is root
              and lineage.ledger.scopes is registry and len(registry) == index
@@ -566,6 +587,7 @@ def _register_native_scope(owner, s, cell, root):
              and len(slot) == 1 and slot[0] is record)
     owner._native_scope_registration = record
     _require(_native_scope_current(owner, record) is record)
+    _native_work_registration_tail(owner, record)
     return record
 
 
@@ -641,20 +663,46 @@ def _finish_native_declared_walk(owner, registration, held):
     progress[0] = index + 1
 
 
+def _native_work_registration_tail(owner, registration):
+    """Original allocation joins before any nested lineage or native access."""
+    _require(type(registration) is _NativeScopeRegistration and registration.owner is owner
+             and type(registration.scope) is _Scope)
+    s, cell, root = registration.scope, registration.cell, registration.root
+    _require(_capture_native_scope(s, cell, root) is registration
+             and type(s.activation) is GatewayActivationOwner
+             and GatewayActivationOwner._retained_scope(s.activation) is s.activation_scope)
+    activation_names = vars(s.activation)
+    _require(any(activation_names.get(name) is root for name in
+                 ('_artifact_cell', '_package_cell', '_runtime_read_cell',
+                  '_runtime_cache_probe_cell', '_cache_read_cell')))
+    owner_names = vars(owner)
+    _require(type(owner_names) is dict and owner_names.get('_origin') is s
+             and owner_names.get('_scope') is s and owner_names.get('_cell') is cell
+             and owner_names.get('_root_cell') is root
+             and owner_names.get('_native_scope_registration') is registration)
+    pins = registration.type_pins
+    _require(type(pins) is tuple and len(pins) == 3 and all(type(pin) is type for pin in pins)
+             and type(registration.lineage) is pins[0]
+             and type(registration.native_ledger) is pins[1]
+             and type(registration.native_origin) is pins[2])
+    _require(registration.lineage.ledger is registration.native_ledger
+             and registration.lineage.native is registration.native_origin)
+    registry = registration.native_ledger.scopes
+    _require(type(registry) is list and type(registration.index) is int
+             and 0 <= registration.index < len(registry)
+             and registry[registration.index] is registration)
+    _require(type(sys) is ModuleType)
+    modules = vars(sys).get('modules')
+    _require(type(modules) is dict and type(registration.entry_module) is ModuleType
+             and modules.get('hmp_startup.gateway_entry') is registration.entry_module)
+
+
 def _capture_native_work_origin(owner, registration):
     """Original DATA for fixed callers; never select or perform an operation."""
     if registration is None:
         return None
-    _require(type(registration) is _NativeScopeRegistration and registration.owner is owner
-             and type(sys) is ModuleType)
-    modules = vars(sys).get('modules')
-    _require(type(modules) is dict)
-    entry = modules.get('hmp_startup.gateway_entry')
-    _require(type(entry) is ModuleType)
-    names = vars(entry)
-    _require(type(registration.lineage) is names.get('_NativeFileLineage'))
-    native = registration.lineage.native
-    _require(type(native) is names.get('_NativeIOOrigin'))
+    _native_work_registration_tail(owner, registration)
+    native = registration.native_origin
     _native_work_origin_tail(owner, registration, native)
     return native
 
@@ -664,18 +712,10 @@ def _native_work_origin_tail(owner, registration, native):
     if native is None:
         _require(registration is None)
         return
-    _require(type(registration) is _NativeScopeRegistration and registration.owner is owner
-             and type(registration.scope) is _Scope and type(sys) is ModuleType)
+    _native_work_registration_tail(owner, registration)
+    _require(native is registration.native_origin)
     modules = vars(sys).get('modules')
-    _require(type(modules) is dict)
-    entry = modules.get('hmp_startup.gateway_entry')
-    _require(type(entry) is ModuleType)
-    names = vars(entry)
-    _require(type(registration.lineage) is names.get('_NativeFileLineage')
-             and type(native) is names.get('_NativeIOOrigin')
-             and registration.lineage.native is native
-             and registration.scope.native_files is registration.lineage
-             and type(native.namespace) is ModuleType and native.namespace is os
+    _require(type(native.namespace) is ModuleType and native.namespace is os
              and type(native.native) is ModuleType
              and modules.get('os') is native.namespace and modules.get('posix') is native.native
              and type(builtins) is ModuleType and modules.get('builtins') is builtins
