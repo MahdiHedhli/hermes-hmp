@@ -362,8 +362,9 @@ def prepare(frame):
                                         values=cursor.tb_frame.f_locals
                                         assert values['raw'] is result.unset
                                         assert values['snapshot'] is values['actual'] is None
-                                        for alias in ('origin','marker','payload','cells','raw_cell',
-                                                      'category_cell','snapshot_cell','envelope_cell'):
+                                        for alias in ('origin','marker','payload','cells',
+                                                      'raw_cell','category_cell','snapshot_cell',
+                                                      'envelope_cell'):
                                             assert values[alias] is None
                                     cursor=cursor.tb_next
                                 assert ledger.failed==[True] and ledger.failure[0] is operation
