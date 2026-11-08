@@ -1023,13 +1023,13 @@ def _begin_native_declared_walk(owner, registration, expected):
     _require(plan.metadata_slot[0] is None and plan.state is state and state[0] == 0)
     plan.metadata_slot[0] = metadata
     state[0] = 1  # file-walk intent only, before any descriptor acquisition
-    return plan, walks, progress, index, state
+    return plan, walks, progress, index, state, metadata
 
 
 def _finish_native_declared_walk(owner, registration, held):
     _require(type(registration) is _NativeScopeRegistration
-             and type(held) is tuple and len(held) == 5)
-    plan, walks, progress, index, state = held
+             and type(held) is tuple and len(held) == 6)
+    plan, walks, progress, index, state, metadata = held
     _require(type(plan) is _NativeDeclaredWalk and type(walks) is tuple
              and type(index) is int and 0 <= index < len(walks))
     _native_registration_tail(owner, registration.scope, registration.cell,
@@ -1038,7 +1038,15 @@ def _finish_native_declared_walk(owner, registration, held):
     _require(registration.file_walks is walks and registration.file_progress is progress
              and type(progress) is list and len(progress) == 1 and progress[0] is index
              and walks[index] is plan and plan.state is state and len(state) == 1
-             and type(state[0]) is int and state[0] == 1)
+             and type(state[0]) is int and state[0] == 1
+             and type(metadata) is _NativeDeclaredMetadataPlan
+             and metadata.owner is owner and metadata.scope is registration.scope
+             and metadata.walk is plan and metadata.expected is plan.expected
+             and type(plan.metadata_slot) is list and len(plan.metadata_slot) == 1
+             and plan.metadata_slot[0] is metadata
+             and type(metadata.progress) is list and len(metadata.progress) == 2
+             and type(metadata.progress[0]) is int and metadata.progress[0] == 0
+             and metadata.progress[1] is None)
     state[0] = 2
     progress[0] = index + 1
 
@@ -3694,7 +3702,7 @@ class StartupArtifactOwner:
                               and expected.path.endswith(".pyc"))
             remaining = before.st_size if anchor else expected.size
             if (runtime_source or declared_reader is not None) and native_registration is not None:
-                _require(type(native_walk) is tuple and len(native_walk) == 5)
+                _require(type(native_walk) is tuple and len(native_walk) == 6)
                 native_step = _new_native_read_file_step(
                     self, native_registration, native_walk[0], expected, row, digest,
                     source_root, source_observations)
