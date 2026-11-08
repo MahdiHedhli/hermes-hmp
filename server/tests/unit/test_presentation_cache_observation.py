@@ -42,9 +42,10 @@ if case in ('appears_after_hash','parent_replaced'):
 actual_stat=a.os.stat
 foreign_count=None
 if case in ('permission','not_directory','loop_error','wrong_enoent','unknown_stat','count_copy'):
-    def disturbed_stat(name,*,dir_fd=None,follow_symlinks=True):
+    def disturbed_stat(frame):
         global foreign_count
-        io=entry._activation._artifact_owner
+        name=frame.f_locals['name']
+        io=frame.f_locals['self']
         active=(io is not None and io._origin is not None and io._origin.cache is not None)
         if active and name=='__pycache__':
             if case=='permission':raise PermissionError(errno.EACCES,'synthetic',name)
@@ -54,28 +55,27 @@ if case in ('permission','not_directory','loop_error','wrong_enoent','unknown_st
             if case=='unknown_stat':raise OSError(errno.EIO,'synthetic',name)
             if case=='count_copy' and foreign_count is None:
                 foreign_count=tuple(list(io._count_cell));io._count_cell=foreign_count
-        return actual_stat(name,dir_fd=dir_fd,follow_symlinks=follow_symlinks)
-    a.os.stat=disturbed_stat
+    trace_synthetic_boundary(a.StartupArtifactOwner._stat.__code__,
+                             'value = os.stat(',disturbed_stat)
 actual_close=a.os.close
 lost=False
 if case=='close_unknown':
-    def lost_close(fd):
+    def lost_close(frame):
         global lost
-        actual_close(fd)
-        io=entry._activation._artifact_owner
+        io=frame.f_locals['self']
         if (io is not None and io._origin.cache is not None and not lost
             and io._origin.cache.effects and not io._origin.cache.effects[-1].returned):
             lost=True;raise OSError('synthetic close acknowledgement lost')
-    a.os.close=lost_close
+    trace_synthetic_boundary(a.StartupArtifactOwner._close.__code__,
+                             'row.closed = True',lost_close)
 actual_read=a.os.read
 if case=='no_probe_read':
-    def code_read(fd,count):
-        io=entry._activation._artifact_owner
+    def code_read(frame):
+        io=frame.f_locals['self']
         if io is not None and io._origin.cache is not None:
             effects=io._origin.cache.effects
             assert not effects or effects[-1].returned
-        return actual_read(fd,count)
-    a.os.read=code_read
+    observe_synthetic_native(actual_read,a.StartupArtifactOwner._read.__code__,code_read)
 replacement=object()
 if case in ('before_slot_late','before_after_slot_late','after_slot_late'):
     actual_guard=a._owner_guard

@@ -47,27 +47,22 @@ if case=='wrong_thread':
     assert not other.is_alive() and refused==[True] and not owner._started and not owner._failed
 if case=='read_error':
     import errno
-    import os
-    native_read=os.read
     read_calls=0
-    def fail_after_prefix(fd,count):
+    def fail_after_prefix(frame):
         global read_calls
-        if owner._started:
+        if frame.f_locals['self'] is owner:
             read_calls+=1
-            if read_calls==2:raise OSError(errno.EIO,'synthetic')
-        return native_read(fd,count)
-    os.read=fail_after_prefix
+            if read_calls==2:raise OSError(errno.EIO,'synthetic lost read acknowledgement')
+    trace_synthetic_boundary(DeclaredCacheReadOwner._read.__code__,
+                             '_require(type(data) is bytes)',fail_after_prefix)
 if case in ('native_count_drift','foreign_read_claim'):
-    import os
-    native_read=os.read
     foreign_claim=object()
-    def drift_after_actual_read(fd,count):
-        returned=native_read(fd,count)
-        if owner._started:
+    def drift_after_actual_read(frame):
+        if frame.f_locals['self'] is owner:
             if case=='native_count_drift':owner._count_cell=tuple(list(owner._count_cell))
             else:owner._read_claim=foreign_claim
-        return returned
-    os.read=drift_after_actual_read
+    trace_synthetic_boundary(DeclaredCacheReadOwner._read.__code__,
+                             '_require(type(data) is bytes)',drift_after_actual_read)
 if case=='late_owner':
     actual_context=cm._context
     foreign_owner=object()

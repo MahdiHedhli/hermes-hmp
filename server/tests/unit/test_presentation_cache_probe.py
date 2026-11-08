@@ -47,38 +47,40 @@ if case in ('stat_permission','stat_structure','open_error','fstat_error','close
     import errno
     fault_calls=[]
     if case in ('stat_permission','stat_structure'):
-        actual_stat=pm.os.stat
-        def fault_stat(name,*args,**kwargs):
-            if owner._started and name=='__pycache__':
+        def fault_stat(frame):
+            name=frame.f_locals['name']
+            if frame.f_locals['self'] is owner and name=='__pycache__':
                 fault_calls.append(case)
                 if case=='stat_permission':raise PermissionError(errno.EACCES,'synthetic',name)
                 raise NotADirectoryError(errno.ENOTDIR,'synthetic',name)
-            return actual_stat(name,*args,**kwargs)
-        pm.os.stat=fault_stat
+        trace_synthetic_boundary(RuntimeCacheProbeOwner._stat_known.__code__,
+                                 'result = os.stat(',fault_stat)
     if case=='open_error':
-        actual_open=pm.os.open
-        def fault_open(name,*args,**kwargs):
-            if owner._started and name=='/':
+        def fault_open(frame):
+            if frame.f_locals['self'] is owner and frame.f_locals['name']=='/':
                 fault_calls.append(case)
-                raise PermissionError(errno.EACCES,'synthetic',name)
-            return actual_open(name,*args,**kwargs)
-        pm.os.open=fault_open
+                raise PermissionError(errno.EACCES,'synthetic','/')
+        trace_synthetic_boundary(pm.StartupArtifactOwner._open.__code__,
+                                 'fd = os.open(',fault_open)
     if case=='fstat_error':
-        actual_fstat=pm.os.fstat
-        def fault_fstat(fd):
-            if owner._started and not fault_calls:
+        def fault_fstat(frame):
+            if frame.f_locals['self'] is owner and not fault_calls:
                 fault_calls.append(case)
                 raise OSError(errno.EIO,'synthetic')
-            return actual_fstat(fd)
-        pm.os.fstat=fault_fstat
+        trace_synthetic_boundary(pm.StartupArtifactOwner._fstat.__code__,
+                                 'value = os.fstat(',fault_fstat)
     if case=='close_ack':
-        actual_close=pm.os.close
-        def fault_close(fd):
-            actual_close(fd)
-            if owner._started and not fault_calls:
+        close_attempts=[]
+        def close_observed(frame):
+            if frame.f_locals['self'] is owner:
+                close_attempts.append((frame.f_locals['row'],frame.f_locals['fd']))
+        observe_synthetic_native(pm.os.close,pm.StartupArtifactOwner._close.__code__,close_observed)
+        def fault_close(frame):
+            if frame.f_locals['self'] is owner and not fault_calls:
                 fault_calls.append(case)
                 raise OSError(errno.EIO,'synthetic lost close acknowledgement')
-        pm.os.close=fault_close
+        trace_synthetic_boundary(pm.StartupArtifactOwner._close.__code__,
+                                 'row.closed = True',fault_close)
 if case=='counter_copy':
     actual=pm._context;contexts=0
     def replace_count():
@@ -148,6 +150,9 @@ if case=='open_error':
     assert row.attempted and row.unknown and row.fd is None and not row.close_attempted
 elif case=='close_ack':
     assert fault_calls==[case] and owner._unknown
+    assert len(close_attempts)==len(owner._origin.records)>1
+    assert len({id(row) for row,fd in close_attempts})==len(close_attempts)
+    assert all(row.fd is fd for row,fd in close_attempts)
     unknown=[row for row in owner._origin.records if row.unknown]
     assert len(unknown)==1 and unknown[0].close_attempted and not unknown[0].closed
     assert all(row.closed and row.close_attempted for row in owner._origin.records

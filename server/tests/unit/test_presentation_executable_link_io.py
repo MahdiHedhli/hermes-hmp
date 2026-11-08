@@ -4,9 +4,10 @@ from __future__ import annotations
 import pytest
 
 from . import test_presentation_entry_files as base
+from .io_trace_fixture import TRACE_HELPERS
 from .test_presentation_executable_link_plan import link_script
 
-FINISH = r'''
+FINISH = TRACE_HELPERS + r'''
 original_bytes=plugin._bytes_read
 retained=EntryFileSnapshotOwner.retain_runtime_link_files(entry,recipe,plugin)
 plan=retained._inputs.runtime_plan;selected=plan.executable_link
@@ -22,26 +23,32 @@ actual_link=a.os.readlink
 read_calls=[];foreign_counter=None;foreign_scope=object()
 if mutation in ("io_read_unknown","io_count_copy","io_scope_drift","io_read_retire",
                 "io_overread"):
-    def readlink_callback(name,*,dir_fd):
+    link_code=a.StartupArtifactOwner._readlink.__code__
+    def before_link_return(frame):
         global foreign_counter
-        io=entry._activation._artifact_owner
-        if mutation=="io_overread" and len(read_calls)==1:
-            current=actual_link(name,dir_fd=dir_fd)
-            a.os.symlink(current+b'x',b'changed-link',dir_fd=dir_fd)
-            a.os.replace(b'changed-link',name,src_dir_fd=dir_fd,dst_dir_fd=dir_fd)
-        value=actual_link(name,dir_fd=dir_fd)
+        io=frame.f_locals['self'];value=frame.f_locals['data']
         read_calls.append(len(value))
-        if mutation=="io_read_unknown":raise OSError("synthetic unknown link result")
+        if mutation=="io_read_unknown":raise OSError("synthetic lost link acknowledgement")
         if mutation=="io_count_copy":
             foreign_counter=tuple(list(io._count_cell));io._count_cell=foreign_counter
         if mutation=="io_scope_drift":io._scope=foreign_scope
         if mutation=="io_read_retire":entry._activation.retire()
-        return value
-    a.os.readlink=readlink_callback
+    def before_link_call(frame):
+        if mutation=="io_overread" and len(read_calls)==1:
+            name,parent=frame.f_locals['name'],frame.f_locals['parent']
+            current=actual_link(name,dir_fd=parent)
+            a.os.symlink(current+b'x',b'changed-link',dir_fd=parent)
+            a.os.replace(b'changed-link',name,src_dir_fd=parent,dst_dir_fd=parent)
+    trace_synthetic_boundary(link_code,'data = os.readlink(',before_link_call)
+    trace_synthetic_boundary(link_code,'_require(type(data) is bytes)',before_link_return)
 else:
-    def observed_readlink(name,*,dir_fd):
-        value=actual_link(name,dir_fd=dir_fd);read_calls.append(len(value));return value
-    a.os.readlink=observed_readlink
+    actual_owned_readlink=a.StartupArtifactOwner._readlink
+    def observed_readlink(*args,**kwargs):
+        value=actual_owned_readlink(*args,**kwargs)
+        read_calls.append(len(value.data))
+        assert a.os.readlink is actual_link
+        return value
+    a.StartupArtifactOwner._readlink=observed_readlink
 actual_file=a.StartupArtifactOwner._file
 foreign_before=None
 if mutation in ("io_link_replace","io_target_replace","io_after_hash_mode","io_before_copy"):
@@ -63,17 +70,21 @@ if mutation in ("io_link_replace","io_target_replace","io_after_hash_mode","io_b
                 runtime.before[0]=foreign_before
         return value
     a.StartupArtifactOwner._file=after_file
-actual_close=a.os.close;close_fault=False
+actual_close=a.os.close;close_fault=False;close_calls=[]
 if mutation=="io_close_unknown":
-    def close_callback(fd):
+    def observed_native_close(frame):
+        close_calls.append((frame.f_locals['row'],frame.f_locals['fd']))
+    observe_synthetic_native(actual_close,a.StartupArtifactOwner._close.__code__,
+                             observed_native_close)
+    def close_acknowledgement(frame):
         global close_fault
-        io=entry._activation._artifact_owner
-        actual_close(fd)
-        if (io is not None and io._attempt_cell is not None and not close_fault
-                and len(read_calls)==1):
+        io=frame.f_locals['self']
+        if (io is entry._activation._artifact_owner and io._attempt_cell is not None
+                and not close_fault and len(read_calls)==1):
             close_fault=True
-            raise OSError("synthetic lost close outcome")
-    a.os.close=close_callback
+            raise OSError("synthetic lost close acknowledgement")
+    trace_synthetic_boundary(a.StartupArtifactOwner._close.__code__,
+                             'row.closed = True',close_acknowledgement)
 foreign_fact=object()
 actual_recheck=a.StartupArtifactOwner.recheck_link_metadata
 if mutation.startswith("io_final_"):
@@ -119,7 +130,13 @@ except EntryFilesError:
         assert len(read_calls)==2 and io._unknown and io._bytes_read==expected_total+1
         assert io._origin.runtime.reads[-1].after[2]==expected_total+1
     if mutation=="io_before_copy":assert io._origin.runtime.before[0] is foreign_before
-    if mutation=="io_close_unknown":assert close_fault and io._unknown and len(read_calls)==1
+    if mutation=="io_close_unknown":
+        assert close_fault and io._unknown and len(read_calls)==1
+        assert len(close_calls)==len({id(row) for row,fd in close_calls})
+        assert all(row.fd is fd for row,fd in close_calls)
+        opened=[row for row in io._origin.records if row.fd is not None]
+        assert len(close_calls)==len(opened)>1 and all(row.close_attempted for row in opened)
+        assert sum(row.unknown for row in opened)==1
 else:
     assert mutation in successes,mutation
     io=checked._fact_cell[2];fact=io._fact_cell

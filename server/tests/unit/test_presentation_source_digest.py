@@ -83,9 +83,9 @@ if source_case=='hash_lost_ack':
         raise OSError('synthetic lost hash acknowledgement')
     sd.finish=lost
 if source_case in ('split_reads','linear_reads','late_old_read'):
-    actual_read=a.os.read
-    def split(fd,count):return actual_read(fd,min(count,257))
-    a.os.read=split
+    actual_read=a.StartupArtifactOwner._read
+    def split(owner,fd,count,scope):return actual_read(owner,fd,min(count,257),scope)
+    a.StartupArtifactOwner._read=split
 try:
     plugin=GatewayPackageOwner.verify_recipe_source_hashes(recipe,entry)
 except Exception:
