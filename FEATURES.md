@@ -82,6 +82,16 @@ Test-only `6d3a8cd`, with production identical to `b6b8322`, ran one original
 timeout case with a private45-second stack sampler and unchanged60-second
 deadline. It passed at26.093 seconds before sampling, leaving an empty stack
 file. This supplies no timeout cause and does not erase the original failures.
+A fresh static recheck of installed native source `ed1afb0` finds the public
+`hermes-gateway-v1` session-authority contract (typed submissions/request IDs,
+receipts, snapshots and mutation). This is a potential integration route, not
+qualified HMP phone access: native transport ticket/actor authorization must be
+mapped explicitly, and session attachment changes subscription/lifecycle state
+rather than acting as a passive health read. Legacy peer sends generate a fresh
+delivery key; contract presence alone does not resolve external message identity
+or the duplicate-history bug. No live requests, grants or session operations
+were performed. See the current native session-authority source note.
+
 Fixed-site DATA preparation `e285873` adds original row variants allocated with
 the plan before descriptor acquisition. Structural role/op/component checks,
 current resource and latched-consumer variant joins are source-reviewed, with
@@ -4054,7 +4064,7 @@ HMP is the Hermes gateway plugin used by the [HermesBot Mobile](https://hermes-b
 | Draft read support | Phone Bot Chat search | A distinct start-of-history page for authorized sessions lets the phone match locally without passing query text to Hermes. The companion app draft handles compaction, incomplete scans, and bounded paging; this is not Hermes-wide search. |
 | Upstream gap | Hermes-wide search | Hermes logs raw query text on a slow search path; HMP cannot safely expose that full-corpus search yet. |
 | Upstream gap | Create and delete bots | The profile-scoped API server lacks a complete profile lifecycle and canonical Bot Chat create-or-get contract. |
-| Partly available | Session management | Read-only browsing exists. Metadata writes and non-destructive branching need a stable canonical remote contract. |
+| Partly available | Session management | Read-only browsing exists. Native source `ed1afb0` exposes a canonical session-authority contract, but HMP paired-device/native-actor authorization, adapter semantics and qualification remain open. See [source recheck](docs/UPSTREAM_SESSION_AUTHORITY_20261108.md). |
 
 See the [roadmap](ROADMAP.md), [unified gateway research](HermesUnifiedGatewayResearch.md), [wire contract](docs/architecture/contracts/HMP_V1.md), and [upstream requests for Nous Research](NOUS_GATEWAY_OBSERVATIONS.md).
 
