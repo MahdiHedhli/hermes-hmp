@@ -9,7 +9,8 @@ from .test_presentation_gateway_approval import operator_composed_script
 
 @pytest.mark.parametrize('case', ['normal', 'lost_return', 'revoked_lost_return',
                                  'foreign_slot_lost_return', 'foreign_inner_lost_return',
-                                 'late_marker_drift', 'disposal_revocation'])
+                                 'late_marker_drift', 'disposal_revocation',
+                                 'lost_return_interrupt_before', 'lost_return_interrupt_after'])
 def test_fixed_directory_caller(tmp_path, monkeypatch, case):
     script, mutation = operator_composed_script('links')
     script = script.replace('GatewayPackageOwner.verify_recipe(recipe)',
@@ -17,7 +18,7 @@ def test_fixed_directory_caller(tmp_path, monkeypatch, case):
     script = script[:script.rfind('print(json.dumps')]
     script += '\ncase=' + repr(case) + '\n'
     script += r'''
-import gc, weakref
+import ast, gc, inspect, weakref
 from hmp_startup.gateway_continuation import GatewayContinuationOwner
 from hmp_startup.cache_selection import selected_cache_input_attempts
 from hmp_startup.runtime_reader import RuntimeSourceReadOwner
@@ -50,7 +51,27 @@ def exercise(frame):
     producer_code=m._produce_directory_metadata.__code__
     ack_tail_code=m._acked_directory_commit_tail.__code__
     caller_code=m._run_directory_observation.__code__
-    late_events=[];finalizer_events=[]
+    late_events=[];finalizer_events=[];arm_events=[];detach_faults=[]
+    interrupt_case=case in ('lost_return_interrupt_before','lost_return_interrupt_after')
+    target_line=-1
+    if interrupt_case:
+        lines,start=inspect.getsourcelines(m._run_directory_observation)
+        tree=ast.parse(''.join(lines))
+        stores=[node for node in ast.walk(tree) if isinstance(node,ast.Assign)
+                and len(node.targets)==1 and isinstance(node.targets[0],ast.Subscript)
+                and isinstance(node.targets[0].value,ast.Name)
+                and node.targets[0].value.id=='held_link'
+                and isinstance(node.targets[0].slice,ast.Constant)
+                and node.targets[0].slice.value==0
+                and isinstance(node.value,ast.Constant) and node.value.value is None]
+        assert len(stores)==1
+        after=[node for node in ast.walk(tree) if isinstance(node,ast.Assign)
+               and any(isinstance(target,ast.Name) and target.id=='unmatched_marker'
+                       for target in node.targets)]
+        assert after
+        target=(stores[0] if case=='lost_return_interrupt_before'
+                else min(after,key=lambda node:node.lineno))
+        target_line=start+target.lineno-1
     class RevokeOnDisposal:
         def __del__(self):
             activation_names['_retired']=True
@@ -63,11 +84,34 @@ def exercise(frame):
         assert marker.operation is operation
         captured.append((operation,marker,weakref.ref(payload)))
         return triple
+    def interrupt_cleanup(frame,event,arg):
+        if frame.f_code is not caller_code:return None
+        if event=='line' and frame.f_lineno==target_line:
+            assert detach_faults==[]
+            operation,marker,payload_reference=captured[0]
+            assert payload_reference() is not None
+            if case=='lost_return_interrupt_before':
+                assert marker.owner_link[0] is payload_reference()
+            else:assert marker.owner_link[0] is None
+            detach_faults.append(True)
+            sys.settrace(trace_before)
+            raise RuntimeError('synthetic memory retirement interruption')
+        return interrupt_cleanup
     def observe_native(frame,event,arg):
         if (event=='c_call' and arg is native_callee
                 and frame.f_code is producer_code):
             assert len(captured)==1 and frame.f_locals['operation'] is captured[0][0]
             native_entries.append(True)
+        if (interrupt_case and event=='c_return'
+                and arg is registration.native_origin.actor_calls[2]
+                and frame.f_code is a._native_actor_context.__code__
+                and frame.f_back.f_code is caller_code and not arm_events):
+            assert returns==[True] and native_entries==[True]
+            # Do not materialize caller f_locals: a cached Python3.11 snapshot
+            # could itself retain the payload beyond the caller's fastlocals.
+            frame.f_back.f_trace=interrupt_cleanup
+            sys.settrace(interrupt_cleanup)
+            arm_events.append(True)
     def lose_return(frame,event,arg):
         if frame.f_code is ack_tail_code:
             if (event=='return' and frame.f_back.f_code is caller_code
@@ -126,6 +170,18 @@ def exercise(frame):
             sys.setprofile(profile_before)
         assert len(captured)==1 and returns==[True] and native_entries==[True]
         operation,marker,payload_reference=captured[0]
+        if interrupt_case:
+            alive=payload_reference() is not None
+            stage=dict(case=case,producer_returns=len(returns),native_entries=len(native_entries),
+                       armed=len(arm_events),injected=len(detach_faults),payload_alive=alive,
+                       owned_link_retains_payload=(alive and
+                           marker.owner_link[0] is payload_reference()),
+                       debit_preserved=ledger.counts==[counts[0]+1,counts[1]],
+                       phase_failed=phase.current[0] is phase.failed)
+            path=Path(sys.argv[1])/'caller-interruption-stage.json'
+            fd=os.open(path,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
+            with os.fdopen(fd,'w') as stream:json.dump(stage,stream,sort_keys=True)
+            assert arm_events==detach_faults==[True]
         assert not gc.isenabled() and payload_reference() is None
         assert operation.result.custody_link==[None]
         assert ledger.counts==[counts[0]+1,counts[1]]
@@ -147,7 +203,9 @@ def exercise(frame):
                 assert metadata.progress[0]==0
                 assert metadata.progress[1] is operation.result.consumer[0]
                 assert operation.result.acknowledged==[None]
-            assert marker.state[:2]==[True,True]
+            if interrupt_case:
+                assert marker.state==[False,False,False]
+            else:assert marker.state[:2]==[True,True]
         if case in ('foreign_slot_lost_return','late_marker_drift'):
             assert marker.marker_slot[0] is foreign_slot and marker.state[2] is True
         else:assert marker.marker_slot[0] is marker
