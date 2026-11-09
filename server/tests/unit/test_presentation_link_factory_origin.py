@@ -1,0 +1,163 @@
+"""Early-origin DATA controls, not entry/lineage or native admission tests."""
+import sys
+
+import pytest
+
+from hmp_plugin import presentation_link_path_policy as policy
+from hmp_startup import link_factory_origin as origins
+
+
+@pytest.fixture
+def captured(monkeypatch):
+    # An isolated source-test attempt, never production reset/recovery behavior.
+    monkeypatch.setattr(origins, '_CAPTURE_STARTED', False)
+    return origins.capture()
+
+
+def test_actual_capture_return_rejoins_without_calling_policy(captured):
+    assert origins.current(captured) is captured
+    assert origins.factory(captured) is policy._new_policy
+    assert tuple(row[0] for row in captured[1]) == (
+        'hmp_startup.link_factory_origin', 'hmp_plugin.presentation_link_path_policy',
+        'hmp_plugin.presentation_startup_artifacts', 'hmp_startup.runtime_files')
+    assert all(row[1].__closure__ is None for row in captured[3])
+
+
+def test_capture_is_one_attempt_and_cannot_recover_a_lost_return(captured):
+    del captured  # no original-object receipt is reconstructed from a global slot
+    with pytest.raises(RuntimeError, match='BI1_LINK_FACTORY_ORIGIN_REFUSED'):
+        origins.capture()
+
+
+@pytest.mark.parametrize('fault', (
+    'factory_export', 'parts_export', 'need_code', 'current_export',
+    'pin_helper_export', 'validator_default', 'validator_extra_default',
+    'policy_module', 'native_module', 'policy_dispatch', 'policy_member',
+    'native_type_export', 'constructor_globals', 'capture_marker',
+))
+def test_changed_original_bindings_refuse_before_foreign_calls(captured, monkeypatch, fault):
+    from hmp_startup import runtime_files
+
+    calls = []
+    held_factory = origins.factory
+
+    def foreign(*args, **kwargs):
+        calls.append(True)
+        raise AssertionError('foreign origin dependency invoked')
+
+    def changed_code(*args, **kwargs):
+        raise AssertionError('changed origin dependency code invoked')
+
+    if fault == 'factory_export':
+        monkeypatch.setattr(policy, '_new_policy', foreign)
+    elif fault == 'parts_export':
+        monkeypatch.setattr(policy, '_parts', foreign)
+    elif fault == 'need_code':
+        monkeypatch.setattr(policy._need, '__code__', changed_code.__code__)
+    elif fault == 'current_export':
+        monkeypatch.setattr(origins, 'current', foreign)
+    elif fault == 'pin_helper_export':
+        monkeypatch.setattr(origins, '_pin_type', foreign)
+    elif fault == 'validator_default':
+        monkeypatch.setitem(origins.current.__kwdefaults__, '_any', foreign)
+    elif fault == 'validator_extra_default':
+        monkeypatch.setitem(origins.current.__kwdefaults__, 'foreign', foreign)
+    elif fault == 'policy_module':
+        monkeypatch.setitem(sys.modules, 'hmp_plugin.presentation_link_path_policy', object())
+    elif fault == 'native_module':
+        monkeypatch.setitem(sys.modules, 'hmp_startup.runtime_files', object())
+    elif fault == 'policy_dispatch':
+        monkeypatch.setattr(policy._LinkPathPolicy, '__getattribute__', foreign, raising=False)
+    elif fault == 'policy_member':
+        monkeypatch.setattr(policy._LinkPathPolicy, 'plan', property(foreign))
+    elif fault == 'native_type_export':
+        monkeypatch.setattr(runtime_files, 'LinkHop', object())
+    elif fault == 'constructor_globals':
+        monkeypatch.setitem(policy._LinkPathPolicy.__new__.__globals__, '_tuple_new', foreign)
+    elif fault == 'capture_marker':
+        monkeypatch.setattr(origins, '_CAPTURE_STARTED', False)
+    else:
+        raise AssertionError('unhandled causal fault')
+    with pytest.raises(RuntimeError, match='BI1_LINK_FACTORY_ORIGIN_REFUSED'):
+        held_factory(captured)
+    assert calls == []
+
+
+def test_foreign_namespace_key_refuses_without_hash_or_equality(captured, monkeypatch):
+    calls = []
+
+    class ForeignKey:
+        def __hash__(self):
+            calls.append('hash')
+            return 192837465
+        def __eq__(self, other):
+            calls.append('eq')
+            raise AssertionError('foreign key equality invoked')
+
+    key = ForeignKey()
+    monkeypatch.setitem(vars(policy), key, object())
+    before = tuple(calls)
+    with pytest.raises(RuntimeError, match='BI1_LINK_FACTORY_ORIGIN_REFUSED'):
+        origins.factory(captured)
+    assert tuple(calls) == before
+
+
+@pytest.mark.parametrize('field', range(5))
+def test_foreign_origin_fields_cannot_select_a_helper(captured, field):
+    class Foreign:
+        def __getattribute__(self, name):
+            raise AssertionError('foreign getter invoked')
+        def __iter__(self):
+            raise AssertionError('foreign iteration invoked')
+
+    changed = list(captured)
+    changed[field] = Foreign()
+    with pytest.raises(RuntimeError, match='BI1_LINK_FACTORY_ORIGIN_REFUSED'):
+        origins.factory(tuple(changed))
+
+
+def test_data_copy_is_not_misreported_as_independent_entry_ownership(captured):
+    copied = tuple(list(captured))
+    assert copied is not captured
+    # The generic DATA seal has no entry owner to distinguish these. Actual LP2
+    # entry/lineage integration MUST compare the independently held original
+    # capture return by identity. No admission or receipt claim is made here.
+    assert origins.current(copied) is copied
+
+
+@pytest.mark.parametrize('fault', ('export', 'code', 'validator_default'))
+def test_initialization_import_cannot_nominate_capture_helpers(monkeypatch, fault):
+    import builtins
+
+    monkeypatch.setattr(origins, '_CAPTURE_STARTED', False)
+    actual_import = builtins.__import__
+    reached = []
+    foreign_calls = []
+
+    def foreign(*args, **kwargs):
+        foreign_calls.append(True)
+        raise AssertionError('foreign capture dependency invoked')
+
+    def forbidden_code(*args, **kwargs):
+        raise AssertionError('changed capture code invoked')
+
+    def observed_import(name, globals=None, locals=None, fromlist=(), level=0):
+        result = actual_import(name, globals, locals, fromlist, level)
+        if (name == 'hmp_plugin' and 'presentation_link_path_policy' in (fromlist or ())
+                and not reached):
+            reached.append(True)
+            if fault == 'export':
+                monkeypatch.setattr(origins, '_pin_type', foreign)
+            elif fault == 'code':
+                monkeypatch.setattr(origins._pin_type, '__code__', forbidden_code.__code__)
+            else:
+                monkeypatch.setitem(origins.current.__kwdefaults__, '_any', foreign)
+        return result
+
+    monkeypatch.setattr(builtins, '__import__', observed_import)
+    with pytest.raises(RuntimeError, match='BI1_LINK_FACTORY_ORIGIN_REFUSED'):
+        origins.capture()
+    assert reached == [True] and foreign_calls == []
+    assert origins._CAPTURE_STARTED is True
+    with pytest.raises(RuntimeError, match='BI1_LINK_FACTORY_ORIGIN_REFUSED'):
+        origins.capture()  # no second initialization attempt after uncertainty

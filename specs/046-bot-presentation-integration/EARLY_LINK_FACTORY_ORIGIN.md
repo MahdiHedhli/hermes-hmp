@@ -4,6 +4,21 @@ November 9, 2026. LP2 design following the separately frozen LP1 source
 `0d5d86210dd1f2a163ace57effe5882c3a47e507`. This does not claim implementation
 of the entry-origin extension or native link operations.
 
+`hmp_startup/link_factory_origin.py` now prepares a one-attempt capture, a
+primitive-fenced DATA seal, and a held-factory return. No global receipt can
+recover a lost capture return. Own helper/code/default bindings are checked
+across initialization imports before use, with module/registry identity and
+six NamedTuple type/constructor/member/dispatch bindings retained. Independent
+review accepted this bounded preparation; its 26 causal source tests have not
+run. The actual `_ENTRY_ORIGIN`/lineage extension remains unimplemented.
+
+The DATA seal intentionally does not reject a copied tuple as independent
+ownership: it has no entry owner against which to establish that fact. Future
+entry wiring must hold the actual original return, and retain/check the actual
+capture/current/factory code and defaults before calling them. After a factory
+or seal returns, rejoin the original factory/export/code/pins immediately before
+invocation; a prior seal is not durable across another callback/return boundary.
+
 ## Anchor and admission limits
 
 Use the actual `_ENTRY_ORIGIN = _capture_origin()` allocation at the bottom of
