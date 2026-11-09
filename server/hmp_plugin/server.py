@@ -665,6 +665,7 @@ def _collect_media_readiness(ctx: ServerContext, **scope: Any) -> dict[str, obje
     )}
     def checkpoint() -> None:
         _readiness_authority_check(ctx, **authority)
+    original_iid = ctx.iid
     checkpoint()
     decision = ctx.store.media_read_decision(ctx.iid, scope["device_id"])
     if decision is None:
@@ -693,15 +694,18 @@ def _collect_media_readiness(ctx: ServerContext, **scope: Any) -> dict[str, obje
             or media_readiness.host_setting(ctx.readiness_settings()) != setting):
         raise readiness.ReadinessUnavailableError()
     payload = media_readiness.project(entitlement=entitlement, host=setting, api=api)
+    checked_at = _readiness_now(ctx)
     checkpoint()
     # The checkpoint invokes authorization callbacks. Sample its dependent media
     # state afterward; nothing authority-bearing may follow these comparisons.
     if (ctx.store.media_read_decision(ctx.iid, scope["device_id"]) != decision
             or ctx.media_read_permission(scope["device_id"]) != permission
             or media_readiness.host_setting(ctx.readiness_settings()) != setting
-            or ctx.media_snapshot() != bound):
+            or ctx.media_snapshot() != bound
+            or ctx.iid != original_iid
+            or ctx.readiness_generation != scope["generation"]):
         raise readiness.ReadinessUnavailableError()
-    return {"protocol": 1, "checked_at": _readiness_now(ctx),
+    return {"protocol": 1, "checked_at": checked_at,
             "generation": scope["generation"], "media": payload,
             "_authority": (decision, permission)}
 
@@ -732,11 +736,14 @@ async def _handle_readiness(request: web.Request, *, media: bool) -> web.Respons
     except Exception:
         raise HmpError(ErrorCode.READINESS_UNAVAILABLE) from None
     original_cohort = (ctx.identity, ctx.store, ctx.bridge)
+    original_iid = ctx.iid
     def media_context_current() -> bool:
         return (context(request) is ctx
                 and ctx.identity is original_cohort[0]
                 and ctx.store is original_cohort[1]
-                and ctx.bridge is original_cohort[2])
+                and ctx.bridge is original_cohort[2]
+                and ctx.iid == original_iid
+                and ctx.readiness_generation == generation)
     who = _readiness_bearer(request)
     profile = request.match_info.get("p", "")
     if _READINESS_PROFILE_RE.fullmatch(profile) is None:
