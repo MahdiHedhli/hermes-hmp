@@ -78,7 +78,8 @@ else:
     assert io._cache_fact is None and io._fact_cell is None and entry._activation._artifact_fact_cell is None
     assert active_effects[0].unknown and not active_effects[0].returned
     unknown=[row for row in held if row.unknown]
-    assert unknown==[target[0]] and target[0].close_attempted and not target[0].closed
+    assert len(unknown)==1 and unknown[0] is target[0]
+    assert target[0].close_attempted and not target[0].closed
     assert all(row.closed and row.close_attempted for row in held if row is not target[0])
     ledger,budget,attempts,closed_at_fault=budgets[0]
     remaining=len(held)-closed_at_fault
