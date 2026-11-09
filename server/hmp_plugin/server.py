@@ -2254,7 +2254,9 @@ class HmpServer:
         if self._start_attempted:
             owner = self._start_owner
             if owner is None:
-                raise RuntimeError("listener startup ownership unresolved; retain original resources")
+                raise RuntimeError(
+                    "listener startup ownership unresolved; retain original resources"
+                )
             await asyncio.shield(owner)
             if self._start_owner is not owner:
                 raise RuntimeError("listener startup owner changed; retain original resources")
