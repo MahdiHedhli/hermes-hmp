@@ -2,6 +2,7 @@
 
 import asyncio
 import os
+import tempfile
 import threading
 import time
 from pathlib import Path
@@ -15,6 +16,18 @@ from hmp_plugin.media_operator_protocol import MediaReadMutation, decode_reply
 from hmp_plugin.media_publication_actor import MediaPublicationActor
 from hmp_plugin.request_ctx import ReadWorkerBudget
 from hmp_plugin.store import Store
+
+
+@pytest.fixture(autouse=True)
+def private_socket_parent(monkeypatch):
+    # A fresh owned short pathname keeps Darwin's Unix socket path bound usable.
+    with tempfile.TemporaryDirectory(
+        prefix="hmp-mut-", dir=os.path.realpath(tempfile.gettempdir())
+    ) as value:
+        assert Path(value).stat().st_mode & 0o777 == 0o700
+        monkeypatch.setenv("HOST_OPERATOR_TEST_PARENT", value)
+        yield
+        assert not (Path(value) / "media-operator.sock").exists()
 
 
 async def open_service(tmp_path):
@@ -121,7 +134,8 @@ def test_socket_scope_refusal_does_not_write(tmp_path, monkeypatch, bad):
     asyncio.run(scenario())
 
 
-def test_timeout_and_stop_retain_actual_worker_debt(tmp_path, monkeypatch):
+@pytest.mark.parametrize("cancel", (False, True))
+def test_timeout_or_cancel_and_stop_retain_actual_worker_debt(tmp_path, monkeypatch, cancel):
     async def scenario():
         actor, store, ctx, request, service = await open_service(tmp_path)
         entered, release = threading.Event(), threading.Event()
@@ -135,6 +149,8 @@ def test_timeout_and_stop_retain_actual_worker_debt(tmp_path, monkeypatch):
         try:
             task = asyncio.create_task(service._decide(request, time.monotonic() + 0.05))
             assert await asyncio.to_thread(entered.wait, 1)
+            if cancel:
+                task.cancel()
             raw = await task
             assert decode_reply(raw, request=request).status == "unknown"
             assert service._outstanding == 1 and ctx.read_worker_budget.operator == 1
