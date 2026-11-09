@@ -6,6 +6,7 @@ import os
 import stat
 import threading
 from typing import NamedTuple
+from types import FunctionType
 
 from hmp_plugin.presentation_gateway_activation import GatewayActivationOwner
 from hmp_plugin.presentation_gateway_package import _Tree
@@ -358,82 +359,46 @@ class RuntimeCacheProbeOwner:
         _require(_native_walk_scope(self, native_registration) is s
                  and _ROOT is root and _CELL is cell and self._count_cell is count)
         native_registry = native_registration.lineage.ledger.scopes
-        held, ancestors = [], []
-        failed = False
-        result = None
-        try:
-            _require(_native_walk_scope(self, native_registration) is s and type(path) is str)
-            # This is the original retain allocation, not a new path/plan from
-            # mutable current selection. Native claim/diagnostic ACK migration
-            # remains separate; this DATA alone grants no observation or fallback.
-            plan = s.native_probe_plan
-            _require(plan is self._probe_plan and plan.path is path
-                     and plan.selected is selected and plan.proof is proof)
-            components = plan.components
-            parent = None
-            for position, name in enumerate(components):
-                info = RuntimeCacheProbeOwner._stat_known(
-                    self, name, parent, s, native_registration)
-                if info is None:
-                    _require(position > 0
-                             and RuntimeCacheProbeOwner._stat_known(
-                                 self, name, parent, s, native_registration) is None)
-                    result = CacheProbeData('missing_component', position - 1, None,
-                                            tuple(item[3] for item in ancestors))
-                    break
-                leaf = position == len(components) - 1
-                if leaf:
-                    if stat.S_ISDIR(info.st_mode):
-                        _require(selected.plan_row.state == 'tree_nonfile')
-                        identity = _identity(info, True)
-                        package = selected.plan_row.tree
-                        relative = path[len(package.path) + 1:] + '/'
-                        originals = tuple(signature for prefix, signature
-                                          in selected.proof[0].directories if prefix == relative)
-                        _require(len(originals) == 1 and originals[0] == identity)
-                        state = 'directory'
-                    else:
-                        _require(stat.S_ISREG(info.st_mode) and selected.cache is not None)
-                        identity = _identity(info)
-                        _require(identity == selected.cache.identity)
-                        state = 'declared_regular'
-                    _require(_identity(RuntimeCacheProbeOwner._stat_known(
-                        self, name, parent, s, native_registration),
-                        state == 'directory') == identity)
-                    result = CacheProbeData(state, position - 1, identity,
-                                            tuple(item[3] for item in ancestors))
-                    break
-                signature = _identity(info, True)
-                _require(stat.S_ISDIR(info.st_mode) and info.st_uid in (0, s.context[1])
-                         and not info.st_mode & (stat.S_ISUID | stat.S_ISGID)
-                         and (not stat.S_IMODE(info.st_mode) & 0o022
-                              or (info.st_uid == 0 and bool(info.st_mode & stat.S_ISVTX))))
-                row, fd = StartupArtifactOwner._open(self, name, parent, True, native_registration)
-                held.append((row, fd))
-                _require(_identity(StartupArtifactOwner._fstat(
-                    self, fd, s, native_registration), True) == signature)
-                ancestors.append((name, parent, fd, signature))
-                parent = fd
-            _require(type(result) is CacheProbeData)
-            for name, parent, fd, signature in ancestors:
-                _require(_identity(StartupArtifactOwner._fstat(
-                    self, fd, s, native_registration), True) == signature
-                         and _identity(StartupArtifactOwner._stat(
-                             self, name, parent, s, native_registration), True)
-                         == signature)
-        except BaseException:
-            failed = True
-        finally:
-            for row, fd in reversed(held):
-                try:
-                    StartupArtifactOwner._close(self, row, fd, s, root)
-                except BaseException:
-                    _descriptor_refused(row)
-                    self._unknown = failed = True
-        if failed:
-            self._failed = True
-            raise CacheProbeError(self) from None
-        resources, records = tuple(held), tuple(s.records)
+        # Keep the original complete engine return across data allocation. No
+        # current history/cursor lookup can substitute for a lost return.
+        plan = s.native_probe_plan
+        from . import probe_native as engine
+
+        origin = plan.engine_origin
+        validate = origin[2][0][1]
+        _require(type(validate) is FunctionType and engine is origin[0]
+                 and vars(engine).get('_engine_origin_tail') is validate
+                 and validate.__code__ is origin[2][0][2])
+        validate(origin)
+        run = origin[2][10][1]
+        finish_tail = origin[2][24][1]
+        finish_kind = origin[1][5][0]
+        _require(origin[2][10][0] == '_run_fresh_probe'
+                 and origin[2][24][0] == '_finished_state_tail')
+        actual = run(self, s, native_registration, plan)
+        validate(origin)
+        _require(type(actual) is finish_kind and actual.execution is self._probe_execution
+                 and actual.execution.finished == [True]
+                 and actual.execution.owner is self and actual.execution.plan is plan
+                 and type(actual.outcome) is tuple and len(actual.outcome) == 4
+                 and type(actual.resources) is tuple)
+        outcome, resources = actual.outcome, actual.resources
+        _require(finish_tail(actual.execution, actual.predecessor, resources) is outcome)
+        kind = CacheProbeData
+        fields = kind._fields
+        members = tuple(vars(kind).get(name) for name in fields)
+        constructor, constructor_code = kind.__new__, kind.__new__.__code__
+        result = kind(*outcome)
+        _require(CacheProbeData is kind and kind._fields is fields
+                 and kind.__new__ is constructor and constructor.__code__ is constructor_code
+                 and all(vars(kind).get(name) is member
+                         for name, member in zip(fields, members, strict=True))
+                 and type(result) is kind and tuple.__len__(result) == 4
+                 and all(tuple.__getitem__(result, i) is value
+                         for i, value in enumerate(outcome)))
+        _require(finish_tail(actual.execution, actual.predecessor, resources) is outcome
+                 and actual.execution.finished == [True])
+        records = tuple(s.records)
         fact = (self, s, result, resources, count, records, selected, path, proof, root)
         _require(_native_walk_scope(self, native_registration) is s and _ROOT is root
                  and self._count_cell is count and self._bytes_read == 0
@@ -446,6 +411,11 @@ class RuntimeCacheProbeOwner:
                  and all(_descriptor_closed_in_scope(row, s) and row.fd is fd
                          for row, fd in resources))
         _native_registration_tail(self, s, cell, root, native_registration, native_registry)
+        validate(origin)
+        _require(finish_tail(actual.execution, actual.predecessor, resources) is outcome
+                 and actual.execution.finished == [True]
+                 and self._ready is False and self._fact is None and _FACT is None
+                 and self._count_cell is count and self._bytes_read == 0)
         self._fact = _FACT = s.activation._runtime_cache_probe_fact = fact
         self._ready = True
         return self

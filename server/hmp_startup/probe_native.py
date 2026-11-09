@@ -3,7 +3,7 @@
 One closed producer serves the original probe sites. This module does not accept
 paths, operations, policies or grants from a client. The actual admitted owner
 must retain its execution and literal returns; DATA preparation is not admission.
-The legacy caller is deliberately not switched until this engine is qualified.
+The actual observe caller consumes the original typed finish; installation remains gated.
 """
 from __future__ import annotations
 
@@ -63,11 +63,21 @@ class _ProbeCommit(NamedTuple):
         return '<FreshProbeCommit raw-free metadata redacted>'
 
 
+class _ProbeFinish(NamedTuple):
+    execution: _ProbeExecution
+    predecessor: _ProbeCommit
+    resources: tuple
+    outcome: tuple
+
+    def __repr__(self):
+        return '<FreshProbeFinish original metadata-only return>'
+
+
 def _new_probe_engine_origin():
     module = sys.modules.get(__name__)
     _require(type(module) is ModuleType and vars(module) is globals())
     kinds = (_ProbeExecution, _ProbeConsumer, _ProbeReturn, _ProbeCommit,
-             metadata._ReportedMissingMetadataReturn)
+             metadata._ReportedMissingMetadataReturn, _ProbeFinish)
     types = tuple((kind, kind._fields,
                    tuple(vars(kind).get(name) for name in kind._fields)) for kind in kinds)
     functions = tuple((name, globals()[name], globals()[name].__code__) for name in (
@@ -77,7 +87,8 @@ def _new_probe_engine_origin():
         '_finish', '_run_fresh_probe', '_lifecycle_tail',
         '_prepare_shared_consumer', '_latch_shared_consumer', '_produce_shared',
         '_consume_shared', '_ack_shared', '_retired_shared', '_history_mirrors_tail', '_attached_shared',
-        '_make_shared_commit', '_commit_shared_tail', '_acked_shared_history', '_publish_shared_ack'))
+        '_make_shared_commit', '_commit_shared_tail', '_acked_shared_history', '_publish_shared_ack',
+        '_finished_state_tail', '_opened_chain_tail'))
     return (module, types, functions, OSError.__dict__['errno'],
             OSError.__dict__['filename'], errno.ENOENT,
             (metadata, tuple((name, vars(metadata).get(name), vars(metadata).get(name).__code__)
@@ -90,8 +101,8 @@ def _engine_origin_tail(origin):
              and type(origin[0]) is ModuleType
              and sys.modules.get(__name__) is origin[0]
              and vars(origin[0]) is globals()
-             and type(origin[1]) is tuple and len(origin[1]) == 5
-             and type(origin[2]) is tuple and len(origin[2]) == 24
+             and type(origin[1]) is tuple and len(origin[1]) == 6
+             and type(origin[2]) is tuple and len(origin[2]) == 26
              and origin[3] is OSError.__dict__['errno']
              and origin[4] is OSError.__dict__['filename']
              and type(origin[5]) is int and origin[5] == errno.ENOENT)
@@ -145,7 +156,11 @@ def _execution_tail(execution):
              and len(execution.opened) < len(plan.components)
              and type(execution.outcome) is list and len(execution.outcome) == 1
              and type(execution.failed) is list and execution.failed == [False]
-             and type(execution.finished) is list and execution.finished == [False])
+             and type(execution.finished) is list and len(execution.finished) == 1
+             and type(execution.finished[0]) is bool
+             and (execution.finished[0] is False or
+                  (execution.next_site[0] == len(plan.definitions)
+                   and execution.pending[0] is None)))
     _native_work_origin_tail(owner, reg, reg.native_origin)
     _lifecycle_tail(owner, reg.scope, reg, plan)
     return execution
@@ -204,6 +219,48 @@ def _history_tail(execution, predecessor):
     return _history_mirrors_tail(execution, predecessor)
 
 
+def _opened_chain_tail(execution, closed=False):
+    """Join each actual directory open to its original component and parent."""
+    _require(type(closed) is bool and type(execution) is _ProbeExecution)
+    reg, plan = execution.registration, execution.plan
+    _require(type(execution.opened) is list and type(reg.scope.records) is list
+             and len(execution.opened) == len(reg.scope.records)
+             and len(execution.opened) < len(plan.components))
+    parent = None
+    for position, entry in enumerate(execution.opened):
+        _require(type(entry) is tuple and len(entry) == 7
+                 and type(entry[0]) is int and entry[0] == position
+                 and entry[1] is plan.components[position]
+                 and type(entry[3]) is _NativeOpenedDescriptor
+                 and type(entry[4]) is int and entry[4] >= 0
+                 and type(entry[5]) is tuple and len(entry[5]) == 5
+                 and all(type(value) is int for value in entry[5])
+                 and type(entry[6]) is _ProbeCommit
+                 and entry[6].identity is entry[5]
+                 and entry[6].site == position * 6
+                 and reg.scope.records[position] is entry[3])
+        descriptor = entry[3]
+        close = _native_descriptor_opened(descriptor, reg.native_ledger)
+        allocation = descriptor.allocation
+        flags = reg.native_origin.flags
+        _require(descriptor.fd is entry[4]
+                 and entry[2] is (None if parent is None else parent.fd)
+                 and allocation.parent is parent and allocation.owner is execution.owner
+                 and allocation.scope is reg.scope and allocation.registration is reg
+                 and type(allocation.arguments) is tuple and len(allocation.arguments) == 3
+                 and allocation.arguments[0] is entry[1]
+                 and type(allocation.arguments[1]) is int
+                 and allocation.arguments[1] == flags[0] | flags[1] | flags[2] | flags[3] | flags[4]
+                 and allocation.arguments[2] is entry[2])
+        if closed:
+            _require(_descriptor_closed_in_scope(descriptor, reg.scope))
+        else:
+            _require(close.state == [False, False] and close.raw[0] is close.unset
+                     and close.result[0] is None and allocation.refused == [False])
+        parent = descriptor
+    return execution
+
+
 def _resource_tail(owner, resource):
     _require(type(resource) is _NativeProbeMetadataResource and resource.owner is owner
              and type(resource.metadata) is _ProbeExecution)
@@ -214,6 +271,7 @@ def _resource_tail(owner, resource):
              and 0 <= resource.ordinal < len(plan.definitions)
              and resource.site is plan.definitions[resource.ordinal]
              and resource.variant is plan.variants[resource.ordinal])
+    _opened_chain_tail(execution)
     position, offset = divmod(resource.ordinal, 6)
     _require(type(resource.arguments) is tuple)
     descriptor = None
@@ -376,8 +434,25 @@ def _open_ancestor(execution, commit, held):
 
 
 def _finish(execution, predecessor, held):
+    _require(execution.finished == [False] and type(held) is list)
+    resources = tuple(held)
+    outcome = _finished_state_tail(execution, predecessor, resources)
+    values = (execution, predecessor, resources, outcome)
+    result = _ProbeFinish(*values)
+    _engine_origin_tail(execution.origin)
+    _require(type(result) is _ProbeFinish and tuple.__len__(result) == 4
+             and all(tuple.__getitem__(result, i) is value for i, value in enumerate(values))
+             and execution.finished == [False])
+    _require(_finished_state_tail(execution, predecessor, resources) is outcome)
+    execution.finished[0] = True
+    return result
+
+
+def _finished_state_tail(execution, predecessor, held):
     _history_tail(execution, predecessor)
+    _opened_chain_tail(execution, closed=True)
     reg = execution.registration
+    _require(type(held) is tuple)
     _require(execution.next_site[0] == len(execution.plan.definitions)
              and execution.pending[0] is None and type(execution.outcome[0]) is tuple
              and len(execution.outcome[0]) == 4
@@ -402,8 +477,9 @@ def _finish(execution, predecessor, held):
              and all(row is execution.opened[i][3] and fd is execution.opened[i][4]
                      for i, (row, fd) in enumerate(held)))
     _history_mirrors_tail(execution, predecessor)
-    execution.finished[0] = True
-    return execution.outcome[0]
+    outcomes = tuple(commit.outcome for commit in execution.history if commit.outcome is not None)
+    _require(len(outcomes) == 1 and execution.outcome[0] is outcomes[0])
+    return outcomes[0]
 
 
 def _run_fresh_probe(owner, scope, registration, plan):

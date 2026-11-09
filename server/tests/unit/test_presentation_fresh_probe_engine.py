@@ -41,7 +41,8 @@ def exercise(frame):
     before=(reg.native_ledger.counts[0],reg.native_ledger.counts[1],len(reg.native_ledger.attempts))
     old_gc=gc.isenabled();gc.disable()
     try:
-        result=engine._run_fresh_probe(owner,scope,reg,plan)
+        finish=engine._run_fresh_probe(owner,scope,reg,plan)
+        result=finish.outcome
         actual=owner._probe_execution
         expected=('missing_component' if engine_case=='missing' else
                   'directory' if engine_case=='directory' else 'declared_regular')

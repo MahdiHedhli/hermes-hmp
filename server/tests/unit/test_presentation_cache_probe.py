@@ -32,6 +32,7 @@ prepared_cache.chmod(0o700 if CACHE_CASE=='directory' else 0o600)
 from hmp_startup.gateway_continuation import GatewayContinuationOwner
 from hmp_startup.cache_selection import selected_cache_input_attempts
 from hmp_startup import cache_probe as pm
+from hmp_plugin import presentation_native_metadata as metadata
 from hmp_startup.cache_probe import RuntimeCacheProbeOwner,CacheProbeError
 continuation=GatewayContinuationOwner.retain(entry,approval,recipe,checked)
 rows=selected_cache_input_attempts(continuation)
@@ -50,13 +51,13 @@ if case in ('stat_permission','stat_structure','open_error','fstat_error','close
     fault_calls=[]
     if case in ('stat_permission','stat_structure'):
         def fault_stat(frame):
-            name=frame.f_locals['name']
-            if frame.f_locals['self'] is owner and name=='__pycache__':
+            name=frame.f_locals['arguments'][0]
+            if frame.f_locals['owner'] is owner and name=='__pycache__':
                 fault_calls.append(case)
                 if case=='stat_permission':raise PermissionError(errno.EACCES,'synthetic',name)
                 raise NotADirectoryError(errno.ENOTDIR,'synthetic',name)
-        trace_synthetic_boundary(RuntimeCacheProbeOwner._stat_known.__code__,
-                                 'result = stat_call(',fault_stat)
+        trace_synthetic_boundary(metadata._produce_directory_metadata.__code__,
+                                 'raw = callee(arguments[0], dir_fd=',fault_stat)
     if case=='open_error':
         def fault_open(frame):
             if frame.f_locals['self'] is owner and frame.f_locals['name']=='/':
@@ -66,11 +67,11 @@ if case in ('stat_permission','stat_structure','open_error','fstat_error','close
                                  'fd = open_call(',fault_open)
     if case=='fstat_error':
         def fault_fstat(frame):
-            if frame.f_locals['self'] is owner and not fault_calls:
+            if frame.f_locals['owner'] is owner and not fault_calls:
                 fault_calls.append(case)
                 raise OSError(errno.EIO,'synthetic')
-        trace_synthetic_boundary(pm.StartupArtifactOwner._fstat.__code__,
-                                 'value = fstat_call(',fault_fstat)
+        trace_synthetic_boundary(metadata._produce_directory_metadata.__code__,
+                                 'raw = callee(arguments[0])',fault_fstat)
     if case=='close_ack':
         from hmp_plugin import presentation_startup_artifacts as close_module
         close_attempts=[]
