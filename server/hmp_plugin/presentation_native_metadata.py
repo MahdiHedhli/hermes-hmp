@@ -28,6 +28,7 @@ from .presentation_startup_artifacts import (
     _native_read_lifecycle_tail,
     _native_work_origin_tail,
     _NativeActorMismatchError,
+    _NativeDeclaredMetadataPlan,
     _NativeMetadataResource,
     _NativeMetadataSnapshot,
     _NativeScopeRegistration,
@@ -206,6 +207,8 @@ class _DirectoryConsumer(NamedTuple):
     file_module: ModuleType
     file_owner_type: type
     commit: list
+    history: list
+    predecessors: tuple
 
     @property
     def consumption(self):
@@ -400,19 +403,71 @@ def _prepare_directory_consumer(owner, operation):
     parents = (scope.activation, scope.activation_scope, root, root[0], type(root[0]),
                root[2], type(root[2]))
     _native_read_lifecycle_tail(owner, resource.registration, parents)
+    history = resource.metadata.commits
+    _require(type(history) is list and len(history) == resource.ordinal)
+    predecessors = tuple(history)
     consumer = _DirectoryConsumer(owner, operation, resource, parents, kind,
                                    class_name, module_name, origin[0], origin[1], module,
                                    origin[4], origin[5], file_module, StartupArtifactOwner,
-                                   [None])
+                                   [None], history, predecessors)
     _require(_resource_tail(owner, resource) is resource
              and operation.result is result and result.consumer[0] is None
              and result.attempt[0] is operation and result.raw[0] is result.unset)
     _native_read_lifecycle_tail(owner, resource.registration, parents)
     _require(_unused_directory_intent_tail(owner, operation) is result
              and _directory_material_tail(owner, consumer) is consumer)
+    _directory_predecessors_tail(owner, consumer)
     result.consumer[0] = consumer
     _require(_directory_material_tail(owner, consumer) is consumer
              and result.consumer[0] is consumer)
+    return consumer
+
+
+def _directory_predecessors_tail(owner, consumer):
+    """Held raw-free original ACK prefix, never a cursor or native-work credit."""
+    _require(type(consumer) is _DirectoryConsumer and consumer.owner is owner
+             and type(consumer.resource) is _NativeMetadataResource)
+    resource = consumer.resource
+    metadata, registration = resource.metadata, resource.registration
+    _require(type(metadata) is _NativeDeclaredMetadataPlan
+             and type(registration) is _NativeScopeRegistration
+             and consumer.history is metadata.commits and type(consumer.history) is list
+             and type(consumer.predecessors) is tuple
+             and len(consumer.predecessors) == resource.ordinal
+             and len(consumer.history) >= resource.ordinal)
+    for ordinal, commit in enumerate(consumer.predecessors):
+        _require(type(commit) is _DirectoryPolicyCommit and commit.owner is owner
+                 and consumer.history[ordinal] is commit
+                 and type(commit.ordinal) is int and commit.ordinal == ordinal
+                 and type(commit.next_ordinal) is int and commit.next_ordinal == ordinal + 1
+                 and commit.site is metadata.definitions[ordinal]
+                 and type(commit.resource) is _NativeMetadataResource
+                 and commit.resource.metadata is metadata
+                 and commit.resource.registration is registration
+                 and commit.resource.held_walk is resource.held_walk
+                 and type(commit.operation) is _MetadataOperation
+                 and commit.operation.owner is owner
+                 and commit.operation.resource is commit.resource
+                 and commit.operation.registration is registration
+                 and commit.operation.attempts is registration.native_ledger.attempts
+                 and type(commit.operation.index) is int
+                 and 0 <= commit.operation.index < len(commit.operation.attempts)
+                 and commit.operation.attempts[commit.operation.index] is commit.operation
+                 and type(commit.operation.state) is list
+                 and all(type(value) is bool for value in commit.operation.state)
+                 and commit.operation.state == [True, True, False]
+                 and type(commit.operation.ended) is list
+                 and all(type(value) is bool for value in commit.operation.ended)
+                 and commit.operation.ended == [True]
+                 and type(commit.operation.result) is _MetadataResult
+                 and type(commit.operation.result.acknowledged) is list
+                 and len(commit.operation.result.acknowledged) == 1
+                 and commit.operation.result.acknowledged[0] is commit
+                 and type(commit.consumer) is _DirectoryConsumer
+                 and commit.consumer.operation is commit.operation
+                 and commit.consumer.resource is commit.resource
+                 and type(commit.consumer.commit) is list and len(commit.consumer.commit) == 1
+                 and commit.consumer.commit[0] is commit)
     return consumer
 
 
@@ -483,6 +538,8 @@ def _latched_directory_resource_tail(owner, consumer):
     operation, resource = consumer.operation, consumer.resource
     registration = resource.registration
     metadata = _native_declared_metadata_cohort_tail(owner, registration, resource.held_walk)
+    _directory_predecessors_tail(owner, consumer)
+    _require(len(consumer.history) == resource.ordinal)
     _require(metadata is resource.metadata and metadata.progress[0] is resource.ordinal
              and metadata.progress[1] is consumer
              and type(resource.ordinal) is int
@@ -1038,6 +1095,9 @@ def _acked_directory_history_tail(owner, consumer, commit):
              and type(resource.site[1]) is str and resource.site[1] == 'directory'
              and type(resource.site[2]) is int)
     metadata = _native_declared_metadata_cohort_tail(owner, registration, resource.held_walk)
+    _directory_predecessors_tail(owner, consumer)
+    _require(len(consumer.history) == commit.next_ordinal
+             and consumer.history[commit.ordinal] is commit)
     _require(metadata is resource.metadata and type(commit.ordinal) is int
              and 0 <= commit.ordinal < len(metadata.definitions)
              and commit.ordinal is resource.ordinal and commit.site is resource.site
@@ -1181,6 +1241,7 @@ def _ack_directory_policy(owner, consumer, actual, commit):
         result.envelope[0] = None
         result.category[0] = None
         consumer.consumption[0] = commit  # retire the raw-bearing backlink too
+        consumer.history.append(commit)  # actual ACK, retained without the native payload
         consumer.resource.metadata.progress[0] = commit.next_ordinal
         consumer.resource.metadata.progress[1] = None
         phase.result[0] = None

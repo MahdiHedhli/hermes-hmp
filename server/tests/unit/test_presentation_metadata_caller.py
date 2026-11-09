@@ -257,6 +257,7 @@ def exercise(frame):
         ledger.inflight[0]=None;ledger.failed[0]=False;ledger.failure[0]=None
         phase.current[0]=phase.idle;phase.result[0]=None
         metadata.progress[:]=[0,None]
+        metadata.commits.clear()  # dispose this synthetic fixture's ACK history only
         ledger.preparation[:]=preparation
 original_fstat=vars(a.StartupArtifactOwner)['_fstat']
 original_file_code=a.StartupArtifactOwner._file.__code__

@@ -984,6 +984,7 @@ class _NativeDeclaredMetadataPlan(NamedTuple):
     definitions: tuple
     variants: tuple
     progress: list
+    commits: list
 
     def __repr__(self):
         return '<NativeDeclaredMetadataPlan unqualified site DATA redacted>'
@@ -1018,7 +1019,7 @@ def _prepare_declared_metadata_plan(owner, registration, walk):
     variants = tuple(_NativeDeclaredMetadataSite(owner, walk, walk.expected, site, ordinal)
                      for ordinal, site in enumerate(definitions))
     return _NativeDeclaredMetadataPlan(owner, walk.scope, walk, walk.expected,
-                                       definitions, variants, [0, None])
+                                       definitions, variants, [0, None], [])
 
 
 def _native_declared_metadata_site_tail(owner, metadata, ordinal):
@@ -1068,6 +1069,8 @@ def _native_declared_metadata_cohort_tail(owner, registration, held):
              and type(walk.metadata_slot) is list and len(walk.metadata_slot) == 1
              and walk.metadata_slot[0] is metadata
              and type(metadata.definitions) is tuple and len(metadata.definitions) <= 16384
+             and type(metadata.commits) is list
+             and len(metadata.commits) <= len(metadata.definitions)
              and type(metadata.progress) is list and len(metadata.progress) == 2
              and type(metadata.progress[0]) is int
              and 0 <= metadata.progress[0] < len(metadata.definitions))
@@ -1214,7 +1217,8 @@ def _finish_native_declared_walk(owner, registration, held):
              and plan.metadata_slot[0] is metadata
              and type(metadata.progress) is list and len(metadata.progress) == 2
              and type(metadata.progress[0]) is int and metadata.progress[0] == 0
-             and metadata.progress[1] is None)
+             and metadata.progress[1] is None
+             and type(metadata.commits) is list and len(metadata.commits) == 0)
     state[0] = 2
     progress[0] = index + 1
 
