@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import inspect
 import threading
 import time
 from collections import OrderedDict
@@ -551,6 +552,10 @@ class PushDispatcher:
 
         def settled(original):
             _consume_result(original)
+            if inspect.iscoroutine(coro):
+                # A known Task may be cancelled before its wrapper first runs.
+                # Only actual Task settlement permits closing the unused coroutine.
+                coro.close()
             if self._owned_tasks.get(intent) == (coro, wrapper, original):
                 del self._owned_tasks[intent]
 

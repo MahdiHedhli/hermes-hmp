@@ -1016,3 +1016,25 @@ def test_unknown_push_close_owner_never_replays_or_certifies_drain(env, monkeypa
                 await dispatcher.relay.close()  # fixture cleanup only
 
     run(env, scenario)
+
+
+def test_known_push_task_cancelled_before_wrapper_entry_retires_original_coroutine(env):
+    async def scenario(client):
+        _setup(env)
+        dispatcher = PushDispatcher(env.ctx, Relay(), require_gate=server._require_approvals_gate)
+        entered = []
+
+        async def work():
+            entered.append(True)
+            await asyncio.Event().wait()
+
+        coro = work()
+        task = dispatcher._spawn_owned(coro)
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+        await asyncio.sleep(0)
+        assert not entered and coro.cr_frame is None and not dispatcher._owned_tasks
+        await dispatcher.close()
+        await dispatcher.wait_drained()
+
+    run(env, scenario)
