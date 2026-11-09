@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import concurrent.futures
 import contextlib
+import contextvars
 import ctypes
 import json
 import os
@@ -393,6 +394,7 @@ class OperatorReadService:
                 or ctx is not self._read_origin_ctx or self._read_budget is None
                 or ctx.read_worker_budget is not self._read_budget):
             raise OperatorUnavailableError("operator context unavailable")
+        execution_context = contextvars.copy_context()
         generation = ctx.readiness_generation
         deadline = time.monotonic() + DEADLINE_S
         intent = object()  # preconditions/allocations precede capacity acquisition
@@ -416,6 +418,7 @@ class OperatorReadService:
             raise OperatorUnavailableError("operator context unavailable")
         try:
             original = self._read_pool.submit(
+                execution_context.run,
                 _collect,
                 ctx, request_id, challenge, self.nonce, generation, deadline,
             )
