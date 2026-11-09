@@ -29,7 +29,7 @@ pure=vars(RuntimeCacheProbeOwner)['_pure'];pure_code=pure.__code__
 observe=vars(RuntimeCacheProbeOwner)['_observe_owned'];observe_code=observe.__code__
 facts={};callbacks=[];foreign_execution=[];native_calls=[];held_inputs=[]
 supplied_definitions=[]
-def foreign_body(self,*args,**kwargs):foreign_execution.append(True)
+def foreign_body(self,*args,**kwargs):vars(self)['_fixture_foreign_execution'].append(True)
 def site_constructor(cls,*values):
     if factory_case.startswith('variant_') and not callbacks:
         target=observe if factory_case=='variant_observe' else pure
@@ -44,6 +44,7 @@ def plan_constructor(cls,*values):
         values=tuple(changed);callbacks.append(factory_case)
     return plan_new(cls,*values)
 def tracked_factory(owner,root,selected,context):
+    vars(owner)['_fixture_foreign_execution']=foreign_execution
     lineage=root[2].entry_binding[0].native_files
     ledger=lineage.ledger;before=(tuple(ledger.counts),len(ledger.attempts))
     def profile(frame,event,arg):
