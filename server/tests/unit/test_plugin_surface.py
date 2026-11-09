@@ -457,6 +457,36 @@ def test_unreviewed_parser_import_variants_remain_closed(pkg: Path, statement: s
             True,
         ),
         (
+            "presentation_link_path_policy.py",
+            "def f():\n    from hmp_startup.runtime_files import ExecutableLinkPlan, LinkHop\n",
+            True,
+        ),
+        (
+            "presentation_link_path_policy.py",
+            "from hmp_startup.runtime_files import ExecutableLinkPlan, LinkHop\n",
+            False,
+        ),
+        (
+            "presentation_link_path_policy.py",
+            "def f():\n    from hmp_startup.runtime_files import RuntimeFilePlan\n",
+            False,
+        ),
+        (
+            "presentation_link_path_policy.py",
+            "def f():\n    from hmp_startup.runtime_files import *\n",
+            False,
+        ),
+        (
+            "presentation_link_path_policy.py",
+            "def f():\n    from hmp_startup.entry_files import EntryFileSnapshotOwner\n",
+            False,
+        ),
+        (
+            "reads.py",
+            "def f():\n    from hmp_startup.runtime_files import LinkHop\n",
+            False,
+        ),
+        (
             "presentation_startup_artifacts.py",
             "from hmp_startup.entry_files import EntryFileSnapshotOwner\n",
             False,

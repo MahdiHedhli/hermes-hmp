@@ -234,6 +234,11 @@ class _ModuleScanner(ast.NodeVisitor):
                 "hmp_startup.entry_files": {"EntryFileSnapshotOwner", "_Inputs"},
                 "hmp_startup.runtime_files": {"RuntimeFilePlan", "_inside", "_path"},
             }
+            if (self.name == "presentation_link_path_policy.py"
+                    and self._function_depth > 0 and names
+                    and module == "hmp_startup.runtime_files"
+                    and set(names) <= {"ExecutableLinkPlan", "LinkHop"}):
+                return
             if (self.name == "presentation_source_digest.py" and self._function_depth > 0
                     and names
                     and ((module == "hmp_startup.gateway_entry"
