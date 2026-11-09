@@ -5,11 +5,15 @@ from . import test_presentation_entry_files as base
 from .test_presentation_gateway_approval import operator_composed_script
 
 
-@pytest.mark.parametrize('case', ('normal', 'missing_eof', 'copied_eof',
+@pytest.mark.parametrize('case', ('normal', 'empty', 'missing_eof', 'copied_eof',
                                  'missing_baseline', 'changed_file', 'lost_return',
                                  'foreign_baseline_resource', 'foreign_baseline_variant'))
 def test_original_postread_receipts(tmp_path, monkeypatch, case):
     script, fixture_mutation = operator_composed_script('links')
+    if case == 'empty':
+        original = r'(dep_root / "__init__.py").write_text("VALUE = 1\n")'
+        assert script.count(original) == 1
+        script = script.replace(original, '(dep_root / "__init__.py").write_text("")')
     script = script.replace('GatewayPackageOwner.verify_recipe(recipe)',
                             'GatewayPackageOwner.verify_recipe_source_hashes(recipe,entry)')
     script = script[:script.rfind('print(json.dumps')]
@@ -29,7 +33,7 @@ factory=m._prepare_metadata_operation_with_custody
 original_fstat=vars(a.StartupArtifactOwner)['_fstat']
 original_stat=vars(a.StartupArtifactOwner)['_stat']
 original_file_code=a.StartupArtifactOwner._file.__code__
-captured=[];commits=[];native_entries=[];post_returns=[];observed={}
+captured=[];commits=[];native_entries=[];post_returns=[];observed={};read_entries=[]
 baselines=[];eofs=[];native_origin=None;active_role=None;foreign_hooks=[]
 class ForeignBaseline:
     def __getattr__(self,name):
@@ -42,6 +46,9 @@ def capture_factory(actual_owner,resource):
     return operation,marker,payload
 
 def observe_native(frame,event,arg):
+    if (event=='c_call' and frame.f_code is a.StartupArtifactOwner._read.__code__
+            and native_origin is not None and arg is native_origin.operations[1]):
+        read_entries.append(True)
     if frame.f_code is m._produce_directory_metadata.__code__:
         if (event=='c_call' and native_origin is not None
                 and (arg is native_origin.operations[3] or arg is native_origin.operations[4])):
@@ -92,7 +99,7 @@ def observe_site(actual_owner,scope,registration,operation,name=None):
             baseline=baseline._replace(resource=baseline.resource._replace(variant=ForeignBaseline()))
         try:commit=m._run_directory_observation(owner,resource,predecessor,baseline,eof)
         except a.ArtifactObservationError:
-            assert post_case!='normal' and operation==4
+            assert post_case not in ('normal','empty') and operation==4
             entered=post_case in ('changed_file','lost_return')
             assert native_entries.count('leaf_after_read')==int(entered)
             assert tuple(registration.native_ledger.counts)==(before[0]+int(entered),before[1])
@@ -105,7 +112,7 @@ def observe_site(actual_owner,scope,registration,operation,name=None):
                 assert registration.native_ledger.failed==[True]
             observed.update(refused=True,post_entries=int(entered),actual_eof_preserved=True)
             raise
-        assert post_case=='normal'
+        assert post_case in ('normal','empty')
         assert commit.identity==baselines[0].identity==post_returns[-1][0]
         assert commit.consumer.predecessor is commits[-1]
         assert commit.consumer.eof is eofs[0] and commit.consumer.baseline is baselines[0]
@@ -117,6 +124,12 @@ def observe_site(actual_owner,scope,registration,operation,name=None):
         else:raise AssertionError('later metadata must not renew current read closure')
         if operation==3:
             assert native_entries.count('leaf_after_read')==2 and len(post_returns)==2
+            if post_case=='empty':
+                assert eofs[0].count[2]==0 and read_entries==[True]
+                assert eofs[0].eof is True and eofs[0].step.eof==[True]
+                assert eofs[0].operation.state==[True,True,False]
+                assert eofs[0].result.acknowledged[0] is eofs[0]
+                observed.update(empty_actual_eof=True,actual_read_calls=1)
             observed.update(actual_post_pair_ack=True,post_entries=2,
                             literal_eof_retained=True,current_read_closure_refused=True)
             raise RuntimeError('synthetic boundary after actual post-read pair ACK')
