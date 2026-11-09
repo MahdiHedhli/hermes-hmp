@@ -1,11 +1,32 @@
 # Complete startup cache-absence metadata policy
 
-November 9, 2026. This is the next complete local HMP implementation boundary.
-Fresh cache probe adoption is distinct. No upstream capability blocker is proven.
-The canonical startup resource and closed common-origin dispatch are preparation
-only: the default startup origin is None, no factory sets it, and startup still
-uses its existing traversal. No native authority, media access or deployment is
-introduced by declaring these types.
+November 9, 2026. The startup absence driver is source-connected in candidate
+`61cb346875ccfadd57f06798770073931017e0f9`; fresh cache probe adoption remains
+separate. The original pre-Scope factory now captures the path/policy and engine
+origins, the native cache observer calls the shared metadata pipeline, and actual
+finishes flow through before/after effects, passes and historical sealing. Other
+callers retain the default None origin. This is not deployed character/media
+support, and the acceptance requirements below are not all completed.
+
+Full uninstrumented native Entry/cache-fact completion passes on current
+Python 3.14.9 and minimum 3.11.15. Current local-line monitoring passes normal
+completion and first/middle close-ACK loss; minimum Python passes uninstrumented
+normal completion plus those two fault cases through its focused-trace fallback.
+These are different normal observer selections, not identical three-case sets.
+Two late old-parent scan mutations are rejected without subsequent stat/fstat
+or attempt debit. All retained source/result identities and security checks
+remain required; the earlier globally traced normal timeouts remain failures.
+The connected 109-case current regression is running; the 108-case minimum
+selection has not started. None of this qualifies actual installed startup,
+complete native/service composition, character delivery, devices or release.
+
+No upstream capability blocker is proven for this local work. A source-only
+census of native `0f0e96fc8e7fd35aba406e4a9fa341fb969d0b41` finds Desktop
+`profiles.get_asset` and no avatar/profile-asset endpoint in the primary or both
+unconditional HTTP extension route tables. That distinguishes Desktop RPC from
+a remote contract; it does not require an upstream change before implementing
+the bounded authenticated HMP bridge. No live RPC, profile asset, private config,
+permission or runtime change was used to establish this source finding.
 
 The complete implementation must preserve both original passes around file and
 link observations. Each path belongs to the original CacheContext paths tuple;
