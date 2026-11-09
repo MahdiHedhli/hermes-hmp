@@ -1,5 +1,14 @@
 ## November 8 — reviewed host updates deployed; character integration remains open
 
+Media-readiness discovery is implemented at source `e1edd5f` through authenticated
+`GET /media-readiness/capabilities`: protocol support only, explicitly no remote
+permission writes. Its 85-case current-interpreter readiness suite passes.
+Contract documentation at `fb82aef` defines closed DTO axes, older-host 404 fallback,
+per-instance/device/profile lifecycle and remaining review/qualification gates.
+The broader 256-case readiness/contract/plugin-surface run is in progress; no pass
+is claimed for it yet. Mobile decoder/display remains unfinished, and no new
+backend source or permission/schema change is deployed.
+
 Media-readiness final-delivery source `bbd75f3` rechecks authenticated bot/session
 scope after the worker await and compares the private permission revision before
 removing that internal snapshot from the wire DTO. Post-worker deny/regrant,
