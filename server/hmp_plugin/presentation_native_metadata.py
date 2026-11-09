@@ -1253,13 +1253,15 @@ def _produce_directory_metadata(owner, consumer):
                  and result.acknowledged[0] is None
                  and type(consumer.commit) is list and len(consumer.commit) == 1
                  and consumer.commit[0] is None)
-        if probe:
-            # Lifecycle/control failures belong to integrity refusal, never to
-            # the native diagnostic classifier below.
-            _probe_current_lifetime_tail(owner, consumer)
         if operation.operation == 4:
+            if probe:
+                _probe_current_lifetime_tail(owner, consumer)
             raw = callee(arguments[0])
         else:
+            if probe:
+                # Final lifetime closure is before the call but OUTSIDE the
+                # diagnostic handler: control failure is never native missing.
+                _probe_current_lifetime_tail(owner, consumer)
             try:
                 raw = callee(arguments[0], dir_fd=arguments[1], follow_symlinks=False)
             except missing_type as error:
