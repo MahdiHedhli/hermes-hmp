@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import sys
-from types import FunctionType, ModuleType
+from types import FunctionType, ModuleType, MemberDescriptorType
 from typing import NamedTuple
 
 from .presentation_metadata_custody import (
@@ -303,7 +303,7 @@ def _probe_stage_functions(owner, resource):
     _native_work_registration_tail(owner, resource.registration)
     scope = resource.registration.scope
     origin = scope.native_probe_engine_origin
-    _require(type(origin) is tuple and len(origin) == 6
+    _require(type(origin) is tuple and len(origin) == 7
              and type(origin[0]) is ModuleType and type(origin[2]) is tuple)
     wanted = ('_prepare_shared_consumer', '_latch_shared_consumer',
               '_produce_shared', '_consume_shared', '_ack_shared', '_attached_shared', '_retired_shared')
@@ -1065,9 +1065,69 @@ class _DirectoryMetadataReturn(NamedTuple):
     raw: object
     snapshot: _NativeMetadataSnapshot
 
+    @property
+    def category(self):
+        return 'returned'
+
     def __repr__(self):
         return '<DirectoryMetadataReturn pending original DATA redacted>'
 
+
+
+class _ReportedMissingMetadataReturn(NamedTuple):
+    """Actual known-raised STAT outcome; no exception/errno/filename retained."""
+    operation: _MetadataOperation
+    result: _MetadataResult
+    consumer: _ProbeConsumer
+
+    @property
+    def raw(self):
+        return self.result.unset
+
+    @property
+    def snapshot(self):
+        return None
+
+    @property
+    def category(self):
+        return 'reported_missing'
+
+    def __repr__(self):
+        return '<ReportedMissingMetadataReturn known raised DATA redacted>'
+
+
+def _probe_current_lifetime_tail(owner, consumer):
+    _require(type(consumer) is _ProbeConsumer and type(consumer.operation) is _MetadataOperation
+             and type(consumer.operation.resource) is _NativeProbeMetadataResource)
+    registration = consumer.operation.registration
+    _native_work_registration_tail(owner, registration)
+    origin = registration.scope.native_probe_engine_origin
+    _require(type(origin) is tuple and len(origin) == 7 and type(origin[2]) is tuple)
+    rows = tuple(row for row in origin[2] if type(row) is tuple and len(row) == 3
+                 and type(row[0]) is str and row[0] == '_lifecycle_tail')
+    _require(len(rows) == 1)
+    _, function, code = rows[0]
+    _require(type(function) is FunctionType and function.__code__ is code
+             and function.__globals__ is vars(origin[0])
+             and vars(origin[0]).get('_lifecycle_tail') is function)
+    return function(owner, registration.scope, registration, registration.scope.native_probe_plan)
+
+
+def _reported_missing_operation_tail(owner, consumer, actual):
+    _require(type(consumer) is _ProbeConsumer and type(actual) is _ReportedMissingMetadataReturn)
+    operation = _charged_directory_operation_tail(owner, consumer)
+    result = operation.result
+    _require(actual.operation is operation and actual.result is result and actual.consumer is consumer
+             and operation.operation == 3 and operation.state[1] is False
+             and operation.state[2] is False and operation.ended[0] is True
+             and operation.phase.current[0] is operation.phase.active
+             and operation.ledger.inflight[0] is operation
+             and result.raw[0] is result.unset
+             and consumer.consumption[0] is None and consumer.commit[0] is None
+             and all(cell[0] is None for cell in (result.category, result.snapshot,
+                                                result.acknowledged, result.envelope)))
+    _probe_current_lifetime_tail(owner, consumer)
+    return actual
 
 def _returned_directory_operation_tail(owner, consumer, operation, raw):
     """Actual raw return retained in original ACTIVE storage, before publication."""
@@ -1086,6 +1146,24 @@ def _returned_directory_operation_tail(owner, consumer, operation, raw):
 
 def _pending_directory_cohort_tail(owner, consumer, actual):
     """Rejoin the actual producer return; constructing matching DATA is no grant."""
+    if type(consumer) is _ProbeConsumer:
+        _require(type(actual) in (_DirectoryMetadataReturn, _ReportedMissingMetadataReturn))
+        operation = _charged_directory_operation_tail(owner, consumer)
+        result, phase = operation.result, operation.phase
+        _require(actual.operation is operation and actual.result is result
+                 and actual.consumer is consumer and operation.ended[0] is True
+                 and phase.current[0] is phase.pending and operation.ledger.inflight[0] is None
+                 and result.envelope[0] is actual and type(result.category[0]) is str
+                 and result.category[0] == actual.category)
+        if type(actual) is _ReportedMissingMetadataReturn:
+            _require(operation.operation == 3 and operation.state[1] is False
+                     and result.raw[0] is result.unset and result.snapshot[0] is None)
+        else:
+            _require(operation.state[1] is True and type(actual.raw) is operation.native.result_type
+                     and result.raw[0] is actual.raw and type(actual.snapshot) is _NativeMetadataSnapshot
+                     and result.snapshot[0] is actual.snapshot)
+        _probe_current_lifetime_tail(owner, consumer)
+        return actual
     _require(type(actual) is _DirectoryMetadataReturn)
     operation = _charged_directory_operation_tail(owner, consumer)
     result, phase = operation.result, operation.phase
@@ -1122,7 +1200,20 @@ def _produce_directory_metadata(owner, consumer):
     result, ledger, phase = operation.result, operation.ledger, operation.phase
     callee, arguments = operation.callee, operation.arguments
     raw, snapshot, actual = result.unset, None, None
-    category = _fixed_metadata_role(consumer.resource)
+    probe = type(consumer) is _ProbeConsumer
+    category = 'returned' if probe else _fixed_metadata_role(consumer.resource)
+    native = operation.native
+    missing_type = native.errors[1]
+    error_number = vars(native.errors[0]).get('errno')
+    error_filename = vars(native.errors[0]).get('filename')
+    _require(type(error_number) is MemberDescriptorType
+             and type(error_filename) is MemberDescriptorType
+             and error_number.__objclass__ is native.errors[0]
+             and error_filename.__objclass__ is native.errors[0])
+    missing = number = filename = None
+    enoent = (consumer.operation.registration.scope.native_probe_engine_origin[5]
+              if probe else None)
+    _require(not probe or type(enoent) is int)
     origin = marker = payload = cells = joined_cells = None
     raw_cell = category_cell = snapshot_cell = envelope_cell = None
     try:
@@ -1161,22 +1252,44 @@ def _produce_directory_metadata(owner, consumer):
                  and result.acknowledged[0] is None
                  and type(consumer.commit) is list and len(consumer.commit) == 1
                  and consumer.commit[0] is None)
-        if operation.operation == 4:
-            raw = callee(arguments[0])
-        else:
-            # The original closed leaf-before row alone selects this literal
-            # no-follow signature. No caller-supplied kwargs/callback/policy.
-            raw = callee(arguments[0], dir_fd=arguments[1], follow_symlinks=False)
-        raw_cell[0] = raw  # retain the actual C return before allocating/validating
-        operation.state[1] = True
+        try:
+            if operation.operation == 4:
+                if probe:
+                    _probe_current_lifetime_tail(owner, consumer)
+                raw = callee(arguments[0])
+            else:
+                if probe:
+                    _probe_current_lifetime_tail(owner, consumer)
+                raw = callee(arguments[0], dir_fd=arguments[1], follow_symlinks=False)
+            raw_cell[0] = raw  # actual C return, before allocation or validation
+            operation.state[1] = True
+        except missing_type as error:
+            if not probe:
+                raise
+            _require(operation.operation == 3 and type(error) is missing_type)
+            number = error_number.__get__(error, missing_type)
+            filename = error_filename.__get__(error, missing_type)
+            _require(type(number) is int and number == enoent
+                     and type(filename) is str and filename == arguments[0])
+            missing = _ReportedMissingMetadataReturn(operation, result, consumer)
+            _require(type(missing) is _ReportedMissingMetadataReturn
+                     and missing.operation is operation and missing.result is result
+                     and missing.consumer is consumer)
         operation.ended[0] = True
-        _returned_directory_operation_tail(owner, consumer, operation, raw)
-        snapshot = _native_metadata_snapshot(owner, operation.registration,
-                                             operation.native, raw)
-        _returned_directory_operation_tail(owner, consumer, operation, raw)
-        _require(type(snapshot) is _NativeMetadataSnapshot)
-        actual = _DirectoryMetadataReturn(operation, result, consumer, raw, snapshot)
-        _returned_directory_operation_tail(owner, consumer, operation, raw)
+        if missing is None:
+            _returned_directory_operation_tail(owner, consumer, operation, raw)
+            snapshot = _native_metadata_snapshot(owner, operation.registration,
+                                                 operation.native, raw)
+            _returned_directory_operation_tail(owner, consumer, operation, raw)
+            _require(type(snapshot) is _NativeMetadataSnapshot)
+            actual = _DirectoryMetadataReturn(operation, result, consumer, raw, snapshot)
+            _returned_directory_operation_tail(owner, consumer, operation, raw)
+        else:
+            # A known raised outcome is ended, charged and still NOT returned.
+            # It does not set the unknown/integrity-failure slot or clear debt.
+            actual = _reported_missing_operation_tail(owner, consumer, missing)
+            category = 'reported_missing'
+            snapshot = None
         category_cell[0] = category
         snapshot_cell[0] = snapshot
         envelope_cell[0] = actual
@@ -1219,6 +1332,8 @@ def _produce_directory_metadata(owner, consumer):
         raw = result.unset
         snapshot = None
         actual = None
+        missing = number = filename = None
+        error_number = error_filename = missing_type = enoent = None
         origin = marker = payload = cells = joined_cells = None
         raw_cell = category_cell = snapshot_cell = envelope_cell = None
     raise ArtifactObservationError(owner) from None

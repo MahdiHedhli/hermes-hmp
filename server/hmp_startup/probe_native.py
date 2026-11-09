@@ -47,14 +47,7 @@ class _ProbeExecution(NamedTuple):
 _ProbeConsumer = metadata._ProbeConsumer
 
 
-class _ProbeReturn(NamedTuple):
-    consumer: _ProbeConsumer
-    raw: object
-    snapshot: object
-    category: str
-
-    def __repr__(self):
-        return '<FreshProbeReturn private pending metadata redacted>'
+_ProbeReturn = metadata._DirectoryMetadataReturn
 
 
 class _ProbeCommit(NamedTuple):
@@ -73,30 +66,38 @@ class _ProbeCommit(NamedTuple):
 def _new_probe_engine_origin():
     module = sys.modules.get(__name__)
     _require(type(module) is ModuleType and vars(module) is globals())
-    kinds = (_ProbeExecution, _ProbeConsumer, _ProbeReturn, _ProbeCommit)
+    kinds = (_ProbeExecution, _ProbeConsumer, _ProbeReturn, _ProbeCommit,
+             metadata._ReportedMissingMetadataReturn)
     types = tuple((kind, kind._fields,
                    tuple(vars(kind).get(name) for name in kind._fields)) for kind in kinds)
     functions = tuple((name, globals()[name], globals()[name].__code__) for name in (
         '_engine_origin_tail', '_execution_tail', '_history_tail',
         '_resource_tail', '_resource', '_consumer_tail',
-        '_produce', '_policy', '_run_observation', '_open_ancestor',
+        '_policy', '_run_observation', '_open_ancestor',
         '_finish', '_run_fresh_probe', '_lifecycle_tail',
         '_prepare_shared_consumer', '_latch_shared_consumer', '_produce_shared',
         '_consume_shared', '_ack_shared', '_retired_shared', '_history_mirrors_tail', '_attached_shared'))
     return (module, types, functions, OSError.__dict__['errno'],
-            OSError.__dict__['filename'], errno.ENOENT)
+            OSError.__dict__['filename'], errno.ENOENT,
+            (metadata._produce_directory_metadata, metadata._produce_directory_metadata.__code__,
+             metadata))
 
 
 def _engine_origin_tail(origin):
-    _require(type(origin) is tuple and len(origin) == 6
+    _require(type(origin) is tuple and len(origin) == 7
              and type(origin[0]) is ModuleType
              and sys.modules.get(__name__) is origin[0]
              and vars(origin[0]) is globals()
-             and type(origin[1]) is tuple and len(origin[1]) == 4
-             and type(origin[2]) is tuple and len(origin[2]) == 21
+             and type(origin[1]) is tuple and len(origin[1]) == 5
+             and type(origin[2]) is tuple and len(origin[2]) == 20
              and origin[3] is OSError.__dict__['errno']
              and origin[4] is OSError.__dict__['filename']
              and type(origin[5]) is int and origin[5] == errno.ENOENT)
+    _require(type(origin[6]) is tuple and len(origin[6]) == 3
+             and origin[6][0] is metadata._produce_directory_metadata
+             and type(origin[6][0]) is FunctionType and origin[6][0].__code__ is origin[6][1]
+             and origin[6][2] is metadata and origin[6][0].__globals__ is vars(metadata)
+             and sys.modules.get('hmp_plugin.presentation_native_metadata') is metadata)
     for kind, fields, members in origin[1]:
         _require(type(kind) is type and vars(kind).get('_fields') is fields
                  and all(vars(kind).get(name) is member
@@ -264,66 +265,16 @@ def _consumer_tail(consumer, predecessor):
     return operation
 
 
-def _produce(consumer, predecessor, cells):
-    _consumer_tail(consumer, predecessor)
-    execution = consumer.execution
-    operation = metadata._admit_directory_operation(execution.owner, consumer)
-    ledger, phase, native = operation.ledger, operation.phase, operation.native
-    callee, args = operation.callee, operation.arguments
-    raw_cell, category_cell, snapshot_cell, envelope_cell = cells[:4]
-    missing_type = native.errors[1]
-    error_number, error_filename, enoent = execution.origin[3:]
-    _consumer_tail(consumer, predecessor)
-    _require(callee is native.operations[operation.operation]
-             and operation.operation in (3, 4) and operation.state == [True, False, False]
-             and ledger.inflight[0] is operation and phase.result[0] is operation
-             and phase.current[0] is phase.active and ledger.failed == [False]
-             and raw_cell[0] is operation.result.unset
-             and category_cell[0] is snapshot_cell[0] is envelope_cell[0] is None)
-    category = 'returned'
-    raw = operation.result.unset
-    # Only this narrow handler classifies an actual raised fixed stat call.
-    try:
-        if operation.operation == 4:
-            _lifecycle_tail(execution.owner, execution.registration.scope,
-                            execution.registration, execution.plan)
-            raw = callee(args[0])
-        else:
-            _lifecycle_tail(execution.owner, execution.registration.scope,
-                            execution.registration, execution.plan)
-            raw = callee(args[0], dir_fd=args[1], follow_symlinks=False)
-        raw_cell[0] = raw
-        operation.state[1] = True
-    except missing_type as error:
-        _require(operation.operation == 3 and type(error) is missing_type)
-        number = error_number.__get__(error, missing_type)
-        filename = error_filename.__get__(error, missing_type)
-        _require(type(number) is int and number == enoent
-                 and type(filename) is str and filename == args[0])
-        category = 'reported_missing'
-        # ended + typed reported-missing envelope records known raised; the
-        # shared third state slot remains false (it means unknown/failure).
-    operation.ended[0] = True
-    _consumer_tail(consumer, predecessor)
-    snapshot = (None if category == 'reported_missing' else
-                _native_metadata_snapshot(execution.owner, operation.registration, native, raw))
-    actual = _ProbeReturn(consumer, raw, snapshot, category)
-    _require(type(actual) is _ProbeReturn and actual.consumer is consumer
-             and actual.raw is raw and actual.snapshot is snapshot and actual.category is category)
-    category_cell[0], snapshot_cell[0], envelope_cell[0] = category, snapshot, actual
-    ledger.inflight[0] = None
-    phase.current[0] = phase.pending
-    return actual
-
 
 def _policy(execution, actual, predecessor):
-    _require(type(actual) is _ProbeReturn and type(actual.consumer) is _ProbeConsumer)
+    _require(type(actual) in (_ProbeReturn, metadata._ReportedMissingMetadataReturn)
+             and type(actual.consumer) is _ProbeConsumer)
     consumer = actual.consumer
     operation = _consumer_tail(consumer, predecessor)
     result, phase = operation.result, operation.phase
     _require(consumer.execution is execution and phase.current[0] is phase.pending
              and phase.result[0] is operation and operation.ledger.inflight[0] is None
-             and result.envelope[0] is actual and result.category[0] is actual.category
+             and result.envelope[0] is actual and type(result.category[0]) is str and result.category[0] == actual.category
              and result.snapshot[0] is actual.snapshot
              and result.raw[0] is actual.raw and operation.ended == [True])
     plan, site = execution.plan, operation.resource.ordinal
@@ -559,21 +510,9 @@ def _latch_shared_consumer(owner, consumer, rejoin=False):
 
 def _produce_shared(owner, consumer):
     _require(type(consumer) is _ProbeConsumer and consumer.execution.owner is owner)
-    result = consumer.operation.result
-    origin, marker, link, slot, state, reference = consumer.custody
-    payload = link[0]
-    cells = _directory_payload_cells(owner, origin, marker, payload)
-    try:
-        return _produce(consumer, consumer.predecessor, cells)
-    except BaseException:
-        # This fixed synchronous producer has unwound. End only this actual
-        # original intent; the common caller owns conditional routing/retirement.
-        ended = consumer.operation.ended
-        if type(ended) is list and len(ended) == 1 and ended[0] is False:
-            ended[0] = True
-        raise
-    finally:
-        payload = cells = None
+    origin = _engine_origin_tail(consumer.execution.origin)
+    # Retained original common producer, never a current replacement callable.
+    return origin[6][0](owner, consumer)
 
 
 def _consume_shared(owner, consumer, actual):

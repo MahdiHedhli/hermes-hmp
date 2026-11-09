@@ -34,17 +34,17 @@ faults=[];native_calls=[];references=[];held_rows=[]
 owner._fixture_foreign_stage_calls=0
 original_stage_code=engine._produce_shared.__code__
 def observed(frame):
-    if frame.f_locals['execution'].owner is owner:native_calls.append(True)
-observe_synthetic_native(reg.native_origin.operations[3],engine._produce.__code__,observed)
+    if frame.f_locals.get('owner') is owner:native_calls.append(True)
+observe_synthetic_native(reg.native_origin.operations[3],engine.metadata._produce_directory_metadata.__code__,observed)
 if failure_case=='retire_before_stat':
     def retire(frame):
-        if frame.f_locals['execution'].owner is owner and not faults:
+        if frame.f_locals.get('owner') is owner and not faults:
             faults.append(True)
             continuation._retired=True
-    trace_synthetic_boundary(engine._produce.__code__,'if operation.operation == 4:',retire)
+    trace_synthetic_boundary(engine.metadata._produce_directory_metadata.__code__,'if operation.operation == 4:',retire)
 elif failure_case=='lost_native_return':
     def lose(frame):
-        execution=frame.f_locals['execution']
+        execution=frame.f_locals['consumer'].execution
         if execution.owner is owner and execution.opened and not faults:
             faults.append(True)
             operation=frame.f_locals['operation']
@@ -52,7 +52,7 @@ elif failure_case=='lost_native_return':
             references.append(operation.result.custody_slot[0].reference)
             held_rows.extend(scope.records)
             raise RuntimeError('synthetic producer-return loss after actual native return')
-    trace_synthetic_boundary(engine._produce.__code__,'snapshot = (None if category',lose)
+    trace_synthetic_boundary(engine.metadata._produce_directory_metadata.__code__,'snapshot = _native_metadata_snapshot(',lose)
 if failure_case=='stage_code_drift':
     def foreign_stage(owner,consumer):
         vars(owner)['_fixture_foreign_stage_calls']+=1
