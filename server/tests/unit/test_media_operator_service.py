@@ -585,7 +585,7 @@ def test_client_invalid_server_challenge_sends_no_mutation(tmp_path, bad):
         finally:
             listener.close()
             await listener.wait_closed()
-            service.path.unlink()
+            service.path.unlink(missing_ok=True)  # newer asyncio already removes its socket
             await finish(actor, store, service)
 
     asyncio.run(scenario())
