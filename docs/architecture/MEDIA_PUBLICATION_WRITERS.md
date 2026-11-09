@@ -38,3 +38,28 @@ the transaction. It is not a provider/request-selected callback. A future actor
 must reject a listener-thread blocking rendezvous before waiting. Full publication
 cannot be enabled until all relevant writers invalidate before effect and settle
 under the same authority owner. Polling, TTLs and cached grants are insufficient.
+
+## Listener actor preparation — d6f57d4
+
+The unwired MediaPublicationActor now implements the in-process observer protocol.
+Only fixed currency operations run on the original listener thread. Worker callers
+wait up to250ms for acknowledgement; listener-thread rendezvous is refused before
+enqueue.32 queued-operation slots bound admission. A callback releases its original
+slot only after actual retirement; unknown enqueue/acquisition retains debt and
+closes admission, while proven-unused reservations can be released. Futures are
+not cancelled on observation timeout. Sticky failure is checked before and after
+candidate/claim operations, together with original publisher/loop/thread identities.
+
+Seven actor tests and the existing Store/currency regressions pass (287 cases on
+each interpreter). A real Store worker fixture holds SQL while listener sleep
+remains responsive, then settles; queued-deadline loss starts no write. Worker
+failure during actual currency-clock callbacks refuses output. Allocation failure
+before enqueue releases all proven-unused capacity and closes admission. The first
+timeout fixture had a scheduling race; its failed evidence is retained, and the
+corrected fixture prevents delivery until after the deadline.
+
+No adapter installs this actor. Typed operator IPC, original listener lifecycle
+binding, complete Store entry/retirement/migration coverage and native bot/config
+mutation contracts remain required. The existing final synchronous diagnostic
+collector is unchanged. Actor tests therefore do NOT close LM-ENT1-P1 or qualify
+complete authority, responsiveness, runtime, device or release behavior.
