@@ -1,6 +1,18 @@
 ## November 8 — reviewed host updates deployed; character integration remains open
 
 
+Independent review then found pre-submission allocation/registration and budget-return
+loss accounting gaps. Source `e948e83` records the original intent before capacity
+acquisition, cleans only proven-unacquired reservations, and retains/poisons unknown
+acquisition without a guessed refund. Both148-case combined suites pass unchanged
+(23 service cases), full lint passes, and independent delta review found no new
+concrete blocker in the fix. Conservatively unresolved acquisition may block drain
+indefinitely; it never authorizes Store closure. The service remains unwired, with
+CLI consent/client, whole-listener retirement, native/config publication, migration
+and physical qualification still open. Latest observed Mac capacity is443MiB free;
+large builds/tests need a new capacity check. No broader feature completion claimed.
+
+
 Mutation service source `be1f84b` passes142 combined read/FD/layout/codec/CAS/service
 cases on both Python3.14.9 and3.11.15, plus full Ruff. The17 service cases now cover
 malformed frames, waiting-client bound, foreign connection challenge/cohort, worker
