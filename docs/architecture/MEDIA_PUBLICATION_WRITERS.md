@@ -442,3 +442,24 @@ Next: audit context propagation in the earlier read-worker backport separately;
 then retain/reconcile each partial listener setup stage and failed builder resource.
 No native profile side effect or auth bypass is inferred from the context audit.
 Nothing from this source branch was deployed; live hosts remain c7482f1.
+
+## Read-worker context parity audit completed — 81f3725 / 5ecd2ba
+
+The earlier direct read-pool submission lost caller ContextVars compared with
+asyncio.to_thread. A synthetic marker control on16ca49c reproduced the mismatch;
+no real context values were inspected/logged or native profile/auth effect claimed.
+Each read now copies its caller context before any reservation and runs the same
+collector through that context on its original actual Future. Debt/settlement,
+late-error handling, timeout and same-origin checks are unchanged.
+
+Both593-case minimal-backport regression suites and364-case feature suites passed
+unchanged on3.14.9/3.11.15, plus Ruff, Plugin Doctor and independent finite source
+review. Pinned5ecd2ba7e580e86e3d91bcae38f0584bcc366077 is now installed on both
+hosts, with109 files, fresh matched gateway/listener PIDs, expected TLS identity and
+unchanged configuration/device-controls/schema snapshots verified. Prior channel
+states remain; LLY520 Lucas/Serenity still produce aggregate health exit1.
+
+This deploys only the small read-context parity repair atop the earlier safety
+backport. The feature-branch bootstrap/retirement/media additions remain uninstalled.
+Partial listener/builder resource recovery, all other borrowers, migration, native
+publication and physical/release qualification remain open.
