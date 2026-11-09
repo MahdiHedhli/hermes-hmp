@@ -1,4 +1,18 @@
-## November 9 — shutdown ownership checks pass; media integration remains open
+## November 9 — full unit failures cleared; device launch checks advance
+
+Full reconciled unit reruns at `889a31b` report zero failures/errors with unchanged
+source: current8,257passed/15skipped; floor8,255passed/17skipped, plus190passing
+subtests each. Strict qualification remains false: native prerequisites, Linux-only
+coverage and two floor UUID7 cases remain explicit. Subsequent test-only SDK verifier
+`72a27a9` follows Hermes0.23 explicit class re-exports without native import/execution;
+26checks pass for each ed1/0f0 committed-source sample and23portable parser checks pass
+on3.11. Finite review accepted declaration checks, not effective native behavior.
+Device observations: Android beta6 launches, unpaired onboarding and demo entry/exit
+observed; iPad702 launch/activation accepted with matching PID/executable observations
+more than2minutes apart. No cold-start/UI/persistence qualification. LB1-T008 staysopen;
+Android host preference awaits the owner and iPhone15 is disconnected. Existing hosts
+still match expected5ecd installed-file checks; no new install/config/grant/media activation.
+New lifecycle fixes remain source-only; a minimal schema-preserving host backport is next.
 
 Reconciliation source `1afc818` addresses the remaining original media/migration/
 source-contract failures in selected checks. S5 now uses actual current permission

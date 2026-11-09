@@ -560,3 +560,22 @@ rerun is still required;14 missing native prerequisites and1 Linux-only skip rem
 No deployment/activation or device qualification; broader feature goal stays active.
 
 Next: rerun complete unit selection with short owned paths and preserve all outcomes; configure exact native prerequisites separately, never convert skips or historical composition into release approval. Builder/native media authority/migration and physical gates remain.
+
+
+## Full unit reruns and initial physical launch checks
+
+Full reconciled unit reruns at `889a31b` report zero failures/errors with unchanged
+source: current8,257passed/15skipped; floor8,255passed/17skipped, plus190passing
+subtests each. Strict qualification remains false: native prerequisites, Linux-only
+coverage and two floor UUID7 cases remain explicit. Subsequent test-only SDK verifier
+`72a27a9` follows Hermes0.23 explicit class re-exports without native import/execution;
+26checks pass for each ed1/0f0 committed-source sample and23portable parser checks pass
+on3.11. Finite review accepted declaration checks, not effective native behavior.
+Device observations: Android beta6 launches, unpaired onboarding and demo entry/exit
+observed; iPad702 launch/activation accepted with matching PID/executable observations
+more than2minutes apart. No cold-start/UI/persistence qualification. LB1-T008 staysopen;
+Android host preference awaits the owner and iPhone15 is disconnected. Existing hosts
+still match expected5ecd installed-file checks; no new install/config/grant/media activation.
+New lifecycle fixes remain source-only; a minimal schema-preserving host backport is next.
+
+Next: minimal migration-free lifecycle backport after exact review/tests; paired organizer/persistence after owner host choice; native media authority/migration, failed-builder allocation, wider native probes and release/device gates stay open.
