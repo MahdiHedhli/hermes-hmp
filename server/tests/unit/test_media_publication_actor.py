@@ -54,10 +54,18 @@ def test_late_begin_ack_starts_no_write_and_poisoned_callback_retires(monkeypatc
             started.set()
             actor.begin()
             writes.append('must not run without receipt')
-        work = asyncio.create_task(asyncio.to_thread(write))
-        assert await asyncio.to_thread(started.wait, 2)
-        time.sleep(.08)  # deliberately block fixture loop past the ack deadline
-        with pytest.raises(PublicationUnavailable): await work
+        failures = []
+        def run_worker():
+            try: write()
+            except PublicationUnavailable: failures.append(True)
+        worker = threading.Thread(target=run_worker)
+        worker.start()
+        # Keep the loop from processing begin until after its acknowledgement
+        # deadline. Awaiting the started event could let begin run first.
+        assert started.wait(2)
+        time.sleep(.08)
+        await asyncio.to_thread(worker.join, 2)
+        assert not worker.is_alive() and failures == [True]
         await asyncio.sleep(0)
         assert writes == []
         with pytest.raises(PublicationUnavailable): actor.candidate(SCOPE, (1, 2, 3))
