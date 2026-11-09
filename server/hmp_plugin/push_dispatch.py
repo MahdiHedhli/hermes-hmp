@@ -162,6 +162,7 @@ class PushDispatcher:
         self._relay_owner = relay_owner if relay_owner is not None else RelayCloseOwner(relay)
         if self._relay_owner.relay is not relay:
             raise ValueError("relay owner mismatch")
+        self._origin_relay_owner = self._relay_owner
         self._origin_store, self._origin_hints = self.store, ctx.push_hints
         self._owned_tasks: dict[object, tuple[object, object, asyncio.Task | None]] = {}
         self._close_attempted = False
@@ -586,6 +587,7 @@ class PushDispatcher:
 
     def _retirement_scope(self):
         if (self.ctx is not self._origin_ctx or self.relay is not self._origin_relay
+                or self._relay_owner is not self._origin_relay_owner
                 or self.store is not self._origin_store
                 or self.ctx.prompt_store is not self._origin_store
                 or self.ctx.push_hints is not self._origin_hints):

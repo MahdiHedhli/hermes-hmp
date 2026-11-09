@@ -2405,7 +2405,14 @@ class HmpServer:
         rejoin()
         hints.clear()
         dispatcher = cohort["_push_dispatcher"] or cohort["_push_start_dispatcher"]
+        if (cohort["_push_dispatcher"] is not None
+                and cohort["_push_start_dispatcher"] is not None
+                and cohort["_push_dispatcher"] is not cohort["_push_start_dispatcher"]):
+            raise RuntimeError("push dispatcher owner changed; retain original resources")
         if dispatcher is not None:
+            if (cohort["_push_relay_owner"] is not None
+                    and dispatcher._relay_owner is not cohort["_push_relay_owner"]):
+                raise RuntimeError("push relay owner changed; retain original resources")
             self._push_dispatcher_drained = dispatcher
             await dispatcher.close()
             rejoin()

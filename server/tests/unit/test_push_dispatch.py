@@ -1172,3 +1172,21 @@ def test_failed_relay_close_cannot_certify_retirement_or_replay(env):
         assert dispatcher.retirement_pending and calls == ["close"]
 
     run(env, scenario)
+
+
+def test_dispatcher_rejects_substituted_relay_cleanup_owner(env):
+    from hmp_plugin.push_retirement import RelayCloseOwner
+
+    async def scenario(client):
+        _, _, _, relay, dispatcher, _, _ = await prepare(env, client)
+        await dispatcher.close()
+        original = dispatcher._relay_owner
+        dispatcher._relay_owner = RelayCloseOwner(relay)
+        try:
+            with pytest.raises(RuntimeError, match="scope changed"):
+                await dispatcher.wait_drained()
+        finally:
+            dispatcher._relay_owner = original
+        await dispatcher.wait_drained()
+
+    run(env, scenario)
