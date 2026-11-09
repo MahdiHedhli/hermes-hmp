@@ -104,6 +104,7 @@ def exchange_media_decision(path: Path, request: MediaReadMutation):
             hello = wire.parse_body(
                 _line(client, maximum=512, deadline=deadline), max_bytes=511, max_depth=2
             )
+            now_ms = int(time.monotonic() * 1000)
             if (
                 frozenset(hello) != _HELLO_KEYS
                 or type(hello["protocol"]) is not int
@@ -116,7 +117,7 @@ def exchange_media_decision(path: Path, request: MediaReadMutation):
                 or len(hello["challenge"]) != 32
                 or any(c not in "0123456789abcdef" for c in hello["challenge"])
                 or type(hello["expires_ms"]) is not int
-                or not int(time.monotonic() * 1000) < hello["expires_ms"] <= int(deadline * 1000)
+                or not 0 < hello["expires_ms"] - now_ms <= 2000
             ):
                 raise ValueError("challenge unavailable")
             deadline = min(deadline, hello["expires_ms"] / 1000)
@@ -138,4 +139,9 @@ def exchange_media_decision(path: Path, request: MediaReadMutation):
         raise MediaOperatorUnavailableError() from None
     finally:
         if fd is not None:
-            os.close(fd)
+            try:
+                os.close(fd)
+            except BaseException:
+                if submitted:
+                    raise MediaOperatorOutcomeUnknownError() from None
+                raise MediaOperatorUnavailableError() from None

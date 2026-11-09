@@ -466,3 +466,126 @@ def test_definite_capacity_refusal_removes_only_unacquired_intent(tmp_path, monk
             await finish(actor, store, service)
 
     asyncio.run(scenario())
+
+
+def test_verified_client_real_socket_commits_once_and_stale_snapshot_conflicts(tmp_path):
+    from hmp_plugin.media_operator_client import exchange_media_decision
+
+    async def scenario():
+        actor, store, ctx, request, service = await open_service(tmp_path)
+        try:
+            reply = await asyncio.to_thread(exchange_media_decision, service.path, request)
+            assert reply.status == "committed" and reply.decision.revision == 1
+            duplicate = await asyncio.to_thread(exchange_media_decision, service.path, request)
+            assert duplicate.status == "conflict"
+            assert store.media_read_decision(ctx.iid, request.device_id).revision == 1
+            assert store.owner_controls_decision(request.device_id) is None
+        finally:
+            await finish(actor, store, service)
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("failure", ("peer", "before_send", "after_reply", "reply_decode"))
+def test_verified_client_classifies_before_send_vs_possible_commit_without_retry(
+    tmp_path, monkeypatch, failure
+):
+    from hmp_plugin import media_operator_client as client
+
+    async def scenario():
+        actor, store, ctx, request, service = await open_service(tmp_path)
+        binding = client._binding
+        calls = []
+
+        def checked(*args):
+            calls.append(1)
+            if (failure == "before_send" and len(calls) == 3) or (
+                failure == "after_reply" and len(calls) == 4
+            ):
+                raise OSError("synthetic binding change")
+            return binding(*args)
+
+        def decode_failed(*_args, **_kwargs):
+            raise ValueError("synthetic reply parsing loss")
+
+        monkeypatch.setattr(client, "_binding", checked)
+        if failure == "peer":
+            monkeypatch.setattr(client, "_peer_uid", lambda _sock: os.getuid() + 1)
+        if failure == "reply_decode":
+            monkeypatch.setattr(client, "decode_reply", decode_failed)
+        try:
+            possible_write = failure in {"after_reply", "reply_decode"}
+            error = (
+                client.MediaOperatorOutcomeUnknownError
+                if possible_write
+                else client.MediaOperatorUnavailableError
+            )
+            with pytest.raises(error):
+                await asyncio.to_thread(client.exchange_media_decision, service.path, request)
+            assert store.media_read_decision(ctx.iid, request.device_id).revision == int(
+                possible_write
+            )
+            assert store.owner_controls_decision(request.device_id) is None
+        finally:
+            await finish(actor, store, service)
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize(
+    "bad", ("iid", "nonce", "generation", "expired", "future", "bool", "duplicate")
+)
+def test_client_invalid_server_challenge_sends_no_mutation(tmp_path, bad):
+    from hmp_plugin import media_operator_client as client
+
+    async def scenario():
+        actor, store, ctx, request, service = await open_service(tmp_path)
+        await service.stop()
+        received = []
+        finished = asyncio.Event()
+
+        async def fake(reader, writer):
+            hello = {
+                "protocol": 1,
+                "operation": "host_media_read_challenge",
+                "iid": request.iid,
+                "nonce": request.nonce,
+                "generation": request.generation,
+                "challenge": "e" * 32,
+                "expires_ms": int(time.monotonic() * 1000) + 1500,
+            }
+            if bad in {"iid", "nonce", "generation"}:
+                hello[bad] = "f" * (52 if bad == "iid" else 32)
+            elif bad == "expired":
+                hello["expires_ms"] = int(time.monotonic() * 1000) - 1
+            elif bad == "future":
+                hello["expires_ms"] = int(time.monotonic() * 1000) + 10000
+            elif bad == "bool":
+                hello["protocol"] = True
+            raw = wire.dump_json(hello)
+            if bad == "duplicate":
+                raw = b'{"protocol":1,' + raw[1:]
+            try:
+                writer.write(raw + b"\n")
+                await writer.drain()
+                received.append(await reader.readline())
+            finally:
+                writer.close()
+                await writer.wait_closed()
+                finished.set()
+
+        listener = await asyncio.start_unix_server(fake, path=str(service.path))
+        service.path.chmod(0o600)
+        try:
+            with pytest.raises(client.MediaOperatorUnavailableError):
+                await asyncio.to_thread(client.exchange_media_decision, service.path, request)
+            await asyncio.wait_for(finished.wait(), 1)
+            assert received == [b""]
+            assert store.media_read_decision(ctx.iid, request.device_id).revision == 0
+        finally:
+            listener.close()
+            await listener.wait_closed()
+            service.path.unlink()
+            await finish(actor, store, service)
+
+    asyncio.run(scenario())
