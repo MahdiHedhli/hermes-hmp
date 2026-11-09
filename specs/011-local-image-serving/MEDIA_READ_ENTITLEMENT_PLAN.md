@@ -75,3 +75,22 @@ No such change was made. Software installation is separate from access.
 
 No upstream Hermes change is established as a prerequisite for this HMP-owned
 permission separation. It does not resolve the separate character-reader work.
+
+
+## Source checkpoint — November 8, media readiness
+
+Focused branch `feat/media-read-entitlement-20261108`, source `701783e`, adds
+`GET /bots/{p}/media-readiness` without changing the existing AR1 response.
+The new response separates entitlement, host opt-in and runtime API state, with
+closed reasons and `contact_host_operator`; it does not advertise an unimplemented
+Request access or Fix transport. Image availability is explicitly `not_probed`.
+It reuses the existing authenticated per-bot authorization/deadline/worker-budget
+fence and rereads rights/settings before disclosure. Unknown authority is refused,
+not represented as missing rights. No file/reference lookup or mutation occurs.
+
+The 77-case current-Python readiness suite passes with zero failures/errors/skips;
+floor run and broader route-surface/contract coverage are pending at this checkpoint.
+Mobile decoding/display and capability negotiation, causal revocation/lost-await
+route coverage, independent review and runtime/physical qualification remain open.
+The legacy owner-fallback revocation-generation limitation remains open. Nothing
+from this schema-4 branch is installed on a live host.
