@@ -144,9 +144,16 @@ passes at c981bc2, independently audited; failing stage-code and scope-field
 controls are preserved. The intermediary4case failure was a directory-only
 postACK tail accidentally retained in the probe path; its fixed attached stage
 now passes positive paths as well as refusal controls. Existing directory
-compatibility22 is running, not inferred. No minimum/runtime/device qualification
+compatibility22 passes on current and minimum Python, unchanged source; this
+does not qualify later producer changes. No minimum/runtime/device qualification
 or fullengine approval follows from these selected checks.
 
 Shared native outcome, consumption and partial ACK handling remain incomplete.
 Do not wire or install the probe while those and the full failure/finish/type/
 descriptor causals remain unqualified. PS1-FP-NATIVE stays open.
+
+The separate common-producer worktree has a canonical known-raised outcome and
+one stat/fstat producer. Its initial broad classification handler failed two
+causal controls; `c4b7930` isolates the literal native stat call and preserves
+actual returned history on bookkeeping loss. Runtime12 is running, unqualified.
+Do not infer this source's qualification from the c981 parent compatibility.
