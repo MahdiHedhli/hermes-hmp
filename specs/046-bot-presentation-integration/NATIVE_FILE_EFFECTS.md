@@ -1,6 +1,19 @@
 ## November 8 — reviewed host updates deployed; character integration remains open
 
 
+MR-START1 source `d524059` serializes adapter connect/disconnect and blocks retry
+or false-connected results after unresolved startup/shutdown. A retained730e908
+control reproduced2 component workers active together; successful concurrentcalls
+now share one syntheticTLSlistener and failed attempts remain sequential. Both350
+combined cases pass unchanged on3.14.9/3.11.15 plus Ruff; independent finite review
+found no further concrete blocker. Only explicitcleanup with actualStorecloseproof
+clears disconnect uncertainty; startup uncertainty stays latched. MR-START2 actual
+bootstrapFuture/partial-resource ownership and recovery are NOT implemented by this
+exclusion lock. No live incident/deployment or media activation claimed; livehosts
+remainc7482f1. Other borrower, migration, nativepublication and physical/release gates
+remain open. This source-only protection is not a runtime qualification claim.
+
+
 MR-LIFE2b source `5f684b8` retains each original adapter server/context/Store/close
 owner before dropping its listener pointer. Pending/failed/unknown retirement blocks
 connect beforeopen_components; cancelled waiters do not cancel actualowners and

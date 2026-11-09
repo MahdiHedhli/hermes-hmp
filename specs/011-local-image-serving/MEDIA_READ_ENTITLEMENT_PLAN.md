@@ -355,3 +355,20 @@ publication or physical/release qualification. The adapter still starts no new
 media service; both live hosts remain on c7482f1 with no changes this turn.
 
 Next qualification: serialize/capture concurrent startup and bootstrap cancellation ownership, inventory every HTTP/native/thread Store borrower, then qualify quiesced schema4 migration/rollback. Native final authority publication remains blocked on an inspected contract, not substituted by a cached boolean. No activation from this checkpoint.
+
+
+## MR-START1 lifecycle exclusion reviewed
+
+MR-START1 source `d524059` serializes adapter connect/disconnect and blocks retry
+or false-connected results after unresolved startup/shutdown. A retained730e908
+control reproduced2 component workers active together; successful concurrentcalls
+now share one syntheticTLSlistener and failed attempts remain sequential. Both350
+combined cases pass unchanged on3.14.9/3.11.15 plus Ruff; independent finite review
+found no further concrete blocker. Only explicitcleanup with actualStorecloseproof
+clears disconnect uncertainty; startup uncertainty stays latched. MR-START2 actual
+bootstrapFuture/partial-resource ownership and recovery are NOT implemented by this
+exclusion lock. No live incident/deployment or media activation claimed; livehosts
+remainc7482f1. Other borrower, migration, nativepublication and physical/release gates
+remain open. This source-only protection is not a runtime qualification claim.
+
+MR-START2 next: retain the actual component-opening concurrent Future and original startup scope/context/server before publication; reconcile caller cancellation/unknown task creation/partial startup without guessed cleanup or replay, then permit recovery only after known original resources retire. Preserve controlled False results and tested normal behavior. No default media activation.
