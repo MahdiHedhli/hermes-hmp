@@ -103,6 +103,10 @@ class RuntimeCacheProbeOwner:
 
             plan = _new_fresh_probe_plan(owner, root, selected, context)
             scope_kind = _Scope
+            scope_fields = vars(scope_kind)['_fields']
+            scope_members = tuple(vars(scope_kind).get(field) for field in scope_fields)
+            dispatch_names = ('__getattribute__', '__getattr__', '__getitem__', '__len__', '__iter__')
+            scope_dispatch = tuple(vars(scope_kind).get(name) for name in dispatch_names)
             owner_names = vars(owner)
             owner_entries = tuple(owner_names.items())
             need, need_code = _require, _require.__code__
@@ -123,6 +127,11 @@ class RuntimeCacheProbeOwner:
             if need.__code__ is not need_code:
                 raise CacheProbeError(owner) from None
             need(type(scope) is scope_kind and _Scope is scope_kind
+                 and vars(scope_kind).get('_fields') is scope_fields
+                 and all(vars(scope_kind).get(field) is member
+                         for field, member in zip(scope_fields, scope_members, strict=True))
+                 and all(vars(scope_kind).get(name) is member
+                         for name, member in zip(dispatch_names, scope_dispatch, strict=True))
                  and tuple_length(scope) == len(values)
                  and all(tuple_item(scope, index) is original
                          for index, original in enumerate(values))
@@ -131,6 +140,8 @@ class RuntimeCacheProbeOwner:
                  and all(key in owner_names and owner_names[key] is value
                          for key, value in owner_entries)
                  and owner_names.get('_probe_plan') is None
+                 and type(records) is list and len(records) == 0
+                 and type(slot) is list and len(slot) == 1 and slot[0] is None
                  and material.__code__ is material_code and observe.__code__ is observe_code
                  and vars(cls).get('_pure') is material
                  and vars(cls).get('_observe_owned') is observe
