@@ -11,6 +11,9 @@ from types import FunctionType, ModuleType
 from typing import NamedTuple
 
 from hmp_plugin.presentation_startup_artifacts import _Scope
+from hmp_plugin.presentation_startup_artifacts import (
+    _NativeScopeRegistration, _capture_native_scope, _native_work_origin_tail,
+)
 
 from .cache_probe import RuntimeCacheProbeOwner
 from .cache_candidates import PlannedCachePath
@@ -248,3 +251,92 @@ def _fresh_probe_plan_tail(owner, scope, original):
           and type(original.commits) is list and len(original.commits) == 0
           and type(original.ancestors) is list and len(original.ancestors) == 0)
     return original
+
+
+class _ProbeObservationResource(NamedTuple):
+    """Fixed original probe input DATA, never an operation or returned receipt."""
+    owner: object
+    registration: object
+    metadata: _FreshProbePlan
+    variant: _ProbeSite
+    site: tuple
+    ordinal: int
+    descriptor: object
+    arguments: tuple
+
+    def __repr__(self):
+        return '<FreshProbeResource original DATA no-admission>'
+
+
+def _fresh_probe_resource_tail(owner, resource):
+    """Unclaimed root resource only while the complete probe engine is unwired.
+
+    This deliberately does not relax the original zero-state plan fence. Later
+    sites require the distinct probe consumer/history/diagnostic lifecycle, not
+    another DirectoryConsumer owner or a caller-selected path/operation.
+    """
+    _need(type(resource) is _ProbeObservationResource and resource.owner is owner
+          and type(owner) is RuntimeCacheProbeOwner
+          and type(resource.registration) is _NativeScopeRegistration
+          and resource.registration.owner is owner
+          and type(resource.registration.scope) is _Scope
+          and type(resource.metadata) is _FreshProbePlan)
+    registration, plan = resource.registration, resource.metadata
+    scope = registration.scope
+    own = vars(owner)
+    _need(own.get('_origin') is scope and own.get('_scope') is scope
+          and own.get('_started') is True and own.get('_ready') is False
+          and own.get('_failed') is False and own.get('_unknown') is False
+          and own.get('_retaining') is False and own.get('_admitting') is False)
+    cell, root = own.get('_cell'), own.get('_root_cell')
+    _need(_capture_native_scope(scope, cell, root) is registration
+          and _fresh_probe_plan_tail(owner, scope, plan) is plan
+          and type(scope.records) is list and len(scope.records) == 0
+          and type(resource.ordinal) is int and resource.ordinal == 0
+          and resource.site is plan.definitions[0]
+          and resource.variant is plan.variants[0]
+          and resource.site == (3, 'probe_initial', 0)
+          and resource.descriptor is None
+          and type(resource.arguments) is tuple and len(resource.arguments) == 2
+          and resource.arguments[0] is plan.components[0]
+          and resource.arguments[1] is None)
+    _native_work_origin_tail(owner, registration, registration.native_origin)
+    _need(_capture_native_scope(scope, cell, root) is registration
+          and _fresh_probe_plan_tail(owner, scope, plan) is plan
+          and own.get('_started') is True and own.get('_ready') is False
+          and own.get('_failed') is False and own.get('_unknown') is False
+          and own.get('_retaining') is False and own.get('_admitting') is False
+          and len(scope.records) == 0 and resource.metadata is plan
+          and resource.site is plan.definitions[0] and resource.variant is plan.variants[0]
+          and resource.descriptor is None
+          and type(resource.arguments) is tuple and len(resource.arguments) == 2
+          and resource.arguments[0] is plan.components[0] and resource.arguments[1] is None)
+    return resource
+
+
+def _prepare_fresh_probe_resource(owner, registration, original):
+    """Allocate original root input for shared intent preparation, without IO.
+
+    The actual probe invocation must already have passed its normal admission.
+    This provides neither native admission nor result/diagnostic credit. The
+    unsupported consumer path remains closed until the complete engine is wired.
+    """
+    _need(type(registration) is _NativeScopeRegistration
+          and type(registration.scope) is _Scope
+          and registration.owner is owner and type(original) is _FreshProbePlan)
+    _fresh_probe_plan_tail(owner, registration.scope, original)
+    kind = _ProbeObservationResource
+    fields = kind._fields
+    members = tuple(vars(kind).get(name) for name in fields)
+    item, length = tuple.__getitem__, tuple.__len__
+    site, variant = original.definitions[0], original.variants[0]
+    arguments = (original.components[0], None)
+    values = (owner, registration, original, variant, site, 0, None, arguments)
+    result = kind(*values)
+    _need(_ProbeObservationResource is kind and type(result) is kind
+          and vars(kind).get('_fields') is fields
+          and all(vars(kind).get(name) is member
+                  for name, member in zip(fields, members, strict=True))
+          and length(result) == len(values)
+          and all(item(result, index) is value for index, value in enumerate(values)))
+    return _fresh_probe_resource_tail(owner, result)

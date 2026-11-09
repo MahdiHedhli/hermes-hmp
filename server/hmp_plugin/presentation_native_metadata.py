@@ -127,6 +127,22 @@ class _MetadataOperation(NamedTuple):
 
 def _resource_tail(owner, resource):
     """Rejoin the held actual resource; never adopt a current replacement."""
+    if type(resource) is not _NativeMetadataResource:
+        # A retained probe has already loaded this HMP-owned module. Unknown
+        # inputs and ordinary reader owners must refuse without a cold import.
+        _require(type(sys.modules) is dict)
+        probe_module = sys.modules.get('hmp_startup.probe_metadata')
+        owner_module = sys.modules.get('hmp_startup.cache_probe')
+        _require(type(probe_module) is ModuleType and type(owner_module) is ModuleType)
+        probe_kind = vars(probe_module).get('_ProbeObservationResource')
+        owner_kind = vars(owner_module).get('RuntimeCacheProbeOwner')
+        _require(type(probe_kind) is type and type(resource) is probe_kind
+                 and type(owner_kind) is type and type(owner) is owner_kind)
+        from hmp_startup.probe_metadata import (
+            _ProbeObservationResource, _fresh_probe_resource_tail,
+        )
+        _require(_ProbeObservationResource is probe_kind)
+        return _fresh_probe_resource_tail(owner, resource)
     _require(type(resource) is _NativeMetadataResource and resource.owner is owner
              and type(resource.site) is tuple and len(resource.site) == 3
              and type(resource.site[0]) is int and resource.site[0] in (3, 4)

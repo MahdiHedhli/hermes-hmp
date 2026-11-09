@@ -588,3 +588,26 @@ def test_native_scope_type_joins_remain_exact_lazy_and_local(
 ) -> None:
     _append(pkg, module, body)
     assert (("S1", module) not in _rules(pkg)) is ok
+
+
+@pytest.mark.parametrize('module,body,ok', [
+    ('presentation_native_metadata.py',
+     'def f():\n    from hmp_startup.probe_metadata import _ProbeObservationResource, _fresh_probe_resource_tail\n', True),
+    ('presentation_native_metadata.py',
+     'def f():\n    from hmp_startup.probe_metadata import _ProbeObservationResource\n', True),
+    ('presentation_native_metadata.py',
+     'from hmp_startup.probe_metadata import _ProbeObservationResource\n', False),
+    ('presentation_native_metadata.py',
+     'class Eager:\n    from hmp_startup.probe_metadata import _ProbeObservationResource\n', False),
+    ('presentation_native_metadata.py',
+     'def f():\n    from hmp_startup.probe_metadata import *\n', False),
+    ('presentation_native_metadata.py',
+     'def f():\n    from hmp_startup.probe_metadata import _new_fresh_probe_plan\n', False),
+    ('presentation_native_metadata.py',
+     'def f():\n    import hmp_startup.probe_metadata\n', False),
+    ('reads.py',
+     'def f():\n    from hmp_startup.probe_metadata import _ProbeObservationResource\n', False),
+])
+def test_probe_resource_join_is_exact_lazy_and_local(pkg: Path, module: str, body: str, ok: bool) -> None:
+    _append(pkg, module, body)
+    assert (('S1', module) not in _rules(pkg)) is ok
