@@ -1,6 +1,20 @@
 ## November 8 — reviewed host updates deployed; character integration remains open
 
 
+Read-context parity audit is completed: synthetic16ca49c control reproduced missing
+callerContextVars in directpool submission. Perread copy_context+Context.run now
+restores to_thread semantics without changing actualFuture/debt/drain. Independent
+finite review passed; both593-case backport and364-case feature suites pass on
+3.14.9/3.11.15 plus Ruff/Doctor. Pinned5ecd2ba7e580e86e3d91bcae38f0584bcc366077
+is deployed on bothhosts:109files, freshmatched gateway/listenerPIDs, expectedTLS,
+and unchanged configuration/device-controls/schema snapshots verified. Native
+versions stay0.22.7/0.23.0; priorhealthstates remain, includingLucas/Serenity unavailable
+onLLY520 (aggregateexit1). No realcontextvalues inspected/logged or nativeprofile/
+authbypass effect claimed. Onlythissmallreadrepair is deployed; featurebootstrap,
+mediaretirement/service remainuninstalled. Partialbuilder/listenercleanup, other
+borrowers, migration/nativepublication and physical/release gates remainopen.
+
+
 MR-START2a source `bd7feef` retains the actual componentFuture and successfulreturn
 ctx/Store/boundclose across cancellation or unknownenqueue. Explicitcleanup can
 close an unpublished context once afteractualFuturecompletion, rejoining theheld

@@ -390,3 +390,21 @@ profileeffect/authbypass inferred. No sourcebranch deployment/mediaactivation; b
 hosts remainc7482f1, and physical/release qualification is stillpending.
 
 Next checkpoint: context-propagation parity audit for earlier read-worker pool/backport, without inferring a live profile leak. MR-START2b then needs stage-owned runner/TLS startup/failed-builder allocation cleanup, actual-resource retirement and scope readback before recovery. Other borrowers/migration/native publication and device qualification remain open.
+
+
+## Read context parity audit and minimal repair deployed
+
+Read-context parity audit is completed: synthetic16ca49c control reproduced missing
+callerContextVars in directpool submission. Perread copy_context+Context.run now
+restores to_thread semantics without changing actualFuture/debt/drain. Independent
+finite review passed; both593-case backport and364-case feature suites pass on
+3.14.9/3.11.15 plus Ruff/Doctor. Pinned5ecd2ba7e580e86e3d91bcae38f0584bcc366077
+is deployed on bothhosts:109files, freshmatched gateway/listenerPIDs, expectedTLS,
+and unchanged configuration/device-controls/schema snapshots verified. Native
+versions stay0.22.7/0.23.0; priorhealthstates remain, includingLucas/Serenity unavailable
+onLLY520 (aggregateexit1). No realcontextvalues inspected/logged or nativeprofile/
+authbypass effect claimed. Onlythissmallreadrepair is deployed; featurebootstrap,
+mediaretirement/service remainuninstalled. Partialbuilder/listenercleanup, other
+borrowers, migration/nativepublication and physical/release gates remainopen.
+
+Next MR-START2b: retain runner/site objects before every startup await, reconcile known partial listener setup and failed builder allocation, and require original-scope actual resource cleanup before permitting recovery. No default media activation; broader borrower/migration/native final-authority constraints remain.
