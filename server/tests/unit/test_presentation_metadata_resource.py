@@ -20,6 +20,7 @@ from hmp_startup.gateway_continuation import GatewayContinuationOwner
 from hmp_startup.cache_selection import selected_cache_input_attempts
 from hmp_startup.runtime_reader import RuntimeSourceReadOwner
 from hmp_plugin import presentation_startup_artifacts as a
+from hmp_plugin import presentation_native_metadata as m
 continuation=GatewayContinuationOwner.retain(entry,approval,recipe,checked)
 rows=selected_cache_input_attempts(continuation)
 index=next(i for i,row in enumerate(rows) if row.plan_row.source.path==str(dep_root/'__init__.py'))
@@ -29,11 +30,12 @@ class Foreign:
     def __getattr__(self,name):
         foreign_calls.append(name)
         raise AssertionError('foreign descriptor getter')
-def prepare(frame):
-    if frame.f_locals['self'] is not owner or seen:return
-    held=frame.f_locals['native_walk']
-    registration=frame.f_locals['native_registration']
-    descriptor=frame.f_locals['row']
+def prepare(original):
+    held=original.held_walk
+    registration=original.registration
+    descriptor=original.descriptor
+    assert original.owner is owner and original.site==(4,'directory',0)
+    assert original.ordinal==0 and original.metadata is held[5]
     assert type(descriptor) is a._NativeOpenedDescriptor and len(held)==6
     ledger=registration.native_ledger
     counts=tuple(ledger.counts);attempts=len(ledger.attempts)
@@ -60,10 +62,15 @@ def prepare(frame):
     assert phase.current[0] is phase.idle and phase.result[0] is None
     assert foreign_calls==[] and not owner._failed and not owner._unknown
     seen.append(True)
-trace_synthetic_boundary(a.StartupArtifactOwner._file.__code__,
-                         'info = StartupArtifactOwner._fstat(self, fd, s, native_registration)',
-                         prepare)
-owner.read()
+actual_run=m._run_directory_observation
+def observe_original(actual_owner,resource,predecessor=None,baseline=None,eof=None):
+    if actual_owner is owner and not seen:
+        assert predecessor is baseline is eof is None
+        prepare(resource)
+    return actual_run(actual_owner,resource,predecessor,baseline,eof)
+m._run_directory_observation=observe_original
+try:owner.read()
+finally:m._run_directory_observation=actual_run
 assert seen==[True] and owner._ready
 assert owner.completed_binding()[4] is owner._original_buffer
 owner.release()
