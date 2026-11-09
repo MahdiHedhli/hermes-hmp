@@ -193,6 +193,7 @@ def _probe(source, owner, phase, index, native_registration=None):
         StartupArtifactOwner,
         _native_registration_tail,
         _native_walk_scope,
+        _descriptor_refused,
     )
 
     scope = _native_walk_scope(owner, native_registration)
@@ -242,7 +243,10 @@ def _probe(source, owner, phase, index, native_registration=None):
             try:
                 StartupArtifactOwner._close(owner, record, fd, scope, root)
             except BaseException:
-                record.unknown = owner._unknown = failed = True
+                # Native descriptor status is read-only. Mark its original
+                # allocation, then continue the other held close reservations.
+                _descriptor_refused(record)
+                owner._unknown = failed = True
     if failed:
         effect.unknown = owner._unknown = True
         raise CacheObservationError from None
