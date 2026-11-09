@@ -4,9 +4,9 @@ import pytest
 from hmp_plugin.media_readiness import host_setting, project, MediaReadinessUnavailable
 
 
-@pytest.mark.parametrize('rights,flag,api', itertools.product(
+@pytest.mark.parametrize('rights,flag,api', tuple(itertools.product(
     ('granted', 'missing', 'unknown'), ('enabled', 'disabled', 'unknown'),
-    ('available', 'unavailable', 'unknown')))
+    ('available', 'unavailable', 'unknown'))))
 def test_axes_remain_independent(rights, flag, api):
     result = project(entitlement=rights, host=flag, api=api)
     assert result['entitlement'] == rights
@@ -44,7 +44,9 @@ def test_untrusted_values_never_escape(field):
 
 def test_route_is_authenticated_read_only_and_does_not_probe_images(tmp_path):
     from .hmp_kit import Env, pair, get, run
+    from hmp_plugin.contract import AuthzState
     env = Env(tmp_path)
+    env.bridge.authz_state = lambda user, profile: AuthzState.AUTHORIZED
     env.ctx.readiness_settings = lambda: {'local_media': {'enabled': False}}
 
     async def scenario(client):
