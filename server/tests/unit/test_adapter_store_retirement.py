@@ -542,3 +542,29 @@ def test_unknown_bootstrap_submit_keeps_returned_context_but_cannot_claim_cleanu
             adapter._opening.pool.shutdown(wait=False, cancel_futures=False)
 
     asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("replacement", ("close", "cohort"))
+def test_unpublished_cleanup_cannot_follow_callback_replacement_fields(adapter_module, replacement):
+    async def scenario():
+        adapter = adapter_module.HmpAdapter(SimpleNamespace(extra={"port": 12345}))
+        original_store, foreign_store = FakeStore(), FakeStore()
+        original_ctx = SimpleNamespace(store=original_store)
+        opening = adapter_module.BootstrapOpening(lambda _adapter: original_ctx, adapter)
+        adapter._opening = opening
+        opening.start()
+        assert await opening.wait() is original_ctx
+
+        def change(_ctx):
+            opening.close = foreign_store.close
+            if replacement == "cohort":
+                opening.ctx = SimpleNamespace(store=foreign_store)
+                opening.store = foreign_store
+
+        adapter._close_generation = change
+        with pytest.raises(RuntimeError, match="retain original resources"):
+            opening.close_unpublished(adapter)
+        assert original_store.closes == 0 and foreign_store.closes == 0
+        assert opening.close_attempted and not opening.closed
+
+    asyncio.run(scenario())
