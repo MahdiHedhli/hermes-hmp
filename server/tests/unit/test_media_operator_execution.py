@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import pytest
 from hmp_plugin.store import Store
 from hmp_plugin.media_publication_actor import MediaPublicationActor
-from hmp_plugin.media_operator_protocol import MediaReadMutation
+from hmp_plugin.media_operator_protocol import MediaReadMutation, encode_reply, decode_reply
 from hmp_plugin.media_operator_execution import (
     MediaOperatorExecutor, MediaMutationRefused, MediaMutationUnknown,
 )
@@ -32,6 +32,8 @@ def test_real_operator_cas_and_duplicate_snapshot_never_replays_write(tmp_path):
         executor = MediaOperatorExecutor(ctx, actor, 'c' * 32)
         result = await asyncio.to_thread(executor.decide, request, deadline=time.monotonic()+1.0)
         assert result.status == 'committed' and result.decision.allowed is True
+        receipt = decode_reply(encode_reply(request, result.status, result.decision), request=request)
+        assert receipt.decision == result.decision
         assert result.decision.revision == 1
         duplicate = await asyncio.to_thread(executor.decide, request, deadline=time.monotonic()+1.0)
         assert duplicate.status == 'conflict'

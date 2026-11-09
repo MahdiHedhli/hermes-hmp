@@ -120,3 +120,15 @@ def test_reply_preserves_large_counter_without_json_number_rounding():
     # The exhausted revision cannot have a committed successor.
     with pytest.raises(MediaOperatorProtocolError): encode_reply(value, 'committed', committed(value))
     assert decode_reply(encode_reply(value, 'unknown'), request=value).status == 'unknown'
+
+
+def test_large_committed_successor_remains_exact_and_closed():
+    value = request(explicit=True, maximum=True)
+    previous = value.expected._replace(revision=2 ** 63 - 2)
+    value = MediaReadMutation(value.iid, value.nonce, value.generation, value.attempt,
+                              value.device_id, previous, True)
+    raw = encode_reply(value, 'committed', committed(value))
+    assert json.loads(raw)['decision']['revision'] == str(2 ** 63 - 1)
+    assert decode_reply(raw, request=value).decision.revision == 2 ** 63 - 1
+    body = json.loads(raw); body['private'] = 'not accepted'
+    with pytest.raises(MediaOperatorProtocolError): decode_reply(json.dumps(body).encode(), request=value)
