@@ -6,7 +6,8 @@ from .test_presentation_gateway_approval import operator_composed_script
 
 
 @pytest.mark.parametrize('case', ('normal', 'copied_predecessor', 'wrong_parent',
-                                 'wrong_name', 'unsafe_mode', 'coherent_predecessor'))
+                                 'wrong_name', 'unsafe_mode', 'coherent_predecessor',
+                                 'missing_return'))
 def test_original_declared_leaf_before(tmp_path, monkeypatch, case):
     script, fixture_mutation = operator_composed_script('links')
     script = script.replace('GatewayPackageOwner.verify_recipe(recipe)',
@@ -55,7 +56,8 @@ def at_original_fstat(actual_owner,fd,scope,registration=None):
             native_origin=registration.native_origin
             descriptor=frame.f_locals['row']
             resource=a._prepare_native_metadata_resource(owner,registration,held,descriptor,None)
-            commit=m._run_directory_observation(owner,resource)
+            commit=m._run_directory_observation(owner,resource,
+                                                None if not commits else commits[-1])
             assert commit.identity==a._identity(os.fstat(fd),True) and commit.mtime is None
             assert commit.consumer.predecessor is (None if not commits else commits[-1])
             assert metadata.commits[-1] is commit and captured[-1][1]() is None
@@ -86,7 +88,9 @@ def at_original_stat(actual_owner,name,parent,scope,registration=None):
             resource=resource._replace(descriptor=other,arguments=(name,other.fd))
         if leaf_case=='wrong_name':resource=resource._replace(arguments=('foreign.py',parent))
         if leaf_case=='unsafe_mode':os.chmod(dep_root/'__init__.py',0o666)
-        try:commit=m._run_directory_observation(owner,resource)
+        try:
+            if leaf_case=='missing_return':commit=m._run_directory_observation(owner,resource)
+            else:commit=m._run_directory_observation(owner,resource,commits[-1])
         except a.ArtifactObservationError:
             assert leaf_case!='normal'
             entered=leaf_case=='unsafe_mode'

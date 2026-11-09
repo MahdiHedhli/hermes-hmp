@@ -58,7 +58,8 @@ def at_original_fstat(actual_owner,fd,scope,registration=None):
                 assert metadata.commits[0] is commits[0]
                 if history_case=='copied_predecessor':metadata.commits[0]=commits[0]._replace()
                 if history_case=='missing_predecessor':metadata.commits.clear()
-            try:commit=m._run_directory_observation(owner,resource)
+            try:commit=m._run_directory_observation(owner,resource,
+                                                    None if not commits else commits[-1])
             except a.ArtifactObservationError:
                 assert ordinal==1 and history_case!='normal' and len(native_entries)==1
                 assert tuple(registration.native_ledger.counts)==before

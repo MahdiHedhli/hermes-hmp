@@ -379,7 +379,7 @@ def _unused_directory_intent_tail(owner, operation):
     return result
 
 
-def _prepare_directory_consumer(owner, operation):
+def _prepare_directory_consumer(owner, operation, predecessor=None):
     """Bind one actual unused intent to a fixed runtime/cache metadata policy.
 
     Other owner/configuration/tree policies need their own reviewed consumers.
@@ -441,7 +441,11 @@ def _prepare_directory_consumer(owner, operation):
     _native_read_lifecycle_tail(owner, resource.registration, parents)
     history = resource.metadata.commits
     _require(type(history) is list and len(history) == resource.ordinal)
-    predecessor = None if resource.ordinal == 0 else history[resource.ordinal - 1]
+    # The fixed caller carries the literal previous return across callbacks.
+    # Current mirrors can confirm it; they cannot nominate its replacement.
+    _require(predecessor is None if resource.ordinal == 0 else
+             type(predecessor) is _DirectoryPolicyCommit
+             and history[resource.ordinal - 1] is predecessor)
     consumer = _DirectoryConsumer(owner, operation, resource, parents, kind,
                                    class_name, module_name, origin[0], origin[1], module,
                                    origin[4], origin[5], file_module, StartupArtifactOwner,
@@ -453,10 +457,12 @@ def _prepare_directory_consumer(owner, operation):
     _require(_unused_directory_intent_tail(owner, operation) is result
              and _directory_material_tail(owner, consumer) is consumer)
     _directory_predecessors_tail(owner, consumer)
+    _require(consumer.predecessor is predecessor)
     result.consumer[0] = consumer
     _require(_directory_material_tail(owner, consumer) is consumer
              and result.consumer[0] is consumer)
     _directory_predecessors_tail(owner, consumer)
+    _require(consumer.predecessor is predecessor)
     return consumer
 
 
@@ -1531,7 +1537,7 @@ def _abandon_known_directory_return(owner, consumer, actual, commit=None):
 
 
 
-def _run_directory_observation(owner, resource):
+def _run_directory_observation(owner, resource, predecessor=None):
     """Unwired shared declared-site caller with pre-effect independent memory custody.
 
     Only the actual factory/producer/policy/ACK returns are used. Cleanup is
@@ -1555,7 +1561,7 @@ def _run_directory_observation(owner, resource):
         _resource_tail(owner, resource)
         registration = resource.registration
         native = registration.native_origin
-        actor_arguments = (resource, registration)
+        actor_arguments = (resource, registration, predecessor)
         actor_state = _native_pre_actor_state(owner, actor_arguments)
         _native_actor_context(native.actor_calls, (native.native, native.thread_native),
                               registration.context)
@@ -1572,8 +1578,10 @@ def _run_directory_observation(owner, resource):
                  and result.custody_slot is marker.marker_slot)
         held_link, held_slot = marker.owner_link, marker.marker_slot
         held_state, held_reference = marker.state, marker.reference
-        consumer = _prepare_directory_consumer(owner, operation)
-        _require(_latch_directory_consumer(owner, consumer) is consumer)
+        consumer = _prepare_directory_consumer(owner, operation, predecessor)
+        _require(consumer.predecessor is predecessor)
+        _require(_latch_directory_consumer(owner, consumer) is consumer
+                 and consumer.predecessor is predecessor)
         producer_started = True
         try:
             actual = produce(owner, consumer)
