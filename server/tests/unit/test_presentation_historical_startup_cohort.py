@@ -100,7 +100,7 @@ def test_historical_snapshot_refuses_failed_or_torn_shared_phase_data(fault):
     assert ledger.counts == [0, 0] and ledger.attempts == []
 
 
-@pytest.mark.parametrize('fault', ('healthy_phase_change', 'old_ack_change'))
+@pytest.mark.parametrize('fault', ('healthy_phase_change', 'retirement_marker_change'))
 def test_real_old_finish_rejects_changes_after_weak_observations(tmp_path, monkeypatch, fault):
     from . import test_presentation_entry_files as base
     from .test_presentation_gateway_approval import operator_composed_script
