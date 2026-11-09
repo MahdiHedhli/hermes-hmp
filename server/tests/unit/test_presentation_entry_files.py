@@ -10,8 +10,10 @@ from pathlib import Path
 
 import pytest
 
+from .io_trace_fixture import TRACE_HELPERS
+
 SERVER = Path(__file__).resolve().parents[2]
-SCRIPT = r'''
+SCRIPT = TRACE_HELPERS + r'''
 import hashlib, json, sys
 from pathlib import Path
 from types import ModuleType
@@ -147,21 +149,26 @@ try:
         assert entry._activation._entry_files_attempt_cell is None
         if mutation == "retained_changed":
             (entry_root/"unused.py").write_bytes(b"CHANGED_AFTER_RETENTION")
-        if mutation == "completion_context_failure":
-            actual_pid = a.os.getpid
-            def fail_completion_context():
-                if retained._completing: raise OSError("synthetic context failure")
-                return actual_pid()
-            a.os.getpid = fail_completion_context
-        if mutation == "completion_attempt_swap":
-            actual_pid = a.os.getpid
-            def swap_completion_attempt():
-                value = actual_pid()
-                if retained._completing:
-                    copied = tuple(list(retained._inputs.completion_attempt))
-                    retained._attempt_cell = entry._activation._entry_files_attempt_cell = copied
-                return value
-            a.os.getpid = swap_completion_attempt
+        if mutation in ("completion_context_failure", "completion_attempt_swap"):
+            completion_faults=[]
+            completion_prior_trace=sys.gettrace()
+            def completion_context_return(frame):
+                if not retained._completing or completion_faults:return
+                assert frame.f_locals['self'] is entry
+                assert frame.f_locals['context']==frame.f_locals['s'].context
+                assert retained._attempt_cell is retained._inputs.completion_attempt
+                assert entry._activation._entry_files_attempt_cell is retained._attempt_cell
+                completion_faults.append(True)
+                sys.settrace(completion_prior_trace)
+                if mutation=="completion_context_failure":
+                    raise OSError("synthetic fresh completion context return lost")
+                copied=tuple(list(retained._inputs.completion_attempt))
+                retained._attempt_cell=entry._activation._entry_files_attempt_cell=copied
+            # Observe the original context return after completion intent; do
+            # not replace os.getpid and fail original-callee preflight instead.
+            trace_synthetic_boundary(GatewayEntryOwner._invocation.__code__,
+                '_require(all(type(v) is int for v in context) and context == s.context)',
+                completion_context_return)
         result = EntryFileSnapshotOwner.complete(retained)
     else:
         result = EntryFileSnapshotOwner.verify(entry,recipe,plugin)
@@ -178,8 +185,9 @@ else:
     assert all(row.closed for row in io._origin.records)
     assert all(row.closed for row in result._inputs.scans)
 if retained is not None:
-    actual_pid = locals().get("actual_pid")
-    if actual_pid is not None: a.os.getpid = actual_pid
+    if mutation in ("completion_context_failure", "completion_attempt_swap"):
+        sys.settrace(completion_prior_trace)
+        assert completion_faults==[True]
     io = retained._inputs.io_slot[0]
     if mutation in ("completion_context_failure", "completion_attempt_swap"):
         assert io is None and entry._activation._artifact_owner is None
