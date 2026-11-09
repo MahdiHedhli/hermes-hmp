@@ -22,28 +22,39 @@ cache_path=Path(row.location.path)
 cache_path.parent.mkdir(mode=0o700)
 held=[];attempted=[];faults=[];target=[];budgets=[];active_effects=[]
 def current(frame):
-    io=frame.f_locals.get('owner')
-    if type(io) is not a.StartupArtifactOwner or io._origin.cache is None:return None
-    effects=io._origin.cache.effects
-    if not effects or effects[-1].returned or effects[-1].phase!=0:return None
-    return io
+    cursor=frame
+    while cursor is not None:
+        if cursor.f_code is cache_module._probe.__code__:
+            values=cursor.f_locals
+            io,effect,resources=values.get('owner'),values.get('effect'),values.get('held')
+            if (type(io) is not a.StartupArtifactOwner or io._origin.cache is None
+                    or type(effect) is not cache_module._ProbeEffect
+                    or effect.source is not io._origin.cache
+                    or effect.returned or effect.phase!=0):return None
+            if active_effects and effect is not active_effects[0]:return None
+            assert type(resources) is list
+            return io,effect,resources
+        cursor=cursor.f_back
+    return None
 def close_observed(frame):
-    io=current(frame)
-    if io is None:return
+    cohort=current(frame)
+    if cohort is None:return
+    io,effect,resources=cohort
     allocation=frame.f_locals['allocation'];actual=allocation.result[0]
     assert type(actual) is tuple and actual[0] is allocation
     descriptor=actual[1]
     assert type(descriptor) is a._NativeOpenedDescriptor and descriptor.fd is frame.f_locals['fd']
     if not held:
-        held.extend(io._origin.records)
+        held.extend(row for row,fd in resources)
         assert len(held)>2 and all(type(row) is a._NativeOpenedDescriptor for row in held)
         target.append(held[-1] if cleanup_case=='first' else held[len(held)//2])
-        active_effects.append(io._origin.cache.effects[-1])
+        active_effects.append(effect)
     attempted.append((descriptor,frame.f_locals['fd']))
 observe_synthetic_native(a.os.close,a._close_native_file_known.__code__,close_observed)
 def lose_ack(frame):
-    io=current(frame)
-    if io is None or cleanup_case=='normal' or faults or not target:return
+    cohort=current(frame)
+    if cohort is None or cleanup_case=='normal' or faults or not target:return
+    io,effect,resources=cohort
     allocation=frame.f_locals['allocation']
     descriptor=allocation.result[0][1]
     if descriptor is not target[0]:return
