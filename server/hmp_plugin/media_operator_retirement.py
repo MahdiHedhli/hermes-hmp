@@ -87,7 +87,7 @@ class MediaOperatorRetirement:
             # lost. Even an abandoned original Task emits no private exception.
             return self._failed_completion
 
-    async def stop(self):
+    def begin(self):
         self._owner()
         if not self._started:
             self._started = True  # unknown task creation/close is never automatically replayed
@@ -106,6 +106,9 @@ class MediaOperatorRetirement:
                 self._task.add_done_callback(consume_error)
             except BaseException:
                 raise MediaRetirementUnavailableError() from None
+
+    async def stop(self):
+        self.begin()
         task = self._task
         if task is None:
             raise MediaRetirementUnavailableError()

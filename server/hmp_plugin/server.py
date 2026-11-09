@@ -1929,8 +1929,19 @@ class HmpServer:
         on_closed: Callable[[], None] | None = None,
         push_relay_factory: Callable[[], RelayPort] | None = None,
         approval_test_owners: tuple[Any, Any] | None = None,
+        media_retirement: Any = None,
     ) -> None:
         self.ctx = ctx
+        self._media_retirement = media_retirement
+        self._media_store = None
+        self._media_retirement_error = False
+        if media_retirement is not None:
+            from .media_operator_retirement import MediaOperatorRetirement
+
+            if (type(media_retirement) is not MediaOperatorRetirement
+                    or media_retirement._ctx is not ctx or not media_retirement._same()):
+                raise RuntimeError("media retirement owner unavailable")
+            self._media_store = ctx.store
         self.settings = settings
         self._interval = watchdog_interval
         self._on_closed = on_closed
@@ -2150,6 +2161,14 @@ class HmpServer:
         service = self._operator_read_drained
         if service is not None:
             await service.wait_drained()
+        retirement = self._media_retirement
+        if retirement is not None:
+            if self._media_retirement_error or self.ctx.store is not self._media_store:
+                raise RuntimeError("media retirement unresolved; retain original Store")
+            await retirement.stop()
+            if not retirement.drained_for(self._media_store):
+                raise RuntimeError("media retirement unresolved; retain original Store")
+        self.operator_worker_debt = 0
 
     async def _cancel_pending_sends(self) -> None:
         """Review round 3: cancel in-flight direct sends and wait, bounded, so a stop does not
@@ -2171,10 +2190,19 @@ class HmpServer:
         await asyncio.shield(self._stop_owner)
 
     async def _stop_joined(self) -> None:
+        retirement = self._media_retirement
+        if retirement is not None:
+            # A sentinel forces the adapter through combined drain before Store close.
+            # Network cleanup proceeds even when media retirement cannot be proved.
+            self.operator_worker_debt = 1
+            try:
+                retirement.begin()  # close admission/publication BEFORE any shutdown await
+            except BaseException:
+                self._media_retirement_error = True
         service, self._operator_read = self._operator_read, None
         if service is not None:
             debt = await service.stop()
-            self.operator_worker_debt = debt
+            self.operator_worker_debt = debt + (1 if retirement is not None else 0)
             self._operator_read_drained = service
             if debt:
                 log_event("operator_read_stop", outcome="worker_debt")
