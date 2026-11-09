@@ -66,3 +66,37 @@ def test_route_is_authenticated_read_only_and_does_not_probe_images(tmp_path):
         status, data = await get(client, path, headers=env.headers(device))
         assert status == 404 and 'media' not in data
     run(env, scenario)
+
+
+@pytest.mark.parametrize('change', ('media_deny', 'generation', 'bot_revoke', 'host_flag'))
+def test_route_discards_snapshot_changed_during_config_callback(tmp_path, change):
+    from .hmp_kit import Env, pair, get, run
+    from hmp_plugin.contract import AuthzState
+    env = Env(tmp_path)
+    env.bridge.authz_state = lambda user, profile: AuthzState.AUTHORIZED
+
+    async def scenario(client):
+        device = await pair(env, client)
+        initial = env.store.media_read_decision(env.iid, device.device_id)
+        assert env.store.set_media_read(initial, allowed=True, now=env.clock.now) is not None
+        calls = []
+
+        def settings():
+            calls.append(1)
+            if len(calls) == 1:
+                if change == 'media_deny':
+                    previous = env.store.media_read_decision(env.iid, device.device_id)
+                    assert env.store.set_media_read(previous, allowed=False, now=env.clock.now)
+                elif change == 'generation':
+                    env.ctx.readiness_generation = 'a' * 32
+                elif change == 'bot_revoke':
+                    env.bridge.authz_state = lambda user, profile: AuthzState.NOT_SERVED
+            return {'local_media': {'enabled': not (change == 'host_flag' and len(calls) > 1)}}
+
+        env.ctx.readiness_settings = settings
+        status, data = await get(client, '/bots/default/media-readiness',
+                                 headers=env.headers(device))
+        assert status == (404 if change == 'bot_revoke' else 503), data
+        assert 'media' not in data
+        assert env.store.owner_controls_decision(device.device_id) is None
+    run(env, scenario)
