@@ -312,11 +312,76 @@ def _resource(execution, predecessor):
 
 
 def _consumer_tail(consumer, predecessor):
+    """Join callback observations, then one full audit and contiguous mirrors.
+
+    No reusable validation token is published. Standalone history/resource
+    validators retain their complete audits for all other callers.
+    """
     _require(type(consumer) is _ProbeConsumer
              and type(consumer.operation) is metadata._MetadataOperation)
     execution, operation = consumer.execution, consumer.operation
-    _history_tail(execution, predecessor)
-    _resource_tail(execution.owner, operation.resource)
+    _history_mirrors_tail(execution, predecessor)
+    for commit in execution.history:
+        _require(type(commit) is _ProbeCommit and type(commit.consumer) is _ProbeConsumer)
+        origin, marker = commit.consumer.custody[:2]
+        metadata._origin_tail(origin)
+        _require(type(marker) is origin.marker_type
+                 and type(marker.reference) is origin.reference_type
+                 and origin.reference_call(marker.reference) is None)
+    _execution_tail(execution)  # Rejoin full mutable parent state after callbacks.
+    history, reg = execution.history, execution.registration
+    actual = predecessor
+    for sequence in range(len(history) - 1, -1, -1):
+        _require(type(actual) is _ProbeCommit and type(actual.sequence) is int
+                 and actual.sequence == sequence
+                 and history[sequence] is actual
+                 and type(actual.consumer) is _ProbeConsumer
+                 and actual.consumer.execution is execution
+                 and actual.consumer.commit[0] is actual)
+        past_operation = actual.consumer.operation
+        _require(type(past_operation) is metadata._MetadataOperation)
+        result = past_operation.result
+        _require(type(result) is metadata._MetadataResult
+                 and type(past_operation) is metadata._MetadataOperation
+                 and past_operation.registration is reg and past_operation.owner is execution.owner
+                 and type(past_operation.index) is int
+                 and reg.native_ledger.attempts[past_operation.index] is past_operation
+                 and type(actual.category) is str and actual.category in ('returned', 'reported_missing')
+                 and type(past_operation.state) is list and len(past_operation.state) == 3
+                 and all(type(value) is bool for value in past_operation.state)
+                 and past_operation.state == ([True, True, False] if actual.category == 'returned'
+                                         else [True, False, False])
+                 and type(past_operation.ended) is list and len(past_operation.ended) == 1
+                 and past_operation.ended[0] is True
+                 and result.acknowledged[0] is actual
+                 and result.consumer[0] is actual.consumer)
+        _require(result.custody_link == [None]
+                 and actual.consumer.custody[1].state == [True, True, False])
+        actual = actual.consumer.predecessor
+    _require(actual is None)
+    _require((not history and execution.next_site[0] == 0) or
+             (history and execution.next_site[0] == predecessor.next_site))
+    resource = operation.resource
+    _require(type(resource) is _NativeStartupProbeMetadataResource
+             and resource.owner is execution.owner and resource.metadata is execution)
+    plan, reg = execution.plan, execution.registration
+    _require(resource.registration is reg and type(resource.ordinal) is int
+             and resource.ordinal == execution.next_site[0]
+             and 0 <= resource.ordinal < len(plan.definitions)
+             and resource.site is plan.definitions[resource.ordinal]
+             and resource.variant is plan.variants[resource.ordinal])
+    _opened_chain_tail(execution)
+    action = policy._action(execution.cursor[0])
+    _require(type(action) is tuple and action[0] in ('stat', 'fstat'))
+    if action[0] == 'fstat':
+        descriptor = execution.opened[action[1]][3]
+        _require(resource.descriptor is descriptor and type(resource.arguments) is tuple
+                 and len(resource.arguments) == 1 and resource.arguments[0] is descriptor.fd)
+    else:
+        descriptor = None if action[2] is None else execution.opened[action[2]][3]
+        _require(resource.descriptor is descriptor and type(resource.arguments) is tuple
+                 and len(resource.arguments) == 2 and resource.arguments[0] is action[1]
+                 and resource.arguments[1] is (None if descriptor is None else descriptor.fd))
     _require(type(operation) is metadata._MetadataOperation
              and operation.owner is execution.owner
              and operation.registration is execution.registration
