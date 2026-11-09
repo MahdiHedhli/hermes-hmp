@@ -2094,6 +2094,11 @@ class HmpServer:
             self._stopping = asyncio.get_running_loop().create_task(self.stop())
 
     async def wait_operator_drain(self) -> None:
+        if getattr(self, "_stop_attempted", False):
+            owner = self._stop_owner
+            if (owner is None or not owner.done() or owner.cancelled()
+                    or owner.result() is not self._stop_complete):
+                raise RuntimeError("listener shutdown ownership unresolved")
         ctx = self.ctx
         store, prompts, hints = ctx.store, ctx.prompt_store, ctx.push_hints
         service = self._operator_read_drained
@@ -2141,19 +2146,23 @@ class HmpServer:
                 self._stop_coro = self._stop_owned()
                 self._stop_owner = asyncio.get_running_loop().create_task(self._stop_coro)
             except BaseException:
-                raise RuntimeError("listener cleanup ownership unresolved") from None
+                raise RuntimeError("listener shutdown ownership unresolved") from None
         owner = self._stop_owner
         if owner is None:
-            raise RuntimeError("listener cleanup ownership unresolved")
+            raise RuntimeError("listener shutdown ownership unresolved")
         result = await asyncio.shield(owner)
-        if self._stop_owner is not owner or result is not self._stop_complete:
+        if self._stop_owner is not owner:
+            raise RuntimeError("listener shutdown ownership unresolved")
+        if isinstance(result, BaseException):
+            raise result
+        if result is not self._stop_complete:
             raise RuntimeError("listener cleanup incomplete")
 
     async def _stop_owned(self):
         try:
             await self._stop_joined()
-        except BaseException:
-            return None
+        except BaseException as exc:
+            return exc
         return self._stop_complete
 
     async def _stop_joined(self) -> None:
