@@ -7,7 +7,7 @@ from .test_presentation_gateway_approval import operator_composed_script
 
 @pytest.mark.parametrize('case', ('normal', 'copied_predecessor', 'wrong_parent',
                                  'wrong_name', 'unsafe_mode', 'coherent_predecessor',
-                                 'missing_return'))
+                                 'missing_return', 'lost_return'))
 def test_original_declared_leaf_before(tmp_path, monkeypatch, case):
     script, fixture_mutation = operator_composed_script('links')
     script = script.replace('GatewayPackageOwner.verify_recipe(recipe)',
@@ -44,6 +44,7 @@ def observe_native(frame,event,arg):
             elif arg is native_origin.operations[4]:native_entries.append(4)
         if event=='return' and arg is not None and arg.operation.operation==3:
             leaf_returns.append((a._identity(arg.raw),arg.raw.st_mtime))
+            if leaf_case=='lost_return':raise RuntimeError('synthetic lost actual leaf return')
 
 def at_original_fstat(actual_owner,fd,scope,registration=None):
     global native_origin
@@ -93,7 +94,7 @@ def at_original_stat(actual_owner,name,parent,scope,registration=None):
             else:commit=m._run_directory_observation(owner,resource,commits[-1])
         except a.ArtifactObservationError:
             assert leaf_case!='normal'
-            entered=leaf_case=='unsafe_mode'
+            entered=leaf_case in ('unsafe_mode','lost_return')
             assert native_entries==[4]*ordinal+([3] if entered else [])
             assert tuple(registration.native_ledger.counts)==(before[0]+int(entered),before[1])
             assert metadata.progress[0]==ordinal
@@ -109,6 +110,7 @@ def at_original_stat(actual_owner,name,parent,scope,registration=None):
                 assert captured[-1][0].state==[True,True,True]
                 assert captured[-1][0].result.acknowledged==[None]
                 assert registration.native_ledger.failed==[True]
+                if leaf_case=='lost_return':assert len(leaf_returns)==1
             observed.update(refused=True,native_leaf_entries=int(entered),cursor=ordinal)
             raise
         if leaf_case=='coherent_predecessor':
