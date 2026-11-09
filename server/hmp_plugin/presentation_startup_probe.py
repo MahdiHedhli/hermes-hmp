@@ -1198,12 +1198,13 @@ def _historical_cohort(actual, scope):
     ledger, phase = registration.native_ledger, registration.native_phase
     cells = (ledger.counts, ledger.inflight, ledger.failed, ledger.failure, ledger.preparation,
              phase.current, phase.result)
+    # Preparation retains the last admission inputs after IDLE; it is not
+    # an unspent permission. Snapshot its original three cells across callbacks.
     widths = (2, 1, 1, 1, 3, 1, 1)
     _require(all(type(cell) is list and len(cell) == width
                  for cell, width in zip(cells, widths, strict=True))
              and ledger.inflight[0] is None and ledger.failed[0] is False
              and ledger.failure[0] is None
-             and all(value is None for value in ledger.preparation)
              and phase.current[0] is phase.idle and phase.result[0] is None)
     return (tuple(dictionaries), tuple((cell, tuple(cell)) for cell in cells),
             ledger.attempts, len(ledger.attempts), vars(activation_module).get('_ENTRY_CELL'))
