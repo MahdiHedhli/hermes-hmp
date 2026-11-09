@@ -167,3 +167,154 @@ def test_timeout_or_cancel_and_stop_retain_actual_worker_debt(tmp_path, monkeypa
             await finish(actor, store, service)
 
     asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("malformed", ("duplicate", "oversize", "deep", "extra", "type"))
+def test_malformed_frame_never_dispatches_mutation(tmp_path, monkeypatch, malformed):
+    async def scenario():
+        actor, store, ctx, request, service = await open_service(tmp_path)
+        dispatched = []
+
+        def forbidden(*_args, **_kwargs):
+            dispatched.append(True)
+            raise AssertionError("malformed request reached worker")
+
+        monkeypatch.setattr(service._executor, "decide", forbidden)
+        reader, writer = await asyncio.open_unix_connection(str(service.path))
+        try:
+            hello = wire.parse_body(await reader.readline(), max_bytes=4096, max_depth=3)
+            envelope = {
+                "challenge": hello["challenge"],
+                "mutation": wire.parse_body(request.encode(), max_bytes=2048, max_depth=3),
+            }
+            if malformed == "duplicate":
+                raw = b'{"challenge":"bad",' + wire.dump_json(envelope)[1:]
+            elif malformed == "oversize":
+                raw = b" " * 4096
+            elif malformed == "deep":
+                envelope["mutation"] = {"a": {"b": {"c": {"d": {"e": 1}}}}}
+                raw = wire.dump_json(envelope)
+            elif malformed == "extra":
+                envelope["other"] = True
+                raw = wire.dump_json(envelope)
+            else:
+                envelope["mutation"] = []
+                raw = wire.dump_json(envelope)
+            writer.write(raw + b"\n")
+            await writer.drain()
+            assert await asyncio.wait_for(reader.readline(), 1) == b""
+            assert not dispatched and service._outstanding == 0
+            assert store.media_read_decision(ctx.iid, request.device_id).revision == 0
+        finally:
+            writer.close()
+            await writer.wait_closed()
+            await finish(actor, store, service)
+
+    asyncio.run(scenario())
+
+
+def test_two_waiting_clients_bound_admission_without_worker_reservations(tmp_path):
+    async def scenario():
+        actor, store, ctx, _request, service = await open_service(tmp_path)
+        connections = []
+        try:
+            for _ in range(2):
+                reader, writer = await asyncio.open_unix_connection(str(service.path))
+                connections.append((reader, writer))
+                assert await reader.readline()  # each original connection owns its challenge
+            reader, writer = await asyncio.open_unix_connection(str(service.path))
+            connections.append((reader, writer))
+            assert await reader.readline() == b""
+            assert len(service._clients) == 2
+            assert ctx.read_worker_budget.operator == 0 and service._outstanding == 0
+        finally:
+            for _reader, writer in connections:
+                writer.close()
+                await writer.wait_closed()
+            await finish(actor, store, service)
+
+    asyncio.run(scenario())
+
+
+def test_challenge_from_another_connection_cannot_authorize_write(tmp_path):
+    async def scenario():
+        actor, store, ctx, request, service = await open_service(tmp_path)
+        reader, writer = await asyncio.open_unix_connection(str(service.path))
+        try:
+            original = wire.parse_body(await reader.readline(), max_bytes=4096, max_depth=3)
+            other, response = await exchange(service, request, challenge=original["challenge"])
+            assert other["challenge"] != original["challenge"] and response == b""
+            assert store.media_read_decision(ctx.iid, request.device_id).revision == 0
+        finally:
+            writer.close()
+            await writer.wait_closed()
+            await finish(actor, store, service)
+
+    asyncio.run(scenario())
+
+
+def test_cohort_replaced_after_challenge_never_dispatches(tmp_path):
+    async def scenario():
+        actor, store, ctx, request, service = await open_service(tmp_path)
+        reader, writer = await asyncio.open_unix_connection(str(service.path))
+        try:
+            hello = wire.parse_body(await reader.readline(), max_bytes=4096, max_depth=3)
+            ctx.bridge = object()
+            writer.write(
+                wire.dump_json(
+                    {
+                        "challenge": hello["challenge"],
+                        "mutation": wire.parse_body(request.encode(), max_bytes=2048, max_depth=3),
+                    }
+                )
+                + b"\n"
+            )
+            await writer.drain()
+            assert await reader.readline() == b""
+            assert service._outstanding == 0
+            assert store.media_read_decision(ctx.iid, request.device_id).revision == 0
+        finally:
+            writer.close()
+            await writer.wait_closed()
+            await finish(actor, store, service)
+
+    asyncio.run(scenario())
+
+
+def test_lost_submit_ack_retains_unknown_debt_even_after_actual_commit(tmp_path, monkeypatch):
+    async def scenario():
+        actor, store, ctx, request, service = await open_service(tmp_path)
+        submit = service._pool.submit
+        actual = []
+
+        def lost_ack(*args, **kwargs):
+            actual.append(submit(*args, **kwargs))
+            raise RuntimeError("synthetic post-enqueue lost acknowledgement")
+
+        monkeypatch.setattr(service._pool, "submit", lost_ack)
+        try:
+            raw = await service._decide(request, time.monotonic() + 1)
+            assert decode_reply(raw, request=request).status == "unknown"
+            # This test possesses the hidden Future solely to end its synthetic worker.
+            # Production has no such completion proof and must retain debt indefinitely.
+            result = await asyncio.wrap_future(actual[0])
+            assert result.status == "committed"
+            assert store.media_read_decision(ctx.iid, request.device_id).revision == 1
+            assert service._outstanding == 1 and ctx.read_worker_budget.operator == 1
+            assert await service.stop() == 1
+            waiter = asyncio.create_task(service.wait_drained())
+            await asyncio.sleep(0)
+            assert not waiter.done()
+            waiter.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await waiter
+            assert store.owner_controls_decision(request.device_id) is None
+        finally:
+            await service.stop()
+            actor.close()
+            await actor.wait_drained()
+            # Test-only teardown after the separately retained actual Future ended;
+            # never treat service.stop or cancelled wait_drained as Store retirement proof.
+            store.close()
+
+    asyncio.run(scenario())
