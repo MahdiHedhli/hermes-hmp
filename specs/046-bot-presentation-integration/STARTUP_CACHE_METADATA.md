@@ -16,9 +16,18 @@ These are different normal observer selections, not identical three-case sets.
 Two late old-parent scan mutations are rejected without subsequent stat/fstat
 or attempt debit. All retained source/result identities and security checks
 remain required; the earlier globally traced normal timeouts remain failures.
-The connected 109-case current regression is running; the 108-case minimum
-selection has not started. None of this qualifies actual installed startup,
-complete native/service composition, character delivery, devices or release.
+The connected 109-case current regression on `61cb346` finished 108 passes
+and one normal cache-read refusal. The minimum broad selection was not run on
+that failed source. Targeted diagnosis identified an incorrect historical idle
+requirement: a completed startup receipt may be revalidated during a later healthy
+read. Repair `7d0e455` preserves exact historical phase snapshots and refuses
+failed/torn states while allowing canonical healthy idle/active/pending shapes.
+Test successor `ed44874` passes the same 18 controls on both supported Python
+versions, including the formerly failing normal read. Test-only `f6f3348` names
+the retirement-marker mutation accurately; its repaired 109-case current suite
+is running, with broader minimum coverage pending. None of this qualifies actual
+installed startup, complete native/service composition, character delivery,
+devices or release.
 
 No upstream capability blocker is proven for this local work. A source-only
 census of native `0f0e96fc8e7fd35aba406e4a9fa341fb969d0b41` finds Desktop
