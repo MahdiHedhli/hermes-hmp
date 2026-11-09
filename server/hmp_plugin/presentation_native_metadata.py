@@ -208,7 +208,7 @@ class _DirectoryConsumer(NamedTuple):
     file_owner_type: type
     commit: list
     history: list
-    predecessors: tuple
+    predecessor: object
 
     @property
     def consumption(self):
@@ -405,11 +405,11 @@ def _prepare_directory_consumer(owner, operation):
     _native_read_lifecycle_tail(owner, resource.registration, parents)
     history = resource.metadata.commits
     _require(type(history) is list and len(history) == resource.ordinal)
-    predecessors = tuple(history)
+    predecessor = None if resource.ordinal == 0 else history[resource.ordinal - 1]
     consumer = _DirectoryConsumer(owner, operation, resource, parents, kind,
                                    class_name, module_name, origin[0], origin[1], module,
                                    origin[4], origin[5], file_module, StartupArtifactOwner,
-                                   [None], history, predecessors)
+                                   [None], history, predecessor)
     _require(_resource_tail(owner, resource) is resource
              and operation.result is result and result.consumer[0] is None
              and result.attempt[0] is operation and result.raw[0] is result.unset)
@@ -420,6 +420,7 @@ def _prepare_directory_consumer(owner, operation):
     result.consumer[0] = consumer
     _require(_directory_material_tail(owner, consumer) is consumer
              and result.consumer[0] is consumer)
+    _directory_predecessors_tail(owner, consumer)
     return consumer
 
 
@@ -432,10 +433,12 @@ def _directory_predecessors_tail(owner, consumer):
     _require(type(metadata) is _NativeDeclaredMetadataPlan
              and type(registration) is _NativeScopeRegistration
              and consumer.history is metadata.commits and type(consumer.history) is list
-             and type(consumer.predecessors) is tuple
-             and len(consumer.predecessors) == resource.ordinal
+             and type(resource.ordinal) is int
+             and type(metadata.definitions) is tuple
+             and 0 <= resource.ordinal < len(metadata.definitions)
              and len(consumer.history) >= resource.ordinal)
-    for ordinal, commit in enumerate(consumer.predecessors):
+    commit = consumer.predecessor
+    for ordinal in range(resource.ordinal - 1, -1, -1):
         _require(type(commit) is _DirectoryPolicyCommit and commit.owner is owner
                  and consumer.history[ordinal] is commit
                  and type(commit.ordinal) is int and commit.ordinal == ordinal
@@ -467,7 +470,10 @@ def _directory_predecessors_tail(owner, consumer):
                  and commit.consumer.operation is commit.operation
                  and commit.consumer.resource is commit.resource
                  and type(commit.consumer.commit) is list and len(commit.consumer.commit) == 1
-                 and commit.consumer.commit[0] is commit)
+                 and commit.consumer.commit[0] is commit
+                 and commit.consumer.history is consumer.history)
+        commit = commit.consumer.predecessor
+    _require(commit is None)
     return consumer
 
 
@@ -570,6 +576,8 @@ def _latched_directory_resource_tail(owner, consumer):
     _native_read_lifecycle_tail(owner, registration, consumer.parents)
     _native_work_origin_tail(owner, registration, operation.native)
     _require(_directory_material_tail(owner, consumer) is consumer)
+    _directory_predecessors_tail(owner, consumer)
+    _require(len(consumer.history) == resource.ordinal)
     return resource
 
 
@@ -1096,7 +1104,11 @@ def _acked_directory_history_tail(owner, consumer, commit):
              and type(resource.site[2]) is int)
     metadata = _native_declared_metadata_cohort_tail(owner, registration, resource.held_walk)
     _directory_predecessors_tail(owner, consumer)
-    _require(len(consumer.history) == commit.next_ordinal
+    _require(type(commit.ordinal) is int
+             and 0 <= commit.ordinal < len(metadata.definitions)
+             and type(commit.next_ordinal) is int
+             and commit.next_ordinal == commit.ordinal + 1
+             and len(consumer.history) == commit.next_ordinal
              and consumer.history[commit.ordinal] is commit)
     _require(metadata is resource.metadata and type(commit.ordinal) is int
              and 0 <= commit.ordinal < len(metadata.definitions)
@@ -1153,6 +1165,13 @@ def _acked_directory_history_tail(owner, consumer, commit):
              and _directory_material_tail(owner, consumer) is consumer)
     _native_read_lifecycle_tail(owner, registration, consumer.parents)
     _native_work_origin_tail(owner, registration, operation.native)
+    _directory_predecessors_tail(owner, consumer)
+    _require(type(commit.ordinal) is int
+             and 0 <= commit.ordinal < len(metadata.definitions)
+             and type(commit.next_ordinal) is int
+             and commit.next_ordinal == commit.ordinal + 1
+             and len(consumer.history) == commit.next_ordinal
+             and consumer.history[commit.ordinal] is commit)
     return commit
 
 
