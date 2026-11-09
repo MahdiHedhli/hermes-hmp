@@ -1,5 +1,15 @@
 ## November 8 — reviewed host updates deployed; character integration remains open
 
+Media-readiness final-delivery source `bbd75f3` rechecks authenticated bot/session
+scope after the worker await and compares the private permission revision before
+removing that internal snapshot from the wire DTO. Post-worker deny/regrant,
+listener-generation drift and bot revocation tests reject stale responses.
+Both 84-case readiness suites pass on Python 3.14.9 and 3.11.15 with zero
+failures/errors/skips and unchanged source. This final synchronous recheck can
+perform SQLite/native configuration I/O; event-loop latency has not been qualified.
+Independent security/performance review, capability negotiation, mobile wiring,
+broader contract tests and physical acceptance remain open. No live deployment.
+
 Media-readiness causal tests at `d41750f` now revoke media rights or bot access,
 change listener generation, or change host opt-in inside a sampled callback.
 All discard the snapshot without a media DTO or unrelated controls changes.
