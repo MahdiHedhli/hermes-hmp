@@ -1,4 +1,7 @@
 """A lost native close ACK must not stop remaining reserved startup cleanup."""
+import os
+import subprocess
+
 import pytest
 
 from . import test_presentation_entry_files as base
@@ -13,7 +16,8 @@ def test_startup_probe_known_close_cleanup(tmp_path, monkeypatch, case):
     script = script[:script.index('original_bytes=plugin._bytes_read')]
     script += '\ncleanup_case=' + repr(case) + '\n'
     script += r'''
-import os
+import os,faulthandler
+faulthandler.dump_traceback_later(40,repeat=False)
 from hmp_plugin import presentation_startup_cache as cache_module
 from hmp_plugin import presentation_startup_probe as startup_native
 retained=EntryFileSnapshotOwner.retain_runtime_link_files(entry,recipe,plugin)
@@ -119,4 +123,12 @@ else:
 print(json.dumps({'mutation':mutation,'runtime_admitted':False}))
 '''
     monkeypatch.setattr(base, 'SCRIPT', script)
-    base.test_actual_entry_and_wrapper_files(tmp_path, mutation)
+    try:
+        base.test_actual_entry_and_wrapper_files(tmp_path, mutation)
+    except subprocess.TimeoutExpired as error:
+        # Stack names/lines only from this isolated synthetic child, never locals.
+        path = tmp_path / 'startup-native-watchdog-stack.log'
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, 'wb') as stream:
+            stream.write(error.stderr or b'')
+        raise
