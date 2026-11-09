@@ -589,3 +589,73 @@ def test_client_invalid_server_challenge_sends_no_mutation(tmp_path, bad):
             await finish(actor, store, service)
 
     asyncio.run(scenario())
+
+
+@pytest.mark.parametrize(
+    "allowed,answer", ((True, "exact"), (False, "exact"), (True, "wrong"), (True, "eof"))
+)
+def test_cli_confirmation_actual_client_service_cas_and_readback(
+    tmp_path, monkeypatch, allowed, answer
+):
+    import argparse
+    import io
+
+    from hmp_plugin import cli
+
+    async def scenario():
+        actor, store, ctx, request, service = await open_service(tmp_path)
+        expected_token = ("ALLOW" if allowed else "DENY") + " MEDIA_READ device\n"
+        stdin = expected_token if answer == "exact" else ("yes\n" if answer == "wrong" else "")
+        command_ctx = SimpleNamespace(
+            store=store,
+            out=io.StringIO(),
+            now=lambda: 2,
+            custody=SimpleNamespace(anchor_dir=service.path.parent / "anchor"),
+            env=SimpleNamespace(stdin=io.StringIO(stdin)),
+        )
+        reads = []
+
+        def live(_ctx, device_id, iid):
+            assert iid == ctx.iid and device_id == request.device_id
+            decision = store.media_read_decision(iid, device_id)
+            reads.append(decision.revision)
+            return {
+                "decision": decision._asdict(),
+                "nonce": request.nonce,
+                "generation": request.generation,
+                "host_enabled": False,
+                "api_available": True,
+                "effective": decision.allowed is True,
+                "expires_ms": int(time.monotonic() * 1000) + 1500,
+            }
+
+        def forbidden(*_args, **_kwargs):
+            raise AssertionError("CLI direct SQL write bypassed service")
+
+        monkeypatch.setattr(cli, "_load_identity", lambda _ctx: SimpleNamespace(iid=ctx.iid))
+        monkeypatch.setattr(cli, "_media_operator_context", live)
+        # Executor captured its original bound Store mutator at construction.
+        # A direct CLI lookup is forbidden while the real service retains that method.
+        monkeypatch.setattr(store, "set_media_read", forbidden)
+        args = argparse.Namespace(
+            devices_command="grant-media-read" if allowed else "deny-media-read",
+            device_id="device",
+        )
+        try:
+            if answer == "exact":
+                assert await asyncio.to_thread(cli._cmd_devices_media, command_ctx, args) == 0
+                assert reads == [0, 0, 1]
+                decision = store.media_read_decision(ctx.iid, "device")
+                assert decision.revision == 1 and decision.allowed is allowed
+                assert "saved at revision 1" in command_ctx.out.getvalue()
+            else:
+                with pytest.raises(cli.RefusedError, match="exact typed"):
+                    await asyncio.to_thread(cli._cmd_devices_media, command_ctx, args)
+                assert reads == [0]
+                assert store.media_read_decision(ctx.iid, "device").revision == 0
+            assert "Type " + expected_token.rstrip("\n") in command_ctx.out.getvalue()
+            assert store.owner_controls_decision("device") is None
+        finally:
+            await finish(actor, store, service)
+
+    asyncio.run(scenario())
