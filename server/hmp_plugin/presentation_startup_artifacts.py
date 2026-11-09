@@ -2723,8 +2723,8 @@ def _native_runtime_read_commit_tail(owner, envelope, commit, source_buffer, tok
     return scope
 
 
-def _native_runtime_read_closed_tail(owner, commit, step):
-    """Caller holds the actual fixed-consumer return, never recaptures its ACK."""
+def _native_runtime_read_history_tail(owner, commit, step):
+    """Held raw-free read receipt, not current-work or EOF admission authority."""
     _require(type(commit) is _NativeRuntimeReadCommit and type(step) is _NativeReadFileStep
              and commit.step is step and step.owner is owner
              and type(commit.operation) is _NativeFileOperation
@@ -2753,20 +2753,24 @@ def _native_runtime_read_closed_tail(owner, commit, step):
              and step.progress[0] is commit.ordinal and step.progress[1] is commit.remaining
              and step.progress[2] is commit.count and step.progress[3] is None
              and step.eof[0] is commit.eof)
-    ledger, phase = operation.ledger, registration.native_phase
+    ledger = operation.ledger
     _require(ledger is registration.native_ledger and ledger.failed[0] is False
+             and type(operation.index) is int and type(ledger.attempts) is list
+             and 0 <= operation.index < len(ledger.attempts)
              and ledger.attempts[operation.index] is operation
+             and type(operation.budget) is tuple and len(operation.budget) == 4
              and ledger.counts is operation.budget[0]
-             and ledger.counts[0] is operation.budget[3]
-             and ledger.counts[1] is operation.budget[2]
-             and ledger.inflight[0] is None
-             and phase.current[0] is phase.idle and phase.result[0] is None)
+             and type(ledger.counts) is list and len(ledger.counts) == 2
+             and all(type(value) is int for value in ledger.counts)
+             and type(operation.budget[3]) is int
+             and ledger.counts[0] >= operation.budget[3]
+             and ledger.counts[1] is operation.budget[2])
     _native_read_accumulator_tail(owner, step, commit.count)
     return commit
 
 
-def _native_cache_read_closed_tail(owner, commit, step):
-    """Caller closure for the actual cache ACK; no journal prefixes are retained."""
+def _native_cache_read_history_tail(owner, commit, step):
+    """Held raw-free cache receipt; no journal prefixes or new work authority."""
     _require(type(commit) is _NativeCacheReadCommit and type(step) is _NativeReadFileStep
              and commit.step is step and step.owner is owner
              and type(commit.operation) is _NativeFileOperation
@@ -2795,14 +2799,18 @@ def _native_cache_read_closed_tail(owner, commit, step):
              and step.progress[0] is commit.ordinal and step.progress[1] is commit.remaining
              and step.progress[2] is commit.count and step.progress[3] is None
              and step.eof[0] is commit.eof)
-    ledger, phase = operation.ledger, registration.native_phase
+    ledger = operation.ledger
     _require(ledger is registration.native_ledger and ledger.failed[0] is False
+             and type(operation.index) is int and type(ledger.attempts) is list
+             and 0 <= operation.index < len(ledger.attempts)
              and ledger.attempts[operation.index] is operation
+             and type(operation.budget) is tuple and len(operation.budget) == 4
              and ledger.counts is operation.budget[0]
-             and ledger.counts[0] is operation.budget[3]
-             and ledger.counts[1] is operation.budget[2]
-             and ledger.inflight[0] is None
-             and phase.current[0] is phase.idle and phase.result[0] is None)
+             and type(ledger.counts) is list and len(ledger.counts) == 2
+             and all(type(value) is int for value in ledger.counts)
+             and type(operation.budget[3]) is int
+             and ledger.counts[0] >= operation.budget[3]
+             and ledger.counts[1] is operation.budget[2])
     _native_read_accumulator_tail(owner, step, commit.count)
     namespace, own = vars(step.material_module), vars(owner)
     _require(type(namespace) is dict and len(namespace) <= 4096
@@ -2831,6 +2839,31 @@ def _native_cache_read_closed_tail(owner, commit, step):
              and type(commit.header) is bytes
              and len(commit.header) == min(16, commit.count[2])
              and commit.header == step.buffer[:16])
+    return commit
+
+
+
+def _native_runtime_read_closed_tail(owner, commit, step):
+    """Actual current return plus the original strict latest-debit/IDLE closure."""
+    _require(_native_runtime_read_history_tail(owner, commit, step) is commit)
+    operation = commit.operation
+    ledger, phase = operation.ledger, step.registration.native_phase
+    _require(ledger.failed[0] is False
+             and ledger.counts[0] is operation.budget[3]
+             and ledger.inflight[0] is None
+             and phase.current[0] is phase.idle and phase.result[0] is None)
+    return commit
+
+
+def _native_cache_read_closed_tail(owner, commit, step):
+    """Actual current cache return; later metadata cannot renew read authority."""
+    _require(_native_cache_read_history_tail(owner, commit, step) is commit)
+    operation = commit.operation
+    ledger, phase = operation.ledger, step.registration.native_phase
+    _require(ledger.failed[0] is False
+             and ledger.counts[0] is operation.budget[3]
+             and ledger.inflight[0] is None
+             and phase.current[0] is phase.idle and phase.result[0] is None)
     return commit
 
 

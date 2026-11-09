@@ -32,6 +32,10 @@ from .presentation_startup_artifacts import (
     _NativeMetadataResource,
     _NativeMetadataSnapshot,
     _NativeScopeRegistration,
+    _NativeRuntimeReadCommit,
+    _NativeCacheReadCommit,
+    _native_runtime_read_history_tail,
+    _native_cache_read_history_tail,
     _prepare_native_metadata_resource,
     _require,
     _Scope,
@@ -209,6 +213,8 @@ class _DirectoryConsumer(NamedTuple):
     commit: list
     history: list
     predecessor: object
+    baseline: object = None
+    eof: object = None
 
     @property
     def consumption(self):
@@ -276,7 +282,8 @@ def _fixed_metadata_role(resource):
     operation, role = resource.site[:2]
     _require((operation == 4 and role == 'directory')
              or (operation == 3 and role == 'leaf_before')
-             or (operation == 4 and role == 'leaf_opened'))
+             or (operation == 4 and role == 'leaf_opened')
+             or (operation in (3, 4) and role == 'leaf_after_read'))
     return role
 
 
@@ -380,7 +387,7 @@ def _unused_directory_intent_tail(owner, operation):
     return result
 
 
-def _prepare_directory_consumer(owner, operation, predecessor=None):
+def _prepare_directory_consumer(owner, operation, predecessor=None, baseline=None, eof=None):
     """Bind one actual unused intent to a fixed runtime/cache metadata policy.
 
     Other owner/configuration/tree policies need their own reviewed consumers.
@@ -391,7 +398,7 @@ def _prepare_directory_consumer(owner, operation, predecessor=None):
              and type(operation.result) is _MetadataResult)
     resource, result = operation.resource, operation.result
     _resource_tail(owner, resource)
-    _require(_fixed_metadata_role(resource) in ('directory', 'leaf_before', 'leaf_opened')
+    _require(_fixed_metadata_role(resource) in ('directory', 'leaf_before', 'leaf_opened', 'leaf_after_read')
              and operation.registration is resource.registration
              and type(operation.state) is list and len(operation.state) == 3
              and all(type(value) is bool and value is False for value in operation.state)
@@ -450,7 +457,7 @@ def _prepare_directory_consumer(owner, operation, predecessor=None):
     consumer = _DirectoryConsumer(owner, operation, resource, parents, kind,
                                    class_name, module_name, origin[0], origin[1], module,
                                    origin[4], origin[5], file_module, StartupArtifactOwner,
-                                   [None], history, predecessor)
+                                   [None], history, predecessor, baseline, eof)
     _require(_resource_tail(owner, resource) is resource
              and operation.result is result and result.consumer[0] is None
              and result.attempt[0] is operation and result.raw[0] is result.unset)
@@ -458,12 +465,14 @@ def _prepare_directory_consumer(owner, operation, predecessor=None):
     _require(_unused_directory_intent_tail(owner, operation) is result
              and _directory_material_tail(owner, consumer) is consumer)
     _directory_predecessors_tail(owner, consumer)
-    _require(consumer.predecessor is predecessor)
+    _require(consumer.predecessor is predecessor
+             and consumer.baseline is baseline and consumer.eof is eof)
     result.consumer[0] = consumer
     _require(_directory_material_tail(owner, consumer) is consumer
              and result.consumer[0] is consumer)
     _directory_predecessors_tail(owner, consumer)
-    _require(consumer.predecessor is predecessor)
+    _require(consumer.predecessor is predecessor
+             and consumer.baseline is baseline and consumer.eof is eof)
     return consumer
 
 
@@ -526,6 +535,71 @@ def _directory_predecessors_tail(owner, consumer):
                  and predecessor.resource.variant.expected is resource.variant.expected
                  and type(predecessor.identity) is tuple and len(predecessor.identity) == 9
                  and all(type(value) is int for value in predecessor.identity))
+    if _fixed_metadata_role(resource) == 'leaf_after_read':
+        _postread_receipts_tail(owner, consumer)
+    else:
+        _require(consumer.baseline is None and consumer.eof is None)
+    return consumer
+
+
+def _postread_receipts_tail(owner, consumer):
+    """Literal baseline/EOF joins plus exact accounted metadata since that EOF.
+
+    Historical read validation grants no work. This closed post-read sequence
+    accounts for every intervening attempt/debit and retains the original EOF
+    return rather than adopting an ACK from current mirrors.
+    """
+    resource, operation = consumer.resource, consumer.operation
+    baseline, eof = consumer.baseline, consumer.eof
+    _require(type(baseline) is _DirectoryPolicyCommit
+             and baseline.owner is owner and baseline.resource.held_walk is resource.held_walk
+             and baseline.resource.variant.expected is resource.variant.expected
+             and type(baseline.site) is tuple and len(baseline.site) == 3
+             and type(baseline.site[0]) is int and baseline.site[0] == 3
+             and type(baseline.site[1]) is str and baseline.site[1] == 'leaf_before'
+             and type(baseline.identity) is tuple and len(baseline.identity) == 9
+             and all(type(value) is int for value in baseline.identity)
+             and type(baseline.ordinal) is int
+             and 0 <= baseline.ordinal < resource.ordinal
+             and consumer.history[baseline.ordinal] is baseline)
+    if consumer.class_name == 'RuntimeSourceReadOwner':
+        _require(type(eof) is _NativeRuntimeReadCommit)
+        _require(_native_runtime_read_history_tail(owner, eof, eof.step) is eof)
+    else:
+        _require(consumer.class_name == 'DeclaredCacheReadOwner'
+                 and type(eof) is _NativeCacheReadCommit)
+        _require(_native_cache_read_history_tail(owner, eof, eof.step) is eof)
+    walk = resource.held_walk[0]
+    step, read = eof.step, eof.operation
+    _require(consumer.baseline is baseline and consumer.eof is eof
+             and step.walk is walk and step.expected is resource.variant.expected
+             and step.registration is resource.registration
+             and eof.eof is True and type(eof.remaining) is int and eof.remaining == 0
+             and type(eof.count[2]) is int and eof.count[2] == step.expected.size
+             and (resource.descriptor is step.descriptor if resource.site[0] == 4 else
+                  resource.descriptor is step.descriptor.allocation.parent))
+    # The two original post-read rows are adjacent. No open/close/read or other
+    # unaccounted operation may be inserted between actual EOF and these rows.
+    offset = resource.ordinal - (len(walk.components) + 1)
+    _require(type(offset) is int and offset in (0, 1)
+             and resource.site[0] == (4 if offset == 0 else 3)
+             and type(operation.state) is list and len(operation.state) == 3
+             and type(operation.state[0]) is bool
+             and type(read.index) is int and type(read.budget[3]) is int
+             and operation.index == read.index + 1 + offset
+             and len(operation.ledger.attempts) == read.index + 1 + offset + int(operation.state[0])
+             and operation.ledger.counts[0] == read.budget[3] + offset + int(operation.state[0])
+             and operation.budget[1] == read.budget[3] + offset)
+    predecessor = consumer.predecessor
+    _require(type(predecessor) is _DirectoryPolicyCommit
+             and predecessor.resource.held_walk is resource.held_walk
+             and predecessor.site[1] == ('leaf_opened' if offset == 0 else 'leaf_after_read')
+             and predecessor.site[0] == 4)
+    if offset:
+        _require(predecessor.operation.index == read.index + 1
+                 and predecessor.operation.budget[3] == read.budget[3] + 1
+                 and predecessor.consumer.baseline is baseline
+                 and predecessor.consumer.eof is eof)
     return consumer
 
 
@@ -605,7 +679,7 @@ def _latched_directory_resource_tail(owner, consumer):
              and metadata.variants[resource.ordinal] is resource.variant
              and type(resource.site) is tuple and len(resource.site) == 3
              and type(resource.site[0]) is int and resource.site[0] in (3, 4)
-             and _fixed_metadata_role(resource) in ('directory', 'leaf_before', 'leaf_opened')
+             and _fixed_metadata_role(resource) in ('directory', 'leaf_before', 'leaf_opened', 'leaf_after_read')
              and type(resource.site[2]) is int
              and operation.owner is owner and operation.registration is registration
              and operation.ledger is registration.native_ledger
@@ -1099,6 +1173,8 @@ def _consume_directory_policy(owner, consumer, actual):
                          and len(predecessor.identity) == 9
                          and all(type(value) is int for value in predecessor.identity)
                          and identity == predecessor.identity)
+            elif _fixed_metadata_role(resource) == 'leaf_after_read':
+                _require(identity == consumer.baseline.identity)
         _consuming_directory_return_tail(owner, consumer, actual)
         commit = _DirectoryPolicyCommit(owner, operation, consumer, resource, resource.site,
                                          resource.ordinal, resource.ordinal + 1, identity, mtime)
@@ -1181,7 +1257,7 @@ def _acked_directory_history_tail(owner, consumer, commit):
              and len(operation.arguments) == (1 if operation.operation == 4 else 2)
              and type(resource.site) is tuple and len(resource.site) == 3
              and type(resource.site[0]) is int and resource.site[0] in (3, 4)
-             and _fixed_metadata_role(resource) in ('directory', 'leaf_before', 'leaf_opened')
+             and _fixed_metadata_role(resource) in ('directory', 'leaf_before', 'leaf_opened', 'leaf_after_read')
              and type(resource.site[2]) is int)
     metadata = _native_declared_metadata_cohort_tail(owner, registration, resource.held_walk)
     _directory_predecessors_tail(owner, consumer)
@@ -1556,7 +1632,7 @@ def _abandon_known_directory_return(owner, consumer, actual, commit=None):
 
 
 
-def _run_directory_observation(owner, resource, predecessor=None):
+def _run_directory_observation(owner, resource, predecessor=None, baseline=None, eof=None):
     """Unwired shared declared-site caller with pre-effect independent memory custody.
 
     Only the actual factory/producer/policy/ACK returns are used. Cleanup is
@@ -1580,7 +1656,7 @@ def _run_directory_observation(owner, resource, predecessor=None):
         _resource_tail(owner, resource)
         registration = resource.registration
         native = registration.native_origin
-        actor_arguments = (resource, registration, predecessor)
+        actor_arguments = (resource, registration, predecessor, baseline, eof)
         actor_state = _native_pre_actor_state(owner, actor_arguments)
         _native_actor_context(native.actor_calls, (native.native, native.thread_native),
                               registration.context)
@@ -1597,10 +1673,12 @@ def _run_directory_observation(owner, resource, predecessor=None):
                  and result.custody_slot is marker.marker_slot)
         held_link, held_slot = marker.owner_link, marker.marker_slot
         held_state, held_reference = marker.state, marker.reference
-        consumer = _prepare_directory_consumer(owner, operation, predecessor)
-        _require(consumer.predecessor is predecessor)
+        consumer = _prepare_directory_consumer(owner, operation, predecessor, baseline, eof)
+        _require(consumer.predecessor is predecessor
+             and consumer.baseline is baseline and consumer.eof is eof)
         _require(_latch_directory_consumer(owner, consumer) is consumer
-                 and consumer.predecessor is predecessor)
+                 and consumer.predecessor is predecessor
+                 and consumer.baseline is baseline and consumer.eof is eof)
         producer_started = True
         try:
             actual = produce(owner, consumer)

@@ -1,0 +1,151 @@
+"""Actual EOF receipt survives exactly accounted post-read metadata, not new reads."""
+import pytest
+
+from . import test_presentation_entry_files as base
+from .test_presentation_gateway_approval import operator_composed_script
+
+
+@pytest.mark.parametrize('case', ('normal', 'missing_eof', 'copied_eof',
+                                 'missing_baseline', 'changed_file', 'lost_return'))
+def test_original_postread_receipts(tmp_path, monkeypatch, case):
+    script, fixture_mutation = operator_composed_script('links')
+    script = script.replace('GatewayPackageOwner.verify_recipe(recipe)',
+                            'GatewayPackageOwner.verify_recipe_source_hashes(recipe,entry)')
+    script = script[:script.rfind('print(json.dumps')]
+    script += '\npost_case=' + repr(case) + '\n'
+    script += r'''
+import gc, os, weakref
+from hmp_startup.gateway_continuation import GatewayContinuationOwner
+from hmp_startup.cache_selection import selected_cache_input_attempts
+from hmp_startup.runtime_reader import RuntimeSourceReadOwner, RuntimeReadError
+from hmp_plugin import presentation_startup_artifacts as a
+from hmp_plugin import presentation_native_metadata as m
+continuation=GatewayContinuationOwner.retain(entry,approval,recipe,checked)
+rows=selected_cache_input_attempts(continuation)
+index=next(i for i,row in enumerate(rows) if row.plan_row.source.path==str(dep_root/'__init__.py'))
+owner=RuntimeSourceReadOwner.retain(continuation,index)
+factory=m._prepare_metadata_operation_with_custody
+original_fstat=vars(a.StartupArtifactOwner)['_fstat']
+original_stat=vars(a.StartupArtifactOwner)['_stat']
+original_file_code=a.StartupArtifactOwner._file.__code__
+captured=[];commits=[];native_entries=[];post_returns=[];observed={}
+baselines=[];eofs=[];native_origin=None;active_role=None
+
+def capture_factory(actual_owner,resource):
+    operation,marker,payload=factory(actual_owner,resource)
+    captured.append((operation,weakref.ref(payload)))
+    return operation,marker,payload
+
+def observe_native(frame,event,arg):
+    if frame.f_code is m._produce_directory_metadata.__code__:
+        if (event=='c_call' and native_origin is not None
+                and (arg is native_origin.operations[3] or arg is native_origin.operations[4])):
+            native_entries.append(active_role)
+        if (event=='return' and arg is not None
+                and arg.operation.resource.site[1]=='leaf_after_read'):
+            post_returns.append((a._identity(arg.raw),arg.raw.st_mtime))
+            if post_case=='lost_return':raise RuntimeError('synthetic lost post-read return')
+
+def observe_site(actual_owner,scope,registration,operation,name=None):
+    global native_origin,active_role
+    frame=sys._getframe(2)
+    try:
+        assert frame.f_code is original_file_code
+        held=frame.f_locals['native_walk'];metadata=held[5];ordinal=len(commits)
+        active_role=metadata.definitions[ordinal][1]
+        assert metadata.definitions[ordinal][0]==operation
+        native_origin=registration.native_origin
+        descriptor=(frame.f_locals['row'] if operation==4 else
+                    frame.f_locals['held'][-1][0] if active_role=='leaf_before' else
+                    frame.f_locals['held'][-2][0])
+        resource=a._prepare_native_metadata_resource(owner,registration,held,descriptor,name)
+        predecessor=None if not commits else commits[-1]
+        if active_role!='leaf_after_read':
+            commit=m._run_directory_observation(owner,resource,predecessor)
+            if active_role=='leaf_before':baselines.append(commit)
+            assert metadata.commits[-1] is commit and captured[-1][1]() is None
+            commits.append(commit)
+            return
+        assert len(baselines)==1 and type(frame.f_locals['native_commit']) is a._NativeRuntimeReadCommit
+        eof=frame.f_locals['native_commit']
+        assert eof.eof is True and eof.remaining==0 and eof.count[2]==resource.variant.expected.size
+        if not eofs:eofs.append(eof)
+        assert eofs[0] is eof
+        baseline=baselines[0]
+        before=tuple(registration.native_ledger.counts)
+        if operation==4:
+            assert a._native_runtime_read_closed_tail(owner,eof,eof.step) is eof
+            if post_case=='changed_file':
+                leaf=dep_root/'__init__.py';st=os.stat(leaf,follow_symlinks=False)
+                os.utime(leaf,ns=(st.st_atime_ns,st.st_mtime_ns+1000000000))
+        if post_case=='missing_eof':eof=None
+        if post_case=='copied_eof':eof=eof._replace()
+        if post_case=='missing_baseline':baseline=None
+        try:commit=m._run_directory_observation(owner,resource,predecessor,baseline,eof)
+        except a.ArtifactObservationError:
+            assert post_case!='normal' and operation==4
+            entered=post_case in ('changed_file','lost_return')
+            assert native_entries.count('leaf_after_read')==int(entered)
+            assert tuple(registration.native_ledger.counts)==(before[0]+int(entered),before[1])
+            assert metadata.progress[0]==ordinal and metadata.commits[-1] is commits[-1]
+            assert eofs[0].result.acknowledged[0] is eofs[0]
+            assert eofs[0].step.eof==[True] and eofs[0].result.raw[0] is eofs[0].result.unset
+            if entered:
+                assert captured[-1][0].state==[True,True,True]
+                assert captured[-1][0].result.acknowledged==[None]
+                assert registration.native_ledger.failed==[True]
+            observed.update(refused=True,post_entries=int(entered),actual_eof_preserved=True)
+            raise
+        assert post_case=='normal'
+        assert commit.identity==baselines[0].identity==post_returns[-1][0]
+        assert commit.consumer.predecessor is commits[-1]
+        assert commit.consumer.eof is eofs[0] and commit.consumer.baseline is baselines[0]
+        assert metadata.commits[-1] is commit and captured[-1][1]() is None
+        commits.append(commit)
+        assert a._native_runtime_read_history_tail(owner,eofs[0],eofs[0].step) is eofs[0]
+        try:a._native_runtime_read_closed_tail(owner,eofs[0],eofs[0].step)
+        except a.ArtifactObservationError:pass
+        else:raise AssertionError('later metadata must not renew current read closure')
+        if operation==3:
+            assert native_entries.count('leaf_after_read')==2 and len(post_returns)==2
+            observed.update(actual_post_pair_ack=True,post_entries=2,
+                            literal_eof_retained=True,current_read_closure_refused=True)
+            raise RuntimeError('synthetic boundary after actual post-read pair ACK')
+    finally:frame=None
+
+def at_original_fstat(actual_owner,fd,scope,registration=None):
+    if actual_owner is owner:observe_site(actual_owner,scope,registration,4)
+    return original_fstat(actual_owner,fd,scope,registration)
+
+def at_original_stat(actual_owner,name,parent,scope,registration=None):
+    if actual_owner is owner:observe_site(actual_owner,scope,registration,3,name)
+    return original_stat(actual_owner,name,parent,scope,registration)
+
+profile_before=sys.getprofile();gc_before=gc.isenabled()
+assert profile_before is None
+m._prepare_metadata_operation_with_custody=capture_factory
+a.StartupArtifactOwner._fstat=at_original_fstat
+a.StartupArtifactOwner._stat=at_original_stat
+gc.disable()
+try:
+    sys.setprofile(observe_native)
+    try:owner.read()
+    except RuntimeReadError:pass
+    else:raise AssertionError('incomplete metadata walker must remain refused')
+    assert owner._failed and not owner._ready and owner._original_buffer==bytearray()
+    assert observed and all(reference() is None for _,reference in captured)
+    observed.update(case=post_case,metadata_acks=len(commits),payloads_reclaimed=True,
+                    gc_disabled=not gc.isenabled(),walker_refused=True)
+    diagnostic=Path(sys.argv[1])/'metadata-postread-stage.json'
+    fd=os.open(diagnostic,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
+    with os.fdopen(fd,'w') as stream:json.dump(observed,stream,sort_keys=True)
+finally:
+    sys.setprofile(profile_before)
+    m._prepare_metadata_operation_with_custody=factory
+    a.StartupArtifactOwner._fstat=original_fstat
+    a.StartupArtifactOwner._stat=original_stat
+    if gc_before:gc.enable()
+print(json.dumps({'mutation':mutation,'runtime_admitted':False}))
+'''
+    monkeypatch.setattr(base, 'SCRIPT', script)
+    base.test_actual_entry_and_wrapper_files(tmp_path, fixture_mutation)
