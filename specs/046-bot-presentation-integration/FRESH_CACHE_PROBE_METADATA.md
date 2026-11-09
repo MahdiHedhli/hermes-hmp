@@ -2,7 +2,7 @@
 
 November 9, 2026. Contract checked against `e12df99`; original-plan binding is
 implemented in uninstalled `45c006c` and independently reviewed. **The complete
-native/diagnostic traversal remains planned and unqualified.** The inherited
+native/diagnostic traversal remains unwired and unqualified.** The inherited
 runtime-source/declared-cache `_file` sequence does not cover this traversal.
 This is local HMP work, not an upstream Hermes capability blocker.
 
@@ -116,3 +116,17 @@ fallback, loader, image or permission authority.
 
 Native startup/service, resource/deadline limits, authenticated image transport,
 physical devices and release qualification remain separate unfinished gates.
+
+## Full-engine prototype review
+
+The separate branch `feat/native-fresh-probe-engine-20261109` preserves the
+unqualified full traversal prototype and normal-admission causal controls.
+See [PROBE_ENGINE_REVIEW.md](PROBE_ENGINE_REVIEW.md). Three positive cases do
+not qualify it: three intended causal failures reproduce lifetime, producer-loss
+retirement/known-close and foreign-actor publication defects. Two existing
+missing/declared probes still pass after the shared admission extraction.
+
+Correct the complete lifecycle through closed common machinery before wiring
+`observe`. Preserve the separate diagnostic native outcome, actual return/ACK,
+original cleanup custody and final pure branch/close/accounting seal. Do not
+count this prototype as PS1-FP-NATIVE completion or a new runtime capability.
