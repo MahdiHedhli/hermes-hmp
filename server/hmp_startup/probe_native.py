@@ -73,14 +73,16 @@ def _new_probe_engine_origin():
     functions = tuple((name, globals()[name], globals()[name].__code__) for name in (
         '_engine_origin_tail', '_execution_tail', '_history_tail',
         '_resource_tail', '_resource', '_consumer_tail',
-        '_policy', '_run_observation', '_open_ancestor',
+        '_policy_values', '_run_observation', '_open_ancestor',
         '_finish', '_run_fresh_probe', '_lifecycle_tail',
         '_prepare_shared_consumer', '_latch_shared_consumer', '_produce_shared',
-        '_consume_shared', '_ack_shared', '_retired_shared', '_history_mirrors_tail', '_attached_shared'))
+        '_consume_shared', '_ack_shared', '_retired_shared', '_history_mirrors_tail', '_attached_shared',
+        '_make_shared_commit', '_commit_shared_tail', '_acked_shared_history', '_publish_shared_ack'))
     return (module, types, functions, OSError.__dict__['errno'],
             OSError.__dict__['filename'], errno.ENOENT,
-            (metadata._produce_directory_metadata, metadata._produce_directory_metadata.__code__,
-             metadata))
+            (metadata, tuple((name, getattr(metadata, name), getattr(metadata, name).__code__)
+                             for name in ('_produce_directory_metadata',
+                                          '_consume_directory_policy', '_ack_directory_policy'))))
 
 
 def _engine_origin_tail(origin):
@@ -89,15 +91,18 @@ def _engine_origin_tail(origin):
              and sys.modules.get(__name__) is origin[0]
              and vars(origin[0]) is globals()
              and type(origin[1]) is tuple and len(origin[1]) == 5
-             and type(origin[2]) is tuple and len(origin[2]) == 20
+             and type(origin[2]) is tuple and len(origin[2]) == 24
              and origin[3] is OSError.__dict__['errno']
              and origin[4] is OSError.__dict__['filename']
              and type(origin[5]) is int and origin[5] == errno.ENOENT)
-    _require(type(origin[6]) is tuple and len(origin[6]) == 3
-             and origin[6][0] is metadata._produce_directory_metadata
-             and type(origin[6][0]) is FunctionType and origin[6][0].__code__ is origin[6][1]
-             and origin[6][2] is metadata and origin[6][0].__globals__ is vars(metadata)
+    _require(type(origin[6]) is tuple and len(origin[6]) == 2
+             and origin[6][0] is metadata and type(origin[6][1]) is tuple
+             and len(origin[6][1]) == 3
              and sys.modules.get('hmp_plugin.presentation_native_metadata') is metadata)
+    for name, function, code in origin[6][1]:
+        _require(type(name) is str and type(function) is FunctionType
+                 and getattr(metadata, name) is function and function.__code__ is code
+                 and function.__globals__ is vars(metadata))
     for kind, fields, members in origin[1]:
         _require(type(kind) is type and vars(kind).get('_fields') is fields
                  and all(vars(kind).get(name) is member
@@ -261,12 +266,15 @@ def _consumer_tail(consumer, predecessor):
              and consumer.predecessor is predecessor
              and operation.result.consumer[0] is consumer
              and execution.pending[0] is consumer
-             and consumer.commit == [None])
+             and type(consumer.commit) is list and len(consumer.commit) == 1
+             and (consumer.commit[0] is None or
+                  (type(consumer.commit[0]) is _ProbeCommit
+                   and consumer.commit[0].consumer is consumer)))
     return operation
 
 
 
-def _policy(execution, actual, predecessor):
+def _policy_values(execution, actual, predecessor):
     _require(type(actual) in (_ProbeReturn, metadata._ReportedMissingMetadataReturn)
              and type(actual.consumer) is _ProbeConsumer)
     consumer = actual.consumer
@@ -333,8 +341,7 @@ def _policy(execution, actual, predecessor):
         next_site = (position * 6 + 5 if offset == 4 else
                      (position + 1) * 6 + 4 if position + 1 < len(execution.opened) else
                      len(plan.definitions))
-    return _ProbeCommit(consumer, len(execution.history), site, next_site,
-                        actual.category, identity, outcome)
+    return (len(execution.history), site, next_site, actual.category, identity, outcome)
 
 
 def _run_observation(execution, predecessor):
@@ -511,42 +518,19 @@ def _latch_shared_consumer(owner, consumer, rejoin=False):
 def _produce_shared(owner, consumer):
     _require(type(consumer) is _ProbeConsumer and consumer.execution.owner is owner)
     origin = _engine_origin_tail(consumer.execution.origin)
-    # Retained original common producer, never a current replacement callable.
-    return origin[6][0](owner, consumer)
+    return origin[6][1][0][1](owner, consumer)
 
 
 def _consume_shared(owner, consumer, actual):
     _require(type(consumer) is _ProbeConsumer and consumer.execution.owner is owner)
-    commit = _policy(consumer.execution, actual, consumer.predecessor)
-    _consumer_tail(consumer, consumer.predecessor)
-    _require(consumer.commit == [None])
-    consumer.commit[0] = commit
-    return commit
+    origin = _engine_origin_tail(consumer.execution.origin)
+    return origin[6][1][1][1](owner, consumer, actual)
 
 
 def _ack_shared(owner, consumer, actual, commit):
-    execution, operation = consumer.execution, consumer.operation
-    _require(type(consumer) is _ProbeConsumer and type(commit) is _ProbeCommit
-             and execution.owner is owner and commit.consumer is consumer
-             and consumer.commit[0] is commit and operation.result.envelope[0] is actual)
-    # This policy-specific ACK still requires full extraction/partial-store
-    # qualification. The common caller now owns independent raw retirement.
-    result = operation.result
-    _lifecycle_tail(owner, operation.registration.scope, operation.registration, execution.plan)
-    _require(result.acknowledged == [None] and execution.pending[0] is consumer)
-    result.acknowledged[0] = commit
-    result.raw[0] = result.unset
-    result.snapshot[0] = result.envelope[0] = result.category[0] = None
-    consumer.consumption[0] = commit
-    execution.history.append(commit)
-    execution.next_site[0] = commit.next_site
-    if commit.outcome is not None:
-        _require(execution.outcome[0] is None)
-        execution.outcome[0] = commit.outcome
-    execution.pending[0] = None
-    operation.phase.result[0] = None
-    operation.phase.current[0] = operation.phase.idle
-    return commit
+    _require(type(consumer) is _ProbeConsumer and consumer.execution.owner is owner)
+    origin = _engine_origin_tail(consumer.execution.origin)
+    return origin[6][1][2][1](owner, consumer, actual, commit)
 
 
 def _retired_shared(owner, consumer, commit, origin, marker, record):
@@ -584,4 +568,87 @@ def _attached_shared(owner, consumer, commit):
              and operation.ledger.counts[0] is operation.budget[3]
              and operation.ledger.counts[1] is operation.budget[2])
     _history_mirrors_tail(execution, commit, attached=commit)
+    return commit
+
+
+def _make_shared_commit(owner, consumer, actual):
+    _require(type(consumer) is _ProbeConsumer and consumer.execution.owner is owner)
+    values = (consumer, *_policy_values(consumer.execution, actual, consumer.predecessor))
+    kind = _ProbeCommit
+    commit = kind(*values)
+    _engine_origin_tail(consumer.execution.origin)
+    _require(type(commit) is kind and kind is _ProbeCommit and tuple.__len__(commit) == len(values)
+             and all(tuple.__getitem__(commit, i) is value for i, value in enumerate(values)))
+    return commit
+
+
+def _commit_shared_tail(owner, consumer, actual, commit):
+    _require(type(consumer) is _ProbeConsumer and type(commit) is _ProbeCommit
+             and consumer.execution.owner is owner and commit.consumer is consumer)
+    metadata._pending_directory_cohort_tail(owner, consumer, actual)
+    expected = _policy_values(consumer.execution, actual, consumer.predecessor)
+    values = (commit.sequence, commit.site, commit.next_site,
+              commit.category, commit.identity, commit.outcome)
+    _require(all(type(value) is int for value in values[:3])
+             and type(values[3]) is str and values[3] in ('returned', 'reported_missing'))
+    identity, outcome = values[4:]
+    _require(identity is None or (type(identity) is tuple and len(identity) in (5, 9)
+                                  and all(type(value) is int for value in identity)))
+    if outcome is not None:
+        _require(type(outcome) is tuple and len(outcome) == 4
+                 and type(outcome[0]) is str and type(outcome[1]) is int
+                 and (outcome[2] is None or (type(outcome[2]) is tuple
+                      and len(outcome[2]) in (5, 9) and all(type(x) is int for x in outcome[2])))
+                 and type(outcome[3]) is tuple
+                 and all(type(row) is tuple and len(row) == 5
+                         and all(type(x) is int for x in row) for row in outcome[3]))
+    _require(values == expected and consumer.consumption[0] is actual
+             and consumer.commit[0] is commit)
+    return commit
+
+
+def _publish_shared_ack(owner, consumer, commit):
+    _require(type(consumer) is _ProbeConsumer and type(commit) is _ProbeCommit
+             and consumer.execution.owner is owner and commit.consumer is consumer)
+    execution = consumer.execution
+    _lifecycle_tail(owner, execution.registration.scope, execution.registration, execution.plan)
+    _require(type(commit.sequence) is int and commit.sequence == len(execution.history)
+             and execution.pending[0] is consumer
+             and consumer.commit[0] is consumer.operation.result.acknowledged[0] is commit)
+    execution.history.append(commit)
+    execution.next_site[0] = commit.next_site
+    if commit.outcome is not None:
+        _require(execution.outcome[0] is None)
+        execution.outcome[0] = commit.outcome
+    execution.pending[0] = None
+
+
+def _acked_shared_history(owner, consumer, commit):
+    _require(type(consumer) is _ProbeConsumer and type(commit) is _ProbeCommit
+             and consumer.execution.owner is owner and commit.consumer is consumer
+             and type(consumer.operation) is metadata._MetadataOperation)
+    execution, operation = consumer.execution, consumer.operation
+    origin, marker, link, slot, state, reference = consumer.custody
+    metadata._origin_tail(origin)
+    _require(type(marker) is origin.marker_type and marker.operation is operation
+             and marker.owner is owner and marker.origin is origin
+             and marker.owner_link is link and marker.marker_slot is slot
+             and marker.state is state and marker.reference is reference
+             and type(state) is list and len(state) == 3
+             and all(type(value) is bool for value in state))
+    # This is a mirror validator, not a retirement receipt or native allowance.
+    # The attached/retired caller tails separately require their literal phase.
+    attached = commit if state == [False, False, False] else None
+    _history_mirrors_tail(execution, commit, attached=attached)
+    ledger, phase = operation.ledger, operation.phase
+    _require(execution.pending[0] is None
+             and type(operation.index) is int
+             and operation.index == len(ledger.attempts) - 1
+             and ledger.attempts[operation.index] is operation
+             and ledger.counts is operation.budget[0]
+             and ledger.counts[0] is operation.budget[3]
+             and ledger.counts[1] is operation.budget[2]
+             and ledger.failed == [False] and ledger.failure == [None]
+             and ledger.inflight == [None] and phase.current[0] is phase.idle
+             and phase.result == [None])
     return commit

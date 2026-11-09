@@ -295,7 +295,7 @@ def _fresh_probe_resource_tail(owner, resource):
           and type(origin[0]) is ModuleType
           and sys.modules.get('hmp_startup.probe_native') is origin[0]
           and type(origin[1]) is tuple and len(origin[1]) == 5
-          and type(origin[2]) is tuple and len(origin[2]) == 20)
+          and type(origin[2]) is tuple and len(origin[2]) == 24)
     if type(resource.metadata) is origin[1][0][0]:
         for name, function, code in origin[2]:
             _need(type(name) is str and type(function) is FunctionType

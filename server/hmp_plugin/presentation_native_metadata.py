@@ -333,6 +333,28 @@ def _rejoin_probe_stages(owner, resource, origin, stages):
              and all(current is held for current, held in zip(actual, stages, strict=True)))
 
 
+def _probe_policy_helper(owner, consumer, name):
+    """Closed original probe policy projection, never a client callback."""
+    _require(type(consumer) is _ProbeConsumer
+             and name in ('_make_shared_commit', '_commit_shared_tail',
+                          '_acked_shared_history', '_publish_shared_ack'))
+    operation = tuple.__getitem__(consumer, 1)
+    _require(type(operation) is _MetadataOperation
+             and type(operation.resource) is _NativeProbeMetadataResource)
+    _native_work_registration_tail(owner, operation.registration)
+    origin = operation.registration.scope.native_probe_engine_origin
+    _require(type(origin) is tuple and len(origin) == 7 and type(origin[0]) is ModuleType
+             and type(origin[2]) is tuple)
+    rows = tuple(row for row in origin[2] if type(row) is tuple and len(row) == 3
+                 and type(row[0]) is str and row[0] == name)
+    _require(len(rows) == 1)
+    _, function, code = rows[0]
+    _require(type(function) is FunctionType and function.__code__ is code
+             and function.__globals__ is vars(origin[0])
+             and vars(origin[0]).get(name) is function)
+    return function
+
+
 def _probe_latched_resource_tail(owner, consumer):
     _require(type(consumer) is _ProbeConsumer)
     operation = tuple.__getitem__(consumer, 1)
@@ -1374,6 +1396,9 @@ def _consuming_directory_return_tail(owner, consumer, actual):
 
 
 def _directory_commit_cohort_tail(owner, consumer, actual, commit):
+    if type(consumer) is _ProbeConsumer:
+        function = _probe_policy_helper(owner, consumer, '_commit_shared_tail')
+        return function(owner, consumer, actual, commit)
     _pending_directory_cohort_tail(owner, consumer, actual)
     _require(type(commit) is _DirectoryPolicyCommit and commit.owner is owner
              and commit.operation is actual.operation and commit.consumer is consumer
@@ -1432,32 +1457,37 @@ def _consume_directory_policy(owner, consumer, actual):
             raise
         _native_post_actor_state(owner, actor_state, actor_arguments)
         _consuming_directory_return_tail(owner, consumer, actual)
-        resource = consumer.resource
-        if _fixed_metadata_role(resource) in ('directory', 'directory_after_hash'):
-            identity = _directory_identity(actual.snapshot, operation.context[1])
-            mtime = None
-            if _fixed_metadata_role(resource) == 'directory_after_hash':
-                _require(identity == consumer.baseline.identity)
+        if type(consumer) is _ProbeConsumer:
+            make_commit = _probe_policy_helper(owner, consumer, '_make_shared_commit')
+            commit = make_commit(owner, consumer, actual)
         else:
-            identity = _declared_leaf_identity(actual.snapshot, operation.context[1],
-                                                resource.variant.expected.size)
-            # Preserve the same actual result's primitive timestamp. Conditional
-            # source-effect conversion stays with the complete walker integration.
-            mtime = actual.snapshot.mtime
-            if _fixed_metadata_role(resource) == 'leaf_opened':
-                # This is the literal preceding caller return, not a new baseline
-                # sampled from current history or the newly opened descriptor.
-                predecessor = consumer.predecessor
-                _require(type(predecessor) is _DirectoryPolicyCommit
-                         and type(predecessor.identity) is tuple
-                         and len(predecessor.identity) == 9
-                         and all(type(value) is int for value in predecessor.identity)
-                         and identity == predecessor.identity)
-            elif _fixed_metadata_role(resource) == 'leaf_after_read':
-                _require(identity == consumer.baseline.identity)
-        _consuming_directory_return_tail(owner, consumer, actual)
-        commit = _DirectoryPolicyCommit(owner, operation, consumer, resource, resource.site,
-                                         resource.ordinal, resource.ordinal + 1, identity, mtime)
+            resource = consumer.resource
+            if _fixed_metadata_role(resource) in ('directory', 'directory_after_hash'):
+                identity = _directory_identity(actual.snapshot, operation.context[1])
+                mtime = None
+                if _fixed_metadata_role(resource) == 'directory_after_hash':
+                    _require(identity == consumer.baseline.identity)
+            else:
+                identity = _declared_leaf_identity(actual.snapshot, operation.context[1],
+                                                    resource.variant.expected.size)
+                # Preserve the same actual result's primitive timestamp. Conditional
+                # source-effect conversion stays with the complete walker integration.
+                mtime = actual.snapshot.mtime
+                if _fixed_metadata_role(resource) == 'leaf_opened':
+                    # This is the literal preceding caller return, not a new baseline
+                    # sampled from current history or the newly opened descriptor.
+                    predecessor = consumer.predecessor
+                    _require(type(predecessor) is _DirectoryPolicyCommit
+                             and type(predecessor.identity) is tuple
+                             and len(predecessor.identity) == 9
+                             and all(type(value) is int for value in predecessor.identity)
+                             and identity == predecessor.identity)
+                elif _fixed_metadata_role(resource) == 'leaf_after_read':
+                    _require(identity == consumer.baseline.identity)
+            _consuming_directory_return_tail(owner, consumer, actual)
+            commit = _DirectoryPolicyCommit(owner, operation, consumer, resource, resource.site,
+                                             resource.ordinal, resource.ordinal + 1, identity, mtime)
+            _consuming_directory_return_tail(owner, consumer, actual)
         _consuming_directory_return_tail(owner, consumer, actual)
         consumer.commit[0] = commit
         _require(_prepared_directory_commit_tail(owner, consumer, actual, commit) is commit)
@@ -1516,6 +1546,9 @@ def _directory_ack_preparation_tail(owner, consumer, actual, commit):
 
 def _acked_directory_history_tail(owner, consumer, commit):
     """Raw-free ACK history closure; not admission or a returned-receipt proof."""
+    if type(consumer) is _ProbeConsumer:
+        function = _probe_policy_helper(owner, consumer, '_acked_shared_history')
+        return function(owner, consumer, commit)
     _require(type(consumer) is _DirectoryConsumer and consumer.owner is owner
              and type(commit) is _DirectoryPolicyCommit and commit.owner is owner
              and commit.consumer is consumer and commit.operation is consumer.operation
@@ -1698,9 +1731,13 @@ def _ack_directory_policy(owner, consumer, actual, commit):
         result.envelope[0] = None
         result.category[0] = None
         consumer.consumption[0] = commit  # retire the raw-bearing backlink too
-        consumer.history.append(commit)  # actual ACK, retained without the native payload
-        consumer.resource.metadata.progress[0] = commit.next_ordinal
-        consumer.resource.metadata.progress[1] = None
+        if type(consumer) is _ProbeConsumer:
+            publish = _probe_policy_helper(owner, consumer, '_publish_shared_ack')
+            publish(owner, consumer, commit)
+        else:
+            consumer.history.append(commit)  # actual ACK, retained without the native payload
+            consumer.resource.metadata.progress[0] = commit.next_ordinal
+            consumer.resource.metadata.progress[1] = None
         phase.result[0] = None
         phase.current[0] = phase.idle
         _require(_acked_directory_commit_tail(owner, consumer, commit) is commit)
