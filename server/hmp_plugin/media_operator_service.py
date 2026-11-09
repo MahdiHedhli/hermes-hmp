@@ -85,6 +85,15 @@ class MediaOperatorMutationService(OperatorReadService):
             return encode_reply(request, "unknown")
         try:
             wrapped = asyncio.wrap_future(original)
+
+            def consume_late_error(future):
+                # A caller timeout/cancellation leaves this wrapper alive. Consume
+                # its eventual exception without logging worker diagnostics. This
+                # callback has NO authority to retire debt or release the Store.
+                with contextlib.suppress(BaseException):
+                    future.exception()
+
+            wrapped.add_done_callback(consume_late_error)
             result = await asyncio.wait_for(
                 asyncio.shield(wrapped), max(0, deadline - time.monotonic())
             )
