@@ -35,3 +35,15 @@ Review caught a byte-reader normalization regression in the first candidate `4f5
 - `/private/tmp/hq-ug0roqum/receipt.json`
 
 Together with the prior 67-case short-path checks, selected checks address all original47 failure cases. A complete unit rerun remains required; do not infer no new failures or release readiness. Original15 skips comprise14 missing native build/extraction/probe prerequisites and1 Linux-only own-process case on this Mac. Native integration fixtures remain unexecuted. Builder allocation ownership, native media publication/migration and device/release gates remain separate. No deployment or device/permission change occurred.
+
+## Full reconciled reruns and bounded device observations
+
+At exact source `889a31b7cbf7c5ab897f8d2911d23135a0cc0126`, all 8,272 collected unit cases were rerun serially with unchanged tracked source and short owned fixture paths. Python3.14.9: 8,257 passed,15 skipped; Python3.11.15: 8,255 passed,17 skipped. Both additionally report190 passing subtests, no failures/errors, and8,462 JUnit nodes. Strict runners correctly refuse complete qualification because skips remain:
+- current `/private/tmp/hq-ysxdytc2/receipt.json`
+- floor `/private/tmp/hq-egfela1x/receipt.json`
+
+The common15 skips are14 missing native build/extraction/probe prerequisites and1 Linux-only own-process case on this Mac. The floor adds2 cases requiring Python3.14 native uuid.uuid7. The two SDK declaration cases were subsequently configured and verified separately as recorded in `native-sdk-source-api-20261109.md`; that does not retroactively change either full-run result. No full rerun of the later test-only SDK checker is claimed.
+
+Physical observations are curated in `/private/tmp/hermes-mobile-device-launch-current-20261109.json`: Android beta6 normal launch, unpaired onboarding scroll, demo entry/exit visually observed; no pairing/grant/send performed. iPad702 normal launch/activation accepted, with matching PID/executable at two observations more than2minutes apart. No cold-start, continuous crash telemetry, rendered-feature or native persistence pass. iPhone15 remains disconnected;12 retired. LB1-T008 remains open; private task checkpoint commit3e246375 preserves that state. New installs, host configuration/model/provider/permission changes, or media activation were not performed.
+
+Fresh read-only host checks match109 expected installed5ecd2ba file hashes on both development hosts; native gateway identities/PIDs match their status replies and both reported no active work. This is installed-file/process metadata, not full in-memory module attestation or phone-feature coverage. New lifecycle repairs remain undeployed. Next: prepare a separately reviewed minimal shutdown/push-lifetime backport preserving existing schema and settings; keep full media authority/migration/native and release gates separate.
