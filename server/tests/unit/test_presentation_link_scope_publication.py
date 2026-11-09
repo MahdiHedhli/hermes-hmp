@@ -46,7 +46,8 @@ def foreign(*args,**kwargs):
 
 def observe(frame,event,result):
     if event=='call':
-        if frame.f_code not in (original_retain_code, original_ctor_code, original_current_code):return None
+        if (frame.f_code is not original_retain_code and frame.f_code is not original_ctor_code
+                and frame.f_code is not original_current_code):return None
         frame.f_trace_lines=frame.f_code is original_retain_code
     if event=='line' and frame.f_code is original_retain_code:
         if frame.f_lineno in root_stage_lines and frame.f_lineno not in root_stage_seen:
@@ -80,6 +81,7 @@ def observe(frame,event,result):
             elif fault=='register_helper':a._register_native_scope=foreign
             elif fault=='need_helper':a._require=foreign
             elif fault=='source_helper':a._source_current=foreign
+    return observe
 previous=sys.gettrace();sys.settrace(observe)
 refused=False
 try:
