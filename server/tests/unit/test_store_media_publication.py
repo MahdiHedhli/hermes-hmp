@@ -96,3 +96,30 @@ def test_nested_refusal_acquires_no_second_receipt(tmp_path):
             with store.transaction(): pass
     assert len(observer.events) == 2
     store.close()
+
+
+@pytest.mark.parametrize('lost', ('COMMIT', 'ROLLBACK'))
+def test_sql_settlement_ack_loss_is_uncertain_and_poisoned(tmp_path, lost):
+    import sqlite3
+    store, observer = setup(tmp_path)
+    original = store._conn
+    class LostSqlAck:
+        def execute(self, sql, *args):
+            result = original.execute(sql, *args)
+            if sql == lost: raise KeyboardInterrupt('synthetic SQL acknowledgement loss')
+            return result
+        def __getattr__(self, name): return getattr(original, name)
+    store._conn = LostSqlAck()
+    with pytest.raises(BaseException):
+        with store.transaction():
+            store.insert_user('synthetic', 'owner', 1)
+            if lost == 'ROLLBACK': raise ValueError('synthetic body failure')
+    assert store._poisoned
+    assert observer.events[-1] == ('settle', False)
+    with pytest.raises(PublicationUnavailable): observer.publisher.candidate(SCOPE, (1, 2, 3))
+    # Observe the actual persisted SQL outcome independently, never replay it.
+    with sqlite3.connect(str(store._path)) as readback:
+        actual = readback.execute('SELECT count(*) FROM users').fetchone()[0]
+    assert actual == (1 if lost == 'COMMIT' else 0)
+    store._conn = original
+    store.close()
