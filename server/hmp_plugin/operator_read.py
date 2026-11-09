@@ -288,12 +288,14 @@ def _collect_media(ctx: Any, device_id: str, challenge: str, nonce: str,
         raise OperatorUnavailableError("operator device unavailable")
     first.validate()
     enabled, available = ctx.media_enabled(), ctx.media_snapshot() is not None
+    effective = ctx.media_read_permission(device_id) is not None
     second = ctx.store.media_read_decision(ctx.iid, device_id)
     if type(second) is not MediaReadDecision:
         raise OperatorUnavailableError("operator device unavailable")
     second.validate()
     if (second != first or enabled != ctx.media_enabled()
-            or available != (ctx.media_snapshot() is not None)):
+            or available != (ctx.media_snapshot() is not None)
+            or effective != (ctx.media_read_permission(device_id) is not None)):
         raise OperatorUnavailableError("operator context changed")
     current()
     sampled = int(time.monotonic() * 1_000)
@@ -301,6 +303,7 @@ def _collect_media(ctx: Any, device_id: str, challenge: str, nonce: str,
         "protocol": 1, "operation": "host_media_read_context", "request_id": device_id,
         "challenge": challenge, "iid": ctx.iid, "nonce": nonce, "generation": generation,
         "decision": first._asdict(), "host_enabled": enabled, "api_available": available,
+        "effective": effective,
         "sample_ms": sampled, "expires_ms": int(deadline * 1_000),
     }
 
@@ -605,7 +608,7 @@ def read_media_context(path: Path, *, iid: str, nonce: str, device_id: str) -> d
         }
         result = _exchange(path, message, frozenset({
             "protocol", "operation", "request_id", "challenge", "iid", "nonce", "generation",
-            "decision", "host_enabled", "api_available", "sample_ms", "expires_ms",
+            "decision", "host_enabled", "api_available", "effective", "sample_ms", "expires_ms",
         }))
         if (type(result["protocol"]) is not int or result["protocol"] != 1
                 or result["operation"] != "host_media_read_context"
@@ -615,6 +618,7 @@ def read_media_context(path: Path, *, iid: str, nonce: str, device_id: str) -> d
                 or _NONCE.fullmatch(result["generation"]) is None
                 or type(result["host_enabled"]) is not bool
                 or type(result["api_available"]) is not bool
+                or type(result["effective"]) is not bool
                 or type(result["decision"]) is not dict
                 or frozenset(result["decision"]) != frozenset(MediaReadDecision._fields)
                 or type(result["sample_ms"]) is not int
