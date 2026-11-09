@@ -27,6 +27,16 @@ original_blueprint_dispatch=vars(policy._LinkScopeBlueprint).get('__getattribute
 selected_return=2 if fault=='scope_dispatch_early' else 4
 original_current_code=actual_origins.current.__code__
 original_ctor_code=a._Scope.__new__.__code__
+original_retain_code=a.StartupArtifactOwner._retain.__func__.__code__
+root_stage_lines={}
+for line_number,line in enumerate(Path(a.__file__).read_text().splitlines(),1):
+    if line_number<original_retain_code.co_firstlineno:continue
+    if any(fragment in line for fragment in ('_source_current(source)',
+            'current_row = link_origin', 'runtime_guard(runtime.entry',
+            'classes = []', 'link_cohort = (', 'held_factory = blueprint_row',
+            'link_blueprint = held_factory')):
+        root_stage_lines[line_number]=line.strip()[:90]
+root_stage_seen=set()
 foreign_slot=object();scope_seen=[];last_returns=[];hooks=[];actual_owner=[];baseline=[]
 ledger=entry._scope.native_files.ledger
 
@@ -36,9 +46,12 @@ def foreign(*args,**kwargs):
 
 def observe(frame,event,result):
     if event=='call':
-        if frame.f_code not in (a.StartupArtifactOwner._retain.__func__.__code__, original_ctor_code, original_current_code):return None
-        frame.f_trace_lines=False
-    if event=='call' and frame.f_code is a.StartupArtifactOwner._retain.__func__.__code__:
+        if frame.f_code not in (original_retain_code, original_ctor_code, original_current_code):return None
+        frame.f_trace_lines=frame.f_code is original_retain_code
+    if event=='line' and frame.f_code is original_retain_code:
+        if frame.f_lineno in root_stage_lines and frame.f_lineno not in root_stage_seen:
+            root_stage_seen.add(frame.f_lineno);stage(root_stage_lines[frame.f_lineno])
+    if event=='call' and frame.f_code is original_retain_code:
         if frame.f_locals.get('runtime') is not None:
             baseline.append((tuple(ledger.counts),len(ledger.attempts),len(ledger.scopes)))
             stage('runtime_scope_call')
@@ -112,6 +125,29 @@ else:
     assert baseline[0]==(tuple(ledger.counts),len(ledger.attempts),len(ledger.scopes))
 stage('assertions_complete')
 os.close(stage_fd)
+print(json.dumps({'mutation':mutation,'runtime_admitted':False}))
+'''
+    monkeypatch.setattr(base, 'SCRIPT', script)
+    base.test_actual_entry_and_wrapper_files(tmp_path, mutation)
+
+
+def test_actual_link_scope_unobserved_normal(tmp_path, monkeypatch):
+    script, mutation = operator_composed_script('links')
+    script = script.replace('GatewayPackageOwner.verify_recipe(recipe)',
+                            'GatewayPackageOwner.verify_recipe_source_hashes(recipe,entry)')
+    marker = 'original_bytes=plugin._bytes_read'
+    assert script.count(marker) == 1
+    script = script[:script.index(marker)] + r'''
+from hmp_plugin import presentation_link_path_policy as policy
+retained=EntryFileSnapshotOwner.retain_runtime_link_files(entry,recipe,plugin)
+checked=EntryFileSnapshotOwner.complete(retained)
+assert checked._ready
+owner=checked._fact_cell[2];scope=owner._origin;blueprint=scope.native_link_blueprint
+assert owner._ready and blueprint.owner is owner and blueprint.runtime is scope.runtime
+assert blueprint.context is scope.context and blueprint.lineage is scope.native_files
+assert blueprint.origin is tuple.__getitem__(entry._scope.native_files,4)
+assert len(blueprint.rows)==3*(len(scope.runtime.link.hops)+1)
+assert policy._scope_blueprint_tail(blueprint) is blueprint
 print(json.dumps({'mutation':mutation,'runtime_admitted':False}))
 '''
     monkeypatch.setattr(base, 'SCRIPT', script)
