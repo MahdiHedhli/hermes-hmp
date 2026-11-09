@@ -13,3 +13,13 @@ Private receipts:
 - `/private/tmp/hermes-qa-listener-stop-ownership-floor-axjly8d5/receipt.json`
 
 Remaining: context/dependency ownership across every teardown await, auxiliary startup publication, partial adapter recovery, all Store borrowers, native media publication contract and physical qualification. This is neither full lifecycle qualification nor release approval. Hosts retain deployed `5ecd2ba`; no flag, grant, model or provider changes occurred.
+
+## Context/resource cohort follow-up
+
+Source `3eee7d2` retains the read-service handle before its stop await and only detaches read, dispatcher, watcher and runner handles after known cleanup return and original-cohort checks. Context, Store, push hints, direct-send dependencies and the retained resource cohort are checked before further cleanup and after awaited stages. Three synthetic read-stop substitutions (context, dependencies, runner) refuse further effects and never report closed. This does not qualify auxiliary startup publication or all native/Store borrowers.
+
+375 selected tests passed on each pinned interpreter with unchanged tracked source, zero errors/failures/skips:
+- `/private/tmp/hermes-qa-listener-stop-scope-current-a6x60lqj/receipt.json`
+- `/private/tmp/hermes-qa-listener-stop-scope-floor-welex3kr/receipt.json`
+
+No deployment. The isolated test interpreters do not contain Ruff; no new lint pass is claimed for this follow-up.
