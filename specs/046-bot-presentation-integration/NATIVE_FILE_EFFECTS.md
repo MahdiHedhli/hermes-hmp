@@ -1,6 +1,20 @@
 ## November 8 — reviewed host updates deployed; character integration remains open
 
 
+MR-START2a source `bd7feef` retains the actual componentFuture and successfulreturn
+ctx/Store/boundclose across cancellation or unknownenqueue. Explicitcleanup can
+close an unpublished context once afteractualFuturecompletion, rejoining theheld
+scope aroundgenerationcallbacks. Initialclose/cohort substitutions were reproduced
+and fixed; partiallistener resources are retained rather than prematurelyclosed.
+CallerContextVars are copied beforeenqueue and isolated inworker; missingtransfer
+was reproduced beforefix. Both363 combined cases pass unchanged on3.14.9/3.11.15,
+Ruff passes and independentfinite review found no furtherconcrete blocker. Failed-
+builder allocation/partialrunner/TLScleanup and fullnativeauthority remainMR-START2b
+or latergates. Audit earlierread-worker backport contextpropagation next; no live
+profileeffect/authbypass inferred. No sourcebranch deployment/mediaactivation; both
+hosts remainc7482f1, and physical/release qualification is stillpending.
+
+
 MR-START1 source `d524059` serializes adapter connect/disconnect and blocks retry
 or false-connected results after unresolved startup/shutdown. A retained730e908
 control reproduced2 component workers active together; successful concurrentcalls

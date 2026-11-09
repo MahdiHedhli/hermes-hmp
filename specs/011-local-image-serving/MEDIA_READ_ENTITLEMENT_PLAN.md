@@ -372,3 +372,21 @@ remainc7482f1. Other borrower, migration, nativepublication and physical/release
 remain open. This source-only protection is not a runtime qualification claim.
 
 MR-START2 next: retain the actual component-opening concurrent Future and original startup scope/context/server before publication; reconcile caller cancellation/unknown task creation/partial startup without guessed cleanup or replay, then permit recovery only after known original resources retire. Preserve controlled False results and tested normal behavior. No default media activation.
+
+
+## MR-START2a actual component ownership and unpublished cleanup
+
+MR-START2a source `bd7feef` retains the actual componentFuture and successfulreturn
+ctx/Store/boundclose across cancellation or unknownenqueue. Explicitcleanup can
+close an unpublished context once afteractualFuturecompletion, rejoining theheld
+scope aroundgenerationcallbacks. Initialclose/cohort substitutions were reproduced
+and fixed; partiallistener resources are retained rather than prematurelyclosed.
+CallerContextVars are copied beforeenqueue and isolated inworker; missingtransfer
+was reproduced beforefix. Both363 combined cases pass unchanged on3.14.9/3.11.15,
+Ruff passes and independentfinite review found no furtherconcrete blocker. Failed-
+builder allocation/partialrunner/TLScleanup and fullnativeauthority remainMR-START2b
+or latergates. Audit earlierread-worker backport contextpropagation next; no live
+profileeffect/authbypass inferred. No sourcebranch deployment/mediaactivation; both
+hosts remainc7482f1, and physical/release qualification is stillpending.
+
+Next checkpoint: context-propagation parity audit for earlier read-worker pool/backport, without inferring a live profile leak. MR-START2b then needs stage-owned runner/TLS startup/failed-builder allocation cleanup, actual-resource retirement and scope readback before recovery. Other borrowers/migration/native publication and device qualification remain open.
