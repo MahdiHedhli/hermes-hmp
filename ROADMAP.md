@@ -1,5 +1,18 @@
 ## November 9 — shutdown ownership checks pass; media integration remains open
 
+MR-PUSH2 source `0adba02` retains returned relay and dispatcher ownership before
+startup effects. Failed construction/start keeps cleanup ownership; one shared relay
+close operation is retained across bounded observation and unknown Task acknowledgement.
+Failed close cannot certify retirement or trigger replay. Original dispatcher/relay
+owner substitution is rejected. Both pinned runtimes pass 507 combined tests unchanged,
+zero failures/errors/skips; finite independent read-only review accepted the repair.
+This proves successful return of the original relay close coroutine, not an independent
+audit of implementation-internal resources or a factory that fails before returning.
+Next is explicit cleanup/recovery of an adapter's retained partial listener. Failed
+builder allocations, other borrowers, native media authority/migration, full regression
+and physical/release qualification remain open. No deployment/provider/send/grant/media
+activation; images and characters are still not complete.
+
 MR-PUSH1 source `fc06ef3` retains push task/coroutine intents, one shielded close
 owner, and actual borrower drain beyond the bounded network close. The listener carries
 push debt until drain finishes. Independent review caught that task-only cancellation

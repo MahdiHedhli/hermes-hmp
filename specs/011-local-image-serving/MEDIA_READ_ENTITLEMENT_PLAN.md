@@ -490,3 +490,21 @@ other borrowers, partial adapter recovery, native media authority/migration and 
 qualification remain open. No deployment, provider/send, grants or media activation.
 
 Next MR-PUSH2: retain failed dispatcher/relay startup resources and distinguish actual task settlement from successful resource closure; then finish original-listener partial adapter recovery.
+
+
+## MR-PUSH2 retained failed startup and relay success
+
+MR-PUSH2 source `0adba02` retains returned relay and dispatcher ownership before
+startup effects. Failed construction/start keeps cleanup ownership; one shared relay
+close operation is retained across bounded observation and unknown Task acknowledgement.
+Failed close cannot certify retirement or trigger replay. Original dispatcher/relay
+owner substitution is rejected. Both pinned runtimes pass 507 combined tests unchanged,
+zero failures/errors/skips; finite independent read-only review accepted the repair.
+This proves successful return of the original relay close coroutine, not an independent
+audit of implementation-internal resources or a factory that fails before returning.
+Next is explicit cleanup/recovery of an adapter's retained partial listener. Failed
+builder allocations, other borrowers, native media authority/migration, full regression
+and physical/release qualification remain open. No deployment/provider/send/grant/media
+activation; images and characters are still not complete.
+
+Next MR-RECOVER1: original partial listener stop/drain, verified bootstrap/Store ownership transfer and explicit reconnect recovery; no new media activation.
