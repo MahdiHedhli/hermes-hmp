@@ -8,7 +8,8 @@ from .test_presentation_gateway_approval import operator_composed_script
 @pytest.mark.parametrize('case', ('normal', 'copied_registration', 'copied_plan',
                                  'wrong_arguments', 'foreign_resource', 'other_site',
                                  'foreign_ordinal', 'fake_module_fake_type',
-                                 'fake_module_actual_type', 'helper_export', 'helper_code'))
+                                 'fake_module_actual_type', 'helper_export', 'helper_code',
+                                 'shared_foreign_registration', 'rejoin_foreign_scope'))
 def test_fresh_probe_shared_intent(tmp_path, monkeypatch, case):
     script, mutation = operator_composed_script('links')
     script = script.replace('GatewayPackageOwner.verify_recipe(recipe)',
@@ -59,7 +60,28 @@ def exercise(frame):
         elif resource_case=='foreign_ordinal':candidate=resource._replace(ordinal=Foreign())
         else:candidate=resource
         substitutions=('fake_module_fake_type','fake_module_actual_type','helper_export','helper_code')
-        if resource_case in substitutions:
+        if resource_case in ('shared_foreign_registration','rejoin_foreign_scope'):
+            if resource_case=='shared_foreign_registration':
+                candidate=resource._replace(registration=Foreign())
+            else:
+                candidate=resource._replace(registration=reg._replace(scope=Foreign()))
+            stages=m._probe_stage_functions(owner,resource)
+            closed_refusal=False
+            try:
+                if resource_case=='shared_foreign_registration':
+                    m._run_directory_observation(owner,candidate)
+                else:
+                    m._rejoin_probe_stages(owner,candidate,scope.native_probe_engine_origin,stages)
+            except BaseException as error:
+                closed_refusal=type(error) in (pm.ProbePlanError,a.ArtifactObservationError)
+            facts.update(case=resource_case,closed_refusal=closed_refusal,
+                         foreign_hooks_before_assert=list(foreign_hooks),
+                         filesystem_native_calls=len(native_calls))
+            path=Path(sys.argv[1])/'probe-stage-shape-control.json'
+            fd=os.open(path,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
+            with os.fdopen(fd,'w') as stream:json.dump(facts,stream,sort_keys=True)
+            assert closed_refusal and foreign_hooks==[], 'stage scope getter ran before closed type fence'
+        elif resource_case in substitutions:
             from types import ModuleType
             owner._fixture_resource_calls=0
             def foreign_helper(owner,resource):
