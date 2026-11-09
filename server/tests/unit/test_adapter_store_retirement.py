@@ -623,3 +623,27 @@ def test_bootstrap_close_flag_requires_exact_false_without_foreign_bool(adapter_
         assert store.closes == 0
 
     asyncio.run(scenario())
+
+
+def test_bootstrap_worker_preserves_original_context_without_leaking_worker_changes(adapter_module):
+    import contextvars
+
+    async def scenario():
+        scope = contextvars.ContextVar("synthetic_bootstrap_scope", default=None)
+        marker = object()
+        scope.set(marker)
+        adapter = adapter_module.HmpAdapter(SimpleNamespace(extra={"port": 12345}))
+        ctx = SimpleNamespace(store=FakeStore())
+
+        def components(_adapter):
+            assert scope.get() is marker
+            scope.set("synthetic worker-only value")
+            return ctx
+
+        opening = adapter_module.BootstrapOpening(components, adapter)
+        adapter._opening = opening
+        opening.start()
+        assert await opening.wait() is ctx
+        assert scope.get() is marker
+
+    asyncio.run(scenario())
