@@ -722,6 +722,7 @@ class Store:
         try:
             receipt = begin()  # failure/lost return never starts SQL; never replay
             if receipt is None:
+                receipt = missing
                 raise RuntimeError("Store mutation receipt unavailable")
             with self._transaction_sql(outcome) as conn:
                 yield conn

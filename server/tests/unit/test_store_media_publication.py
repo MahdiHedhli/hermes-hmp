@@ -123,3 +123,18 @@ def test_sql_settlement_ack_loss_is_uncertain_and_poisoned(tmp_path, lost):
     assert actual == (1 if lost == 'COMMIT' else 0)
     store._conn = original
     store.close()
+
+
+def test_none_begin_receipt_starts_no_sql_and_never_settles_foreign_ownership(tmp_path):
+    store, observer = setup(tmp_path)
+    def no_receipt():
+        observer.publisher.begin_mutation()  # orphan belongs to observer, not caller
+        observer.events.append(('begin_none', None))
+        return None
+    observer.begin = no_receipt
+    with pytest.raises(RuntimeError, match='mutation receipt unavailable'):
+        store.insert_user('synthetic', 'owner', 1)
+    assert count(store) == 0
+    assert observer.events == [('begin_none', None)]
+    with pytest.raises(PublicationUnavailable): observer.publisher.candidate(SCOPE, (1, 2, 3))
+    store.close()
