@@ -1,6 +1,19 @@
 ## November 8 — reviewed host updates deployed; character integration remains open
 
 
+Verified host IPC client source `3503b48` is now implemented but unwired. It checks
+fixed private socket/peer/parent identity, exact challenge IID/nonce/generation,
+bounded expiry and one-send unknown-outcome handling without SQL fallback/retry.
+Independent review found no concrete client blocker. Both160-case combined suites
+pass unchanged (35 focused service/client cases), full lint passes. The original
+seven fake-server cleanup failures remain unqualified; the cross-version fixture
+correction does not relax protocol checks. Live TLS/listener verification and exact
+typed host consent remain caller obligations; the CLI's direct Store writer is not
+yet replaced. No runtime activation/image display/release claim. Only two completed
+owned synthetic scratch trees were removed after retained receipt/log/XML hash
+verification, restoring about1GB; failed evidence and source remain untouched.
+
+
 Independent review then found pre-submission allocation/registration and budget-return
 loss accounting gaps. Source `e948e83` records the original intent before capacity
 acquisition, cleans only proven-unacquired reservations, and retains/poisons unknown
