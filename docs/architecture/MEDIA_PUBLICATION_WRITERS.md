@@ -319,3 +319,31 @@ loss, callback registration loss and changed-generation refusal. Whole-listener
 integration and resource ownership, schema migration, native/config publication,
 physical image display and release qualification remain open. No deployed host
 uses this coordinator or the new media mutation service.
+
+## MR-LIFE2a: optional listener retention — 13703e9
+
+HmpServer can now retain an explicitly supplied exact media coordinator for its
+original context/Store; the default remains None and nothing starts the service.
+The synchronous begin closes admission/publication before shutdown awaits. A
+retained sentinel forces later Store-close handling through combined read/media
+drain while ordinary network cleanup proceeds even if media owner creation is
+unknown. Unknown creation stays latched; it cannot be silently retried or cleared.
+
+Drain requires an actual listener stop owner and completed network teardown. It
+holds and rejoins the original server context, read service, media owner and Store
+before/after every await and before clearing debt. Source review identified these
+early-call/postawait drift gaps; the narrowing fixes and causal tests are included.
+The final style-only guard wrap is AST-identical to reviewed d7dfcba.
+
+Both308-case combined suites pass unchanged on3.14.9/3.11.15, full Ruff passes, and
+independent finite review found no further concrete blocker in this listener delta.
+New cases cover synthetic runner cleanup while actual media work remains, unknown
+owner creation, constructor scope refusal, premature drain refusal, and context/
+owner replacement during await. The initial305 run failed two stale route-count
+assertions from the prior two GET diagnostics; exact declared-route equality was
+preserved and those GETs are now explicit. The failed receipt remains unqualified.
+
+This is NOT completed MR-LIFE2: adapter-retained Store owner/reconnect protection,
+all other borrower retirement, schema migration, native/config publication and
+physical/release qualification remain open. No adapter supplies the coordinator,
+no media service starts by default, and live hosts remain on c7482f1 only.
