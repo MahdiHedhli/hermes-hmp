@@ -256,3 +256,17 @@ layoutonly.56read/FD/layoutcases passbothPython/fullRuff; futurewritehandlerstil
 absent. Fresh1176floorcapacityretry passes; priorENOSPCrunretainedunqualified.
 Originalfailed testsubsetimportorder was fixed viaexplicitadapterfixture, notwaived.
 Onlycompletedownedsyntheticscratchwasremoved; receipt/log/XMLhashesreverified.
+
+
+## Reviewed CLI IPC integration — 8b15a7a
+
+CLI source `8b15a7a` now routes confirmed image-access decisions through the verified
+one-exchange service, preserving exact typed consent and fresh context/readback.
+The direct CLI Store write and any unavailable-service SQL fallback are removed.
+Both186-case combined suites pass unchanged on3.14.9/3.11.15, full Ruff passes, and
+independent finite CLI review found no concrete blocker. Actual confirmation/client/
+service/actor/Store fixtures cover allow/deny/wrong/EOF while prohibiting the CLI
+mutator; host TLS/live context is mocked, not runtime-qualified. Read-only status
+and global mutating-command TTY guard remain. Adapter activation, actor/listener
+retirement, schema4 quiesced migration, other-process/native/config publication and
+physical/release gates remain open. No live permission/flag or deployed build changed.
