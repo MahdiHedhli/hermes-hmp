@@ -801,7 +801,7 @@ def _policy_pins_tail(blueprint):
     return blueprint
 
 
-def _blueprint_tail(blueprint):
+def _blueprint_tail(blueprint, verify_paths=False):
     _policy_pins_tail(blueprint)
     from .presentation_startup_cache import _CacheSource
     owner, source, context, expected, paths, rows = blueprint[:6]
@@ -811,10 +811,11 @@ def _blueprint_tail(blueprint):
              and source.plan.pending is expected and source.paths is paths
              and type(paths) is tuple and type(rows) is tuple and len(rows) == len(paths)
              and type(blueprint[7]) is tuple)
-    for path, selected in zip(paths, rows, strict=True):
-        _require(type(path) is str and type(selected) is policy._StartupPathPolicy
-                 and selected.path is path and selected.actor_uid == context[1])
-        policy._policy_tail(selected)
+    if verify_paths:
+        for path, selected in zip(paths, rows, strict=True):
+            _require(type(path) is str and type(selected) is policy._StartupPathPolicy
+                     and selected.path is path and selected.actor_uid == context[1])
+            policy._policy_tail(selected)
     _engine_origin_tail(blueprint[7])
     return blueprint
 
@@ -858,12 +859,12 @@ def _new_startup_probe_origin(owner, source, context, expected):
     rows = tuple(policy._new_policy(path, context[1]) for path in paths)
     blueprint = (owner, source, context, expected, paths, rows, policy_pins,
                  engine_origin, kinds, cache_pins)
-    _blueprint_tail(blueprint)
+    _blueprint_tail(blueprint, verify_paths=True)
     _require(vars(owner) is names and len(names) == len(entries)
              and all(type(key) is str for key in names)
              and all(key in names and names[key] is value for key, value in entries))
     cache.source_current(source)
-    _blueprint_tail(blueprint)
+    _blueprint_tail(blueprint, verify_paths=True)
     _require(vars(owner) is names and len(names) == len(entries)
              and all(key in names and names[key] is value for key, value in entries))
     return (_NativeStartupProbeMetadataResource, StartupArtifactOwner, module,
