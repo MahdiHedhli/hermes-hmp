@@ -25,6 +25,10 @@ from .controls_requests import ControlsRequestStore
 from .media_permissions import MediaReadDecision, validate_media_scope
 
 SOCKET_NAME = "controls-operator.sock"
+_SOCKET_LAYOUTS = {
+    "read": (SOCKET_NAME, 512),
+    "media_write": ("media-operator.sock", 4096),
+}
 MAX_REQUEST = 512
 MAX_RESPONSE = 16_384
 MAX_PROFILES = 20
@@ -133,8 +137,10 @@ def _parent_fd(path: Path) -> tuple[int, os.stat_result]:
         raise
 
 
-def _entry(fd: int) -> os.stat_result:
-    return os.stat(SOCKET_NAME, dir_fd=fd, follow_symlinks=False)
+def _entry(fd: int, *, name: str = SOCKET_NAME) -> os.stat_result:
+    if type(name) is not str or name not in {item[0] for item in _SOCKET_LAYOUTS.values()}:
+        raise OperatorUnavailableError("operator socket name unavailable")
+    return os.stat(name, dir_fd=fd, follow_symlinks=False)
 
 
 def _peer_uid(sock: socket.socket) -> int:
@@ -309,9 +315,13 @@ def _collect_media(ctx: Any, device_id: str, challenge: str, nonce: str,
 
 
 class OperatorReadService:
-    def __init__(self, ctx: Any, anchor_dir: Path, nonce: str) -> None:
+    def __init__(self, ctx: Any, anchor_dir: Path, nonce: str,
+                 *, _socket_kind: str = "read") -> None:
+        if type(_socket_kind) is not str or _socket_kind not in _SOCKET_LAYOUTS:
+            raise OperatorUnavailableError("operator socket kind unavailable")
+        self._socket_name, self._request_limit = _SOCKET_LAYOUTS[_socket_kind]
         self.ctx = ctx
-        self.path = Path(anchor_dir).parent / SOCKET_NAME
+        self.path = Path(anchor_dir).parent / self._socket_name
         self.nonce = nonce
         self._fd: int | None = None
         self._inode: tuple[int, int] | None = None
@@ -329,7 +339,7 @@ class OperatorReadService:
         created: tuple[int, int] | None = None
         try:
             try:
-                _entry(fd)
+                _entry(fd, name=self._socket_name)
             except FileNotFoundError:
                 pass
             else:
@@ -338,7 +348,7 @@ class OperatorReadService:
                 named_parent = os.lstat(self.path.parent)
                 held_parent = os.fstat(fd)
                 named = os.lstat(self.path)
-                held_entry = _entry(fd)
+                held_entry = _entry(fd, name=self._socket_name)
                 if ((parent.st_dev, parent.st_ino)
                     != (held_parent.st_dev, held_parent.st_ino)
                     or (parent.st_dev, parent.st_ino)
@@ -355,7 +365,7 @@ class OperatorReadService:
                 previous = os.umask(0o077)
                 try:
                     raw.bind(str(self.path))
-                    bound = _entry(fd)
+                    bound = _entry(fd, name=self._socket_name)
                     created = (bound.st_dev, bound.st_ino)
                 finally:
                     os.umask(previous)
@@ -364,7 +374,7 @@ class OperatorReadService:
                 raw.listen(2)
                 raw.setblocking(False)
                 listener = await asyncio.start_unix_server(
-                    self._handle, sock=raw, limit=MAX_REQUEST,
+                    self._handle, sock=raw, limit=self._request_limit,
                 )
             except BaseException:
                 raw.close()
@@ -379,9 +389,9 @@ class OperatorReadService:
         except BaseException:
             if created is not None:
                 with contextlib.suppress(OSError):
-                    current = _entry(fd)
+                    current = _entry(fd, name=self._socket_name)
                     if (current.st_dev, current.st_ino) == created:
-                        os.unlink(SOCKET_NAME, dir_fd=fd)
+                        os.unlink(self._socket_name, dir_fd=fd)
             os.close(fd)
             raise
 
@@ -399,8 +409,8 @@ class OperatorReadService:
         fd, self._fd = self._fd, None
         if fd is not None:
             try:
-                if self._inode == (_entry(fd).st_dev, _entry(fd).st_ino):
-                    os.unlink(SOCKET_NAME, dir_fd=fd)
+                if self._inode == (_entry(fd, name=self._socket_name).st_dev, _entry(fd, name=self._socket_name).st_ino):
+                    os.unlink(self._socket_name, dir_fd=fd)
             except FileNotFoundError:
                 pass
             finally:
