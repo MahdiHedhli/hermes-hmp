@@ -88,3 +88,27 @@ under saturated new-begin admission. Both291-case suites pass. Independent delta
 review found no new concrete blocker under these assumptions. Adapter lifecycle,
 operator/native/config coordination and complete serving-path qualification remain
 unimplemented; no live resources are managed by this actor yet.
+
+## LM-ENT1-OP1 — operator mutation request contract (source preparation)
+
+A future separate same-UID local mutation endpoint must retain existing bounded
+parent/socket/peer/inode checks. The current read-only socket stays read-only.
+The human CLI's existing exact typed confirmation, current listener validation and
+repeated snapshot remain required; socket possession is host-UID authority, not
+proof of human consent. Mobile never gets this interface.
+
+The closed request is protocol1 / host_media_read_decide with exact instance,
+listener nonce, listener generation, random attempt identifier, stable device ID,
+expected complete MediaReadDecision and exact Boolean allowed. Signed64-bit
+revision/epoch counters use canonical decimal strings in this new protocol to
+avoid JSON integer rounding; the codec does not reinterpret older read protocol.
+No arbitrary operation, path, provider, job or other privilege is accepted.
+
+Before SQL: verify current original listener/cohort and active pairing; reserve
+publication invalidation through the original actor; apply Store's complete
+snapshot CAS only. Settled readback must match original request and committed
+revision. A duplicate/stale CAS cannot repeat the write. Missing/lost response is
+unknown, never automatic retry; explicit read-only status/readback determines next
+operator action. Attempt IDs correlate responses, not a fabricated durable replay
+ledger. Listener restart invalidates old nonce/generation. Mutation execution,
+response receipt, lifecycle and transport are not implemented by a request codec.
