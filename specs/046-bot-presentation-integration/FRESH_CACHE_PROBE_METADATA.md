@@ -5,7 +5,8 @@ contract. Source `1898b64` now connects the actual observe caller to the shared
 engine and typed finish; it is **uninstalled and not fully qualified**. The same
 twenty actual probe/finish/constructor cases pass on current and minimum Python.
 The successor cleanup/boundary/diagnostic36 current selection passes. The separate
-startup close-ACK repair passes3 current cases; combined39 minimum is running.
+startup close-ACK repair passes3 current and3minimum subset cases. Overall39
+minimum has37PASS/2retirement fixtureFAIL; corrected45minimum is running.
 Shared compatibility, full startup migration and service/device/release remain.
 See FEATURES for exact source and result scope. The original DATA plan keeps
 its zero-state fields; actual engine execution holds separate branch/history.
