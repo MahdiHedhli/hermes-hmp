@@ -96,7 +96,8 @@ def _new_probe_engine_origin():
             OSError.__dict__['filename'], errno.ENOENT,
             (metadata, tuple((name, vars(metadata).get(name), vars(metadata).get(name).__code__)
                              for name in ('_produce_directory_metadata',
-                                          '_consume_directory_policy', '_ack_directory_policy'))))
+                                          '_consume_directory_policy', '_ack_directory_policy',
+                                          '_probe_shared_call', '_probe_function_namespace'))))
 
 
 def _engine_origin_tail(origin):
@@ -111,7 +112,7 @@ def _engine_origin_tail(origin):
              and type(origin[5]) is int and origin[5] == errno.ENOENT)
     _require(type(origin[6]) is tuple and len(origin[6]) == 2
              and origin[6][0] is metadata and type(origin[6][1]) is tuple
-             and len(origin[6][1]) == 3
+             and len(origin[6][1]) == 5
              and sys.modules.get('hmp_plugin.presentation_native_metadata') is metadata)
     for name, function, code in origin[6][1]:
         _require(type(name) is str and type(function) is FunctionType
@@ -127,7 +128,7 @@ def _engine_origin_tail(origin):
     for name, function, code in origin[2]:
         _require(type(name) is str and type(function) is FunctionType
                  and globals().get(name) is function and function.__code__ is code
-                 and function.__globals__ is globals())
+                 and metadata._probe_function_namespace(origin[0], name, function))
     return origin
 
 
@@ -611,22 +612,11 @@ def _latch_shared_consumer(owner, consumer, rejoin=False):
     return consumer
 
 
-def _produce_shared(owner, consumer):
-    _require(type(consumer) is _ProbeConsumer and consumer.execution.owner is owner)
-    origin = _engine_origin_tail(consumer.execution.origin)
-    return origin[6][1][0][1](owner, consumer)
-
-
-def _consume_shared(owner, consumer, actual):
-    _require(type(consumer) is _ProbeConsumer and consumer.execution.owner is owner)
-    origin = _engine_origin_tail(consumer.execution.origin)
-    return origin[6][1][1][1](owner, consumer, actual)
-
-
-def _ack_shared(owner, consumer, actual, commit):
-    _require(type(consumer) is _ProbeConsumer and consumer.execution.owner is owner)
-    origin = _engine_origin_tail(consumer.execution.origin)
-    return origin[6][1][2][1](owner, consumer, actual, commit)
+# The native metadata producer/consumer/ACK dispatch is shared with the fixed
+# startup cohort; policy-specific history and branch validation remain here.
+_produce_shared = metadata._produce_probe_shared
+_consume_shared = metadata._consume_probe_shared
+_ack_shared = metadata._ack_probe_shared
 
 
 def _retired_shared(owner, consumer, commit, origin, marker, record):

@@ -335,6 +335,65 @@ class _ProbeConsumer(NamedTuple):
         return '<ProbeConsumer fixed metadata policy redacted>'
 
 
+
+def _probe_shared_call(owner, consumer, index):
+    """One fixed metadata pipeline for the two registered probe cohorts.
+
+    The resource and engine come from the original registered scope. Neither a
+    caller callback nor a policy module supplies the native producer functions.
+    """
+    _require(type(consumer) is _ProbeConsumer and type(index) is int
+             and 0 <= index < 3)
+    operation = tuple.__getitem__(consumer, 1)
+    _require(type(operation) is _MetadataOperation
+             and type(operation.resource) in
+                 (_NativeProbeMetadataResource, _NativeStartupProbeMetadataResource)
+             and operation.owner is owner
+             and type(operation.registration) is _NativeScopeRegistration
+             and operation.registration is operation.resource.registration)
+    origin = _closed_probe_engine_origin(owner, operation.resource)
+    _require(type(origin) is tuple and len(origin) == 7
+             and type(origin[2]) is tuple and type(origin[0]) is ModuleType)
+    rows = tuple(row for row in origin[2] if type(row) is tuple and len(row) == 3
+                 and type(row[0]) is str and row[0] == '_engine_origin_tail')
+    _require(len(rows) == 1)
+    _, validator, code = rows[0]
+    _require(type(validator) is FunctionType and validator.__code__ is code
+             and validator.__globals__ is vars(origin[0])
+             and vars(origin[0]).get('_engine_origin_tail') is validator)
+    _require(validator(origin) is origin)
+    row = origin[6][1][index]
+    expected = ('_produce_directory_metadata', '_consume_directory_policy',
+                '_ack_directory_policy')[index]
+    _require(type(row) is tuple and len(row) == 3 and row[0] == expected
+             and type(row[1]) is FunctionType and row[1].__code__ is row[2]
+             and row[1].__globals__ is globals()
+             and globals().get(expected) is row[1])
+    return row[1]
+
+
+def _produce_probe_shared(owner, consumer):
+    return _probe_shared_call(owner, consumer, 0)(owner, consumer)
+
+
+def _consume_probe_shared(owner, consumer, actual):
+    return _probe_shared_call(owner, consumer, 1)(owner, consumer, actual)
+
+
+def _ack_probe_shared(owner, consumer, actual, commit):
+    return _probe_shared_call(owner, consumer, 2)(owner, consumer, actual, commit)
+
+
+def _probe_function_namespace(owner_module, name, function):
+    """Only the three fixed shared stages may live outside the policy module."""
+    shared = {'_produce_shared': _produce_probe_shared,
+              '_consume_shared': _consume_probe_shared,
+              '_ack_shared': _ack_probe_shared}
+    if name in shared:
+        return (function is shared[name] and function.__globals__ is globals())
+    return function.__globals__ is vars(owner_module)
+
+
 def _probe_stage_functions(owner, resource):
     """Actual registered origin selects fixed internal stages, never a caller."""
     origin = _closed_probe_engine_origin(owner, resource)
@@ -347,7 +406,7 @@ def _probe_stage_functions(owner, resource):
         _require(len(rows) == 1)
         _, function, code = rows[0]
         _require(type(function) is FunctionType and function.__code__ is code
-                 and function.__globals__ is vars(origin[0])
+                 and _probe_function_namespace(origin[0], name, function)
                  and vars(origin[0]).get(name) is function)
         stages.append(function)
     return tuple(stages)
@@ -383,7 +442,7 @@ def _probe_policy_helper(owner, consumer, name):
     _require(len(rows) == 1)
     _, function, code = rows[0]
     _require(type(function) is FunctionType and function.__code__ is code
-             and function.__globals__ is vars(origin[0])
+             and _probe_function_namespace(origin[0], name, function)
              and vars(origin[0]).get(name) is function)
     return function
 

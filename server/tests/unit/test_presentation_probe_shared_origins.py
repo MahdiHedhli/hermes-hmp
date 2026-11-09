@@ -5,7 +5,7 @@ from . import test_presentation_entry_files as base
 from .test_presentation_gateway_approval import operator_composed_script
 
 
-@pytest.mark.parametrize('case', ('removed_export', 'foreign_policy_name'))
+@pytest.mark.parametrize('case', ('removed_export', 'foreign_policy_name', 'shared_helper_replaced'))
 def test_probe_shared_origin_refusal(tmp_path, monkeypatch, case):
     script, mutation = operator_composed_script('links')
     script = script.replace('GatewayPackageOwner.verify_recipe(recipe)',
@@ -40,6 +40,14 @@ if origin_case=='removed_export':
         namespace['_consume_directory_policy']=original
         if prior is absent:namespace.pop('__getattr__')
         else:namespace['__getattr__']=prior
+elif origin_case=='shared_helper_replaced':
+    original=m._probe_shared_call
+    def foreign_helper(*args):hooks.append('shared_helper');raise AssertionError('foreign helper called')
+    m._probe_shared_call=foreign_helper
+    try:
+        try:engine._engine_origin_tail(scope.native_probe_plan.engine_origin)
+        except BaseException as error:closed=type(error) is a.ArtifactObservationError
+    finally:m._probe_shared_call=original
 else:
     class ForeignName:
         def __eq__(self,value):hooks.append('eq');raise AssertionError('foreign name comparison')
