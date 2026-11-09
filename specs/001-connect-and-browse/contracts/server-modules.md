@@ -572,3 +572,30 @@ See [pre-result cursor](../../046-bot-presentation-integration/PRE_RESULT_CURSOR
 read-scope fact, bounded discard/terminal-data cursor and owned minimum-deadline
 notice. It cannot grant join/closure, ACK, native credit, image emission or runtime
 admission. See [cleanup reader](../../046-bot-presentation-integration/CLEANUP_READER.md).
+
+
+### Source-only media and lifecycle additions — November 9, 2026
+
+The closed package inventory additionally includes the following modules. Their
+presence does not activate media, add device privileges or certify native/device
+behavior. Host/user entitlement, authority, schema migration, full regression
+and physical/release gates remain separate.
+
+| Module | Responsibility |
+| --- | --- |
+| `media_permissions.py` | Closed independent decision/generation data; no grants by itself. |
+| `media_readiness.py` | Bounded authenticated media prerequisite projection. |
+| `media_publication.py` | Original media authority publication contracts. |
+| `media_publication_actor.py` | Owned publication/decision mutation lifetime. |
+| `media_operator_protocol.py` | Closed local operator framing/data. |
+| `media_operator_execution.py` | Original intent and mutation execution ownership. |
+| `media_operator_service.py` | Separate same-user operator transport; not activated by default. |
+| `media_operator_client.py` | Single-attempt verified local client; no SQL fallback/replay. |
+| `media_operator_retirement.py` | Original media service/actor retirement; not all-Store authority. |
+| `bootstrap_opening.py` | Retained actual component worker and original Store ownership. |
+| `push_retirement.py` | One retained original relay-close attempt and successful-return proof. |
+
+The historical byte/namespace witnesses keep their original hashes. Test-only
+composition inverses subtract only exact pinned source additions, while unrelated
+edits survive or refuse inversion. They do not act as runtime version allowlists
+or substitute for qualification of the new code.
