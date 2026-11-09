@@ -3081,6 +3081,23 @@ class StartupArtifactOwner:
         link_raw_function, link_raw_module = FunctionType, ModuleType
         link_raw_staticmethod, link_raw_any, link_raw_zip = staticmethod, any, zip
         link_raw_dict, link_raw_str = dict, str
+        # Hold this module's complete original callable/default bindings before
+        # any new blueprint callback; entry points remain the fixed held ones.
+        root_namespace = globals()
+        root_namespace_entries = tuple(root_namespace.items())
+        root_helper_pins = []
+        for root_name, root_value in root_namespace_entries:
+            if type(root_name) is not str:
+                raise error_type from None
+            if type(root_value) is FunctionType and root_value.__globals__ is root_namespace:
+                root_kw = root_value.__kwdefaults__
+                if root_kw is not None and (type(root_kw) is not dict
+                        or any(type(k) is not str for k in root_kw)):
+                    raise error_type from None
+                root_helper_pins.append((root_value, root_value.__code__, root_value.__defaults__,
+                                         root_kw, () if root_kw is None else tuple(root_kw.items())))
+        root_helper_pins = tuple(root_helper_pins)
+        register_scope = _register_native_scope
         _require(cls is StartupArtifactOwner and type(activation) is GatewayActivationOwner
                  and activation._artifact_owner is None and activation._artifact_cell is None
                  and activation._artifact_attempt_cell is None
@@ -3199,6 +3216,19 @@ class StartupArtifactOwner:
                         raise error_type(owner) from None
 
                 def link_rejoin():
+                    if (globals() is not root_namespace
+                            or any(type(k) is not str for k in root_namespace)
+                            or len(root_namespace) != len(root_namespace_entries)
+                            or any(k not in root_namespace or root_namespace[k] is not value
+                                   for k, value in root_namespace_entries)):
+                        raise error_type(owner) from None
+                    for function, code, defaults, kw, pairs in root_helper_pins:
+                        if (function.__code__ is not code or function.__defaults__ is not defaults
+                                or function.__kwdefaults__ is not kw
+                                or (kw is not None and (any(type(k) is not str for k in kw)
+                                    or len(kw) != len(pairs)
+                                    or any(k not in kw or kw[k] is not value for k, value in pairs)))):
+                            raise error_type(owner) from None
                     if (_require is not need or need.__code__ is not need_code
                             or _source_current is not source_check
                             or source_check.__code__ is not source_check_code
@@ -3305,6 +3335,19 @@ class StartupArtifactOwner:
                 # A helper return is not permission to publish changed vacancy.
                 need(cohort_row[1](link_cohort) is link_cohort)
                 link_rejoin()
+                if (globals() is not root_namespace
+                        or any(type(k) is not str for k in root_namespace)
+                        or len(root_namespace) != len(root_namespace_entries)
+                        or any(k not in root_namespace or root_namespace[k] is not value
+                               for k, value in root_namespace_entries)):
+                    raise error_type(owner) from None
+                for function, code, defaults, kw, pairs in root_helper_pins:
+                    if (function.__code__ is not code or function.__defaults__ is not defaults
+                            or function.__kwdefaults__ is not kw
+                            or (kw is not None and (any(type(k) is not str for k in kw)
+                                or len(kw) != len(pairs)
+                                or any(k not in kw or kw[k] is not value for k, value in pairs)))):
+                        raise error_type(owner) from None
                 # Rejoin actual source/entry pointer identities without calling
                 # a current getter after the last callback-bearing origin seal.
                 if (tuple.__getitem__(digest_context, 1) is not digest_binding
@@ -3434,6 +3477,19 @@ class StartupArtifactOwner:
                      and owner_dict.get('_cell') is scope_cell
                      and owner_dict.get('_root_cell') is scope_root
                      and vars(activation).get('_artifact_cell') is scope_root)
+                if (globals() is not root_namespace
+                        or any(type(k) is not str for k in root_namespace)
+                        or len(root_namespace) != len(root_namespace_entries)
+                        or any(k not in root_namespace or root_namespace[k] is not value
+                               for k, value in root_namespace_entries)):
+                    raise error_type(owner) from None
+                for function, code, defaults, kw, pairs in root_helper_pins:
+                    if (function.__code__ is not code or function.__defaults__ is not defaults
+                            or function.__kwdefaults__ is not kw
+                            or (kw is not None and (any(type(k) is not str for k in kw)
+                                or len(kw) != len(pairs)
+                                or any(k not in kw or kw[k] is not value for k, value in pairs)))):
+                        raise error_type(owner) from None
                 # Rejoin actual source/entry pointer identities without calling
                 # a current getter after the last callback-bearing origin seal.
                 if (tuple.__getitem__(digest_context, 1) is not digest_binding
@@ -3511,7 +3567,7 @@ class StartupArtifactOwner:
                                     or len(kw) != len(pairs)
                                     or any(k not in kw or kw[k] is not value for k, value in pairs)))):
                             raise error_type(owner) from None
-            _register_native_scope(owner, s, scope_cell, scope_root)
+            register_scope(owner, s, scope_cell, scope_root)
             _require(owner._origin is s and owner._scope is s
                      and owner._cell is scope_cell and owner._root_cell is scope_root
                      and activation._artifact_cell is scope_root)

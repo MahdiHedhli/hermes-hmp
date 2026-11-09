@@ -5,18 +5,26 @@ from . import test_presentation_entry_files as base
 from .test_presentation_gateway_approval import operator_composed_script
 
 
-@pytest.mark.parametrize('fault', ('normal', 'owner', 'activation', 'io_slot', 'count', 'scope_dispatch'))
+@pytest.mark.parametrize('fault', ('normal', 'owner', 'activation', 'io_slot', 'count', 'scope_dispatch',
+                                    'scope_dispatch_early', 'policy_code', 'blueprint_dispatch',
+                                    'register_helper', 'need_helper', 'source_helper'))
 def test_actual_link_scope_last_origin_return_seals_publication(tmp_path, monkeypatch, fault):
     script, mutation = operator_composed_script('links')
     script = script.replace('GatewayPackageOwner.verify_recipe(recipe)',
                             'GatewayPackageOwner.verify_recipe_source_hashes(recipe,entry)')
     marker = 'original_bytes=plugin._bytes_read'
     assert script.count(marker) == 1
+    script = script.replace('entry = GatewayEntryOwner.start()',
+        "import os,time\nstage_fd=os.open(base/'link-scope-stage.jsonl',os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)\nstage_start=time.monotonic()\ndef stage(label):\n    os.write(stage_fd,(json.dumps({'stage':label,'elapsed':time.monotonic()-stage_start})+'\\n').encode())\nstage('before_entry')\nentry = GatewayEntryOwner.start()\nstage('after_entry')",1)
     script = script[:script.index(marker)] + '\nfault=' + repr(fault) + '\n' + r'''
 from hmp_startup import link_factory_origin as actual_origins
 from hmp_plugin import presentation_link_path_policy as policy
+stage('before_link_retention')
 retained=EntryFileSnapshotOwner.retain_runtime_link_files(entry,recipe,plugin)
+stage('after_link_retention')
 original_scope_dispatch=vars(a._Scope).get('__getattribute__')
+original_blueprint_dispatch=vars(policy._LinkScopeBlueprint).get('__getattribute__')
+selected_return=2 if fault=='scope_dispatch_early' else 4
 original_current_code=actual_origins.current.__code__
 original_ctor_code=a._Scope.__new__.__code__
 foreign_slot=object();scope_seen=[];last_returns=[];hooks=[];actual_owner=[];baseline=[]
@@ -33,9 +41,11 @@ def observe(frame,event,result):
     if event=='call' and frame.f_code is a.StartupArtifactOwner._retain.__func__.__code__:
         if frame.f_locals.get('runtime') is not None:
             baseline.append((tuple(ledger.counts),len(ledger.attempts),len(ledger.scopes)))
+            stage('runtime_scope_call')
     if event=='return' and frame.f_code is original_ctor_code:
         if frame.f_locals.get('native_link_blueprint') is not None:
             scope_seen.append(result)
+            stage('scope_constructor_return')
             actual_owner.append(entry._activation._artifact_owner)
     if (event=='return' and frame.f_code is original_current_code and scope_seen
             and frame.f_back is not None and frame.f_back.f_code.co_name=='link_rejoin'
@@ -43,27 +53,38 @@ def observe(frame,event,result):
         last_returns.append(True)
         # Fourth direct rejoin after actual Scope constructor is the last
         # callback before the inline final publication seal.
-        if len(last_returns)==4:
+        if len(last_returns)==selected_return:
+            stage('last_selected_origin_return')
             sys.settrace(None)
             owner=actual_owner[0]
             if fault=='owner':owner._scope=foreign_slot
             elif fault=='activation':entry._activation._artifact_cell=foreign_slot
             elif fault=='io_slot':scope_seen[0].runtime.inputs.io_slot[0]=foreign_slot
             elif fault=='count':scope_seen[0].runtime.count[0]=foreign_slot
-            elif fault=='scope_dispatch':a._Scope.__getattribute__=foreign
+            elif fault in ('scope_dispatch','scope_dispatch_early'):a._Scope.__getattribute__=foreign
+            elif fault=='policy_code':policy._new_policy.__code__=foreign.__code__
+            elif fault=='blueprint_dispatch':policy._LinkScopeBlueprint.__getattribute__=foreign
+            elif fault=='register_helper':a._register_native_scope=foreign
+            elif fault=='need_helper':a._require=foreign
+            elif fault=='source_helper':a._source_current=foreign
 previous=sys.gettrace();sys.settrace(observe)
 refused=False
 try:
     checked=EntryFileSnapshotOwner.complete(retained)
+    stage('complete_return')
 except EntryFilesError:
     refused=True
+    stage('refused_return')
 finally:
     sys.settrace(previous)
-    if fault=='scope_dispatch':
+    if fault=='blueprint_dispatch':
+        if original_blueprint_dispatch is None:del policy._LinkScopeBlueprint.__getattribute__
+        else:policy._LinkScopeBlueprint.__getattribute__=original_blueprint_dispatch
+    if fault in ('scope_dispatch','scope_dispatch_early'):
         if original_scope_dispatch is None:del a._Scope.__getattribute__
         else:a._Scope.__getattribute__=original_scope_dispatch
 assert len(scope_seen)==1 and len(actual_owner)==1 and len(baseline)==1
-assert len(last_returns)==4 and hooks==[]
+assert len(last_returns)==selected_return and hooks==[]
 owner=actual_owner[0]
 if fault=='normal':
     assert not refused and checked._ready and owner._ready
@@ -89,6 +110,8 @@ else:
     except EntryFilesError:pass
     else:raise AssertionError('lost/refused actual publication replayed')
     assert baseline[0]==(tuple(ledger.counts),len(ledger.attempts),len(ledger.scopes))
+stage('assertions_complete')
+os.close(stage_fd)
 print(json.dumps({'mutation':mutation,'runtime_admitted':False}))
 '''
     monkeypatch.setattr(base, 'SCRIPT', script)
