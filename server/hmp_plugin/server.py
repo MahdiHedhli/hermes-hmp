@@ -2212,7 +2212,8 @@ class HmpServer:
             # Network cleanup proceeds even when media retirement cannot be proved.
             self.operator_worker_debt = 1
             try:
-                if self._media_retirement is not retirement or self.ctx is not self._operator_origin_ctx:
+                if (self._media_retirement is not retirement
+                        or self.ctx is not self._operator_origin_ctx):
                     raise RuntimeError("media retirement owner changed")
                 retirement.begin()  # close admission/publication BEFORE any shutdown await
             except BaseException:
