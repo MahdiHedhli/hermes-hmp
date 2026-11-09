@@ -181,3 +181,70 @@ def test_operator_command_confirms_and_reads_back_only_media_permission(
         assert store.owner_controls_decision('dev_a') is None
     finally:
         store.close()
+
+
+@pytest.mark.parametrize("interruption", (
+    "cancel", "nonce", "generation", "expired", "concurrent_decision", "lost_ack",
+))
+def test_operator_media_interruption_never_replays_or_changes_unrelated_rights(
+    tmp_path, monkeypatch, interruption,
+):
+    store = Store(tmp_path / "media.sqlite3")
+    store.migrate()
+    store.insert_user("user_a", "owner", 1)
+    store.insert_device("dev_a", "user_a", "f" * 52, b"public", "phone", 1, state="ACTIVE")
+    iid = "a" * 52
+    ctx = SimpleNamespace(store=store, out=io.StringIO(), now=lambda: 10)
+    initial = store.media_read_decision(iid, "dev_a")
+    calls = []
+    original_write = store.set_media_read
+    writes = []
+
+    def write(*args, **kwargs):
+        writes.append(1)
+        result = original_write(*args, **kwargs)
+        if interruption == "lost_ack":
+            raise OSError("synthetic lost acknowledgement after commit")
+        return result
+
+    def live(_ctx, device_id, actual_iid):
+        assert device_id == "dev_a" and actual_iid == iid
+        calls.append(1)
+        decision = store.media_read_decision(iid, device_id)
+        reply = {"decision": decision._asdict(), "nonce": "a" * 32,
+                 "generation": "b" * 32, "host_enabled": False,
+                 "api_available": True, "effective": decision.allowed is True,
+                 "expires_ms": 2 ** 52}
+        if len(calls) == 2:
+            if interruption == "nonce":
+                reply["nonce"] = "c" * 32
+            elif interruption == "generation":
+                reply["generation"] = "d" * 32
+            elif interruption == "expired":
+                reply["expires_ms"] = 0
+            elif interruption == "concurrent_decision":
+                # Race after the live sample but before the command's CAS.
+                assert original_write(decision, allowed=False, now=9) is not None
+        return reply
+
+    monkeypatch.setattr(cli, "_load_identity", lambda _ctx: SimpleNamespace(iid=iid))
+    monkeypatch.setattr(cli, "_media_operator_context", live)
+    monkeypatch.setattr(cli, "_host_request_confirmation",
+                        lambda _ctx, _token: interruption != "cancel")
+    monkeypatch.setattr(store, "set_media_read", write)
+    try:
+        args = argparse.Namespace(devices_command="grant-media-read", device_id="dev_a")
+        with pytest.raises(cli.RefusedError) as caught:
+            cli._cmd_devices_media(ctx, args)
+        final = store.media_read_decision(iid, "dev_a")
+        if interruption == "lost_ack":
+            assert final.allowed is True and final.revision == 1
+            assert len(writes) == 1 and "do not replay" in str(caught.value)
+        elif interruption == "concurrent_decision":
+            assert final.allowed is False and final.revision == 1
+            assert len(writes) == 1 and "no decision saved" in str(caught.value)
+        else:
+            assert final == initial and writes == []
+        assert store.owner_controls_decision("dev_a") is None
+    finally:
+        store.close()
