@@ -1,5 +1,14 @@
 ## November 8 — reviewed host updates deployed; character integration remains open
 
+Operator executor preparation `d788615` now performs real coordinated Store CAS
+and readback on worker threads with original listener/actor/Store binding and
+pre/postcommit cohort/deadline checks. Both43-case suites pass: duplicate old
+snapshots do not repeat a grant, post-CAS cohort drift rolls back, and committed
+readback loss remains unknown/no replay. Independent source review found no concrete
+blocker in this unwired layer and narrowing checks. It verifies no peer or human
+consent; transport/admission/deadline provenance and native coordination are still
+missing. No route/socket/CLI calls it, and no live permission or deployment changed.
+
 Operator coordination task LM-ENT1-OP1 now has a strict request codec at1794e43:
 closed fields, exact device/expected-state DATA, bounded parsing and canonical
 signed64-bit decimal counters. Both35-case suites pass; independent review found

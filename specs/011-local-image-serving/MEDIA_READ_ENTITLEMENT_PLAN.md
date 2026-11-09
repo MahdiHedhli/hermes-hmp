@@ -238,3 +238,9 @@ OP1 requestcodec1794e43 is implemented as DATAonly;35cases pass bothPython and
 independentreview found no concrete codecblocker. No socket, consent, runtime
 nonce/peer/listener check, CAS or response execution is supplied by thecodec.
 Operatortransport/handler and allnativepublication obligations remain open.
+
+OP1 executord788615 prepares actualworkerCAS/readback using originalactorStore,
+completeexpectedsnapshot and finalcohort/deadline checks.43cases passbothPython,
+reviewreportsnoconcrete blocker in unwiredlayer. DuplicateCASdoesnotreplaygrant;
+postcommitreadbackloss staysunknown. Peer/consent/admission/deadlineprovenance and
+nativecoordination are separate missingtransport/lifecycle prerequisites.
