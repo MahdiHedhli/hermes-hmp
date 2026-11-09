@@ -218,3 +218,55 @@ def test_component_and_utf8_path_bounds():
     for path in ('/' + '/'.join(['a'] * 65), '/' + 'é' * 2048, '/x/../python', '/x/\ud800'):
         with pytest.raises(ArtifactObservationError):
             policy._parts(path)
+
+
+@pytest.mark.parametrize('fault', (
+    'need_alias', 'tail_alias', 'parts_alias', 'returned_field',
+    'policy_dispatch', 'native_dispatch', 'native_export', 'native_module',
+    'need_code', 'tail_code', 'parts_code', 'expected_dispatch',
+))
+def test_policy_constructor_cannot_nominate_changed_inputs_or_guards(monkeypatch, fault):
+    import sys
+    from hmp_startup import runtime_files
+
+    p = _policy()
+    kind = policy._LinkPathPolicy
+    original = kind.__new__
+    foreign_calls = []
+
+    def foreign(*args, **kwargs):
+        foreign_calls.append(True)
+        raise AssertionError('foreign helper/getter invoked')
+
+    def changed(cls, *values):
+        def forbidden_code(*args, **kwargs):
+            raise AssertionError('changed helper code invoked')
+
+        if fault == 'need_alias':
+            monkeypatch.setattr(policy, '_need', foreign)
+        elif fault == 'tail_alias':
+            monkeypatch.setattr(policy, '_policy_tail', foreign)
+        elif fault == 'parts_alias':
+            monkeypatch.setattr(policy, '_parts', foreign)
+        elif fault == 'returned_field':
+            values = (*values[:7], ('/', 'other', 'python'))
+        elif fault == 'policy_dispatch':
+            monkeypatch.setattr(kind, '__getattribute__', foreign, raising=False)
+        elif fault == 'native_dispatch':
+            monkeypatch.setattr(ExecutableLinkPlan, '__getattribute__', foreign, raising=False)
+        elif fault == 'native_export':
+            monkeypatch.setattr(runtime_files, 'LinkHop', object())
+        elif fault == 'native_module':
+            monkeypatch.setitem(sys.modules, 'hmp_startup.runtime_files', object())
+        elif fault in ('need_code', 'tail_code', 'parts_code'):
+            selected = {'need_code': policy._need, 'tail_code': policy._policy_tail,
+                        'parts_code': policy._parts}[fault]
+            monkeypatch.setattr(selected, '__code__', forbidden_code.__code__)
+        elif fault == 'expected_dispatch':
+            monkeypatch.setattr(ExpectedArtifact, '__getattribute__', foreign, raising=False)
+        return original(cls, *values)
+
+    monkeypatch.setattr(kind, '__new__', staticmethod(changed))
+    with pytest.raises(ArtifactObservationError):
+        policy._new_policy(p.plan, p.hop, p.index, p.phase, p.actor_uid, p.bound)
+    assert foreign_calls == []

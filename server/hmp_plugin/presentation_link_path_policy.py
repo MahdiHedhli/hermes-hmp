@@ -8,6 +8,8 @@ these consistency checks do not replace its path allowlist/lexical resolution.
 """
 from __future__ import annotations
 
+import sys
+from types import FunctionType, ModuleType
 from typing import NamedTuple
 
 from .presentation_startup_artifacts import ArtifactObservationError, ExpectedArtifact
@@ -102,8 +104,56 @@ def _new_policy(plan, hop, index, phase, actor_uid, bound):
     _need(type(plan) is ExecutableLinkPlan and type(plan.target) is ExpectedArtifact
           and (hop is None or type(hop) is LinkHop))
     path = plan.target.path if hop is None else hop.path
-    policy = _LinkPathPolicy(plan, hop, index, phase, actor_uid, bound, path, _parts(path))
-    return _policy_tail(policy)
+    values = (plan, hop, index, phase, actor_uid, bound, path, _parts(path))
+    error = ArtifactObservationError
+    need, need_code = _need, _need.__code__
+    tail, tail_code = _policy_tail, _policy_tail.__code__
+    parts, parts_code = _parts, _parts.__code__
+    kind = _LinkPathPolicy
+    native_module = sys.modules.get('hmp_startup.runtime_files')
+    need(type(native_module) is ModuleType)
+    dispatch_names = ('__getattribute__', '__getattr__', '__getitem__', '__len__',
+                      '__iter__', '__setattr__', '__delattr__')
+    pins = []
+    for selected in (kind, ExecutableLinkPlan, LinkHop, ExpectedArtifact):
+        namespace = vars(selected)
+        fields = namespace.get('_fields')
+        constructor = namespace.get('__new__')
+        if type(constructor) is staticmethod:
+            constructor = constructor.__func__
+        need(type(selected) is type and type(fields) is tuple
+             and all(type(name) is str for name in fields)
+             and type(constructor) is FunctionType)
+        pins.append((selected, fields, tuple(namespace.get(name) for name in fields),
+                     constructor, constructor.__code__, selected.__bases__,
+                     tuple(namespace.get(name) for name in dispatch_names)))
+    constructor = pins[0][3]
+    policy = constructor(kind, *values)
+    # Refuse changed helpers before calling one. Use the held exception class,
+    # tuple primitives and type dictionaries before any returned-object getter.
+    if (ArtifactObservationError is not error
+            or _need is not need or need.__code__ is not need_code
+            or _policy_tail is not tail or tail.__code__ is not tail_code
+            or _parts is not parts or parts.__code__ is not parts_code
+            or _LinkPathPolicy is not kind
+            or sys.modules.get('hmp_startup.runtime_files') is not native_module
+            or vars(native_module).get('ExecutableLinkPlan') is not ExecutableLinkPlan
+            or vars(native_module).get('LinkHop') is not LinkHop):
+        raise error from None
+    for selected, fields, members, original, code, bases, dispatch in pins:
+        namespace = vars(selected)
+        current = namespace.get('__new__')
+        if type(current) is staticmethod:
+            current = current.__func__
+        need(namespace.get('_fields') is fields and current is original
+             and original.__code__ is code and selected.__bases__ is bases
+             and all(namespace.get(name) is member
+                     for name, member in zip(fields, members, strict=True))
+             and all(namespace.get(name) is member
+                     for name, member in zip(dispatch_names, dispatch, strict=True)))
+    need(type(policy) is kind and tuple.__len__(policy) == len(values)
+         and all(tuple.__getitem__(policy, i) is value for i, value in enumerate(values)))
+    return tail(policy)
 
 
 def _sites(policy):

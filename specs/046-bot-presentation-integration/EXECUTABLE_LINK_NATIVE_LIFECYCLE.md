@@ -81,8 +81,12 @@ older healthy finish must not require the shared ledger to stay permanently idle
 
 - LP1: implement and review closed traversal policy DATA for hop/target and all
   three phases. `presentation_link_path_policy.py` and its source tests are the
-  initial implementation. It is unconnected and cannot admit work, acknowledge
-  a native operation, prove provenance or grant access. Test results are pending.
+  initial implementation. Its policy constructor must retain original helper
+  code, class members/dispatch and exact inputs before allocation, then reject
+  callback replacements before invoking a helper or returned-object getter.
+  Twelve new constructor fault cases cover those boundaries. It is unconnected
+  and cannot admit work, acknowledge a native operation, prove provenance or
+  grant access. Test results are pending.
 - LP2: bind original policy/engine origins before Scope construction; define
   distinct resource/consumer and typed readlink result custody. Preserve default
   non-native callers without treating them as native qualification.
