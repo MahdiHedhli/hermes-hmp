@@ -620,6 +620,9 @@ _AT1_ADAPTER_MODULE = sys.modules[__name__]
 _AT1_PLUGIN_MODULE = sys.modules[__package__]
 
 
+from .bootstrap_opening import BootstrapOpening
+
+
 class _RetiringStore:
     """Original ownership retained even when task creation/close acknowledgement is lost."""
 
@@ -650,6 +653,7 @@ class HmpAdapter(BasePlatformAdapter):
         self._retirement_setup_unknown = False
         self._lifecycle_lock = asyncio.Lock()
         self._startup_unresolved = False
+        self._opening: BootstrapOpening | None = None
         self._disconnect_unresolved = False
 
     @staticmethod
@@ -717,9 +721,18 @@ class HmpAdapter(BasePlatformAdapter):
         except server.ListenerConfigError:
             log_event("adapter_connect", outcome="bad_config")
             return False
+        if self._opening is not None:
+            log_event("adapter_connect", outcome="bootstrap_owned")
+            return False
+        opening = BootstrapOpening(open_components, self)
+        self._opening = opening  # own the worker before possibly ambiguous submit
         try:
-            ctx = await asyncio.to_thread(open_components, self)
+            opening.start()
+            ctx = await opening.wait()
         except identity.IdentityError:
+            # Existing builder contract closes its Store on identity refusal.
+            # Qualification of all partial builder failures remains separate.
+            self._opening = None
             log_event("adapter_connect", outcome="identity_error")
             return False
         srv = server.HmpServer(
@@ -729,11 +742,11 @@ class HmpAdapter(BasePlatformAdapter):
             push_relay_factory=lambda: RelayClient(ctx.identity),
             approval_test_owners=(_AT1_PLUGIN_MODULE, _AT1_ADAPTER_MODULE),
         )
+        opening.server = srv  # retain partial listener before its first startup await
         try:
             await srv.start()
         except Exception as exc:
-            self._close_generation(ctx)
-            ctx.store.close()
+            # Partial listener resources are retained, not guessed to be stopped.
             log_event("adapter_connect", outcome="listener_failed")
             raise ConnectionError("HMP listener did not start") from exc
         self._server = srv
@@ -793,6 +806,9 @@ class HmpAdapter(BasePlatformAdapter):
                     self._periodic_profile_refresh()
                 )
         self._mark_connected()
+        if self._opening is not opening or self._server is not srv:
+            raise RuntimeError("bootstrap publication scope changed")
+        self._opening = None  # actual component completion transferred to the live listener
         return True
 
     # ------------------------------------------------------------------------------------------
@@ -984,6 +1000,16 @@ class HmpAdapter(BasePlatformAdapter):
 
     async def _disconnect_serial(self) -> None:
         await self._cancel_profile_refresh()
+        opening = self._opening
+        if opening is not None and self._server is None:
+            if opening.server is not None:
+                raise RuntimeError("partial listener bootstrap unresolved; retain original resources")
+            await opening.wait()  # same actual Future, never a new component opening
+            opening.close_unpublished(self)
+            if self._opening is not opening or not opening.closed:
+                raise RuntimeError("bootstrap cleanup unresolved")
+            self._opening = None
+            self._startup_unresolved = False
         srv = self._server
         if srv is not None:
             await srv.stop(notify=False)
