@@ -873,3 +873,74 @@ def test_dispatcher_creation_failure_keeps_real_tls_listener_and_routes(env, mon
             await srv.stop(notify=False)
 
     run(env, scenario)
+
+
+def test_resistant_close_keeps_actual_push_drain_pending(env):
+    async def scenario(client):
+        _, _, _, relay, dispatcher, _, _ = await prepare(env, client)
+        release, entered = asyncio.Event(), asyncio.Event()
+
+        async def resistant():
+            entered.set()
+            while not release.is_set():
+                with contextlib.suppress(asyncio.CancelledError):
+                    await release.wait()
+
+        relay.close = resistant
+        await dispatcher.close()
+        await entered.wait()
+        assert dispatcher.retirement_pending
+        waiter = asyncio.create_task(dispatcher.wait_drained())
+        await asyncio.sleep(0)
+        assert not waiter.done()
+        waiter.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await waiter
+        assert dispatcher.retirement_pending
+        release.set()
+        await dispatcher.wait_drained()
+        assert not dispatcher.retirement_pending
+        await dispatcher.close()  # same actual close owner, no replay
+
+    run(env, scenario)
+
+
+@pytest.mark.parametrize("after_enqueue", (False, True))
+def test_unknown_push_worker_publication_retains_intent_and_refuses_drain(env, monkeypatch,
+                                                                       after_enqueue):
+    async def scenario(client):
+        _setup(env)
+        dispatcher = PushDispatcher(env.ctx, Relay(), require_gate=server._require_approvals_gate)
+        loop, actual = asyncio.get_running_loop(), []
+        original = loop.create_task
+        calls = []
+
+        def create(coro, *args, **kwargs):
+            if getattr(getattr(coro, "cr_code", None), "co_name", None) == "_run_owned":
+                calls.append(1)
+                if len(calls) == 1:
+                    if after_enqueue:
+                        actual.append(original(coro, *args, **kwargs))
+                    raise MemoryError("synthetic push worker publication loss")
+            return original(coro, *args, **kwargs)
+
+        monkeypatch.setattr(loop, "create_task", create)
+        try:
+            with pytest.raises(MemoryError):
+                dispatcher.start()
+            assert dispatcher.closed and len(dispatcher._owned_tasks) == 1
+            await dispatcher.close()
+            with pytest.raises(RuntimeError, match="publication unresolved"):
+                await dispatcher.wait_drained()
+            assert dispatcher.retirement_pending
+        finally:
+            for task in actual:
+                task.cancel()
+            await asyncio.gather(*actual, return_exceptions=True)
+            if not after_enqueue:
+                for coro, wrapper, task in dispatcher._owned_tasks.values():
+                    if task is None:
+                        wrapper.close()
+                        coro.close()  # fixture knows enqueue never happened
+
+    run(env, scenario)

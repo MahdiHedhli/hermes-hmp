@@ -1951,6 +1951,7 @@ class HmpServer:
         # path is invented here; source tests inject the same listener port.
         self._push_relay_factory = push_relay_factory
         self._push_dispatcher: PushDispatcher | None = None
+        self._push_dispatcher_drained: PushDispatcher | None = None
         self._runner: web.AppRunner | None = None
         self._watch: asyncio.Task[None] | None = None
         self._push_watch: asyncio.Task[None] | None = None
@@ -2246,9 +2247,11 @@ class HmpServer:
         ctx = self._operator_origin_ctx
         retirement = self._media_retirement_owner
         service = self._operator_read_drained
+        push = self._push_dispatcher_drained
 
         def rejoin():
             if (self.ctx is not ctx or self._operator_read_drained is not service
+                    or self._push_dispatcher_drained is not push
                     or self._media_retirement is not retirement
                     or (retirement is not None and ctx.store is not self._media_store)):
                 raise RuntimeError("operator retirement scope changed; retain original Store")
@@ -2256,6 +2259,9 @@ class HmpServer:
         rejoin()
         if service is not None:
             await service.wait_drained()
+            rejoin()
+        if push is not None:
+            await push.wait_drained()
             rejoin()
         if retirement is not None:
             if self._media_retirement_error:
@@ -2386,7 +2392,11 @@ class HmpServer:
         hints.clear()
         dispatcher = cohort["_push_dispatcher"]
         if dispatcher is not None:
+            self._push_dispatcher_drained = dispatcher
             await dispatcher.close()
+            rejoin()
+            if dispatcher.retirement_pending:
+                self.operator_worker_debt += 1
             retired("_push_dispatcher")
         rejoin()
         await self._cancel_pending_sends()
