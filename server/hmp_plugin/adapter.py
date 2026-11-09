@@ -650,6 +650,7 @@ class HmpAdapter(BasePlatformAdapter):
         self._retirement_setup_unknown = False
         self._lifecycle_lock = asyncio.Lock()
         self._startup_unresolved = False
+        self._disconnect_unresolved = False
 
     @staticmethod
     def _health_snapshot(
@@ -693,8 +694,8 @@ class HmpAdapter(BasePlatformAdapter):
 
     async def connect(self, *, is_reconnect: bool = False) -> bool:
         async with self._lifecycle_lock:
-            if self._startup_unresolved:
-                log_event("adapter_connect", outcome="startup_unresolved")
+            if self._startup_unresolved or self._disconnect_unresolved:
+                log_event("adapter_connect", outcome="lifecycle_unresolved")
                 return False
             try:
                 return await self._connect_serial(is_reconnect=is_reconnect)
@@ -973,7 +974,13 @@ class HmpAdapter(BasePlatformAdapter):
 
     async def disconnect(self) -> None:
         async with self._lifecycle_lock:
-            await self._disconnect_serial()
+            try:
+                await self._disconnect_serial()
+            except asyncio.CancelledError:
+                self._disconnect_unresolved = True
+                raise
+            if self._server is None and self._retired_stores_ready():
+                self._disconnect_unresolved = False  # explicit cleanup, actual known close proof
 
     async def _disconnect_serial(self) -> None:
         await self._cancel_profile_refresh()

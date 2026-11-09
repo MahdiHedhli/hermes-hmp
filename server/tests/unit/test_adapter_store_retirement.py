@@ -321,3 +321,61 @@ def test_cancelled_bootstrap_waiter_cannot_allow_overlapping_retry(adapter_modul
             assert await asyncio.to_thread(finished.wait, 1)
 
     asyncio.run(scenario())
+
+
+def test_cancelled_disconnect_never_reports_old_stopping_listener_connected(adapter_module):
+    async def scenario():
+        adapter, srv, store = fixture(adapter_module, debt=0)
+        entered, release = asyncio.Event(), asyncio.Event()
+        actual_stop = None
+
+        async def stop(*, notify):
+            nonlocal actual_stop
+            assert notify is False
+            if actual_stop is None:
+                actual_stop = asyncio.create_task(release.wait())
+            entered.set()
+            await asyncio.shield(actual_stop)
+
+        srv.stop = stop
+        caller = asyncio.create_task(adapter.disconnect())
+        try:
+            await entered.wait()
+            caller.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await caller
+            assert adapter._server is srv and adapter._disconnect_unresolved
+            assert actual_stop is not None and not actual_stop.done()
+            assert await adapter.connect() is False
+            release.set()
+            await actual_stop
+            assert await adapter.connect() is False  # stop completion is not Store-close proof
+            srv.drain.set()
+            await adapter.disconnect()  # explicitly resume the same stop owner, then close once
+            assert store.closes == 1 and not adapter._disconnect_unresolved
+            assert adapter._server is None and adapter._retired_stores_ready()
+        finally:
+            release.set()
+            await asyncio.gather(caller, return_exceptions=True)
+            if actual_stop is not None:
+                await actual_stop
+
+    asyncio.run(scenario())
+
+
+def test_cancelled_wait_for_lifecycle_lock_does_not_poison_disconnect(adapter_module):
+    async def scenario():
+        adapter, srv, store = fixture(adapter_module)
+        await adapter._lifecycle_lock.acquire()
+        caller = asyncio.create_task(adapter.disconnect())
+        try:
+            await asyncio.sleep(0)
+            caller.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await caller
+            assert not adapter._disconnect_unresolved and not adapter._startup_unresolved
+            assert srv.stops == 0 and store.closes == 0
+        finally:
+            adapter._lifecycle_lock.release()
+
+    asyncio.run(scenario())
