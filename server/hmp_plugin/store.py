@@ -593,7 +593,9 @@ class StoreMutationObserver(Protocol):
 
 
 class Store:
-    def __init__(self, path: Path, *, mutation_observer: StoreMutationObserver | None = None) -> None:
+    def __init__(
+        self, path: Path, *, mutation_observer: StoreMutationObserver | None = None,
+    ) -> None:
         self._mutation_observer = mutation_observer
         self._path = path
         self._conn: sqlite3.Connection | None = None

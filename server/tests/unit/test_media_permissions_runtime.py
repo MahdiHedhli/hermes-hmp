@@ -1,4 +1,5 @@
 """Independent media permissions through real descriptor/fetch fixtures; no live host."""
+
 import argparse
 import asyncio
 import io
@@ -65,7 +66,7 @@ def test_deny_then_regrant_does_not_revive_old_references(tmp_path, monkeypatch)
     fx.run(scenario)
 
 
-@pytest.mark.parametrize('phase', ('after_p1', 'after_p2'))
+@pytest.mark.parametrize("phase", ("after_p1", "after_p2"))
 def test_late_worker_result_cannot_survive_deny_regrant(tmp_path, monkeypatch, phase):
     fx = FetchRig(tmp_path, monkeypatch)
 
@@ -86,7 +87,8 @@ def test_late_worker_result_cannot_survive_deny_regrant(tmp_path, monkeypatch, p
 
 
 def test_explicit_media_deny_closes_legacy_owner_without_changing_other_rights(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
 ):
     fx = FetchRig(tmp_path, monkeypatch)
 
@@ -119,75 +121,101 @@ def test_unversioned_legacy_owner_restore_retains_legacy_reference_behavior(tmp_
 
 
 def test_operator_media_roundtrip_is_read_only_and_scoped(tmp_path):
-    store = Store(tmp_path / 'media.sqlite3')
+    store = Store(tmp_path / "media.sqlite3")
     store.migrate()
-    store.insert_user('user_a', 'owner', 1)
-    store.insert_device('dev_a', 'user_a', 'f' * 52, b'public', 'phone', 1, state='ACTIVE')
-    iid = 'a' * 52
+    store.insert_user("user_a", "owner", 1)
+    store.insert_device("dev_a", "user_a", "f" * 52, b"public", "phone", 1, state="ACTIVE")
+    iid = "a" * 52
     ctx = ServerContext(SimpleNamespace(iid=iid, still_current=lambda: True), store, None)
-    service = operator_read.OperatorReadService(ctx, _owned_operator_parent() / 'anchor', 'a' * 32)
-    before = store.media_read_decision(iid, 'dev_a')
+    service = operator_read.OperatorReadService(ctx, _owned_operator_parent() / "anchor", "a" * 32)
+    before = store.media_read_decision(iid, "dev_a")
 
     async def scenario():
         await service.start()
         try:
             reply = await asyncio.to_thread(
-                operator_read.read_media_context, service.path,
-                iid=iid, nonce='a' * 32, device_id='dev_a',
+                operator_read.read_media_context,
+                service.path,
+                iid=iid,
+                nonce="a" * 32,
+                device_id="dev_a",
             )
-            assert reply['decision'] == before._asdict()
-            assert reply['effective'] is False and reply['host_enabled'] is False
+            assert reply["decision"] == before._asdict()
+            assert reply["effective"] is False and reply["host_enabled"] is False
         finally:
             assert await service.stop() == 0
             await service.wait_drained()
 
     try:
         asyncio.run(scenario())
-        assert store.media_read_decision(iid, 'dev_a') == before
+        assert store.media_read_decision(iid, "dev_a") == before
     finally:
         store.close()
 
 
-@pytest.mark.parametrize('allowed', (True, False))
+@pytest.mark.parametrize("allowed", (True, False))
 def test_operator_command_confirms_and_reads_back_only_media_permission(
-    tmp_path, monkeypatch, allowed,
+    tmp_path,
+    monkeypatch,
+    allowed,
 ):
-    store = Store(tmp_path / 'media.sqlite3')
+    store = Store(tmp_path / "media.sqlite3")
     store.migrate()
-    store.insert_user('user_a', 'owner', 1)
-    store.insert_device('dev_a', 'user_a', 'f' * 52, b'public', 'phone', 1, state='ACTIVE')
-    iid = 'a' * 52
+    store.insert_user("user_a", "owner", 1)
+    store.insert_device("dev_a", "user_a", "f" * 52, b"public", "phone", 1, state="ACTIVE")
+    iid = "a" * 52
     ctx = SimpleNamespace(store=store, out=io.StringIO(), now=lambda: 10)
     reads = []
 
     def live(_ctx, device_id, actual_iid):
-        assert actual_iid == iid and device_id == 'dev_a'
+        assert actual_iid == iid and device_id == "dev_a"
         decision = store.media_read_decision(iid, device_id)
         reads.append(decision.revision)
-        return {'decision': decision._asdict(), 'nonce': 'a' * 32, 'generation': 'b' * 32,
-                'host_enabled': False, 'api_available': True, 'effective': decision.allowed is True,
-                'expires_ms': 2 ** 52}
+        return {
+            "decision": decision._asdict(),
+            "nonce": "a" * 32,
+            "generation": "b" * 32,
+            "host_enabled": False,
+            "api_available": True,
+            "effective": decision.allowed is True,
+            "expires_ms": 2**52,
+        }
 
-    monkeypatch.setattr(cli, '_load_identity', lambda _ctx: SimpleNamespace(iid=iid))
-    monkeypatch.setattr(cli, '_media_operator_context', live)
-    monkeypatch.setattr(cli, '_host_request_confirmation', lambda _ctx, token: token.startswith(
-        ('ALLOW' if allowed else 'DENY') + ' MEDIA_READ dev_a'))
+    monkeypatch.setattr(cli, "_load_identity", lambda _ctx: SimpleNamespace(iid=iid))
+    monkeypatch.setattr(cli, "_media_operator_context", live)
+    monkeypatch.setattr(
+        cli,
+        "_host_request_confirmation",
+        lambda _ctx, token: token.startswith(
+            ("ALLOW" if allowed else "DENY") + " MEDIA_READ dev_a"
+        ),
+    )
     try:
-        action = 'grant-media-read' if allowed else 'deny-media-read'
-        args = argparse.Namespace(devices_command=action, device_id='dev_a')
+        action = "grant-media-read" if allowed else "deny-media-read"
+        args = argparse.Namespace(devices_command=action, device_id="dev_a")
         assert cli._cmd_devices_media(ctx, args) == 0
         assert reads == [0, 0, 1]
-        assert store.media_read_decision(iid, 'dev_a').allowed is allowed
-        assert store.owner_controls_decision('dev_a') is None
+        assert store.media_read_decision(iid, "dev_a").allowed is allowed
+        assert store.owner_controls_decision("dev_a") is None
     finally:
         store.close()
 
 
-@pytest.mark.parametrize("interruption", (
-    "cancel", "nonce", "generation", "expired", "concurrent_decision", "lost_ack",
-))
+@pytest.mark.parametrize(
+    "interruption",
+    (
+        "cancel",
+        "nonce",
+        "generation",
+        "expired",
+        "concurrent_decision",
+        "lost_ack",
+    ),
+)
 def test_operator_media_interruption_never_replays_or_changes_unrelated_rights(
-    tmp_path, monkeypatch, interruption,
+    tmp_path,
+    monkeypatch,
+    interruption,
 ):
     store = Store(tmp_path / "media.sqlite3")
     store.migrate()
@@ -211,10 +239,15 @@ def test_operator_media_interruption_never_replays_or_changes_unrelated_rights(
         assert device_id == "dev_a" and actual_iid == iid
         calls.append(1)
         decision = store.media_read_decision(iid, device_id)
-        reply = {"decision": decision._asdict(), "nonce": "a" * 32,
-                 "generation": "b" * 32, "host_enabled": False,
-                 "api_available": True, "effective": decision.allowed is True,
-                 "expires_ms": 2 ** 52}
+        reply = {
+            "decision": decision._asdict(),
+            "nonce": "a" * 32,
+            "generation": "b" * 32,
+            "host_enabled": False,
+            "api_available": True,
+            "effective": decision.allowed is True,
+            "expires_ms": 2**52,
+        }
         if len(calls) == 2:
             if interruption == "nonce":
                 reply["nonce"] = "c" * 32
@@ -229,8 +262,9 @@ def test_operator_media_interruption_never_replays_or_changes_unrelated_rights(
 
     monkeypatch.setattr(cli, "_load_identity", lambda _ctx: SimpleNamespace(iid=iid))
     monkeypatch.setattr(cli, "_media_operator_context", live)
-    monkeypatch.setattr(cli, "_host_request_confirmation",
-                        lambda _ctx, _token: interruption != "cancel")
+    monkeypatch.setattr(
+        cli, "_host_request_confirmation", lambda _ctx, _token: interruption != "cancel"
+    )
     monkeypatch.setattr(store, "set_media_read", write)
     try:
         args = argparse.Namespace(devices_command="grant-media-read", device_id="dev_a")

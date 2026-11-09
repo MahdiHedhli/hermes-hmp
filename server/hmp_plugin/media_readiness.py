@@ -3,10 +3,11 @@
 This projection never opens files, resolves references, changes rights, or grants execution.
 The runtime route must fence its sampled authority before disclosing this DTO.
 """
+
 from collections.abc import Mapping
 
 
-class MediaReadinessUnavailable(ValueError):
+class MediaReadinessUnavailableError(ValueError):
     def __init__(self):
         super().__init__("media readiness unavailable")
 
@@ -26,10 +27,15 @@ def host_setting(extra: object) -> str:
 
 def project(*, entitlement: str, host: str, api: str) -> dict[str, object]:
     """Separate access, opt-in, and runtime availability without claiming an image exists."""
-    if (type(entitlement) is not str or entitlement not in {"granted", "missing", "unknown"}
-            or type(host) is not str or host not in {"enabled", "disabled", "unknown"}
-            or type(api) is not str or api not in {"available", "unavailable", "unknown"}):
-        raise MediaReadinessUnavailable()
+    if (
+        type(entitlement) is not str
+        or entitlement not in {"granted", "missing", "unknown"}
+        or type(host) is not str
+        or host not in {"enabled", "disabled", "unknown"}
+        or type(api) is not str
+        or api not in {"available", "unavailable", "unknown"}
+    ):
+        raise MediaReadinessUnavailableError()
     reasons = []
     if entitlement != "granted":
         reasons.append("media_read_missing" if entitlement == "missing" else "media_read_unknown")
@@ -38,8 +44,11 @@ def project(*, entitlement: str, host: str, api: str) -> dict[str, object]:
     if api != "available":
         reasons.append("media_api_unavailable" if api == "unavailable" else "media_api_unknown")
     return {
-        "entitlement": entitlement, "host_setting": host, "runtime_api": api,
-        "operational": not reasons, "reasons": sorted(reasons),
+        "entitlement": entitlement,
+        "host_setting": host,
+        "runtime_api": api,
+        "operational": not reasons,
+        "reasons": sorted(reasons),
         # No media access-request transport exists yet. Never advertise request_access or Fix.
         "action": "none" if not reasons else "contact_host_operator",
         "image_availability": "not_probed",
