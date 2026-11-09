@@ -56,9 +56,9 @@ MUTATE = REPO_ROOT / "tools" / "fixtures" / "mutate.py"
 _OPTIONAL_BUILDS = ("owner-local", "upstream", "v921-git", "v924-archive", "v924-git")
 _BUILDS_DIR_ENV = os.environ.get("HMP_HERMES_BUILDS_DIR", "")
 _CANDIDATE_BUILD = os.environ.get("HMP_COMPAT_CANDIDATE_LABEL", "")
+_DEFAULT_BUILDS = ("stock-base", "experimental")
 BUILDS = (
-    "stock-base",
-    "experimental",
+    *_DEFAULT_BUILDS,
     *(
         label
         for label in _OPTIONAL_BUILDS
@@ -66,7 +66,7 @@ BUILDS = (
     ),
     *(
         (_CANDIDATE_BUILD,)
-        if _CANDIDATE_BUILD and _CANDIDATE_BUILD not in _OPTIONAL_BUILDS
+        if _CANDIDATE_BUILD and _CANDIDATE_BUILD not in (*_DEFAULT_BUILDS, *_OPTIONAL_BUILDS)
         and _BUILDS_DIR_ENV
         and (Path(_BUILDS_DIR_ENV) / _CANDIDATE_BUILD / "src").is_dir()
         else ()
