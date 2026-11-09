@@ -1178,3 +1178,19 @@ snapshots outside plugin registration; no plugin import-policy exception.
 actual descriptor/hash/count lifecycle and legacy expected-file facts. Table
 projection is DATA; original entry/wrapper execution and runtime/native/key
 authority remain separate.
+
+## Experimental startup metadata components (November 9, 2026)
+
+The explicit plugin module inventory also includes these source components:
+
+- `presentation_metadata_custody.py`: retained metadata custody checks.
+- `presentation_native_metadata.py`: typed native metadata observations.
+- `presentation_startup_probe_policy.py`: bounded startup probe policy.
+- `presentation_startup_probe.py`: startup probe composition.
+- `presentation_link_path_policy.py`: fixed executable-link traversal ordering DATA.
+
+The separate `hmp_startup/link_factory_origin.py` retains early factory provenance
+for the entry/lineage composition. These experimental components do not register
+a service or route, grant native admission, or establish device/release
+qualification. The module inventory remains an explicit exact set; this update
+does not relax the import surface or derive permitted names from the directory.
