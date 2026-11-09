@@ -22,6 +22,8 @@ import hmp_plugin
 from hmp_plugin import cli, compat
 from hmp_plugin.contract import CLI_COMMAND, PLATFORM_NAME
 
+from .native_sdk_ast import public_class_tree
+
 SERVER_DIR = Path(__file__).resolve().parents[2]
 
 
@@ -124,9 +126,9 @@ def _signature_params(tree: ast.Module, cls: str, method: str) -> tuple[set[str]
 @pytest.mark.skipif(not HERMES_SRC, reason="HMP_HERMES_SRC not set")
 def test_kwargs_accepted_by_hermes_plugin_api(calls: list[tuple[str, dict[str, Any]]]) -> None:
     src = Path(HERMES_SRC or "")
-    tree = ast.parse((src / "hermes_cli" / "plugins.py").read_text(encoding="utf-8"))
+    tree, owner = public_class_tree(src, "hermes_cli.plugins", "PluginContext")
     for name, kwargs in calls:
-        params, _ = _signature_params(tree, "PluginContext", name)
+        params, _ = _signature_params(tree, owner, name)
         assert set(kwargs) <= params, (name, set(kwargs) - params)
     # adapter_factory / check_fn semantics per gateway/platform_registry.py PlatformEntry.
     registry = (src / "gateway" / "platform_registry.py").read_text(encoding="utf-8")
