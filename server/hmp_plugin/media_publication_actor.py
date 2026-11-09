@@ -25,7 +25,8 @@ class MediaPublicationActor:
         self._publisher = MediaPublication()
         self._failed = threading.Event()
         self._slots = threading.BoundedSemaphore(_MAX_PENDING)
-        self._mutations: dict[MutationTicket, None] = {}
+        self._cleanup_slots = threading.BoundedSemaphore(_MAX_PENDING)
+        self._mutations: dict[object, MutationTicket | None] = {}
         self._drained = asyncio.Event()
 
     def _owner(self) -> None:
@@ -93,7 +94,7 @@ class MediaPublicationActor:
         except BaseException:
             pass  # closed loop cannot authorize; never invent an acknowledgement
 
-    def _deliver(self, reply, deadline, operation, receipt, certain) -> None:
+    def _deliver(self, reply, deadline, operation, receipt, certain, slots) -> None:
         try:
             closed = self._failed.is_set() or time.monotonic() >= deadline
             if closed:
@@ -102,17 +103,23 @@ class MediaPublicationActor:
             if operation == 'begin':
                 if closed:
                     raise PublicationUnavailable()
-                result = self._publisher.begin_mutation()
-                self._mutations[result] = None  # original debt BEFORE acknowledgement
+                intent = object()
+                self._mutations[intent] = None  # BEFORE requesting the mutation receipt
                 self._refresh_drain()
+                result = self._publisher.begin_mutation()
+                self._mutations[intent] = result  # original receipt, before acknowledgement
             elif operation == 'settle':
-                if type(receipt) is not MutationTicket or receipt not in self._mutations:
+                if type(receipt) is not MutationTicket:
+                    raise PublicationUnavailable()
+                intent = next((key for key, value in self._mutations.items()
+                               if value is receipt), None)
+                if intent is None:
                     raise PublicationUnavailable()
                 if not closed:
                     self._publisher.settle_mutation(receipt, certain=certain)
                 # Closed settlement is cleanup only, never publication authority.
                 # The fixed Store observer calls only after its actual SQL returns.
-                del self._mutations[receipt]
+                del self._mutations[intent]
                 self._refresh_drain()
                 result = None
             else:
@@ -126,7 +133,7 @@ class MediaPublicationActor:
             if not reply.done():
                 reply.set_exception(PublicationUnavailable())
         finally:
-            self._slots.release()  # original callback has really finished
+            slots.release()  # original callback and original reservation have retired
 
     def _request(self, operation: str, receipt=None, certain=False):
         if threading.current_thread() is self._thread:
@@ -134,17 +141,19 @@ class MediaPublicationActor:
         if ((self._failed.is_set() and operation != 'settle')
                 or not self._loop.is_running()):
             raise PublicationUnavailable()
+        # Cleanup has independent reserved capacity, including after publication close.
+        slots = self._cleanup_slots if operation == 'settle' else self._slots
         reserved = None  # unknown acquisition is not proof a slot is unused
         enqueue_attempted = False
         try:
-            reserved = self._slots.acquire(blocking=False)
+            reserved = slots.acquire(blocking=False)
             if reserved is False:
                 raise PublicationUnavailable()
             reply = concurrent.futures.Future()
             deadline = time.monotonic() + _ACK_WAIT_S
             enqueue_attempted = True
             self._loop.call_soon_threadsafe(
-                self._deliver, reply, deadline, operation, receipt, certain,
+                self._deliver, reply, deadline, operation, receipt, certain, slots,
             )
             result = reply.result(timeout=max(0, deadline - time.monotonic()))
             if self._failed.is_set() or time.monotonic() >= deadline:
@@ -155,7 +164,7 @@ class MediaPublicationActor:
                 raise PublicationUnavailable() from None  # capacity refusal, no operation
             self._fail()
             if reserved is True and not enqueue_attempted:
-                self._slots.release()  # proven unused; no callback can own it
+                slots.release()  # proven unused; no callback can own it
             # Otherwise retain debt until actual callback retirement. Unknown
             # enqueue/acquisition may retain debt until this closed actor retires.
             raise PublicationUnavailable() from None

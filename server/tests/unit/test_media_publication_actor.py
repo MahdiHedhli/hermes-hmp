@@ -171,3 +171,38 @@ def test_unsettled_original_receipt_is_not_erased_by_close_or_drain_timeout():
         await asyncio.wait_for(actor.wait_drained(), .2)
         assert actor.outstanding_mutations() == 0
     asyncio.run(scenario())
+
+
+def test_begin_return_loss_retains_preallocated_unknown_debt(monkeypatch):
+    async def scenario():
+        actor = a.MediaPublicationActor()
+        original = actor._publisher.begin_mutation
+        def lose_return():
+            original()
+            raise KeyboardInterrupt('synthetic publisher begin return loss')
+        monkeypatch.setattr(actor._publisher, 'begin_mutation', lose_return)
+        with pytest.raises(PublicationUnavailable): await asyncio.to_thread(actor.begin)
+        actor.close()
+        assert actor.outstanding_mutations() == 1
+        assert list(actor._mutations.values()) == [None]
+        with pytest.raises(TimeoutError): await asyncio.wait_for(actor.wait_drained(), .01)
+        assert actor.outstanding_mutations() == 1  # never infer a current receipt or force drain
+    asyncio.run(scenario())
+
+
+def test_cleanup_capacity_is_independent_of_saturated_new_begin_admission():
+    async def scenario():
+        actor = a.MediaPublicationActor()
+        receipt = await asyncio.to_thread(actor.begin)
+        held = [actor._slots.acquire(blocking=False) for _ in range(32)]
+        assert all(held)
+        actor.close()
+        try:
+            with pytest.raises(PublicationUnavailable):
+                await asyncio.to_thread(actor.settle, receipt, certain=True)
+            await asyncio.wait_for(actor.wait_drained(), .2)
+            assert actor.outstanding_mutations() == 0
+            assert not actor._slots.acquire(blocking=False)
+        finally:
+            for _ in held: actor._slots.release()
+    asyncio.run(scenario())
