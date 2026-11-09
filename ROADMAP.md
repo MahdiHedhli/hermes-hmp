@@ -1,5 +1,15 @@
 ## November 8 — reviewed host updates deployed; character integration remains open
 
+The post-lint1,176-case minimum-Python suite now passes in a fresh capacity-qualified
+run, matching the current-Python pass. The earlier floor run failed with ENOSPC
+before final XML/receipt and remains unqualified; only completed owned synthetic
+pytest scratch was removed, preserving and rehashing source/result evidence.
+Separate namespace preparation `c3ae41b` passes56 read/FD/layout cases on each
+Python version plus full lint; the default read socket/parser remains read-only.
+A future media socket name/frame bound does not install a write handler. Challenge,
+peer/cohort/admission and actual-worker lifetime integration remain incomplete.
+No live permissions, host settings, installed build or deployment changed.
+
 Operator response preparation `adf41e2` has attempt-bound committed/conflict/
 refused/unknown codecs: committed means the exact requested decision and next
 revision; other statuses carry no grant. Both69-case suites pass; independent

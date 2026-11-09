@@ -250,3 +250,9 @@ committed fields mustmatch exact requestedtransition.69cases pass eachPython and
 reviewfoundnoconcrete codecblocker. Replycorrelation isnot runtimeauthority proof.
 Branchlintcleanupade8fce passes fullserver/toolsRuff plus360focusedcases; fresh
 1,176-case integration running, no combined qualification claimedyet.
+
+Transportnamespacec3ae41b preservesreadonlydefault, addsfixedseparatename/frame
+layoutonly.56read/FD/layoutcases passbothPython/fullRuff; futurewritehandlerstill
+absent. Fresh1176floorcapacityretry passes; priorENOSPCrunretainedunqualified.
+Originalfailed testsubsetimportorder was fixed viaexplicitadapterfixture, notwaived.
+Onlycompletedownedsyntheticscratchwasremoved; receipt/log/XMLhashesreverified.
