@@ -474,8 +474,10 @@ def test_real_store_migration_close_uncertainty_survives_component_cleanup(
 def test_identity_close_during_auxiliary_start_cannot_publish_connected(adapter_module, monkeypatch, tmp_path):
     from .hmp_kit import Env
     env = Env(tmp_path)
-    adapter = adapter_module.HmpAdapter(SimpleNamespace(extra={"bind": "127.0.0.1", "port": 0}))
+    adapter = adapter_module.HmpAdapter(SimpleNamespace(extra={"bind": "127.0.0.1", "port": 12345}))
     monkeypatch.setattr(adapter_module, "open_components", lambda _adapter: env.ctx)
+    monkeypatch.setattr(adapter_module.server, "listener_settings", lambda _extra:
+                        adapter_module.server.ListenerSettings("127.0.0.1", 0))
 
     async def interrupted(srv, *_args):
         await srv.stop()  # real original stop invokes adapter's identity-close callback
