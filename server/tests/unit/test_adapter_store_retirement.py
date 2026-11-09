@@ -164,3 +164,44 @@ def test_old_retirement_never_closes_foreign_context_store(adapter_module, drift
         assert await adapter.connect() is False
 
     asyncio.run(scenario())
+
+
+def test_concurrent_component_opens_never_overlap(adapter_module, monkeypatch):
+    import threading
+
+    async def scenario():
+        adapter = adapter_module.HmpAdapter(SimpleNamespace(extra={"port": 12345}))
+        entered, second, release = threading.Event(), threading.Event(), threading.Event()
+        lock = threading.Lock()
+        counts = {"calls": 0, "active": 0, "peak": 0}
+
+        def open_components(_adapter):
+            with lock:
+                counts["calls"] += 1
+                counts["active"] += 1
+                counts["peak"] = max(counts["peak"], counts["active"])
+                if counts["calls"] == 2:
+                    second.set()
+            entered.set()
+            try:
+                assert release.wait(3)
+                raise adapter_module.identity.IdentityError("synthetic startup refusal")
+            finally:
+                with lock:
+                    counts["active"] -= 1
+
+        monkeypatch.setattr(adapter_module, "open_components", open_components)
+        first = asyncio.create_task(adapter.connect())
+        other = None
+        try:
+            assert await asyncio.to_thread(entered.wait, 1)
+            other = asyncio.create_task(adapter.connect())
+            await asyncio.to_thread(second.wait, 0.1)
+        finally:
+            release.set()
+            results = await asyncio.gather(first, *([other] if other is not None else []))
+        # A completed failed attempt can be followed by a new attempt, never overlapped.
+        assert results == [False, False] and counts["calls"] == 2
+        assert counts["peak"] == 1
+
+    asyncio.run(scenario())
