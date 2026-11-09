@@ -28,3 +28,20 @@ RSWORK1 is repaired in this verified deployment; no live incident or production
 fault injection was observed/performed. This is not physical phone qualification,
 job execution, schema4/media service activation or release acceptance. The isolated
 media-authority branch retains separate native/config/lifecycle/migration gates.
+
+## Context-transfer parity correction — 5ecd2ba
+
+A synthetic marker control reproduced that direct pool submission did not carry
+ContextVars, unlike the original asyncio.to_thread. The3-line correction copies
+one caller context per read before reservation and runs the same collector through
+that context. Actual Future/ledger/drain semantics are unchanged. No real context
+values were inspected or logged; no native profile effect/auth bypass is claimed.
+
+Independent finite review found no concrete blocker. Both593-case backport suites
+and364-case feature-branch suites passed on3.14.9/3.11.15; Ruff and Plugin Doctor
+passed. Exact5ecd2ba7e580e86e3d91bcae38f0584bcc366077 is installed on ColPanicM2
+and LLY520 with109 files verified, fresh matched gateway/listener PIDs and expected
+TLS identity. Configuration/device-controls/schema snapshots are unchanged. Native
+versions remain0.22.7/0.23.0. All prior channel states are preserved, including
+Lucas/Serenity unavailable on LLY520 (aggregate health exit1). No media activation,
+permission/provider/model change or phone/release qualification is implied.
