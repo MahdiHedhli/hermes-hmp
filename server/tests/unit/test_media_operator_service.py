@@ -659,3 +659,149 @@ def test_cli_confirmation_actual_client_service_cas_and_readback(
             await finish(actor, store, service)
 
     asyncio.run(scenario())
+
+
+def test_media_retirement_is_idempotent_scoped_and_does_not_close_store(tmp_path):
+    from hmp_plugin.media_operator_retirement import MediaOperatorRetirement
+
+    async def scenario():
+        actor, store, ctx, request, service = await open_service(tmp_path)
+        retirement = MediaOperatorRetirement(service, actor)
+        assert not retirement.drained_for(store)
+        await retirement.stop()
+        original = retirement._task
+        await retirement.stop()
+        assert retirement._task is original
+        assert retirement.drained_for(store) and not retirement.drained_for(object())
+        assert store.media_read_decision(ctx.iid, request.device_id).revision == 0
+        await finish(actor, store, service)
+
+    asyncio.run(scenario())
+
+
+def test_cancelled_retirement_waiter_keeps_one_actual_owner_and_worker_store_borrow(
+    tmp_path, monkeypatch
+):
+    from hmp_plugin.media_operator_retirement import MediaOperatorRetirement
+
+    async def scenario():
+        actor, store, ctx, request, service = await open_service(tmp_path)
+        entered, release = threading.Event(), threading.Event()
+
+        def blocked(*_args, **_kwargs):
+            entered.set()
+            assert release.wait(3)
+            return SimpleNamespace(status="refused", decision=None)
+
+        monkeypatch.setattr(service._executor, "decide", blocked)
+        retirement = MediaOperatorRetirement(service, actor)
+        mutation = asyncio.create_task(service._decide(request, time.monotonic() + 1))
+        try:
+            assert await asyncio.to_thread(entered.wait, 1)
+            waiter = asyncio.create_task(retirement.stop())
+            await asyncio.sleep(0)
+            owner = retirement._task
+            assert owner is not None
+            waiter.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await waiter
+            assert not owner.done() and not retirement.drained_for(store)
+            assert service._operator_debt() == 1
+            assert store.media_read_decision(ctx.iid, request.device_id).revision == 0
+            release.set()
+            raw = await mutation
+            assert decode_reply(raw, request=request).status == "unknown"
+            await asyncio.wait_for(retirement.stop(), 1)
+            assert retirement._task is owner and retirement.drained_for(store)
+        finally:
+            release.set()
+            await mutation
+            await retirement.stop()
+            await finish(actor, store, service)
+
+    asyncio.run(scenario())
+
+
+def test_media_retirement_waits_actual_store_rollback_and_actor_settlement(tmp_path, monkeypatch):
+    from hmp_plugin.media_operator_retirement import MediaOperatorRetirement
+
+    async def scenario():
+        actor, store, ctx, request, service = await open_service(tmp_path)
+        entered, release = threading.Event(), threading.Event()
+        original_set = service._executor._set
+
+        def blocked_set(*args, **kwargs):
+            entered.set()
+            assert release.wait(3)
+            return original_set(*args, **kwargs)
+
+        monkeypatch.setattr(service._executor, "_set", blocked_set)
+        mutation = asyncio.create_task(service._decide(request, time.monotonic() + 1))
+        retirement = MediaOperatorRetirement(service, actor)
+        try:
+            assert await asyncio.to_thread(entered.wait, 1)
+            assert actor.outstanding_mutations() == 1
+            waiter = asyncio.create_task(retirement.stop())
+            await asyncio.sleep(0)
+            assert not waiter.done() and not retirement.drained_for(store)
+            assert actor.outstanding_mutations() == 1
+            release.set()
+            assert decode_reply(await mutation, request=request).status == "unknown"
+            await asyncio.wait_for(waiter, 1)
+            assert retirement.drained_for(store) and actor.outstanding_mutations() == 0
+            assert store.media_read_decision(ctx.iid, request.device_id).revision == 0
+        finally:
+            release.set()
+            await mutation
+            await retirement.stop()
+            await finish(actor, store, service)
+
+    asyncio.run(scenario())
+
+
+def test_unknown_submit_cannot_gain_retirement_proof_after_hidden_actual_completion(
+    tmp_path, monkeypatch
+):
+    from hmp_plugin.media_operator_retirement import (
+        MediaOperatorRetirement,
+        MediaRetirementUnavailableError,
+    )
+
+    async def scenario():
+        actor, store, ctx, request, service = await open_service(tmp_path)
+        submit, actual = service._pool.submit, []
+
+        def lost_ack(*args, **kwargs):
+            actual.append(submit(*args, **kwargs))
+            raise MemoryError("synthetic submit return loss")
+
+        monkeypatch.setattr(service._pool, "submit", lost_ack)
+        retirement = MediaOperatorRetirement(service, actor)
+        try:
+            raw = await service._decide(request, time.monotonic() + 1)
+            assert decode_reply(raw, request=request).status == "unknown"
+            assert (await asyncio.wrap_future(actual[0])).status == "committed"
+            waiter = asyncio.create_task(retirement.stop())
+            await asyncio.sleep(0)
+            owner = retirement._task
+            assert owner is not None
+            await asyncio.sleep(0)
+            assert not retirement.drained_for(store) and not owner.done()
+            waiter.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await waiter
+            assert not owner.done()
+            # Framework shutdown may cancel the original owner. This is NOT drain.
+            owner.cancel()
+            with pytest.raises(MediaRetirementUnavailableError):
+                await retirement.stop()
+            assert not retirement.drained_for(store)
+            assert store.media_read_decision(ctx.iid, request.device_id).revision == 1
+        finally:
+            await service.stop()
+            actor.close()
+            await actor.wait_drained()
+            # Only fixture possesses the hidden Future and observed its end.
+            store.close()
+
+    asyncio.run(scenario())
