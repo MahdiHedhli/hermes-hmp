@@ -5,7 +5,7 @@ from hmp_plugin import presentation_startup_artifacts as artifacts
 from hmp_plugin.presentation_gateway_activation import GatewayActivationOwner
 
 
-@pytest.mark.parametrize('mutation', ('returned_field', 'owner_slot', 'records', 'activation_slot'))
+@pytest.mark.parametrize('mutation', ('returned_field', 'owner_slot', 'records', 'activation_slot', 'guard_alias'))
 def test_startup_scope_constructor_cannot_publish_changed_state(monkeypatch, mutation):
     activation = object.__new__(GatewayActivationOwner)
     activation._artifact_owner = activation._artifact_cell = None
@@ -15,12 +15,15 @@ def test_startup_scope_constructor_cannot_publish_changed_state(monkeypatch, mut
     kind = artifacts._Scope
     original = kind.__new__
     foreign = object()
+    foreign_calls = []
     registered = []
     monkeypatch.setattr(artifacts, '_register_native_scope', lambda *args: registered.append(args))
 
     def changed(cls, *values):
         owner = activation._artifact_owner
-        if mutation == 'owner_slot':
+        if mutation == 'guard_alias':
+            monkeypatch.setattr(artifacts, '_require', lambda value: foreign_calls.append(value))
+        elif mutation == 'owner_slot':
             owner._scope = foreign
         elif mutation == 'records':
             values[4].append(foreign)
@@ -43,3 +46,4 @@ def test_startup_scope_constructor_cannot_publish_changed_state(monkeypatch, mut
     if mutation == 'activation_slot':
         assert activation._artifact_cell is foreign
     assert registered == []
+    assert foreign_calls == []

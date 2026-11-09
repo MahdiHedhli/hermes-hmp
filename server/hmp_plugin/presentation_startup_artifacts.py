@@ -3121,7 +3121,7 @@ class StartupArtifactOwner:
             need, need_code = _require, _require.__code__
             item, length = tuple.__getitem__, tuple.__len__
             s = constructor(kind, *values)
-            if need.__code__ is not need_code:
+            if _require is not need or need.__code__ is not need_code:
                 raise ArtifactObservationError(owner) from None
             current_constructor = vars(kind).get('__new__')
             if type(current_constructor) is staticmethod:
