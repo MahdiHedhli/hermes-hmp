@@ -620,6 +620,18 @@ _AT1_ADAPTER_MODULE = sys.modules[__name__]
 _AT1_PLUGIN_MODULE = sys.modules[__package__]
 
 
+class _RetiringStore:
+    """Original ownership retained even when task creation/close acknowledgement is lost."""
+
+    def __init__(self, srv):
+        self.server, self.ctx = srv, srv.ctx
+        self.store = self.ctx.store
+        self.close = self.store.close
+        self.completion, self.failure = object(), object()
+        self.coro = None
+        self.task = None
+
+
 class HmpAdapter(BasePlatformAdapter):
     def __init__(self, config: Any) -> None:
         super().__init__(config=config, platform=Platform(PLATFORM_NAME))
@@ -634,6 +646,8 @@ class HmpAdapter(BasePlatformAdapter):
         self._profile_refresh_task: asyncio.Task[None] | None = None
         self._record_lock = threading.Lock()
         self._read_worker_budget = server.ReadWorkerBudget()
+        self._retiring_stores: dict[int, _RetiringStore] = {}
+        self._retirement_setup_unknown = False
 
     @staticmethod
     def _health_snapshot(
@@ -677,6 +691,9 @@ class HmpAdapter(BasePlatformAdapter):
 
     async def connect(self, *, is_reconnect: bool = False) -> bool:
         """Run the compat gate, then start the TLS listener (server-modules.md "Startup order")."""
+        if not self._retired_stores_ready():
+            log_event("adapter_connect", outcome="store_retirement_pending")
+            return False
         if self._server is not None:
             return True
         try:
@@ -873,46 +890,103 @@ class HmpAdapter(BasePlatformAdapter):
             if record is not None:
                 cli.remove_listener_record(record)
 
+    def _retired_stores_ready(self) -> bool:
+        if self._retirement_setup_unknown:
+            return False
+        for key, owner in tuple(self._retiring_stores.items()):
+            task = owner.task
+            if task is None or not task.done() or task.cancelled():
+                return False
+            try:
+                if task.result() is not owner.completion:
+                    return False
+            except BaseException:
+                return False
+            if self._retiring_stores.get(key) is not owner:
+                return False
+            del self._retiring_stores[key]
+        return not self._retiring_stores
+
+    def _retain_store_owner(self, srv):
+        key = id(srv)
+        if self._retirement_setup_unknown:
+            raise RuntimeError("Store retirement unresolved; retain original listener")
+        existing = self._retiring_stores.get(key)
+        if existing is not None:
+            if existing.server is not srv or existing.task is None:
+                raise RuntimeError("Store retirement unresolved; retain original listener")
+            return existing
+        self._retirement_setup_unknown = True  # before allocations/registration/possible enqueue
+        try:
+            owner = _RetiringStore(srv)
+            self._retiring_stores[key] = owner
+            owner.coro = self._retire_owned_store(owner)
+            owner.task = asyncio.create_task(owner.coro)
+        except BaseException:
+            # Unknown creation is neither proof of no task nor permission to retry.
+            raise RuntimeError("Store retirement unresolved; retain original listener") from None
+        self._retirement_setup_unknown = False
+        return owner
+
+    async def _retire_owned_store(self, owner):
+        try:
+            await self._close_after_operator_drain(
+                owner.server, original_ctx=owner.ctx, original_store=owner.store,
+                original_close=owner.close,
+            )
+            return owner.completion
+        except BaseException:
+            # Even a lost task handle cannot leak private failures or mint closure proof.
+            return owner.failure
+
     def _listener_closed(self) -> None:
-        srv, self._server = self._server, None
+        srv = self._server
         if srv is None:
             return
         task, self._profile_refresh_task = self._profile_refresh_task, None
         if task is not None:
-            task.cancel()  # fire-and-forget: this callback itself is synchronous (server.py)
+            task.cancel()
+        try:
+            self._retain_store_owner(srv)
+        except RuntimeError:
+            self._set_fatal_error(IDENTITY_CHANGED_CODE, IDENTITY_CHANGED_MESSAGE, retryable=False)
+            return  # original pointer/record remain retained; reconnect guard is sticky
+        if self._server is srv:
+            self._server = None
         self._drop_record()
-        if srv.operator_worker_debt:
-            asyncio.get_running_loop().create_task(self._close_after_operator_drain(srv))
-        else:
-            self._close_generation(srv.ctx)
-            srv.ctx.store.close()
-        # PR7-6 step 3: stay closed until the gateway restarts (a later `connect` would load the
-        # new key and start a new listener; nothing here restarts it).
         self._set_fatal_error(IDENTITY_CHANGED_CODE, IDENTITY_CHANGED_MESSAGE, retryable=False)
 
     async def disconnect(self) -> None:
         await self._cancel_profile_refresh()
         srv = self._server
         if srv is not None:
-            # Keep the current pointer/record/dependencies while actual teardown
-            # owns cleanup. Cancellation or unknown join must prevent replacement.
             await srv.stop(notify=False)
+            owner = self._retain_store_owner(srv)
             if self._server is srv:
                 self._server = None
             self._drop_record()
-            if srv.operator_worker_debt:
-                asyncio.get_running_loop().create_task(self._close_after_operator_drain(srv))
-            else:
-                self._close_generation(srv.ctx)
-                srv.ctx.store.close()
+            if not srv.operator_worker_debt:
+                result = await asyncio.shield(owner.task)
+                if result is not owner.completion:
+                    raise RuntimeError("Store close outcome unresolved; do not replay")
         else:
             self._drop_record()
         self._mark_disconnected()
 
-    async def _close_after_operator_drain(self, srv: server.HmpServer) -> None:
+    async def _close_after_operator_drain(
+        self, srv: server.HmpServer, *, original_ctx=None, original_store=None, original_close=None,
+    ) -> None:
+        ctx = srv.ctx if original_ctx is None else original_ctx
+        store = ctx.store if original_store is None else original_store
+        close = store.close if original_close is None else original_close
         await srv.wait_operator_drain()
-        self._close_generation(srv.ctx)
-        srv.ctx.store.close()
+        if (srv.ctx is not ctx or ctx.store is not store
+                or getattr(self, "_server", None) not in (None, srv)):
+            raise RuntimeError("Store retirement scope changed; retain original Store")
+        self._close_generation(ctx)
+        if srv.ctx is not ctx or ctx.store is not store:
+            raise RuntimeError("Store retirement scope changed; retain original Store")
+        close()  # original bound method; never a newer ctx's Store, never automatically replayed
 
     @staticmethod
     def _close_generation(ctx: server.ServerContext) -> None:
