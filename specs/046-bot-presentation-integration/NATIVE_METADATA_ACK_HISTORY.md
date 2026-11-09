@@ -71,3 +71,20 @@ identity, then carries the same actual fstat timestamp separately. Changed
 mtime, copied/missing predecessor and lost producer return have focused current
 execution coverage; minimum-floor combined regression is pending. This adds no
 fullwalker completion, source-timestamp conversion or media authority.
+
+## EOF receipt and post-read accounting
+
+The post-read consumer carries the caller's actual EOF return separately from
+its metadata predecessor and original leaf-before baseline. It revalidates the
+read's original ACK/consumer/raw-clear/step/count/eof and cache journal where
+applicable. Actual EOF is required even for an empty file. Each fixed post-read
+row then checks exact attempt index/length and debit distance from that EOF;
+the second row also joins the first actual metadata return's same EOF/baseline.
+Historical count monotonicity alone is not native work authority. Existing
+current-read wrappers retain exact latest-debit and IDLE requirements.
+
+The typed-baseline nested-access control found and source-repaired a zero-hook
+refusal gap before any new metadataC. The repaired12 current selection and one actual-empty-EOF control pass across
+two runs with byte-identical production source. Combined13 floor qualification
+is running. Cache post-read integration, final ancestors and full completion
+remain unqualified.

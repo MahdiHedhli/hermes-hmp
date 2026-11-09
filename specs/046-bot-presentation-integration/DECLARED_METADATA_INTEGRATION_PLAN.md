@@ -119,3 +119,25 @@ return with strict historical cleanup joins. Do not replace either proof with
 current cursor/history alone or caller-selected bypass flags. Change terminal
 cursor/cohort and fullwalker completion together with complete wiring, while
 preserving the zero-cursor guard for every unwired policy.
+
+## Retained EOF/post-read source checkpoint
+
+Sourcee8320e4 implements the two original post-read roles with literal baseline,
+EOF and predecessor inputs held across callbacks. Historical runtime/cache read
+receipt guards retain original ACK/raw-clear/step/accumulator/journal joins;
+current wrappers still demand latest debit, healthy IDLE and no inflight work.
+The post-read consumer additionally accounts for every attempt/debit between
+actual EOF and each of the two fixed metadata rows, preserving close reserves.
+No historical guard by itself admits work or nominates a current receipt.
+
+Independent source review accepted the accounting/current-wrapper split and
+required exact resource/variant types before baseline nested access. Those
+fences and two zero-hook controls are implemented. The pre-fix normal control
+reached both actual metadata ACKs and refused renewal of current-read closure;
+malformed typed baselines reproduced foreign hooks before any new metadataC.
+Repaired12 current checks PASS at e8320e4. Test-only676bb62 separately passes
+an empty declared file with exactly one actual native EOF read and both post-read
+metadata ACKs; production bytes match e8320e4. Combined13 floor checks are running.
+Previous72 floor28 PASS belongs only to that earlier source. Final ancestors, pre-close finish receipt, complete _file
+wiring and terminal-cursor handling remain unimplemented; preserve the old
+unwired finish guard until the entire proof is integrated.
