@@ -29,6 +29,8 @@ from hmp_plugin.controls_requests import (
 )
 from hmp_plugin.request_ctx import ReadWorkerBudget
 
+from .test_adapter import adapter_module as adapter_module
+
 RID = "a" * 32
 IID = "a" * 52
 NONCE = "b" * 32
@@ -392,8 +394,8 @@ def test_darwin_peer_uid_is_required_and_failure_refuses(monkeypatch: pytest.Mon
         operator_read._peer_uid(peer)  # type: ignore[arg-type]
 
 
-def test_budget_operator_subcap_and_old_store_close_waits_for_actual_drain() -> None:
-    from hmp_plugin import adapter
+def test_budget_operator_subcap_and_old_store_close_waits_for_actual_drain(adapter_module) -> None:
+    adapter = adapter_module
     budget = ReadWorkerBudget()
     assert budget.reserve(operator=True)
     assert budget.reserve(operator=True)
