@@ -263,3 +263,31 @@ This replaces the earlier direct-writer checkpoint only in isolated source. The
 adapter does not start the service; deployed5e remains unchanged. Listener/actor
 retirement, schema4 quiesced migration, other-process/native/config publication and
 physical/release checks remain open. No live device grant or host flag changed.
+
+## Read-service actual-worker prerequisite — aaa29aa
+
+The existing read-only service used a Task wrapping asyncio.to_thread and retired
+its Store borrow when that Task completed. A corrected causal control at979fbe0
+cancelled all async waiters in an isolated loop while the synchronous read remained
+blocked: operator budget incorrectly became0 instead of1. The earlier569e571 test
+masked that assertion with cleanup timeout; its failure is retained separately.
+
+The repair uses a bounded original concurrent Future pool and intent ledger for
+read-only operations too. Only actual Future completion retires the original
+budget; async cancellation/timeout cannot. Registration/preconditions precede
+acquisition, uncertain acquisition/submission retains debt with fail-closed
+admission, eventual wrapped exceptions are consumed, and delivery rechecks original
+context/budget/generation/deadline. Stop closes admission and shuts the pool without
+cancelling actual work. This does not prove all native/HTTP work has retired.
+
+Both191-case combined suites pass unchanged on3.14.9/3.11.15; full Ruff passes.
+Independent finite source review found no additional blocker after setup reads
+moved before acquisition. AST comparison verified all31 prior top-level definitions
+in test_operator_read.py unchanged by the last formatting delta; three new test
+functions add acquisition loss, submit loss and original-budget replacement checks.
+
+OPEN RSWORK1: the same Task-based pattern is in the deployed5e247a6 baseline.
+No live incident is observed or claimed. This repair currently exists only in
+isolated source; a minimal separately reviewed/tested backport and deployment is
+needed before the production risk is considered resolved. Do not activate schema4
+or the media mutation service merely to deploy the read-only lifetime repair.
