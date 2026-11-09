@@ -1,8 +1,9 @@
 # Original link-policy factory capture
 
 November 9, 2026. LP2 design following the separately frozen LP1 source
-`0d5d86210dd1f2a163ace57effe5882c3a47e507`. This does not claim implementation
-of the entry-origin extension or native link operations.
+`0d5d86210dd1f2a163ace57effe5882c3a47e507`. Entry/lineage source integration
+is recorded below and remains unqualified; native link operations are not yet
+implemented by this preparation.
 
 `hmp_startup/link_factory_origin.py` prepares a one-attempt capture, a
 primitive-fenced DATA seal, and a held-factory return. No global receipt can
