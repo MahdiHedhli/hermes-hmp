@@ -655,7 +655,8 @@ def test_each_reader_exposes_only_its_own_committed_value(
         if name == "request_schema_ready" and commit:
             # The committed future-version marker must not be reopened by old code.
             with sqlite3.connect(store._path) as conn:
-                assert conn.execute("SELECT schema_version FROM meta WHERE id=1").fetchone()[0] == 4
+                assert (conn.execute("SELECT schema_version FROM meta WHERE id=1").fetchone()[0]
+                        == SCHEMA_VERSION + 1)
         else:
             reopened = Store(store._path)
             reopened.migrate()
