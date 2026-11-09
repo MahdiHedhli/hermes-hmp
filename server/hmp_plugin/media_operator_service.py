@@ -179,6 +179,11 @@ class MediaOperatorMutationService(OperatorReadService):
             with contextlib.suppress(Exception):
                 await asyncio.wait_for(writer.wait_closed(), _DEADLINE_S)
 
+    def close_admission(self) -> None:
+        if asyncio.get_running_loop() is not self._loop:
+            raise OperatorUnavailableError("operator service unavailable")
+        self._stopping = True
+
     async def stop(self) -> int:
         debt = await super().stop()
         self._pool.shutdown(wait=False, cancel_futures=False)
