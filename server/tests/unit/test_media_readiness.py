@@ -157,3 +157,53 @@ def test_media_capability_is_authenticated_protocol_only(tmp_path):
         status, _ = await get(client, path + '?protocol=2', headers=env.headers(device))
         assert status == 400
     run(env, scenario)
+
+
+def test_final_bot_callback_cannot_publish_changed_media_flag(tmp_path):
+    from .hmp_kit import Env, pair, get, run
+    from hmp_plugin.contract import AuthzState
+    env = Env(tmp_path)
+    settings = {'local_media': {'enabled': True}}
+    calls = []
+    def authz(user, profile):
+        calls.append(1)
+        # Third checkpoint of the final (second) collection.
+        if len(calls) == 6:
+            settings['local_media']['enabled'] = False
+        return AuthzState.AUTHORIZED
+    env.bridge.authz_state = authz
+    env.ctx.readiness_settings = lambda: settings
+    async def scenario(client):
+        device = await pair(env, client)
+        status, data = await get(client, '/bots/default/media-readiness',
+                                 headers=env.headers(device))
+        assert len(calls) == 6
+        assert status == 503 and 'media' not in data
+    run(env, scenario)
+
+
+def test_replaced_application_context_cannot_publish_old_worker_result(tmp_path, monkeypatch):
+    import threading
+    from .hmp_kit import Env, pair, get, run
+    from hmp_plugin import server
+    from hmp_plugin.request_ctx import CTX_KEY
+    from hmp_plugin.contract import AuthzState
+    env = Env(tmp_path)
+    env.bridge.authz_state = lambda user, profile: AuthzState.AUTHORIZED
+    env.ctx.readiness_settings = lambda: {}
+    original = server._collect_media_readiness
+    async def scenario(client):
+        device = await pair(env, client)
+        def collect(ctx, **scope):
+            result = original(ctx, **scope)
+            if threading.current_thread() is not threading.main_thread():
+                client.server.app[CTX_KEY] = object()
+            return result
+        monkeypatch.setattr(server, '_collect_media_readiness', collect)
+        try:
+            status, data = await get(client, '/bots/default/media-readiness',
+                                     headers=env.headers(device))
+            assert status == 503 and 'media' not in data
+        finally:
+            client.server.app[CTX_KEY] = env.ctx
+    run(env, scenario)
