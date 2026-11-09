@@ -523,10 +523,12 @@ def _media_decision(conn: sqlite3.Connection, iid: str, device_id: str) -> Media
             controls_revision = 0
         if type(controls_revision) is not int or not 0 <= controls_revision <= 2 ** 63 - 1:
             raise RuntimeError("invalid fallback revision")
-    return MediaReadDecision(iid, device_id, row["user_id"],
-                             None if allowed is None else bool(allowed), revision,
-                             *epochs, None if controls is None else bool(controls),
-                             controls_revision)
+    decision = MediaReadDecision(iid, device_id, row["user_id"],
+                                 None if allowed is None else bool(allowed), revision,
+                                 *epochs, None if controls is None else bool(controls),
+                                 controls_revision)
+    decision.validate()
+    return decision
 
 
 def _widen_cmid_status(conn: sqlite3.Connection) -> None:
@@ -946,7 +948,7 @@ class Store:
         if (type(expected) is not MediaReadDecision or type(allowed) is not bool
                 or type(now) is not int or not 0 <= now <= 2 ** 63 - 1):
             raise ValueError("invalid media decision write")
-        validate_media_scope(expected.iid, expected.device_id)
+        expected.validate()  # closed primitive fields before tuple equality can dispatch hooks
         with self._serialized_writer() as conn:
             current = _media_decision(conn, expected.iid, expected.device_id)
             if current is None or current != expected:

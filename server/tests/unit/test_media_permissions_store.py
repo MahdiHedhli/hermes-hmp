@@ -80,7 +80,7 @@ def test_instance_transition_invalidates_a_prepared_write(store, statement):
 
 def test_wrong_instance_does_not_inherit_an_allow(store):
     store.set_media_read(store.media_read_decision(IID, 'dev_a'), allowed=True, now=10)
-    other = store.media_read_decision('b' * 52, 'dev_a')
+    other = store.media_read_decision('b' * 51 + 'a', 'dev_a')
     assert other.allowed is None and other.revision == 0
 
 
@@ -148,3 +148,24 @@ def test_revision_overflow_rolls_back_the_decision(store):
 def test_write_does_not_coerce_permission_input(store, allowed):
     with pytest.raises(ValueError):
         store.set_media_read(store.media_read_decision(IID, 'dev_a'), allowed=allowed, now=10)
+
+
+@pytest.mark.parametrize('field', (
+    'user_id', 'allowed', 'revision', 'instance_epoch', 'revocation_epoch',
+    'fallback_controls', 'fallback_revision',
+))
+def test_cas_rejects_foreign_fields_before_equality(store, field):
+    class Foreign:
+        def __eq__(self, other):
+            raise AssertionError('foreign equality must not execute')
+
+    before = store.media_read_decision(IID, 'dev_a')
+    malformed = before._replace(**{field: Foreign()})
+    with pytest.raises(ValueError):
+        store.set_media_read(malformed, allowed=True, now=10)
+    assert store.media_read_decision(IID, 'dev_a') == before
+
+
+def test_noncanonical_instance_id_refused_before_permission_lookup(store):
+    with pytest.raises(ValueError):
+        store.media_read_decision('a' * 51 + 'b', 'dev_a')
