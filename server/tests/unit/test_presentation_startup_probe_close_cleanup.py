@@ -17,7 +17,16 @@ def test_startup_probe_known_close_cleanup(tmp_path, monkeypatch, case):
     script += '\ncleanup_case=' + repr(case) + '\n'
     script += r'''
 import os,faulthandler
-faulthandler.dump_traceback_later(40,repeat=False)
+# Controlled comparison: no parallel faulthandler stack-dump watchdog.
+# Native fault observer, all outcome/accounting assertions and60s deadline unchanged.
+import time
+_diagnostic_fd=os.open(Path(sys.argv[1])/'observer-timing.jsonl',
+    os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
+_diagnostic_start=time.monotonic_ns()
+def diagnostic_stage(stage):
+    raw=(json.dumps({'stage':stage,'elapsed_ns':time.monotonic_ns()-_diagnostic_start})+'\n').encode()
+    assert os.write(_diagnostic_fd,raw)==len(raw)
+diagnostic_stage('observer_started')
 from hmp_plugin import presentation_startup_cache as cache_module
 from hmp_plugin import presentation_startup_probe as startup_native
 retained=EntryFileSnapshotOwner.retain_runtime_link_files(entry,recipe,plugin)
@@ -68,6 +77,7 @@ def lose_ack(frame):
     if descriptor is not target[0]:return
     assert frame.f_locals['close'].raw[0] is None
     faults.append(True)
+    diagnostic_stage('close_ack_loss_injected')
     ledger=allocation.ledger
     budgets.append((ledger,tuple(ledger.counts),len(ledger.attempts),len(attempted)))
     raise OSError('SYNTHETIC_STARTUP_CLOSE_ACK_LOSS_ONLY')
@@ -92,6 +102,7 @@ def focused_driver_trace(frame,event,arg):
         if frame.f_lineno==cleanup_line and not active_effects:
             assert frame.f_locals['execution'].cursor[0].action=='finished'
             if not _synthetic_native_routes:
+                diagnostic_stage('cleanup_reached')
                 observe_synthetic_native(a.os.close,a._close_native_file_known.__code__,close_observed)
         elif frame.f_lineno==finish_line:scope_ended(frame)
     return focused_driver_trace
@@ -129,6 +140,7 @@ finally:
         monitoring.set_local_events(monitor_id,a._close_native_file_known.__code__,0)
         monitoring.register_callback(monitor_id,monitoring.events.LINE,None)
         monitoring.free_tool_id(monitor_id)
+diagnostic_stage('entry_returned')
 io=inputs.io_slot[0]
 facts={'case':cleanup_case,'refused':refused,'faults':len(faults),
        'known':len(held),'close_calls':len(attempted),
@@ -162,6 +174,8 @@ else:
     remaining=len(held)-closed_at_fault
     assert ledger.counts==[budget[0]+remaining,budget[1]-remaining]
     assert len(ledger.attempts)==attempts
+diagnostic_stage('assertions_complete')
+os.close(_diagnostic_fd)
 print(json.dumps({'mutation':mutation,'runtime_admitted':False}))
 '''
     monkeypatch.setattr(base, 'SCRIPT', script)
@@ -173,4 +187,7 @@ print(json.dumps({'mutation':mutation,'runtime_admitted':False}))
         fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         with os.fdopen(fd, 'wb') as stream:
             stream.write(error.stderr or b'')
+        stdout_path=tmp_path/'startup-native-timeout-stdout.log'
+        stdout_fd=os.open(stdout_path,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
+        with os.fdopen(stdout_fd,'wb') as stream:stream.write((error.stdout or b'')[:8192])
         raise
