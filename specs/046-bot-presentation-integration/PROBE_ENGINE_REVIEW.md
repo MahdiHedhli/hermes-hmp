@@ -49,3 +49,23 @@ Run actual missing/directory/declared and all existing probe regressions on both
 supported interpreters. Only then switch the complete actual caller. Startup
 before/after source effects, other policies/operations, service/resource bounds,
 authenticated image transport, physical devices and release remain separate.
+
+## Shared admission/retirement correction
+
+`c981bc2` reuses the actual shared admission and caller-held original custody
+retirement. Closed probe stages are rejoined to registered original function,
+code, module and export identities before every invocation. Existing directory
+owner/file/EOF policy remains separate. Actor preflight, pure current lifetime,
+independently held opened descriptors and history/accounting checks were added.
+
+The repaired selection has8 current passes at ee3edf0 and4 descendant guard
+passes at c981bc2, independently audited; failing stage-code and scope-field
+controls are preserved. The intermediary4case failure was a directory-only
+postACK tail accidentally retained in the probe path; its fixed attached stage
+now passes positive paths as well as refusal controls. Existing directory
+compatibility22 is running, not inferred. No minimum/runtime/device qualification
+or fullengine approval follows from these selected checks.
+
+Shared native outcome, consumption and partial ACK handling remain incomplete.
+Do not wire or install the probe while those and the full failure/finish/type/
+descriptor causals remain unqualified. PS1-FP-NATIVE stays open.
