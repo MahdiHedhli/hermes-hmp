@@ -194,3 +194,23 @@ replacement, actual-worker retention after timeout/cancellation, uncertain enque
 and late-error consumption. This does not establish human consent, full listener
 retirement, native authority freshness, schema migration/rollback or physical image
 display. Those remain release gates. Independent service review is pending.
+
+## Reservation interruption repair — e948e83
+
+Independent review found allocation/registration and then reservation-return loss
+windows in pre-submission accounting. Intent allocation now precedes any budget
+reservation; registration occurs before acquisition. Known registration failure
+therefore cannot have submitted work or acquired capacity. Definite False removes
+only the known-unacquired intent. Acquisition exception/nonboolean result retains
+that original intent, poisons admission and returns Unknown without guessing a
+refund. Subsequent submission and actual-Future retirement retain the same ledger.
+Stop reads ledger-derived debt rather than a separately allocated integer counter.
+
+The reviewed correction passes148 combined cases on each interpreter, including
+23 service cases and new allocation, before/after registration, before/after
+acquisition-return loss and definite-capacity-refusal checks. Full Ruff passes.
+Independent read-only delta review found no new concrete blocker in this fix.
+Unknown acquisition can conservatively block drain indefinitely despite no actual
+SQL; that is an unresolved lifecycle condition, not permission to close the Store.
+CLI consent/client, listener lifecycle integration, native/config/cross-process
+publication, migration/rollback and device/release qualification remain open.
