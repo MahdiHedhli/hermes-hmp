@@ -1,18 +1,15 @@
 # Fresh cache-probe metadata integration
 
-November 9, 2026. Contract checked against `e12df99`; original-plan binding is
-implemented in uninstalled `45c006c` and independently reviewed. **The complete
-native/diagnostic traversal remains unwired and unqualified.** The inherited
-runtime-source/declared-cache `_file` sequence does not cover this traversal.
-This is local HMP work, not an upstream Hermes capability blocker.
-
-The original owner/root/selection/path/proof/context and fixed possible sites are
-allocated before scope construction, and the scope retains the actual plan.
-Original code is captured before constructors and actual returned fields/variants
-are rejoined afterward. The unwired cursor/pending/history remain zero/empty.
-Twenty-seven current-interpreter probe cases and four reader compatibility cases
-pass; the combined31-case minimum-interpreter run also passes. This plan DATA does
-not admit native work, classify actual failures or authorize fallback/images.
+November 9, 2026. The original requirements below remain the acceptance
+contract. Source `1898b64` now connects the actual observe caller to the shared
+engine and typed finish; it is **uninstalled and not fully qualified**. The
+five-case current-interpreter actual missing/finish/constructor selection passes;
+fifteen remaining existing cache-probe cases are running. Minimum interpreter,
+shared compatibility, broader failure and service/device/release gates remain.
+See FEATURES for exact source and result scope. The original DATA plan keeps
+its zero-state fields; actual engine execution holds separate branch/history.
+This is local HMP work, not a demonstrated upstream Hermes blocker. No image,
+fallback or media-access authority is enabled by these changes.
 
 ## Complete boundary
 
