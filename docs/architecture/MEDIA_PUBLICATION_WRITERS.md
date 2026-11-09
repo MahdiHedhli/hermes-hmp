@@ -377,3 +377,30 @@ activation qualification. Concurrent startup/bootstrap cancellation, all other
 HTTP/native/thread borrowers, migration/rollback, final native authority publication
 and physical/release acceptance remain separate gates. The media service is still
 not started by the adapter, and deployed hosts retain c7482f1 only.
+
+## MR-START1: lifecycle exclusion source — d524059
+
+A per-adapter lock now serializes connect/disconnect. The730e908 causal control
+reproduced two component-opening workers active together. Successful concurrent
+connects now share one synthetic real TLS listener; failed attempts may run again
+only sequentially. Disconnect waits for an executing startup. Cancellation while
+waiting for the lock does not poison the lifecycle.
+
+An executing connect that loses completion latches startup uncertainty, preventing
+another bootstrap even after a fixture separately observes worker end. Executing
+disconnect failure/cancellation similarly refuses the old server shortcut rather
+than reporting a stopping listener connected. Only explicit disconnect cleanup
+with no current server and actual retained Store-close proof clears that latch.
+Unhandled failures are conservative; controlled False paths retain their behavior.
+
+Both350-case combined suites pass unchanged on3.14.9/3.11.15 and Ruff passes.
+Independent finite source/delta review found no further concrete blocker within
+this exclusion scope. It is NOT MR-START2 bootstrap ownership/recovery: actual
+component Future, partial context/listener cleanup and controlled failure cleanup
+still need qualification. The startup latch deliberately does not auto-clear.
+
+No live incident is observed, no deployment was performed and media remains
+inactive. Concurrent-opening protection exists only in this source branch; retain
+that distinction until a separately qualified update is deployed. Remaining other
+borrowers, schema migration/rollback, native publication and physical/release gates
+are unchanged.
