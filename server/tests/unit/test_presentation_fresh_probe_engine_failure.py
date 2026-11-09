@@ -5,7 +5,8 @@ from . import test_presentation_entry_files as base
 from .test_presentation_gateway_approval import operator_composed_script
 
 
-@pytest.mark.parametrize('case', ('retire_before_stat', 'lost_native_return', 'wrong_actor'))
+@pytest.mark.parametrize('case', ('retire_before_stat', 'lost_native_return', 'wrong_actor',
+                                 'stage_code_drift'))
 def test_probe_engine_failure_contract(tmp_path, monkeypatch, case):
     script, mutation = operator_composed_script('links')
     script = script.replace('GatewayPackageOwner.verify_recipe(recipe)',
@@ -30,6 +31,8 @@ scope,selected,path,proof,reg,root,cell,count=RuntimeCacheProbeOwner._start(owne
 plan=scope.native_probe_plan
 before=(tuple(reg.native_ledger.counts),len(reg.native_ledger.attempts))
 faults=[];native_calls=[];references=[];held_rows=[]
+owner._fixture_foreign_stage_calls=0
+original_stage_code=engine._produce_shared.__code__
 def observed(frame):
     if frame.f_locals['execution'].owner is owner:native_calls.append(True)
 observe_synthetic_native(reg.native_origin.operations[3],engine._produce.__code__,observed)
@@ -50,6 +53,16 @@ elif failure_case=='lost_native_return':
             held_rows.extend(scope.records)
             raise RuntimeError('synthetic producer-return loss after actual native return')
     trace_synthetic_boundary(engine._produce.__code__,'snapshot = (None if category',lose)
+if failure_case=='stage_code_drift':
+    def foreign_stage(owner,consumer):
+        vars(owner)['_fixture_foreign_stage_calls']+=1
+        raise RuntimeError('synthetic foreign stage must never execute')
+    def replace_stage(frame):
+        if frame.f_locals['owner'] is owner and not faults:
+            faults.append(True)
+            engine._produce_shared.__code__=foreign_stage.__code__
+    trace_synthetic_boundary(engine.metadata._run_directory_observation.__code__,
+                             'producer_started = True',replace_stage)
 refused=[]
 def invoke():
     try:engine._run_fresh_probe(owner,scope,reg,plan)
@@ -61,9 +74,11 @@ try:
         worker=threading.Thread(target=invoke);worker.start();worker.join(timeout=10)
         assert not worker.is_alive()
     else:invoke()
+    if failure_case=='stage_code_drift':engine._produce_shared.__code__=original_stage_code
     execution=owner._probe_execution
     facts={'case':failure_case,'refused':refused,'faults':len(faults),
-           'stat_calls':len(native_calls),'execution_published':execution is not None,
+           'stat_calls':len(native_calls),'foreign_stage_calls':owner._fixture_foreign_stage_calls,
+           'execution_published':execution is not None,
            'counts_unchanged':before==(tuple(reg.native_ledger.counts),len(reg.native_ledger.attempts)),
            'ledger_failed':reg.native_ledger.failed[0],
            'retained_raw_capsules':sum(reference() is not None for reference in references),
@@ -78,6 +93,8 @@ try:
         assert faults==[True] and references and held_rows
         assert all(reference() is None for reference in references), 'actual raw capsule retained after producer unwind'
         assert all(row.closed and row.close_attempted for row in held_rows), 'known reserved cleanup blocked'
+    elif failure_case=='stage_code_drift':
+        assert faults==[True] and owner._fixture_foreign_stage_calls==0, 'changed original stage code executed after latch'
     else:
         assert owner._probe_execution is None, 'foreign actor published execution before eligibility'
         assert before==(tuple(reg.native_ledger.counts),len(reg.native_ledger.attempts))
