@@ -8,16 +8,40 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from test_media_operator_execution import setup
 
 from hmp_plugin import media_operator_service as module
 from hmp_plugin import wire
-from hmp_plugin.media_operator_protocol import decode_reply
+from hmp_plugin.media_operator_protocol import MediaReadMutation, decode_reply
+from hmp_plugin.media_publication_actor import MediaPublicationActor
 from hmp_plugin.request_ctx import ReadWorkerBudget
+from hmp_plugin.store import Store
 
 
 async def open_service(tmp_path):
-    actor, store, ctx, request = await setup(tmp_path)
+    actor = MediaPublicationActor()
+    store = Store(tmp_path / "store.sqlite3", mutation_observer=actor)
+    store.migrate()
+    await asyncio.to_thread(store.insert_user, "user", "owner", 1)
+    await asyncio.to_thread(
+        store.insert_device, "device", "user", "f" * 52, b"public", "phone", 1, state="ACTIVE"
+    )
+    ctx = SimpleNamespace(
+        iid="a" * 52,
+        identity=SimpleNamespace(still_current=lambda: True),
+        store=store,
+        bridge=object(),
+        readiness_generation="b" * 32,
+        now=lambda: 2,
+    )
+    request = MediaReadMutation(
+        ctx.iid,
+        "c" * 32,
+        ctx.readiness_generation,
+        "d" * 32,
+        "device",
+        store.media_read_decision(ctx.iid, "device"),
+        True,
+    )
     ctx.read_worker_budget = ReadWorkerBudget()
     parent = Path(os.environ["HOST_OPERATOR_TEST_PARENT"])
     service = module.MediaOperatorMutationService(ctx, parent / "anchor", request.nonce, actor)
@@ -97,7 +121,7 @@ def test_socket_scope_refusal_does_not_write(tmp_path, monkeypatch, bad):
     asyncio.run(scenario())
 
 
-def test_timeout_and_handler_cancel_retain_actual_worker_debt(tmp_path, monkeypatch):
+def test_timeout_and_stop_retain_actual_worker_debt(tmp_path, monkeypatch):
     async def scenario():
         actor, store, ctx, request, service = await open_service(tmp_path)
         entered, release = threading.Event(), threading.Event()
