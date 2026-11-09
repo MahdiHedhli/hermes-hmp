@@ -40,3 +40,24 @@ def test_untrusted_values_never_escape(field):
     with pytest.raises(MediaReadinessUnavailable) as exc:
         project(**kwargs)
     assert str(exc.value) == 'media readiness unavailable'
+
+
+def test_route_is_authenticated_read_only_and_does_not_probe_images(tmp_path):
+    from .hmp_kit import Env, pair, get, run
+    env = Env(tmp_path)
+    env.ctx.readiness_settings = lambda: {'local_media': {'enabled': False}}
+
+    async def scenario(client):
+        device = await pair(env, client)
+        path = '/bots/default/media-readiness'
+        before = env.store.media_read_decision(env.iid, device.device_id)
+        status, _ = await get(client, path, headers={'HMP-Instance': env.iid})
+        assert status == 401
+        status, data = await get(client, path, headers=env.headers(device))
+        assert status == 200, data
+        assert data['media']['host_setting'] == 'disabled'
+        assert data['media']['image_availability'] == 'not_probed'
+        assert env.store.media_read_decision(env.iid, device.device_id) == before
+        status, _ = await get(client, path + '?extra=1', headers=env.headers(device))
+        assert status == 400
+    run(env, scenario)
