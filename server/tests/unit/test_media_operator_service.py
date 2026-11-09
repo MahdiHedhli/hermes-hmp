@@ -318,3 +318,40 @@ def test_lost_submit_ack_retains_unknown_debt_even_after_actual_commit(tmp_path,
             store.close()
 
     asyncio.run(scenario())
+
+
+def test_late_worker_exception_is_consumed_without_async_log_or_early_retirement(
+    tmp_path, monkeypatch
+):
+    import gc
+
+    async def scenario():
+        actor, store, ctx, request, service = await open_service(tmp_path)
+        entered, release = threading.Event(), threading.Event()
+        errors = []
+        loop = asyncio.get_running_loop()
+        loop.set_exception_handler(lambda _loop, context: errors.append(context))
+
+        def late_failure(*_args, **_kwargs):
+            entered.set()
+            assert release.wait(3)
+            raise RuntimeError("synthetic worker diagnostic must not reach async log")
+
+        monkeypatch.setattr(service._executor, "decide", late_failure)
+        try:
+            raw = await service._decide(request, time.monotonic() + 0.05)
+            assert entered.is_set() and decode_reply(raw, request=request).status == "unknown"
+            assert service._outstanding == 1
+            assert await service.stop() == 1
+            release.set()
+            await asyncio.wait_for(service.wait_drained(), 1)
+            gc.collect()
+            await asyncio.sleep(0)
+            assert errors == []
+            assert ctx.read_worker_budget.operator == 0
+        finally:
+            release.set()
+            await finish(actor, store, service)
+            loop.set_exception_handler(None)
+
+    asyncio.run(scenario())
