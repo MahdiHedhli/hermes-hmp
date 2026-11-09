@@ -5,7 +5,7 @@ import errno
 import stat
 from dataclasses import dataclass
 from typing import NamedTuple
-from types import FunctionType
+from types import FunctionType, ModuleType
 
 from .presentation_startup_artifacts import StartupArtifactOwner, _Scope, _descriptor_closed_in_scope
 
@@ -280,10 +280,24 @@ def _probe(source, owner, phase, index, native_registration=None, previous=None)
              and type(scope.native_startup_probe_origin) is tuple)
     from . import presentation_startup_probe as native
     origin = scope.native_startup_probe_origin
-    _require(origin[2] is native and origin[3] is native._resource_tail
-             and origin[4] is native._resource_tail.__code__)
-    native._engine_origin_tail(origin[5])
-    native._blueprint_tail(origin[6])
+    _require(type(native) is ModuleType and len(origin) == 7 and origin[2] is native)
+    namespace = vars(native)
+    _require(type(origin[3]) is FunctionType and origin[3].__code__ is origin[4]
+             and origin[3].__globals__ is namespace and namespace.get('_resource_tail') is origin[3]
+             and type(origin[5]) is tuple and len(origin[5]) == 7
+             and type(origin[5][2]) is tuple)
+    def held(name):
+        rows = tuple(row for row in origin[5][2]
+                     if type(row) is tuple and len(row) == 3
+                     and type(row[0]) is str and row[0] == name)
+        _require(len(rows) == 1)
+        _, function, code = rows[0]
+        _require(type(function) is FunctionType and function.__code__ is code
+                 and function.__globals__ is namespace
+                 and namespace.get(name) is function)
+        return function
+    held('_engine_origin_tail')(origin[5])
+    held('_blueprint_tail')(origin[6])
     _native_work_origin_tail(owner, native_registration, native_registration.native_origin)
     arguments = (scope, source, phase, index, previous, native_registration)
     actor_state = _native_pre_actor_state(owner, arguments)
@@ -301,7 +315,7 @@ def _probe(source, owner, phase, index, native_registration=None, previous=None)
     effect = object.__new__(kind)
     effect_dict = vars(effect)  # original empty allocation before constructor callback
     constructor(effect, source, phase, index, count)
-    native._blueprint_tail(origin[6])
+    held('_blueprint_tail')(origin[6])
     expected = dict(source=source, phase=phase, index=index, count=count, attempted=False,
                     returned=False, unknown=False, result=None, descriptors=None, native_finish=None)
     _require(type(effect) is _ProbeEffect and vars(effect) is effect_dict
@@ -318,13 +332,13 @@ def _probe(source, owner, phase, index, native_registration=None, previous=None)
     actual = result = None
     failed = False
     try:
-        plan = native._new_startup_plan(source, owner, phase, index, effect, previous, native_registration)
-        actual = native._run_startup_probe(owner, scope, native_registration, plan)
-        native._historical_finish_tail(actual)
+        plan = held('_new_startup_plan')(source, owner, phase, index, effect, previous, native_registration)
+        actual = held('_run_startup_probe')(owner, scope, native_registration, plan)
+        held('_historical_finish_tail')(actual)
         missing_kind, fields, members, missing_constructor, code = actual.execution.origin[1][6]
         values = actual.outcome
         result = missing_constructor(missing_kind, *values)
-        native._historical_finish_tail(actual)
+        held('_historical_finish_tail')(actual)
         _require(type(result) is _Missing and tuple.__len__(result) == len(values)
                  and all(tuple.__getitem__(result, i) is value for i, value in enumerate(values))
                  and vars(effect) is effect_dict and len(effect_dict) == len(expected)
@@ -480,19 +494,34 @@ def seal(source, owner, before, after):
     calls = []
     if scope.native_files is not None:
         from . import presentation_startup_probe as native
-        native._engine_origin_tail(scope.native_startup_probe_origin[5])
-        native._blueprint_tail(scope.native_startup_probe_origin[6])
+        origin = scope.native_startup_probe_origin
+        _require(type(native) is ModuleType and type(origin) is tuple and len(origin) == 7
+                 and origin[2] is native and type(origin[5]) is tuple and len(origin[5]) == 7
+                 and type(origin[5][2]) is tuple)
+        namespace = vars(native)
+        def held(name):
+            rows = tuple(row for row in origin[5][2]
+                         if type(row) is tuple and len(row) == 3
+                         and type(row[0]) is str and row[0] == name)
+            _require(len(rows) == 1)
+            _, function, code = rows[0]
+            _require(type(function) is FunctionType and function.__code__ is code
+                     and function.__globals__ is namespace
+                     and namespace.get(name) is function)
+            return function
+        held('_engine_origin_tail')(origin[5])
+        held('_blueprint_tail')(origin[6])
         _require(type(before) is _CachePass and type(after) is _CachePass
                  and type(before.native_finishes) is tuple and type(after.native_finishes) is tuple)
         for actual in (*before.native_finishes, *after.native_finishes):
-            cohort = native._historical_cohort(actual, scope)
-            helper = native._historical_finish_mirrors
+            cohort = held('_historical_cohort')(actual, scope)
+            helper = held('_historical_finish_mirrors')
             calls.append((actual, cohort, helper, helper.__code__))
     calls = tuple(calls)
     mirrors(source, owner, before, after, scope, calls)
     if scope.native_files is not None:
         for actual, _, _, _ in calls:
-            _require(native._historical_finish_tail(actual) is actual)
+            _require(held('_historical_finish_tail')(actual) is actual)
     if _cache_seal_mirrors is not mirrors or mirrors.__code__ is not mirrors_code:
         raise CacheObservationError from None
     return mirrors(source, owner, before, after, scope, calls)

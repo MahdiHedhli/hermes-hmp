@@ -97,7 +97,7 @@ def _new_probe_engine_origin():
         '_prepare_shared_consumer', '_latch_shared_consumer', '_produce_shared',
         '_consume_shared', '_ack_shared', '_retired_shared', '_history_mirrors_tail', '_attached_shared',
         '_make_shared_commit', '_commit_shared_tail', '_acked_shared_history', '_publish_shared_ack',
-        '_finished_state_tail', '_opened_chain_tail', '_new_startup_probe_origin', '_blueprint_tail', '_new_startup_plan', '_startup_plan_tail', '_cursor_ordinal', '_historical_finish_tail', '_path_rows', '_policy_pins_tail', '_historical_finish_mirrors', '_historical_cohort'))
+        '_finished_state_tail', '_opened_chain_tail', '_new_startup_probe_origin', '_blueprint_tail', '_new_startup_plan', '_startup_plan_tail', '_cursor_ordinal', '_historical_finish_tail', '_path_rows', '_policy_pins_tail', '_historical_finish_mirrors', '_historical_cohort', '_startup_parent_witness'))
     return (module, types, functions, OSError.__dict__['errno'],
             OSError.__dict__['filename'], errno.ENOENT,
             (metadata, tuple((name, vars(metadata).get(name), vars(metadata).get(name).__code__)
@@ -112,7 +112,7 @@ def _engine_origin_tail(origin):
              and sys.modules.get(__name__) is origin[0]
              and vars(origin[0]) is globals()
              and type(origin[1]) is tuple and len(origin[1]) == 7
-             and type(origin[2]) is tuple and len(origin[2]) == 36
+             and type(origin[2]) is tuple and len(origin[2]) == 37
              and origin[3] is OSError.__dict__['errno']
              and origin[4] is OSError.__dict__['filename']
              and type(origin[5]) is int and origin[5] == errno.ENOENT)
@@ -518,8 +518,24 @@ def _lifecycle_tail(owner, scope, registration, plan):
              and scope.activation._artifact_attempt_cell is owner._attempt_cell
              and scope.activation._artifact_owner is owner
              and scope.activation._artifact_cell is registration.root)
-    from .presentation_startup_cache import owned_current
-    owned_current(plan.source, owner)
+    dictionaries, exports = plan.parents
+    for object_, dictionary, entries in dictionaries:
+        _require(vars(object_) is dictionary and len(dictionary) == len(entries)
+                 and all(type(key) is str for key in dictionary)
+                 and all(key in dictionary and dictionary[key] is value for key, value in entries))
+    for module, name, value in exports:
+        _require(type(module) is ModuleType and vars(module).get(name) is value)
+    inputs = plan.source.inputs
+    _require(vars(plan.source.entry).get('_inputs') is inputs
+             and vars(plan.source.entry).get('_root_cell') is plan.source.cell
+             and vars(plan.source.entry).get('_failed') is False
+             and vars(plan.source.entry).get('_unknown') is False
+             and vars(plan.source.entry).get('_completing') is True
+             and type(inputs.io_slot) is list and len(inputs.io_slot) == 1 and inputs.io_slot[0] is owner
+             and type(inputs.cache_context_slot) is list and len(inputs.cache_context_slot) == 1
+             and inputs.cache_context_slot[0] is plan.source.context_fact
+             and inputs.runtime_plan is plan.source.plan
+             and plan.source.plan.pending is scope.expected)
     _require(scope.cache is plan.source and type(plan.source.effects) is list
              and len(plan.source.effects) == len(plan.effect_prefix)
              and all(current is original for current, original
@@ -730,6 +746,7 @@ class _StartupPlan(NamedTuple):
     effect_dict: dict
     effect_prefix: tuple
     previous: object
+    parents: tuple
 
 
 def _path_rows(selected, context):
@@ -801,7 +818,7 @@ def _policy_pins_tail(blueprint):
     return blueprint
 
 
-def _blueprint_tail(blueprint):
+def _blueprint_tail(blueprint, verify_paths=False):
     _policy_pins_tail(blueprint)
     from .presentation_startup_cache import _CacheSource
     owner, source, context, expected, paths, rows = blueprint[:6]
@@ -811,10 +828,11 @@ def _blueprint_tail(blueprint):
              and source.plan.pending is expected and source.paths is paths
              and type(paths) is tuple and type(rows) is tuple and len(rows) == len(paths)
              and type(blueprint[7]) is tuple)
-    for path, selected in zip(paths, rows, strict=True):
-        _require(type(path) is str and type(selected) is policy._StartupPathPolicy
-                 and selected.path is path and selected.actor_uid == context[1])
-        policy._policy_tail(selected)
+    if verify_paths:
+        for path, selected in zip(paths, rows, strict=True):
+            _require(type(path) is str and type(selected) is policy._StartupPathPolicy
+                     and selected.path is path and selected.actor_uid == context[1])
+            policy._policy_tail(selected)
     _engine_origin_tail(blueprint[7])
     return blueprint
 
@@ -858,12 +876,12 @@ def _new_startup_probe_origin(owner, source, context, expected):
     rows = tuple(policy._new_policy(path, context[1]) for path in paths)
     blueprint = (owner, source, context, expected, paths, rows, policy_pins,
                  engine_origin, kinds, cache_pins)
-    _blueprint_tail(blueprint)
+    _blueprint_tail(blueprint, verify_paths=True)
     _require(vars(owner) is names and len(names) == len(entries)
              and all(type(key) is str for key in names)
              and all(key in names and names[key] is value for key, value in entries))
     cache.source_current(source)
-    _blueprint_tail(blueprint)
+    _blueprint_tail(blueprint, verify_paths=True)
     _require(vars(owner) is names and len(names) == len(entries)
              and all(key in names and names[key] is value for key, value in entries))
     return (_NativeStartupProbeMetadataResource, StartupArtifactOwner, module,
@@ -898,6 +916,9 @@ def _new_startup_plan(source, owner, phase, index, effect, previous, registratio
              and type(phase) is int and phase in (0, 1) and type(index) is int
              and 0 <= index < len(blueprint[4])
              and vars(owner).get('_startup_probe_execution') is None)
+    from .presentation_startup_cache import owned_current
+    owned_current(source, owner)  # full parent validation once at this path boundary
+    parents = _startup_parent_witness(source, scope)
     original_policy = blueprint[5][index]
     selected, keys, definitions = _path_rows(original_policy, blueprint[2])
     _blueprint_tail(blueprint)
@@ -908,7 +929,7 @@ def _new_startup_plan(source, owner, phase, index, effect, previous, registratio
                      for ordinal, site in enumerate(definitions))
     values = (owner, source, phase, index, selected, selected.components, definitions,
               variants, keys, origin[5], blueprint, owner._count_cell, owner._root_cell,
-              owner._cell, tuple(scope.records), effect, vars(effect), tuple(source.effects), previous)
+              owner._cell, tuple(scope.records), effect, vars(effect), tuple(source.effects), previous, parents)
     plan_kind, _, _, plan_constructor, _, _, _ = blueprint[8][0]
     plan = plan_constructor(plan_kind, *values)
     _blueprint_tail(blueprint)
@@ -1198,6 +1219,43 @@ def _historical_cohort(actual, scope):
     ledger, phase = registration.native_ledger, registration.native_phase
     cells = (ledger.counts, ledger.inflight, ledger.failed, ledger.failure, ledger.preparation,
              phase.current, phase.result)
-    _require(all(type(cell) is list and len(cell) <= 2 for cell in cells))
+    widths = (2, 1, 1, 1, 3, 1, 1)
+    _require(all(type(cell) is list and len(cell) == width
+                 for cell, width in zip(cells, widths, strict=True))
+             and ledger.inflight[0] is None and ledger.failed[0] is False
+             and ledger.failure[0] is None
+             and all(value is None for value in ledger.preparation)
+             and phase.current[0] is phase.idle and phase.result[0] is None)
     return (tuple(dictionaries), tuple((cell, tuple(cell)) for cell in cells),
             ledger.attempts, len(ledger.attempts), vars(activation_module).get('_ENTRY_CELL'))
+
+
+def _startup_parent_witness(source, scope):
+    """Original lifecycle mirrors following full source validation, not authority.
+
+    Parent owners are complete and quiescent during a probe. Immutable source
+    facts stay held by the entry inputs. This witness rejects parent ownership,
+    readiness and namespace changes at each stage without walking their old
+    closed file descriptors again. Final startup sealing still checks receipts.
+    """
+    active = scope.activation
+    objects = (source.entry, source.context_fact[0], source.inputs.entry,
+               source.inputs.recipe, source.inputs.plugin, active,
+               vars(active).get('_approval_owner'), vars(active).get('_selection_owner'))
+    dictionaries, seen, exports = [], [], []
+    for object_ in objects:
+        if object_ is None or any(object_ is prior for prior in seen):
+            continue
+        dictionary = vars(object_)
+        _require(type(dictionary) is dict and len(dictionary) <= 512
+                 and all(type(key) is str for key in dictionary))
+        dictionaries.append((object_, dictionary, tuple(dictionary.items())))
+        seen.append(object_)
+        name = vars(type(object_)).get('__module__')
+        _require(type(name) is str)
+        module = sys.modules.get(name)
+        _require(type(module) is ModuleType)
+        for key in ('_OWNER', '_ROOT', '_CELL', '_FACT', '_STARTED', '_ENTRY_OWNER', '_ENTRY_CELL'):
+            if key in vars(module):
+                exports.append((module, key, vars(module)[key]))
+    return tuple(dictionaries), tuple(exports)
