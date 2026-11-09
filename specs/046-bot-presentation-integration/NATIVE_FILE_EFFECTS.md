@@ -1,5 +1,17 @@
 ## November 9 — shutdown ownership checks pass; media integration remains open
 
+MR-RECOVER1 implementation `cfc0692`, test-complete source `34329d7`, adds
+explicit recovery of the original partial listener: join its component Future and actual
+stop/drain, transfer the original Store close to one retained task, and clear startup
+uncertainty only after known closure plus scope rejoin. Cancellation—including after
+Store closure—cannot replay cleanup; callback drift/lost close acknowledgement refuse
+reconnect. 514 selected cases pass unchanged on both pinned runtimes, zero failures/
+errors/skips; finite read-only review accepted implementation and causal tests. Reconnect
+coverage proves admission to next component opening, not a second native listener startup.
+Failed builder allocations, other native/Store borrowers, media authority/migration,
+full-plugin regression and physical/release gates remain open. No deployment or activation;
+user-visible host-local images and characters remain unfinished.
+
 MR-PUSH2 source `0adba02` retains returned relay and dispatcher ownership before
 startup effects. Failed construction/start keeps cleanup ownership; one shared relay
 close operation is retained across bounded observation and unknown Task acknowledgement.
