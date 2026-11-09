@@ -78,6 +78,9 @@ def scope_ended(frame):
     if not active_effects or frame.f_locals.get('plan').effect is not active_effects[0]:return
     restored.append(True)
     sys.setprofile(prior_profile);sys.settrace(prior_trace)
+    if monitor_id is not None:
+        monitoring.set_local_events(monitor_id,driver_code,0)
+        monitoring.set_local_events(monitor_id,a._close_native_file_known.__code__,0)
     path=Path(sys.argv[1])/'startup-probe-observer-scope-stage.json'
     fd=os.open(path,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
     with os.fdopen(fd,'w') as stream:json.dump({'scope_ended':True,'known':len(held),'close_calls':len(attempted)},stream)
@@ -96,13 +99,36 @@ def focused_global_trace(frame,event,arg):
     if frame.f_code is driver_code:return focused_driver_trace
     if frame.f_code is a._close_native_file_known.__code__:return synthetic_trace
     return None
-sys.settrace(focused_global_trace)
+# Python 3.12+ can observe only the two target code objects. This avoids
+# a Python global-call callback for every parent validation frame.
+monitoring=getattr(sys,'monitoring',None);monitor_id=None
+if monitoring is not None:
+    monitor_id=next((i for i in range(6) if monitoring.get_tool(i) is None),None)
+if monitor_id is None:
+    sys.settrace(focused_global_trace)
+else:
+    monitoring.use_tool_id(monitor_id,'hmp-synthetic-startup-close')
+    def local_line(code,line):
+        frame=sys._getframe(1)
+        assert frame.f_code is code
+        if code is driver_code:focused_driver_trace(frame,'line',None)
+        else:
+            callback=_synthetic_trace_routes[code].get(line)
+            if callback is not None:callback(frame)
+    monitoring.register_callback(monitor_id,monitoring.events.LINE,local_line)
+    monitoring.set_local_events(monitor_id,driver_code,monitoring.events.LINE)
+    monitoring.set_local_events(monitor_id,a._close_native_file_known.__code__,monitoring.events.LINE)
 refused=False
 try:
     try:checked=EntryFileSnapshotOwner.complete(retained)
     except EntryFilesError:refused=True
 finally:
     sys.setprofile(prior_profile);sys.settrace(prior_trace)
+    if monitor_id is not None:
+        monitoring.set_local_events(monitor_id,driver_code,0)
+        monitoring.set_local_events(monitor_id,a._close_native_file_known.__code__,0)
+        monitoring.register_callback(monitor_id,monitoring.events.LINE,None)
+        monitoring.free_tool_id(monitor_id)
 io=inputs.io_slot[0]
 facts={'case':cleanup_case,'refused':refused,'faults':len(faults),
        'known':len(held),'close_calls':len(attempted),
