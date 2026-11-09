@@ -297,10 +297,25 @@ def _fresh_probe_resource_tail(owner, resource):
           and type(origin[1]) is tuple and len(origin[1]) == 7
           and type(origin[2]) is tuple and len(origin[2]) == 26)
     if type(resource.metadata) is origin[1][0][0]:
+        # The original engine retains three shared metadata stages. Only those
+        # exact exports may use the common module's namespace; policy/history
+        # functions must still belong to the retained policy module.
+        _need(type(origin[6]) is tuple and len(origin[6]) == 2
+              and type(origin[6][0]) is ModuleType
+              and sys.modules.get('hmp_plugin.presentation_native_metadata') is origin[6][0])
+        common_names = vars(origin[6][0])
         for name, function, code in origin[2]:
             _need(type(name) is str and type(function) is FunctionType
                   and vars(origin[0]).get(name) is function
-                  and function.__globals__ is vars(origin[0]) and function.__code__ is code)
+                  and (function.__globals__ is vars(origin[0])
+                       or (function.__globals__ is common_names
+                           and ((name == '_produce_shared'
+                                 and common_names.get('_produce_probe_shared') is function)
+                                or (name == '_consume_shared'
+                                    and common_names.get('_consume_probe_shared') is function)
+                                or (name == '_ack_shared'
+                                    and common_names.get('_ack_probe_shared') is function))))
+                  and function.__code__ is code)
         # Exact retained engine helper, never a current module nomination.
         _need(origin[2][3][0] == '_resource_tail')
         return origin[2][3][1](owner, resource)
