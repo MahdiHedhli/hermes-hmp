@@ -6,7 +6,8 @@ from .test_presentation_gateway_approval import operator_composed_script
 
 
 @pytest.mark.parametrize('case', ('normal', 'missing_eof', 'copied_eof',
-                                 'missing_baseline', 'changed_file', 'lost_return'))
+                                 'missing_baseline', 'changed_file', 'lost_return',
+                                 'foreign_baseline_resource', 'foreign_baseline_variant'))
 def test_original_postread_receipts(tmp_path, monkeypatch, case):
     script, fixture_mutation = operator_composed_script('links')
     script = script.replace('GatewayPackageOwner.verify_recipe(recipe)',
@@ -29,7 +30,11 @@ original_fstat=vars(a.StartupArtifactOwner)['_fstat']
 original_stat=vars(a.StartupArtifactOwner)['_stat']
 original_file_code=a.StartupArtifactOwner._file.__code__
 captured=[];commits=[];native_entries=[];post_returns=[];observed={}
-baselines=[];eofs=[];native_origin=None;active_role=None
+baselines=[];eofs=[];native_origin=None;active_role=None;foreign_hooks=[]
+class ForeignBaseline:
+    def __getattr__(self,name):
+        foreign_hooks.append(name)
+        raise RuntimeError('synthetic foreign baseline hook')
 
 def capture_factory(actual_owner,resource):
     operation,marker,payload=factory(actual_owner,resource)
@@ -81,6 +86,10 @@ def observe_site(actual_owner,scope,registration,operation,name=None):
         if post_case=='missing_eof':eof=None
         if post_case=='copied_eof':eof=eof._replace()
         if post_case=='missing_baseline':baseline=None
+        if post_case=='foreign_baseline_resource':
+            baseline=baseline._replace(resource=ForeignBaseline())
+        if post_case=='foreign_baseline_variant':
+            baseline=baseline._replace(resource=baseline.resource._replace(variant=ForeignBaseline()))
         try:commit=m._run_directory_observation(owner,resource,predecessor,baseline,eof)
         except a.ArtifactObservationError:
             assert post_case!='normal' and operation==4
@@ -135,10 +144,11 @@ try:
     assert owner._failed and not owner._ready and owner._original_buffer==bytearray()
     assert observed and all(reference() is None for _,reference in captured)
     observed.update(case=post_case,metadata_acks=len(commits),payloads_reclaimed=True,
-                    gc_disabled=not gc.isenabled(),walker_refused=True)
+                    gc_disabled=not gc.isenabled(),walker_refused=True,foreign_hooks=list(foreign_hooks))
     diagnostic=Path(sys.argv[1])/'metadata-postread-stage.json'
     fd=os.open(diagnostic,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
     with os.fdopen(fd,'w') as stream:json.dump(observed,stream,sort_keys=True)
+    assert foreign_hooks==[], 'typed baseline must refuse before foreign hooks'
 finally:
     sys.setprofile(profile_before)
     m._prepare_metadata_operation_with_custody=factory
