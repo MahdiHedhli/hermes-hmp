@@ -288,38 +288,38 @@ class PushDispatcher:
         return (row, route, availability.relay) if route is not None else None
 
     async def _ready(self, pending: Pending):
-        key = await _key(self.ctx)  # non-repairing key I/O is off the listener loop
+        key = await self._await_owned(_key(self.ctx))  # non-repairing key I/O is off the listener loop
         if self._current(pending, key) is None or self.ctx.bridge is None:
             return None
         bridge = self.ctx.bridge
         authz = bridge.authz_state
-        await asyncio.to_thread(
+        await self._await_owned(asyncio.to_thread(
             require_bot_authorized,
             bridge,
             pending.event.inserted.key[1],
             pending.event.inserted.key[2],
-        )
+        ))
         if (
             self.ctx.bridge is not bridge
             or bridge.authz_state != authz
             or self._current(pending, key) is None
         ):
             return None
-        endpoint = await self.require_gate(
+        endpoint = await self._await_owned(self.require_gate(
             self.ctx, pending.event.inserted.key[2], member=pending.event.inserted.surface
-        )
+        ))
         if (
             self.ctx.bridge is not bridge
             or bridge.authz_state != authz
             or self._current(pending, key) is None
         ):
             return None
-        await asyncio.to_thread(
+        await self._await_owned(asyncio.to_thread(
             require_bot_authorized,
             bridge,
             pending.event.inserted.key[1],
             pending.event.inserted.key[2],
-        )
+        ))
         current = self._current(pending, key)
         gate = direct_send_gate(
             base_write_gate=self.ctx.write_gate(),
@@ -354,7 +354,7 @@ class PushDispatcher:
         if self.monotonic() < self.open_until:
             _log("breaker_open")
             return
-        key = await _key(self.ctx)
+        key = await self._await_owned(_key(self.ctx))
         if key is None or self._view(event.inserted) is None or self.monotonic() >= event.deadline:
             return
         recipients = 0
@@ -563,12 +563,21 @@ class PushDispatcher:
         task.add_done_callback(settled)
         return task
 
+    async def _await_owned(self, coro):
+        # Borrower tasks are not worker/slot cancellation targets. Their actual
+        # await (including to_thread Future) survives a cancelled dispatch waiter.
+        task = self._spawn_owned(coro)
+        result = await asyncio.shield(task)
+        if isinstance(result, BaseException):
+            raise result
+        return result
+
     async def _run_owned(self, coro):
         try:
-            await coro
-        except BaseException:
+            return await coro
+        except BaseException as exc:
             # A lost publication handle must not expose private relay failures.
-            return None
+            return exc
 
     def _retirement_scope(self):
         if (self.ctx is not self._origin_ctx or self.relay is not self._origin_relay
