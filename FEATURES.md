@@ -1,5 +1,17 @@
 ## November 9 — shutdown ownership checks pass; media integration remains open
 
+Wide unit regression at `428583f` is NOT qualified: 47 failed, 8,182 passed,
+15 skipped; 190 passing subtests are additional JUnit nodes. Repair `7f3ac82` restores
+readonly push-status counts on exact known schema 3/4 without migration/auth/writes,
+with unknown schemas still refused; an outdated synthetic drain port was corrected.
+544 focused cases pass on both pinned runtimes. A short private harness root separately
+resolves 17 Unix socket-path fixture failures; all 67 affected-module cases pass on
+both runtimes without weakening product bounds. Nineteen original failures remain
+unresolved (frozen/inverse/route contracts, migration expectations, S5 media references
+and module manifest). No full rerun after repair, no automatic repinning or release pass.
+Fresh readonly inventory: iPad installed 2026110702, Android beta 6 connected, iPhone15
+currently disconnected. No app launch/install/UI qualification or host/media activation.
+
 MR-RECOVER1 implementation `cfc0692`, test-complete source `34329d7`, adds
 explicit recovery of the original partial listener: join its component Future and actual
 stop/drain, transfer the original Store close to one retained task, and clear startup
