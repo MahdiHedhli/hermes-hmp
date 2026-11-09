@@ -1860,3 +1860,16 @@ change grants, deliver host-local chat media or certify release readiness.
       raw-bearing backlinks, copy/foreign/context/revocation/interruption/loss
       and GC-disabled cleanup before closing the caller gate. The capsule/weak
       identity proposal is conditional design, not an implemented fix.
+
+## Next complete boundary: fresh cache-probe metadata
+
+- [x] Review the actual fresh-probe call graph and record the distinct plan,
+      reported-missing diagnostic ACK, accounting and publication contract in
+      [FRESH_CACHE_PROBE_METADATA.md](FRESH_CACHE_PROBE_METADATA.md).
+- [ ] Implement and verify the complete fresh-probe traversal on that contract.
+      Its two-part scope, cache location and diagnostic branches cannot reuse
+      the declared-file/EOF consumer by adding another allowed owner.
+- [ ] Separately migrate startup before/after probe effects, then remaining
+      metadata/link/enumeration and native runtime boundaries. Existing source
+      and device/release gates remain; this plan grants no runtime authority.
+
