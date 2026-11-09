@@ -47,6 +47,7 @@ def close_observed(frame):
     cohort=current(frame)
     if cohort is None:return
     io,effect,resources=cohort
+    assert io._startup_probe_execution.cursor[0].action == 'finished'
     allocation=frame.f_locals['allocation'];actual=allocation.result[0]
     assert type(actual) is tuple and actual[0] is allocation
     descriptor=actual[1]
@@ -57,7 +58,7 @@ def close_observed(frame):
         target.append(held[-1] if cleanup_case=='first' else held[len(held)//2])
         active_effects.append(effect)
     attempted.append((descriptor,frame.f_locals['fd']))
-observe_synthetic_native(a.os.close,a._close_native_file_known.__code__,close_observed)
+# Arm the C-call observer only at cleanup, after traversal has finished.
 def lose_ack(frame):
     cohort=current(frame)
     if cohort is None or cleanup_case=='normal' or faults or not target:return
@@ -70,8 +71,9 @@ def lose_ack(frame):
     ledger=allocation.ledger
     budgets.append((ledger,tuple(ledger.counts),len(ledger.attempts),len(attempted)))
     raise OSError('SYNTHETIC_STARTUP_CLOSE_ACK_LOSS_ONLY')
-trace_synthetic_boundary(a._close_native_file_known.__code__,
-                         'close.result[0] = (close, fd, value)',lose_ack)
+_synthetic_trace_routes.setdefault(a._close_native_file_known.__code__,{})[
+    synthetic_line(a._close_native_file_known.__code__,
+                   'close.result[0] = (close, fd, value)')]=lose_ack
 def scope_ended(frame):
     if not active_effects or frame.f_locals.get('plan').effect is not active_effects[0]:return
     restored.append(True)
@@ -79,8 +81,22 @@ def scope_ended(frame):
     path=Path(sys.argv[1])/'startup-probe-observer-scope-stage.json'
     fd=os.open(path,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
     with os.fdopen(fd,'w') as stream:json.dump({'scope_ended':True,'known':len(held),'close_calls':len(attempted)},stream)
-trace_synthetic_boundary(startup_native._run_startup_probe.__code__,
-                         'return _finish(execution, predecessor, held)',scope_ended)
+driver_code=startup_native._run_startup_probe.__code__
+cleanup_line=synthetic_line(driver_code,'for row, fd in reversed(held):')
+finish_line=synthetic_line(driver_code,'return _finish(execution, predecessor, held)')
+def focused_driver_trace(frame,event,arg):
+    if event=='line':
+        if frame.f_lineno==cleanup_line and not active_effects:
+            assert frame.f_locals['execution'].cursor[0].action=='finished'
+            if not _synthetic_native_routes:
+                observe_synthetic_native(a.os.close,a._close_native_file_known.__code__,close_observed)
+        elif frame.f_lineno==finish_line:scope_ended(frame)
+    return focused_driver_trace
+def focused_global_trace(frame,event,arg):
+    if frame.f_code is driver_code:return focused_driver_trace
+    if frame.f_code is a._close_native_file_known.__code__:return synthetic_trace
+    return None
+sys.settrace(focused_global_trace)
 refused=False
 try:
     try:checked=EntryFileSnapshotOwner.complete(retained)
