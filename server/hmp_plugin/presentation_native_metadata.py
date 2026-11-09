@@ -372,6 +372,9 @@ def _probe_policy_helper(owner, consumer, name):
     operation = tuple.__getitem__(consumer, 1)
     _require(type(operation) is _MetadataOperation
              and type(operation.resource) in (_NativeProbeMetadataResource, _NativeStartupProbeMetadataResource))
+    _require(type(operation.registration) is _NativeScopeRegistration
+             and operation.registration is operation.resource.registration)
+    _native_work_registration_tail(owner, operation.registration)
     origin = _closed_probe_engine_origin(owner, operation.resource)
     _require(type(origin) is tuple and len(origin) == 7 and type(origin[0]) is ModuleType
              and type(origin[2]) is tuple)
@@ -1153,6 +1156,9 @@ def _probe_current_lifetime_tail(owner, consumer):
     _require(type(consumer) is _ProbeConsumer and type(consumer.operation) is _MetadataOperation
              and type(consumer.operation.resource) in (_NativeProbeMetadataResource, _NativeStartupProbeMetadataResource))
     registration = consumer.operation.registration
+    _require(type(registration) is _NativeScopeRegistration
+             and registration is consumer.operation.resource.registration)
+    _native_work_registration_tail(owner, registration)
     origin = _closed_probe_engine_origin(owner, consumer.operation.resource)
     _require(type(origin) is tuple and len(origin) == 7 and type(origin[2]) is tuple)
     rows = tuple(row for row in origin[2] if type(row) is tuple and len(row) == 3
