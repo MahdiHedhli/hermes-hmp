@@ -716,18 +716,27 @@ class Store:
             return
         # Retain this exact observer's methods and original receipt across SQL.
         begin, settle = observer.begin, observer.settle
-        receipt = begin()  # failure/lost return never starts SQL; never replay
         outcome = [False]
+        missing = object()
+        receipt = missing
         try:
+            receipt = begin()  # failure/lost return never starts SQL; never replay
+            if receipt is None:
+                raise RuntimeError("Store mutation receipt unavailable")
             with self._transaction_sql(outcome) as conn:
                 yield conn
         finally:
-            try:
-                settle(receipt, certain=outcome[0])
-            except BaseException:
-                # SQL may already be committed. Do not roll it back, replay it,
-                # or describe a missing observer acknowledgement as no write.
-                raise RuntimeError("Store publication settlement outcome unavailable") from None
+            if receipt is missing:
+                # The observer may have invalidated, but no receipt reached us.
+                # Never infer ownership by asking for its current pending ticket.
+                pass
+            else:
+                try:
+                    settle(receipt, certain=outcome[0])
+                except BaseException:
+                    # SQL may already be committed. Do not roll it back, replay it,
+                    # or describe a missing observer acknowledgement as no write.
+                    raise RuntimeError("Store publication settlement outcome unavailable") from None
 
     @contextlib.contextmanager
     def _transaction_sql(self, outcome: list[bool] | None = None) -> Iterator[sqlite3.Connection]:
