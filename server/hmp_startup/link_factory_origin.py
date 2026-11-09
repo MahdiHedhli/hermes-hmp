@@ -103,7 +103,9 @@ def current(origin, *, _type=type, _vars=vars, _tuple=tuple, _len=len,
                 or _type(row[1]) is not _module or _type(row[2]) is not dict
                 or _any(_type(k) is not str for k in row[2])
                 or environment[2].get(name) is not row[1]
-                or _vars(row[1]) is not row[2]):
+                or _vars(row[1]) is not row[2]
+                or _type(row[2].get('__name__')) is not str
+                or row[2]['__name__'] != name):
             raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
     if modules[0][2].get('_CAPTURE_STARTED') is not True:
         raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
@@ -245,7 +247,12 @@ def capture(*,
                 or function.__kwdefaults__ is not kw
                 or (kw is not None and (_type(kw) is not _dict or _any((_type(k) is not _str for k in kw)) or _len(kw) != _len(pairs) or _any((k not in kw or kw[k] is not value for k, value in pairs))))):
             raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
-    modules = _tuple(((_vars(module).get('__name__'), module, _vars(module)) for module in (own, policy, artifacts, runtime_files) if _type(module) is _module))
+    module_names = ('hmp_startup.link_factory_origin',
+                    'hmp_plugin.presentation_link_path_policy',
+                    'hmp_plugin.presentation_startup_artifacts', 'hmp_startup.runtime_files')
+    modules = _tuple((name, module, _vars(module)) for name, module in
+                     _zip(module_names, (own, policy, artifacts, runtime_files), strict=True)
+                     if _type(module) is _module)
     if _len(modules) != 4 or _any((_any((_type(k) is not _str for k in row[2])) for row in modules)):
         raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
     policy_namespace = modules[1][2]
@@ -269,7 +276,10 @@ def capture(*,
     def rejoin():
         if (_type(_sys) is not _module or _any(_type(k) is not _str for k in registry)
                 or _any(_type(row[1]) is not _module or _vars(row[1]) is not row[2]
-                        or registry.get(row[0]) is not row[1] for row in modules)):
+                        or _any(_type(k) is not _str for k in row[2])
+                    or _type(row[2].get('__name__')) is not _str
+                    or row[2]['__name__'] != row[0]
+                    or registry.get(row[0]) is not row[1] for row in modules)):
             raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
         if (_any((_type(k) is not _str for k in namespace))
                 or _any((_any((_type(k) is not _str for k in row[2])) for row in modules))
@@ -324,6 +334,9 @@ def capture(*,
     # Last primitive original-function/type seal after the helper return.
     if (_type(_sys) is not _module or _any(_type(k) is not _str for k in registry)
             or _any(_type(row[1]) is not _module or _vars(row[1]) is not row[2]
+                    or _any(_type(k) is not _str for k in row[2])
+                    or _type(row[2].get('__name__')) is not _str
+                    or row[2]['__name__'] != row[0]
                     or registry.get(row[0]) is not row[1] for row in modules)):
         raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
     if _any((_type(k) is not _str for k in namespace)) or _any((_any((_type(k) is not _str for k in row[2])) for row in modules)) or _vars(_sys) is not sys_namespace or _any((_type(k) is not _str for k in sys_namespace)) or (sys_namespace.get('modules') is not registry) or (sys_namespace.get('getfilesystemencoding') is not get_encoding) or (sys_namespace.get('getfilesystemencodeerrors') is not get_errors) or (_vars(_str).get('encode') is not encode):
@@ -352,6 +365,9 @@ def capture(*,
     result = ((_sys, sys_namespace, registry, encoding_origin), modules, own_functions, functions, kinds)
     if (_type(_sys) is not _module or _any(_type(k) is not _str for k in registry)
             or _any(_type(row[1]) is not _module or _vars(row[1]) is not row[2]
+                    or _any(_type(k) is not _str for k in row[2])
+                    or _type(row[2].get('__name__')) is not _str
+                    or row[2]['__name__'] != row[0]
                     or registry.get(row[0]) is not row[1] for row in modules)):
         raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
     if _any((_type(k) is not _str for k in namespace)) or _any((_any((_type(k) is not _str for k in row[2])) for row in modules)) or _vars(_sys) is not sys_namespace or _any((_type(k) is not _str for k in sys_namespace)) or (sys_namespace.get('modules') is not registry) or (sys_namespace.get('getfilesystemencoding') is not get_encoding) or (sys_namespace.get('getfilesystemencodeerrors') is not get_errors) or (_vars(_str).get('encode') is not encode):
