@@ -607,6 +607,16 @@ def _native_metadata_snapshot(owner, registration, native, value):
     snapshot = _NativeMetadataSnapshot(identity, mtime)
     _native_work_origin_tail(owner, registration, native)
     _require(type(value) is native.result_type)
+    # Constructor identity alone does not bind its fields to the retained native
+    # result. Check primitive types before comparisons can invoke foreign code.
+    _require(type(snapshot) is _NativeMetadataSnapshot
+             and type(snapshot.identity) is tuple
+             and len(snapshot.identity) == len(identity)
+             and all(type(part) is int for part in snapshot.identity)
+             and type(snapshot.mtime) is type(mtime))
+    _require(all(actual == expected for actual, expected in
+                 zip(snapshot.identity, identity, strict=True))
+             and snapshot.mtime == mtime)
     return snapshot
 
 

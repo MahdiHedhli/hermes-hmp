@@ -1,9 +1,12 @@
 """Synthetic native-return snapshot drift; no live-host or user-data reads."""
+import pytest
+
 from . import test_presentation_entry_files as base
 from .test_presentation_metadata_caller import test_fixed_directory_caller as _actual_caller
 
 
-def test_snapshot_constructor_cannot_replace_actual_native_identity(tmp_path, monkeypatch):
+@pytest.mark.parametrize('drift', ('identity', 'mtime'))
+def test_snapshot_constructor_cannot_replace_actual_native_identity(tmp_path, monkeypatch, drift):
     original_execute = base.test_actual_entry_and_wrapper_files
 
     def execute_with_constructor_probe(path, mutation):
@@ -21,7 +24,7 @@ def test_snapshot_constructor_cannot_replace_actual_native_identity(tmp_path, mo
             assert cls is a._NativeMetadataSnapshot
         finally:frame=None
         constructor_calls.append(True)
-        return snapshot_factory(cls,(identity[0]+1,*identity[1:]),mtime+1)
+        return snapshot_factory(cls,DRIFT_IDENTITY,DRIFT_MTIME)
 '''),
             ("        if event=='return':\n"
              "            operation,marker,payload_reference=captured[0]", r'''
@@ -101,6 +104,11 @@ def test_snapshot_constructor_cannot_replace_actual_native_identity(tmp_path, mo
         for old, new in replacements:
             assert script.count(old) == 1, old
             script = script.replace(old, new)
+        assert script.count('DRIFT_IDENTITY') == script.count('DRIFT_MTIME') == 1
+        identity_expression = ('(identity[0]+1,*identity[1:])'
+                               if drift == 'identity' else 'identity')
+        script = script.replace('DRIFT_IDENTITY', identity_expression)
+        script = script.replace('DRIFT_MTIME', 'mtime+1' if drift == 'mtime' else 'mtime')
         monkeypatch.setattr(base, 'SCRIPT', script)
         original_execute(path, mutation)
 
