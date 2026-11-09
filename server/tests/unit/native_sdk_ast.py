@@ -28,10 +28,20 @@ def _other_binding(node, symbol, permitted):
     elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
         if node.name == symbol:
             return True
+        arguments = [*node.args.posonlyargs, *node.args.args, *node.args.kwonlyargs]
+        if node.args.vararg is not None:
+            arguments.append(node.args.vararg)
+        if node.args.kwarg is not None:
+            arguments.append(node.args.kwarg)
+        annotations = [a.annotation for a in arguments if a.annotation is not None]
+        if node.returns is not None:
+            annotations.append(node.returns)
         children = [*node.decorator_list, *node.args.defaults,
-                    *(v for v in node.args.kw_defaults if v is not None)]
+                    *(v for v in node.args.kw_defaults if v is not None), *annotations]
     else:
         if isinstance(node, ast.ImportFrom):
+            if any(a.name == "*" for a in node.names):
+                return True  # cannot establish an unambiguous export through a wildcard
             if any((a.asname or a.name) == symbol for a in node.names):
                 return node not in permitted
         if isinstance(node, ast.Import):

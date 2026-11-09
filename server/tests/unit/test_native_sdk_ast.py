@@ -35,7 +35,8 @@ def test_local_sdk_class_is_found(tmp_path):
 
 @pytest.mark.parametrize("damage", ("cycle", "ambiguous", "assignment", "namespace", "escape",
                                     "symlink", "oversized", "function", "import", "augmented",
-                                    "tuple", "delete", "conditional", "computed")
+                                    "tuple", "delete", "conditional", "computed", "wildcard",
+                                    "wildcard_conditional", "return_annotation", "arg_annotation")
                          + (("type_alias",) if hasattr(ast, "TypeAlias") else ()))
 def test_unknown_or_unsafe_export_is_refused(tmp_path, damage):
     entry = write(tmp_path, "hermes_cli.plugins", "from .owner import PluginContext\n")
@@ -51,7 +52,8 @@ def test_unknown_or_unsafe_export_is_refused(tmp_path, damage):
     elif damage == "escape":
         entry.write_text("from ..outside import PluginContext\n")
     elif damage in {"function", "import", "augmented", "tuple", "delete", "conditional",
-                    "computed", "type_alias"}:
+                    "computed", "type_alias", "wildcard", "wildcard_conditional",
+                    "return_annotation", "arg_annotation"}:
         changes = {
             "function": "def PluginContext():\n    pass\n",
             "import": "import elsewhere as PluginContext\n",
@@ -61,6 +63,10 @@ def test_unknown_or_unsafe_export_is_refused(tmp_path, damage):
             "conditional": "if uncertain:\n    from .other import PluginContext\n",
             "computed": "PluginContext = getattr(object(), 'missing', None)\n",
             "type_alias": "type PluginContext = object\n",
+            "wildcard": "from .other import *\n",
+            "wildcard_conditional": "if uncertain:\n    from .other import *\n",
+            "return_annotation": "def f() -> (PluginContext := object()):\n    pass\n",
+            "arg_annotation": "def f(x: (PluginContext := object())):\n    pass\n",
         }
         entry.write_text(entry.read_text() + changes[damage])
     elif damage == "symlink":
