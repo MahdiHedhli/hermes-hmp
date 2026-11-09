@@ -809,6 +809,9 @@ def test_registry_stores_no_path_or_name_field() -> None:
         "device_id", "user_id", "instance_id", "profile", "kind",
         "session_id", "tip", "tool_row_id", "raw_digest", "permission_generation",
     }  # fmt: skip
+    assert {f.name for f in dataclasses.fields(reg.EntrySnapshot)} == {
+        "binding", "minted_at", "first_served", "_token",
+    }  # fmt: skip
 
 
 def test_permission_generation_cannot_reuse_a_reference_after_regrant() -> None:
@@ -829,9 +832,6 @@ def test_permission_generation_cannot_reuse_a_reference_after_regrant() -> None:
 def test_permission_generation_is_bounded_primitive_data(generation) -> None:
     with pytest.raises(RegistryRefusal):
         binding(permission_generation=generation)
-    assert {f.name for f in dataclasses.fields(reg.EntrySnapshot)} == {
-        "binding", "minted_at", "first_served", "_token",
-    }  # fmt: skip
 
 
 def test_new_instance_starts_empty() -> None:
