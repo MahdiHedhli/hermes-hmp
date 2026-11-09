@@ -32,6 +32,7 @@ from .presentation_startup_artifacts import (
     _NativeMetadataResource,
     _NativeMetadataSnapshot,
     _NativeScopeRegistration,
+    _NativeDeclaredMetadataSite,
     _NativeRuntimeReadCommit,
     _NativeCacheReadCommit,
     _native_runtime_read_history_tail,
@@ -552,7 +553,10 @@ def _postread_receipts_tail(owner, consumer):
     resource, operation = consumer.resource, consumer.operation
     baseline, eof = consumer.baseline, consumer.eof
     _require(type(baseline) is _DirectoryPolicyCommit
-             and baseline.owner is owner and baseline.resource.held_walk is resource.held_walk
+             and baseline.owner is owner
+             and type(baseline.resource) is _NativeMetadataResource
+             and type(baseline.resource.variant) is _NativeDeclaredMetadataSite
+             and baseline.resource.held_walk is resource.held_walk
              and baseline.resource.variant.expected is resource.variant.expected
              and type(baseline.site) is tuple and len(baseline.site) == 3
              and type(baseline.site[0]) is int and baseline.site[0] == 3
