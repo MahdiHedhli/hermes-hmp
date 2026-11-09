@@ -77,7 +77,9 @@ fallback, loader, image or permission authority.
 - [x] Seal outer Scope publication against changed fields, dispatch and vacant
       registration state (`b4173ee`); 11 current and 11 minimum cases PASS.
 - [x] Join original root probe resource to shared intent preparation (`094ddb2`);
-      independent finite source review accepted, 13 current cases PASS.
+      independent finite source review accepted; initial13-case green execution
+      withdrawn because observer could swallow late assertions. Corrected
+      test-only successor `5c387fa` requires external boundary completion.
 - [ ] Qualify the minimum-interpreter and preserved pre-fix helper controls.
       Shared native admission/diagnostic lifecycle remains closed.
 
