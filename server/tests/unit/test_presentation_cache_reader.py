@@ -173,7 +173,7 @@ if case=='metadata_plan_copy':
             held[0].metadata_slot[0]=copied
             plan_swap.append((held,original_plan,copied))
     trace_synthetic_boundary(a.StartupArtifactOwner._file.__code__,
-                             '_finish_native_declared_walk(self, native_registration, native_walk)',
+                             '_finish_native_declared_walk(self, native_registration, native_walk, metadata_last)',
                              replace_metadata_plan)
 try:owner.read()
 except CacheReadError:
