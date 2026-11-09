@@ -140,7 +140,7 @@ Both43-case codec/execution suites pass, including actual Store grant/revision1,
 duplicate old snapshot conflict without revision advance or Controls change,
 prewrite scope/deadline/loop refusals, postcommit readback loss, post-CAS/precommit
 cohort-drift rollback, and replaced publisher refusal. Independent source review
-found no concrete blocker in the initial unwired executor; narrowing delta review
-is pending. Transport/admission/consent/deadline origin, response framing, operator
+found no concrete blocker in the initial unwired executor; independent review also found no concrete issue in the narrowing delta.
+Transport/admission/consent/deadline origin, response framing, operator
 IPC and native/config publication coordination remain incomplete. No route calls
 this executor and no live permission changed.
