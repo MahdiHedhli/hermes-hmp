@@ -30,9 +30,7 @@ rows=selected_cache_input_attempts(continuation)
 index=next(i for i,row in enumerate(rows) if row.plan_row.source.path==str(dep_root/'__init__.py'))
 owner=RuntimeSourceReadOwner.retain(continuation,index)
 factory=m._prepare_metadata_operation_with_custody
-original_fstat=vars(a.StartupArtifactOwner)['_fstat']
-original_stat=vars(a.StartupArtifactOwner)['_stat']
-original_file_code=a.StartupArtifactOwner._file.__code__
+actual_run=m._run_directory_observation
 captured=[];commits=[];native_entries=[];post_returns=[];observed={};read_entries=[]
 baselines=[];eofs=[];native_origin=None;active_role=None;foreign_hooks=[]
 class ForeignBaseline:
@@ -58,28 +56,25 @@ def observe_native(frame,event,arg):
             post_returns.append((a._identity(arg.raw),arg.raw.st_mtime))
             if post_case=='lost_return':raise RuntimeError('synthetic lost post-read return')
 
-def observe_site(actual_owner,scope,registration,operation,name=None):
+def observe_site(actual_owner,resource,predecessor=None,baseline=None,eof=None):
     global native_origin,active_role
-    frame=sys._getframe(2)
+    if actual_owner is not owner:
+        return actual_run(actual_owner,resource,predecessor,baseline,eof)
+    held=resource.held_walk;metadata=held[5];ordinal=len(commits)
+    active_role=resource.site[1];operation=resource.site[0]
+    registration=resource.registration
+    assert metadata.definitions[ordinal] is resource.site
+    native_origin=registration.native_origin
+    assert predecessor is (None if not commits else commits[-1])
+    if active_role!='leaf_after_read':
+        commit=actual_run(owner,resource,predecessor,baseline,eof)
+        if active_role=='leaf_before':baselines.append(commit)
+        assert metadata.commits[-1] is commit and captured[-1][1]() is None
+        commits.append(commit)
+        return commit
     try:
-        assert frame.f_code is original_file_code
-        held=frame.f_locals['native_walk'];metadata=held[5];ordinal=len(commits)
-        active_role=metadata.definitions[ordinal][1]
-        assert metadata.definitions[ordinal][0]==operation
-        native_origin=registration.native_origin
-        descriptor=(frame.f_locals['row'] if operation==4 else
-                    frame.f_locals['held'][-1][0] if active_role=='leaf_before' else
-                    frame.f_locals['held'][-2][0])
-        resource=a._prepare_native_metadata_resource(owner,registration,held,descriptor,name)
-        predecessor=None if not commits else commits[-1]
-        if active_role!='leaf_after_read':
-            commit=m._run_directory_observation(owner,resource,predecessor)
-            if active_role=='leaf_before':baselines.append(commit)
-            assert metadata.commits[-1] is commit and captured[-1][1]() is None
-            commits.append(commit)
-            return
-        assert len(baselines)==1 and type(frame.f_locals['native_commit']) is a._NativeRuntimeReadCommit
-        eof=frame.f_locals['native_commit']
+        assert len(baselines)==1 and type(eof) is a._NativeRuntimeReadCommit
+        assert baseline is baselines[0]
         assert eof.eof is True and eof.remaining==0 and eof.count[2]==resource.variant.expected.size
         if not eofs:eofs.append(eof)
         assert eofs[0] is eof
@@ -97,7 +92,7 @@ def observe_site(actual_owner,scope,registration,operation,name=None):
             baseline=baseline._replace(resource=ForeignBaseline())
         if post_case=='foreign_baseline_variant':
             baseline=baseline._replace(resource=baseline.resource._replace(variant=ForeignBaseline()))
-        try:commit=m._run_directory_observation(owner,resource,predecessor,baseline,eof)
+        try:commit=actual_run(owner,resource,predecessor,baseline,eof)
         except a.ArtifactObservationError:
             assert post_case not in ('normal','empty') and operation==4
             entered=post_case in ('changed_file','lost_return')
@@ -133,27 +128,20 @@ def observe_site(actual_owner,scope,registration,operation,name=None):
             observed.update(actual_post_pair_ack=True,post_entries=2,
                             literal_eof_retained=True,current_read_closure_refused=True)
             raise RuntimeError('synthetic boundary after actual post-read pair ACK')
-    finally:frame=None
-
-def at_original_fstat(actual_owner,fd,scope,registration=None):
-    if actual_owner is owner:observe_site(actual_owner,scope,registration,4)
-    return original_fstat(actual_owner,fd,scope,registration)
-
-def at_original_stat(actual_owner,name,parent,scope,registration=None):
-    if actual_owner is owner:observe_site(actual_owner,scope,registration,3,name)
-    return original_stat(actual_owner,name,parent,scope,registration)
+        return commit
+    finally:
+        pass
 
 profile_before=sys.getprofile();gc_before=gc.isenabled()
 assert profile_before is None
 m._prepare_metadata_operation_with_custody=capture_factory
-a.StartupArtifactOwner._fstat=at_original_fstat
-a.StartupArtifactOwner._stat=at_original_stat
+m._run_directory_observation=observe_site
 gc.disable()
 try:
     sys.setprofile(observe_native)
     try:owner.read()
     except RuntimeReadError:pass
-    else:raise AssertionError('incomplete metadata walker must remain refused')
+    else:raise AssertionError('explicit injected boundary must refuse before final ancestors')
     assert owner._failed and not owner._ready and owner._original_buffer==bytearray()
     assert observed and all(reference() is None for _,reference in captured)
     observed.update(case=post_case,metadata_acks=len(commits),payloads_reclaimed=True,
@@ -165,8 +153,7 @@ try:
 finally:
     sys.setprofile(profile_before)
     m._prepare_metadata_operation_with_custody=factory
-    a.StartupArtifactOwner._fstat=original_fstat
-    a.StartupArtifactOwner._stat=original_stat
+    m._run_directory_observation=actual_run
     if gc_before:gc.enable()
 print(json.dumps({'mutation':mutation,'runtime_admitted':False}))
 '''
