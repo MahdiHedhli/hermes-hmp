@@ -86,7 +86,9 @@ older healthy finish must not require the shared ledger to stay permanently idle
   callback replacements before invoking a helper or returned-object getter.
   Twelve new constructor fault cases cover those boundaries. It is unconnected
   and cannot admit work, acknowledge a native operation, prove provenance or
-  grant access. Test results are pending.
+  grant access. The same 56 original DATA controls pass on both Python
+  versions; the first-helper correction is included in the 86-case preparation
+  and later 131/130 integration suites. None qualifies native link effects.
 - LP2: bind original policy/engine origins before Scope construction; define
   distinct resource/consumer and typed readlink result custody. Preserve default
   non-native callers without treating them as native qualification.

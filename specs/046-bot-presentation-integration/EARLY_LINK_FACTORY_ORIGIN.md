@@ -2,7 +2,7 @@
 
 November 9, 2026. LP2 design following the separately frozen LP1 source
 `0d5d86210dd1f2a163ace57effe5882c3a47e507`. Entry/lineage source integration
-is recorded below and remains unqualified; native link operations are not yet
+is recorded below with bounded verification; native link operations are not yet
 implemented by this preparation.
 
 `hmp_startup/link_factory_origin.py` prepares a one-attempt capture, a
@@ -34,7 +34,10 @@ interpreter observation. Lost/raising/reentrant construction cannot replay via
 the normal start API. Foreign global replacements are preserved on refusal.
 Seven added owner-constructor cases cover copies, helper/slot changes, lost
 return/reentry and generated `_tuple_new` drift; native/interpreter and foreign
-calls must remain zero. The complete 19 entry controls are not yet executed.
+calls must remain zero. The same 19 entry controls pass on current and minimum Python. Combined
+production-identical test successor `d093664` passes 131 current and 130 selected
+minimum cases; current additionally observes normal cleanup. This does not
+qualify Scope blueprint publication or native link effects.
 
 These are original-pointer and startup preparation bindings, not cached
 permission. The original-file lineage getter does not repeatedly execute link
@@ -140,3 +143,53 @@ Full link native result custody, consumption/ACK, literal finish and cleanup,
 remaining enumeration/other owners, service/runtime/device/release qualification
 are separate open tasks. No live deployment or settings change is authorized by
 this source document.
+
+## LP2b reviewed implementation handoff (November 9)
+
+The next change must connect the immutable blueprint to actual Scope publication
+in one slice; a detached helper is not completion. Independent read-only review
+confirmed the following contract against entry source `24e1ba5` and test/document
+successor `5445a48`. No new native effect or service permission is added.
+
+1. Add `_LinkScopeBlueprint`, `_new_scope_blueprint` and
+   `_scope_blueprint_tail` to the existing early-captured policy module. Extend
+   its original function/type export tables and expose one fixed held blueprint
+   factory. Do not select a function by caller-provided name or later export.
+2. The blueprint binds the actual owner pointer, original runtime source, entry,
+   inputs, cell, guard/code, literal runtime/link plans and hops/target, exact
+   context/bound, actual native lineage and independently retained early origin.
+   Its rows are exactly three phases times the original hops plus target, at
+   most 27, each retaining its actual policy constructor return. Do not allocate
+   quadratic syscall inventories or mint native work/debit/ACK authority.
+3. Treat owner as opaque identity in the pure factory; no owner getters, class or
+   Scope inspection there. The actual caller separately retains and rejoins its
+   original owner class/export/dispatch/code and owner/activation/runtime cell
+   cohorts around all helper and constructor returns. Type/member pins are
+   required for every runtime/plan class actually dereferenced by the factory.
+4. Obtain the original pointer from the already validated SourceDigestContext:
+   retain its actual binding, invocation and started cell, then actual
+   `started[5]` EntryOrigin and its link-policy field. Require actual native
+   lineage equals the invocation/context lineage and its link-policy pointer
+   equals that original entry field. A newly imported current getter cannot
+   attest its own originality. Keep existing full source/entry validation plus
+   these raw original-object joins; do not replace it with a cached seal.
+5. Retain original vacant input io_slot, runtime count/before/after/read cells
+   and owner/activation slots before callbacks. Rejoin original factory/code/
+   defaults/types and these cohorts after EACH child factory or constructor
+   return before any later getter/helper. Foreign values must remain untouched
+   on refusal. Retain the actual blueprint return locally across outer Scope
+   construction; append only a trailing `native_link_blueprint=None` field.
+6. Seal exact Scope fields and blueprint identity, original pins and vacancies
+   before owner/cell/root/activation publication and native scope registration.
+   Reseal after existing runtime/cache callbacks. Legacy and no-runtime callers
+   retain None; a native runtime branch missing original provenance refuses.
+
+Required causal coverage includes one/eight hops, all phases and target, legacy
+callers, pre-use export changes, first/later child constructor alias/code/member/
+dispatch/registry changes, copied/lost blueprint return, coherent Scope
+substitution, wrong plan/hop/target/context/lineage, and changed vacant runtime/
+owner/activation cells. Assert each intended boundary was actually reached,
+zero foreign hooks/native effects/descriptors/debits/registration, sticky failure
+and no replay/reconstruction. Preserve foreign replacements. Run current and
+minimum focused controls plus meaningful existing Scope/entry/native regressions
+on frozen exact source. LP3–5 remain open until their actual evidence exists.
