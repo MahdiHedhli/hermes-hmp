@@ -164,3 +164,33 @@ and preserve original worker/debt through timeout and stop. A cancelled async
 wrapper is not proof that its underlying thread finished. Existing read sockets
 must never acquire mutation operations by fallback or unknown operation parsing.
 Human CLI consent and actual current authority remain separate obligations.
+
+## Unwired mutation service and bounded integration — be1f84b
+
+The fixed separate media socket now has its own handler, verified same-UID peer,
+connection-specific single-use challenge and server-origin two-second deadline.
+The service bounds waiting clients and admitted worker operations separately at
+two. A complete request passes the closed mutation codec before dispatch. No
+adapter starts this service and no human-consent CLI client is wired to it.
+
+Only the original concurrent Future's completion retires an admitted operation.
+Caller timeout/cancellation returns unknown without cancellation or replay of SQL.
+A possibly enqueued submission whose acknowledgement is lost poisons admission
+and retains an unresolved operation even after a test separately observes commit;
+stop cannot certify that Store safe to close. This condition needs explicit
+lifecycle handling, not a forced debt reset. The existing direct CLI Store writer
+and other-process/config/native writers remain outside this actor protocol.
+
+A causal late-failure test reproduced an unhandled wrapped Future exception after
+timeout at113f8a8. The be1f84b fix consumes eventual wrapper exceptions without
+logging diagnostic text or granting that callback worker-retirement authority.
+That specific logging defect is fixed in this unwired source; deployment is absent.
+
+The unchanged source passes142 combined cases on Python3.14.9 and3.11.15, covering
+existing read/FD/layout, request/reply codecs, actual Store/actor CAS and17 new
+service cases. Those service cases cover foreign challenge/nonce/generation/peer,
+malformed duplicate/oversize/deep/extra/type frames, waiting-client bound, cohort
+replacement, actual-worker retention after timeout/cancellation, uncertain enqueue
+and late-error consumption. This does not establish human consent, full listener
+retirement, native authority freshness, schema migration/rollback or physical image
+display. Those remain release gates. Independent service review is pending.
