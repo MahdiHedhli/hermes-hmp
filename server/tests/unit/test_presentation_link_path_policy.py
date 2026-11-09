@@ -270,3 +270,36 @@ def test_policy_constructor_cannot_nominate_changed_inputs_or_guards(monkeypatch
     with pytest.raises(ArtifactObservationError):
         policy._new_policy(p.plan, p.hop, p.index, p.phase, p.actor_uid, p.bound)
     assert foreign_calls == []
+
+
+@pytest.mark.parametrize('fault', ('need_alias', 'tail_alias', 'parts_alias', 'constructor'))
+def test_first_path_helper_return_cannot_nominate_later_factory_dependencies(monkeypatch, fault):
+    p = _policy()
+    actual_parts = policy._parts
+    foreign_calls = []
+    observations = []
+
+    def foreign(*args, **kwargs):
+        foreign_calls.append(True)
+        raise AssertionError('foreign factory dependency invoked')
+
+    def observed_parts(path):
+        result = actual_parts(path)
+        observations.append(True)
+        if fault == 'need_alias':
+            monkeypatch.setattr(policy, '_need', foreign)
+        elif fault == 'tail_alias':
+            monkeypatch.setattr(policy, '_policy_tail', foreign)
+        elif fault == 'parts_alias':
+            monkeypatch.setattr(policy, '_parts', foreign)
+        else:
+            monkeypatch.setattr(policy._LinkPathPolicy, '__new__', staticmethod(foreign))
+        return result
+
+    # Controlled return-boundary instrumentation, not proof that a current
+    # exported wrapper is a native original. LP2 still needs entry provenance.
+    monkeypatch.setattr(policy, '_parts', observed_parts)
+    with pytest.raises(ArtifactObservationError):
+        policy._new_policy(p.plan, p.hop, p.index, p.phase, p.actor_uid, p.bound)
+    assert observations == [True]
+    assert foreign_calls == []
