@@ -1,5 +1,13 @@
 ## November 8 — reviewed host updates deployed; character integration remains open
 
+Operator coordination task LM-ENT1-OP1 now has a strict request codec at1794e43:
+closed fields, exact device/expected-state DATA, bounded parsing and canonical
+signed64-bit decimal counters. Both35-case suites pass; independent review found
+no concrete codec blocker. It is not a write endpoint or authorization proof.
+Same-UID transport, actual listener/nonce/generation binding, typed operator
+consent, daemon CAS/readback and unknown-response handling remain unimplemented.
+No permissions, socket mutation service, host or installed build changed.
+
 LM-ENT1-N1 now has exact native source evidence: checkout0f0e96fc's inspected
 HMP authorization/routing path returns live Booleans and may enter profile scope;
 it supplies no revision/read lease/pure publication claim in those exported calls.

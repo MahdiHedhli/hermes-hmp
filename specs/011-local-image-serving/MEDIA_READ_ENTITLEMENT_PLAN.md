@@ -233,3 +233,8 @@ This is a bounded path finding, not allSDKabsence or runtimebyte proof. See
 docs/research/media-publication-native-contract-20261108.md at23437de. Continue
 HMP Store/operator/lifecycle work; do not substitute cachedBoolean or private
 profile-scope shortcut. Existing deployed features and minimum-version policy stay.
+
+OP1 requestcodec1794e43 is implemented as DATAonly;35cases pass bothPython and
+independentreview found no concrete codecblocker. No socket, consent, runtime
+nonce/peer/listener check, CAS or response execution is supplied by thecodec.
+Operatortransport/handler and allnativepublication obligations remain open.
