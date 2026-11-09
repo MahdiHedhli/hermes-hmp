@@ -373,15 +373,63 @@ def _probe_shared_call(owner, consumer, index):
 
 
 def _produce_probe_shared(owner, consumer):
-    return _probe_shared_call(owner, consumer, 0)(owner, consumer)
+    _require(type(consumer) is _ProbeConsumer)
+    operation = tuple.__getitem__(consumer, 1)
+    _require(type(operation) is _MetadataOperation
+             and type(operation.resource) in
+                 (_NativeProbeMetadataResource, _NativeStartupProbeMetadataResource))
+    origin = _closed_probe_engine_origin(owner, operation.resource)
+    _require(type(origin) is tuple and len(origin) == 7
+             and type(origin[6]) is tuple and len(origin[6]) == 2
+             and type(origin[6][1]) is tuple)
+    rows = tuple(row for row in origin[6][1] if type(row) is tuple and len(row) == 3
+                 and type(row[0]) is str and row[0] == '_probe_shared_call')
+    _require(len(rows) == 1)
+    _, selector, code = rows[0]
+    _require(type(selector) is FunctionType and selector.__code__ is code
+             and selector.__globals__ is globals()
+             and globals().get('_probe_shared_call') is selector)
+    return selector(owner, consumer, 0)(owner, consumer)
 
 
 def _consume_probe_shared(owner, consumer, actual):
-    return _probe_shared_call(owner, consumer, 1)(owner, consumer, actual)
+    _require(type(consumer) is _ProbeConsumer)
+    operation = tuple.__getitem__(consumer, 1)
+    _require(type(operation) is _MetadataOperation
+             and type(operation.resource) in
+                 (_NativeProbeMetadataResource, _NativeStartupProbeMetadataResource))
+    origin = _closed_probe_engine_origin(owner, operation.resource)
+    _require(type(origin) is tuple and len(origin) == 7
+             and type(origin[6]) is tuple and len(origin[6]) == 2
+             and type(origin[6][1]) is tuple)
+    rows = tuple(row for row in origin[6][1] if type(row) is tuple and len(row) == 3
+                 and type(row[0]) is str and row[0] == '_probe_shared_call')
+    _require(len(rows) == 1)
+    _, selector, code = rows[0]
+    _require(type(selector) is FunctionType and selector.__code__ is code
+             and selector.__globals__ is globals()
+             and globals().get('_probe_shared_call') is selector)
+    return selector(owner, consumer, 1)(owner, consumer, actual)
 
 
 def _ack_probe_shared(owner, consumer, actual, commit):
-    return _probe_shared_call(owner, consumer, 2)(owner, consumer, actual, commit)
+    _require(type(consumer) is _ProbeConsumer)
+    operation = tuple.__getitem__(consumer, 1)
+    _require(type(operation) is _MetadataOperation
+             and type(operation.resource) in
+                 (_NativeProbeMetadataResource, _NativeStartupProbeMetadataResource))
+    origin = _closed_probe_engine_origin(owner, operation.resource)
+    _require(type(origin) is tuple and len(origin) == 7
+             and type(origin[6]) is tuple and len(origin[6]) == 2
+             and type(origin[6][1]) is tuple)
+    rows = tuple(row for row in origin[6][1] if type(row) is tuple and len(row) == 3
+                 and type(row[0]) is str and row[0] == '_probe_shared_call')
+    _require(len(rows) == 1)
+    _, selector, code = rows[0]
+    _require(type(selector) is FunctionType and selector.__code__ is code
+             and selector.__globals__ is globals()
+             and globals().get('_probe_shared_call') is selector)
+    return selector(owner, consumer, 2)(owner, consumer, actual, commit)
 
 
 def _probe_function_namespace(owner_module, name, function):
@@ -406,7 +454,11 @@ def _probe_stage_functions(owner, resource):
         _require(len(rows) == 1)
         _, function, code = rows[0]
         _require(type(function) is FunctionType and function.__code__ is code
-                 and _probe_function_namespace(origin[0], name, function)
+                 and (function.__globals__ is vars(origin[0])
+                      or (function.__globals__ is globals()
+                          and ((name == '_produce_shared' and function is _produce_probe_shared)
+                               or (name == '_consume_shared' and function is _consume_probe_shared)
+                               or (name == '_ack_shared' and function is _ack_probe_shared))))
                  and vars(origin[0]).get(name) is function)
         stages.append(function)
     return tuple(stages)
@@ -442,7 +494,11 @@ def _probe_policy_helper(owner, consumer, name):
     _require(len(rows) == 1)
     _, function, code = rows[0]
     _require(type(function) is FunctionType and function.__code__ is code
-             and _probe_function_namespace(origin[0], name, function)
+             and (function.__globals__ is vars(origin[0])
+                      or (function.__globals__ is globals()
+                          and ((name == '_produce_shared' and function is _produce_probe_shared)
+                               or (name == '_consume_shared' and function is _consume_probe_shared)
+                               or (name == '_ack_shared' and function is _ack_probe_shared))))
              and vars(origin[0]).get(name) is function)
     return function
 
