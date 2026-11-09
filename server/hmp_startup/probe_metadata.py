@@ -84,7 +84,8 @@ def _new_fresh_probe_plan(owner, root, selected, context):
           and type(context) is tuple and len(context) == 3
           and all(type(part) is int for part in context))
     row, location = selected.plan_row, selected.plan_row.location
-    path = location.path
+    path, proof = location.path, selected.proof
+    owner_kind = RuntimeCacheProbeOwner
     _need(1 < len(path.encode('utf-8')) <= 4096 and path.startswith('/')
           and all(32 <= ord(char) != 127 for char in path))
     parts = path[1:].split('/')
@@ -129,7 +130,7 @@ def _new_fresh_probe_plan(owner, root, selected, context):
     variants = tuple(site_kind(owner, root, selected, site, ordinal)
                      for ordinal, site in enumerate(definitions))
     values = (owner, root, selected, row, location, path, components,
-              selected.proof, context, RuntimeCacheProbeOwner, module,
+              proof, context, owner_kind, module,
               pure, pure_code, observe, observe_code,
               definitions, variants, [0, None], [], [])
     result = plan_kind(*values)
@@ -149,9 +150,12 @@ def _new_fresh_probe_plan(owner, root, selected, context):
          and type(sys.modules) is dict
          and sys.modules.get('hmp_startup.cache_probe') is module
          and vars(module) is names
-         and names.get('RuntimeCacheProbeOwner') is RuntimeCacheProbeOwner
-         and vars(RuntimeCacheProbeOwner).get('_pure') is pure
-         and vars(RuntimeCacheProbeOwner).get('_observe_owned') is observe
+         and RuntimeCacheProbeOwner is owner_kind
+         and names.get('RuntimeCacheProbeOwner') is owner_kind
+         and vars(owner_kind).get('_pure') is pure
+         and vars(owner_kind).get('_observe_owned') is observe
+         and selected.plan_row is row and row.location is location
+         and location.path is path and selected.proof is proof
          and names.get('_OWNER') is owner and names.get('_CELL') is None
          and names.get('_FACT') is None and names.get('_ROOT') is partial
          and vars(owner) is owner_names and len(owner_names) == len(owner_entries)
