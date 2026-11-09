@@ -1,5 +1,13 @@
 ## November 8 — reviewed host updates deployed; character integration remains open
 
+Mobile media lifecycle source `0dcbbb4` binds discovery and bot diagnostics to
+the captured foreground API and original pairing lifecycle scope. Switching during
+either await cancels the result; late revocation affects only its original host.
+All 52 focused media domain/API/context and existing AR1 context tests pass;
+focused analysis has no issues. UI profile/request-generation binding, visible
+image guidance, independent review and device qualification remain open.
+No live host request, permission change, build installation or deployment occurred.
+
 Mobile media API source `467e576` now reads discovery and per-bot diagnostics
 through the existing pinned authenticated transport. Discovery-only 404/405 is
 legacy unknown; malformed success is protocol unknown; bot 404 remains a refusal.
