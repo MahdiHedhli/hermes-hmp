@@ -112,3 +112,11 @@ unknown, never automatic retry; explicit read-only status/readback determines ne
 operator action. Attempt IDs correlate responses, not a fabricated durable replay
 ledger. Listener restart invalidates old nonce/generation. Mutation execution,
 response receipt, lifecycle and transport are not implemented by a request codec.
+
+OP1 codec checkpoint1794e43: closed request DATA parsing/encoding is implemented,
+with35 cases passing on each interpreter. It retains the full signed64-bit Store
+counter domain as canonical decimal strings and validates complete expected-state
+consistency. Independent read-only review found no concrete codec blocker. No
+transport, response receipt, runtime scope/nonce/peer verification, consent proof,
+CAS execution or listener wiring is provided by this codec. Attempt IDs are
+correlation only, not durable exactly-once authority. These remain explicit tasks.
