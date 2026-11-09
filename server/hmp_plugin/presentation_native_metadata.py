@@ -458,11 +458,13 @@ def _declared_leaf_identity(snapshot, actor_uid, expected_size):
     return identity
 
 
-def _declared_leaf_before_data(snapshot, actor_uid, expected_size):
-    """Fixed leaf-before identity/timestamp DATA; never an operation allowance.
+def _declared_leaf_source_before_data(snapshot, actor_uid, expected_size):
+    """Fixed source-effect leaf-before DATA; never an operation allowance.
 
     Preserve the original _file/path_stats integer conversion of this same
     native snapshot's st_mtime, including truncation toward zero before epoch.
+    Only a source-digest effect requires this timestamp. Cache/non-source
+    consumers retain their existing policy without this extra requirement.
     The eventual fixed consumer must still bind the original declaration,
     actual native return and source-digest predecessor before publication.
     """
