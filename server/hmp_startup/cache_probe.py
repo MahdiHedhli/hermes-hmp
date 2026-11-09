@@ -88,6 +88,7 @@ class RuntimeCacheProbeOwner:
         owner._admitting = False
         owner._bytes_read = 0
         owner._fact = None
+        owner._probe_plan = None
         try:
             rows = selected_cache_input_attempts(continuation)
             _require(index < len(rows))
@@ -98,10 +99,14 @@ class RuntimeCacheProbeOwner:
                      and _ROOT is partial and _OWNER is owner and _CELL is None
                      and owner._root_cell is partial
                      and activation._runtime_cache_probe_cell is partial)
+            from .probe_metadata import _new_fresh_probe_plan
+
+            plan = _new_fresh_probe_plan(owner, root, selected, context)
             scope = _Scope(activation, root[2].io_scope.activation_scope,
                            (selected.plan_row.source,), context, [], parent=(root, selected),
                            native_files=root[2].entry_binding[0].native_files,
-                           native_registration_slot=[None])
+                           native_registration_slot=[None], native_probe_plan=plan)
+            owner._probe_plan = plan
             cell = (owner, scope)
             runtime_root = (activation, owner, scope)
             owner._scope = owner._origin = scope
@@ -171,6 +176,14 @@ class RuntimeCacheProbeOwner:
                              and type(item[1]) is tuple and len(item[1]) == 5
                              and all(type(value) is int for value in item[1])
                              for item in selected.proof[0].directories))
+        from .probe_metadata import _fresh_probe_plan_tail
+
+        valid_plan = False
+        try:
+            valid_plan = _fresh_probe_plan_tail(self, s, self._probe_plan) is self._probe_plan
+        except BaseException:
+            pass
+        _require(valid_plan)
         if self._ready is True:
             _require(type(_FACT) is tuple and len(_FACT) == 10 and self._fact is _FACT
                      and _FACT[0] is self and _FACT[1] is s
@@ -298,11 +311,15 @@ class RuntimeCacheProbeOwner:
         result = None
         try:
             _require(_native_walk_scope(self, native_registration) is s and type(path) is str)
-            parts = path[1:].split('/')
-            _require(path.startswith('/') and 1 <= len(parts) <= 64
-                     and all(part not in ('', '.', '..') for part in parts))
+            # This is the original retain allocation, not a new path/plan from
+            # mutable current selection. Native claim/diagnostic ACK migration
+            # remains separate; this DATA alone grants no observation or fallback.
+            plan = s.native_probe_plan
+            _require(plan is self._probe_plan and plan.path is path
+                     and plan.selected is selected and plan.proof is proof)
+            components = plan.components
             parent = None
-            for position, name in enumerate(('/', *parts)):
+            for position, name in enumerate(components):
                 info = RuntimeCacheProbeOwner._stat_known(
                     self, name, parent, s, native_registration)
                 if info is None:
@@ -312,7 +329,7 @@ class RuntimeCacheProbeOwner:
                     result = CacheProbeData('missing_component', position - 1, None,
                                             tuple(item[3] for item in ancestors))
                     break
-                leaf = position == len(parts)
+                leaf = position == len(components) - 1
                 if leaf:
                     if stat.S_ISDIR(info.st_mode):
                         _require(selected.plan_row.state == 'tree_nonfile')

@@ -395,6 +395,7 @@ class _Scope(NamedTuple):
     native_files: object = None
     native_registration_slot: object = None
     material_origin: object = None
+    native_probe_plan: object = None
 
     def __repr__(self):
         return "<StartupArtifactScope redacted>"
