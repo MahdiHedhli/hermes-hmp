@@ -142,7 +142,7 @@ def test_close_return_loss_never_replays_or_unblocks_connect(adapter_module):
     asyncio.run(scenario())
 
 
-@pytest.mark.parametrize("drift", ("context", "store", "generation_callback"))
+@pytest.mark.parametrize("drift", ("context", "store", "generation_callback", "server_callback"))
 def test_old_retirement_never_closes_foreign_context_store(adapter_module, drift):
     async def scenario():
         adapter, srv, store = fixture(adapter_module)
@@ -153,8 +153,10 @@ def test_old_retirement_never_closes_foreign_context_store(adapter_module, drift
             srv.ctx = SimpleNamespace(store=foreign_store)
         elif drift == "store":
             original_ctx.store = foreign_store
-        else:
+        elif drift == "generation_callback":
             adapter._close_generation = lambda ctx: setattr(ctx, "store", foreign_store)
+        else:
+            adapter._close_generation = lambda _ctx: setattr(adapter, "_server", FakeServer(store))
         srv.drain.set()
         assert await owner.task is owner.failure
         assert not adapter._retired_stores_ready()
