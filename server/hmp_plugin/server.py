@@ -2275,6 +2275,9 @@ class HmpServer:
                 and self._push_dispatcher is not self._push_start_dispatcher):
             raise RuntimeError("push cleanup scope changed")
         if dispatcher is not None:
+            if (self._push_relay_owner is not None
+                    and dispatcher._relay_owner is not self._push_relay_owner):
+                raise RuntimeError("push relay cleanup owner changed")
             self._push_dispatcher_drained = dispatcher
             await dispatcher.close()
             rejoin()

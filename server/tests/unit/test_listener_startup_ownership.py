@@ -391,3 +391,49 @@ def test_operator_start_replacement_never_closes_foreign_service(monkeypatch, tm
         await runner.cleanup()  # fixture-only cleanup; production must retain/refuse
 
     asyncio.run(scenario())
+
+
+def test_listener_never_closes_substituted_push_dispatcher(monkeypatch):
+    async def scenario():
+        listener, runner, events, _, _ = rig(monkeypatch, setup_error=True)
+        with pytest.raises(RuntimeError):
+            await listener.start()
+        calls = []
+
+        async def foreign_close():
+            calls.append("foreign")
+
+        original = object()
+        listener._push_start_dispatcher = original
+        listener._push_dispatcher = SimpleNamespace(close=foreign_close)
+        with pytest.raises(RuntimeError, match="push cleanup scope changed"):
+            await listener.stop()
+        assert listener._push_start_dispatcher is original
+        assert not calls and not listener.closed.is_set() and "cleanup" not in events
+        await runner.cleanup()  # fixture only; production retains unresolved owners
+
+    asyncio.run(scenario())
+
+
+def test_listener_refuses_substituted_relay_owner_before_dispatcher_close(monkeypatch):
+    async def scenario():
+        listener, runner, events, _, _ = rig(monkeypatch, setup_error=True)
+        with pytest.raises(RuntimeError):
+            await listener.start()
+        calls = []
+
+        async def close():
+            calls.append("foreign-close")
+
+        dispatcher = SimpleNamespace(_relay_owner=object(), close=close)
+        listener._push_dispatcher = listener._push_start_dispatcher = dispatcher
+        original = object()
+        listener._push_relay_owner = original
+        with pytest.raises(RuntimeError, match="relay cleanup owner changed"):
+            await listener.stop()
+        assert not calls and listener._push_relay_owner is original
+        assert listener._push_dispatcher is dispatcher and not listener.closed.is_set()
+        assert "cleanup" not in events
+        await runner.cleanup()  # fixture-only disposal, no production closure claim
+
+    asyncio.run(scenario())
