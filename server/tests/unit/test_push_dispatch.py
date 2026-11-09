@@ -873,3 +873,43 @@ def test_dispatcher_creation_failure_keeps_real_tls_listener_and_routes(env, mon
             await srv.stop(notify=False)
 
     run(env, scenario)
+
+
+def test_actual_authorization_thread_outlives_cancelled_dispatch_and_blocks_drain(env, monkeypatch):
+    from hmp_plugin import push_dispatch
+
+    entered, release, finished = threading.Event(), threading.Event(), threading.Event()
+
+    def authorize(*_args, **_kwargs):
+        entered.set()
+        release.wait()
+        finished.set()
+
+    monkeypatch.setattr(push_dispatch, "require_bot_authorized", authorize)
+
+    async def scenario(client):
+        _, row, _, _, dispatcher, _, _ = await prepare(env, client)
+        dispatcher.observe(event(row, dispatcher.store.generation))
+        try:
+            await until(entered.is_set)
+            await dispatcher.close()
+            assert not finished.is_set() and dispatcher.retirement_pending
+            waiter = asyncio.create_task(dispatcher.wait_drained())
+            await asyncio.sleep(0)
+            assert not waiter.done()
+            waiter.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await waiter
+            assert not finished.is_set() and dispatcher.retirement_pending
+            release.set()
+            await dispatcher.wait_drained()
+            assert finished.is_set() and not dispatcher.retirement_pending
+        finally:
+            release.set()
+            await dispatcher.close()
+            drain = getattr(dispatcher, "wait_drained", None)
+            if drain is not None:
+                await drain()
+
+    run(env, scenario)
+
