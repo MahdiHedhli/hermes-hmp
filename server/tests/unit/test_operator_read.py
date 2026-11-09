@@ -1041,3 +1041,31 @@ def test_read_completion_releases_original_budget_after_context_budget_replaceme
             await service.wait_drained()
 
     asyncio.run(scenario())
+
+
+def test_read_worker_preserves_original_context_and_isolates_worker_changes(monkeypatch):
+    import contextvars
+
+    async def scenario():
+        scope = contextvars.ContextVar("synthetic_operator_read_scope", default=None)
+        marker = object()
+        scope.set(marker)
+        budget = ReadWorkerBudget()
+        ctx = SimpleNamespace(read_worker_budget=budget, readiness_generation=GEN)
+        service = operator_read.OperatorReadService(ctx, "/private/tmp/synthetic", NONCE)
+
+        def collect(*_args):
+            assert scope.get() is marker
+            scope.set("synthetic worker-only value")
+            return {"synthetic": True}
+
+        monkeypatch.setattr(operator_read, "_collect", collect)
+        try:
+            assert await service._context(RID, "0" * 32) == {"synthetic": True}
+            assert scope.get() is marker
+        finally:
+            await service.stop()
+            await service.wait_drained()
+        assert (budget.active, budget.operator) == (0, 0)
+
+    asyncio.run(scenario())
