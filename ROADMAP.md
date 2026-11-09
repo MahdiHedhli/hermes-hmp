@@ -1,5 +1,17 @@
 ## November 9 — shutdown ownership checks pass; media integration remains open
 
+MR-PUSH1 source `fc06ef3` retains push task/coroutine intents, one shielded close
+owner, and actual borrower drain beyond the bounded network close. The listener carries
+push debt until drain finishes. Independent review caught that task-only cancellation
+could leave native authorization threads running; the final repair separately tracks
+and shields authorization/key/gate borrowers. A blocked real-thread causal test proves
+cancelled dispatch/drain waiters do not retire that work early. Both pinned runtimes
+pass 500 selected tests unchanged, zero failures/errors/skips; finite read-only review
+accepted this repair. This proves bounded task/borrower settlement, not successful relay
+resource closure or all native lifetime contracts. Failed dispatcher startup retention,
+other borrowers, partial adapter recovery, native media authority/migration and physical
+qualification remain open. No deployment, provider/send, grants or media activation.
+
 MR-START2d source `574899c` pins the approval test generation to the original
 listener context/service and immediate shutdown fence. Copied context fields cannot
 authorize a replacement or revive a retired generation. Three new synthetic cases

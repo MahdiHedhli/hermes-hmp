@@ -473,3 +473,20 @@ partial adapter recovery, other borrowers, migration and native media authority 
 open. No deployment, permission change, push send or media activation occurred.
 
 Next: MR-PUSH1 retain creation intents and actual push drain owners, then integrate original-owner debt into Store retirement. Do not substitute bounded close for actual settlement.
+
+
+## MR-PUSH1 actual task/native borrower drain
+
+MR-PUSH1 source `fc06ef3` retains push task/coroutine intents, one shielded close
+owner, and actual borrower drain beyond the bounded network close. The listener carries
+push debt until drain finishes. Independent review caught that task-only cancellation
+could leave native authorization threads running; the final repair separately tracks
+and shields authorization/key/gate borrowers. A blocked real-thread causal test proves
+cancelled dispatch/drain waiters do not retire that work early. Both pinned runtimes
+pass 500 selected tests unchanged, zero failures/errors/skips; finite read-only review
+accepted this repair. This proves bounded task/borrower settlement, not successful relay
+resource closure or all native lifetime contracts. Failed dispatcher startup retention,
+other borrowers, partial adapter recovery, native media authority/migration and physical
+qualification remain open. No deployment, provider/send, grants or media activation.
+
+Next MR-PUSH2: retain failed dispatcher/relay startup resources and distinguish actual task settlement from successful resource closure; then finish original-listener partial adapter recovery.
