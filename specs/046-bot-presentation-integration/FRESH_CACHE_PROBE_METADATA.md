@@ -31,6 +31,15 @@ from that original plan and cursor; accept no caller-selected operation, path,
 policy or callback. Every next step carries the literal actual previous return.
 Use the same entry ledger and close reservations, with no new allowance.
 
+The fixed variant ordinal identifies a possible site, not the count of executed
+observations. Branches skip variants, and the final ancestor pass returns to
+previous components. Keep the actual execution sequence/history separate from
+that site index. Derive each next site from the literal previous policy return
+and original invocation/ancestor state; do not accept a caller-selected site,
+equate history length with a variant ordinal, or reconstruct a predecessor from
+matching current slots. The root-only shared intent prototype does not implement
+these transitions, and its zero-state fence remains closed to native consumers.
+
 ## Native result and diagnostic lifecycle
 
 Preallocate original claim and raw custody before effects. Retain the actual
@@ -79,8 +88,13 @@ fallback, loader, image or permission authority.
 - [x] Join original root probe resource to shared intent preparation (`094ddb2`);
       independent finite source review accepted; initial13-case green execution
       withdrawn because observer could swallow late assertions. Corrected
-      test-only successor `5c387fa` requires external boundary completion.
-- [ ] Qualify the minimum-interpreter and preserved pre-fix helper controls.
+      test-only successor `5c387fa` requires external boundary completion; its
+      corrected13 current cases PASS with unchanged production source.
+- [x] Preserve pre-fix helper controls: four expected failures with actual
+      helper execution once each; independently audited source/log/XML/stages.
+- [x] Qualify minimum-interpreter probe-resource checks: 13 PASS, unchanged
+      source, zero failures/errors/skips. Both corrected suites cover root
+      shared intent preparation only; full native traversal remains below.
       Shared native admission/diagnostic lifecycle remains closed.
 
 - [ ] Implement complete traversal and shared-engine integration, preserving
