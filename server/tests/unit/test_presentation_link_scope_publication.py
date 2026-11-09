@@ -7,7 +7,8 @@ from .test_presentation_gateway_approval import operator_composed_script
 
 @pytest.mark.parametrize('fault', ('normal', 'owner', 'activation', 'io_slot', 'count', 'scope_dispatch',
                                     'scope_dispatch_early', 'policy_code', 'blueprint_dispatch',
-                                    'register_helper', 'need_helper', 'source_helper'))
+                                    'register_helper', 'need_helper', 'source_helper',
+                                    'scope_blueprint_copy', 'lost_blueprint_return'))
 def test_actual_link_scope_last_origin_return_seals_publication(tmp_path, monkeypatch, fault):
     script, mutation = operator_composed_script('links')
     script = script.replace('GatewayPackageOwner.verify_recipe(recipe)',
@@ -27,6 +28,7 @@ original_blueprint_dispatch=vars(policy._LinkScopeBlueprint).get('__getattribute
 selected_return=2 if fault=='scope_dispatch_early' else 4
 original_current_code=actual_origins.current.__code__
 original_ctor_code=a._Scope.__new__.__code__
+original_blueprint_code=policy._new_scope_blueprint.__code__
 original_retain_code=a.StartupArtifactOwner._retain.__func__.__code__
 root_stage_lines={}
 for line_number,line in enumerate(Path(a.__file__).read_text().splitlines(),1):
@@ -38,6 +40,7 @@ for line_number,line in enumerate(Path(a.__file__).read_text().splitlines(),1):
         root_stage_lines[line_number]=line.strip()[:90]
 root_stage_seen=set()
 foreign_slot=object();scope_seen=[];last_returns=[];hooks=[];actual_owner=[];baseline=[]
+partial_cells=[];actual_runtime=[];copied_blueprints=[];actual_blueprints=[]
 ledger=entry._scope.native_files.ledger
 
 def foreign(*args,**kwargs):
@@ -47,20 +50,35 @@ def foreign(*args,**kwargs):
 def observe(frame,event,result):
     if event=='call':
         if (frame.f_code is not original_retain_code and frame.f_code is not original_ctor_code
-                and frame.f_code is not original_current_code):return None
-        frame.f_trace_lines=frame.f_code is original_retain_code
+                and frame.f_code is not original_current_code and frame.f_code is not original_blueprint_code):return None
+        frame.f_trace_lines=(frame.f_code is original_retain_code
+            or fault=='scope_blueprint_copy' and frame.f_code is original_ctor_code)
+    if (event=='line' and frame.f_code is original_ctor_code and fault=='scope_blueprint_copy'
+            and frame.f_locals.get('native_link_blueprint') is not None and not copied_blueprints):
+        actual=frame.f_locals['native_link_blueprint'];copied=actual._replace()
+        copied_blueprints.append((actual,copied))
+        frame.f_locals['native_link_blueprint']=copied
     if event=='line' and frame.f_code is original_retain_code:
         if frame.f_lineno in root_stage_lines and frame.f_lineno not in root_stage_seen:
             root_stage_seen.add(frame.f_lineno);stage(root_stage_lines[frame.f_lineno])
     if event=='call' and frame.f_code is original_retain_code:
         if frame.f_locals.get('runtime') is not None:
             baseline.append((tuple(ledger.counts),len(ledger.attempts),len(ledger.scopes)))
+            actual_runtime.append(frame.f_locals['runtime'])
             stage('runtime_scope_call')
+    if event=='return' and frame.f_code is original_blueprint_code:
+        actual_blueprints.append(result)
+        actual_owner.append(frame.f_locals['owner'])
+        partial_cells.append(entry._activation._artifact_cell)
+        if fault=='lost_blueprint_return':
+            stage('synthetic_blueprint_return_lost');sys.settrace(None)
+            raise OSError('synthetic actual blueprint return lost')
     if event=='return' and frame.f_code is original_ctor_code:
         if frame.f_locals.get('native_link_blueprint') is not None:
             scope_seen.append(result)
             stage('scope_constructor_return')
-            actual_owner.append(entry._activation._artifact_owner)
+            assert actual_owner==[entry._activation._artifact_owner]
+            if fault=='scope_blueprint_copy':sys.settrace(None)
     if (event=='return' and frame.f_code is original_current_code and scope_seen
             and frame.f_back is not None and frame.f_back.f_code.co_name=='link_rejoin'
             and actual_owner[0]._origin is None):
@@ -98,8 +116,15 @@ finally:
     if fault in ('scope_dispatch','scope_dispatch_early'):
         if original_scope_dispatch is None:del a._Scope.__getattribute__
         else:a._Scope.__getattribute__=original_scope_dispatch
-assert len(scope_seen)==1 and len(actual_owner)==1 and len(baseline)==1
-assert len(last_returns)==selected_return and hooks==[]
+assert len(scope_seen)==(0 if fault=='lost_blueprint_return' else 1)
+assert len(actual_owner)==len(baseline)==len(partial_cells)==len(actual_blueprints)==1
+assert len(last_returns)==(0 if fault in ('scope_blueprint_copy','lost_blueprint_return') else selected_return)
+assert hooks==[]
+if fault=='scope_blueprint_copy':
+    assert len(copied_blueprints)==1
+    assert scope_seen[0].native_link_blueprint is copied_blueprints[0][1]
+    assert copied_blueprints[0][0] is actual_blueprints[0]
+    assert copied_blueprints[0][1] is not actual_blueprints[0]
 owner=actual_owner[0]
 if fault=='normal':
     assert not refused and checked._ready and owner._ready
@@ -115,12 +140,14 @@ else:
     assert owner._origin is None and owner._cell is owner._root_cell is None
     assert owner._scope is (foreign_slot if fault=='owner' else None)
     assert entry._activation._artifact_cell is (
-        foreign_slot if fault=='activation' else (entry._activation,owner))
+        foreign_slot if fault=='activation' else partial_cells[0])
     if fault=='io_slot':assert scope_seen[0].runtime.inputs.io_slot[0] is foreign_slot
     if fault=='count':assert scope_seen[0].runtime.count[0] is foreign_slot
     assert baseline[0]==(tuple(ledger.counts),len(ledger.attempts),len(ledger.scopes))
-    assert scope_seen[0].native_registration_slot==[None]
-    assert scope_seen[0].records==[]
+    if scope_seen:
+        assert scope_seen[0].native_registration_slot==[None]
+        assert scope_seen[0].records==[]
+    assert actual_runtime[0].inputs.io_slot[0] is (foreign_slot if fault=='io_slot' else None)
     try:EntryFileSnapshotOwner.complete(retained)
     except EntryFilesError:pass
     else:raise AssertionError('lost/refused actual publication replayed')
