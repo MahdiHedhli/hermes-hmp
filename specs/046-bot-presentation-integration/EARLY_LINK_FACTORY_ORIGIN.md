@@ -4,13 +4,44 @@ November 9, 2026. LP2 design following the separately frozen LP1 source
 `0d5d86210dd1f2a163ace57effe5882c3a47e507`. This does not claim implementation
 of the entry-origin extension or native link operations.
 
-`hmp_startup/link_factory_origin.py` now prepares a one-attempt capture, a
+`hmp_startup/link_factory_origin.py` prepares a one-attempt capture, a
 primitive-fenced DATA seal, and a held-factory return. No global receipt can
 recover a lost capture return. Own helper/code/default bindings are checked
 across initialization imports before use, with module/registry identity and
 six NamedTuple type/constructor/member/dispatch bindings retained. Independent
 review accepted this bounded preparation; its 26 causal source tests have not
-run. The actual `_ENTRY_ORIGIN`/lineage extension remains unimplemented.
+run at that checkpoint. Its same combined 86 policy/origin cases subsequently
+pass on both supported interpreters in predecessor `2830810`; that result does
+not qualify the entry wiring added below.
+
+## Entry and lineage source integration
+
+This branch now stores the actual early capture in an appended `_EntryOrigin`
+field and threads the same object into the actual `_NativeFileLineage`. Initial
+capture holds and reseals the entry's namespace, classes, function code/defaults
+and generated-constructor globals across imports and the actual entry-origin
+constructor. Returned tuple fields must be the exact captured inputs before the
+origin can be published. Native lineage readback must retain the same capture
+object as the independently held `started[5]` entry origin.
+
+Independent review found a subsequent owner-constructor gap: `start()` previously
+looked up the origin after `cls.__new__`, allowing that callback to nominate a
+coherent copy. The corrected source holds the actual entry/capture and inspection
+dependencies before construction, latches a fixed one-attempt marker, and reseals
+namespace/class/code/generated-constructor identities before publication or
+interpreter observation. Lost/raising/reentrant construction cannot replay via
+the normal start API. Foreign global replacements are preserved on refusal.
+Seven added owner-constructor cases cover copies, helper/slot changes, lost
+return/reentry and generated `_tuple_new` drift; native/interpreter and foreign
+calls must remain zero. The complete 19 entry controls are not yet executed.
+
+These are original-pointer and startup preparation bindings, not cached
+permission. The original-file lineage getter does not repeatedly execute link
+helpers for unrelated file work. Actual link-policy use must still rejoin the
+held function/code/defaults/type pins immediately before invocation and after
+callbacks. Scope blueprint publication, native link resource/result/consume/ACK
+and full link finish/cleanup/service qualification remain unimplemented. No
+host or device uses this source yet.
 
 The DATA seal intentionally does not reject a copied tuple as independent
 ownership: it has no entry owner against which to establish that fact. Future

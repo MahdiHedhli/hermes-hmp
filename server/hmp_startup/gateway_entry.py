@@ -23,6 +23,7 @@ from hmp_plugin.presentation_gateway_activation import GatewayActivationOwner
 _OWNER = None
 _CELL = None
 _STARTED = None
+_START_ATTEMPTED = False
 _VERSION_TYPE = type(sys.version_info)
 _FLAGS_TYPE = type(sys.flags)
 
@@ -459,6 +460,7 @@ class _NativeFileLineage(NamedTuple):
     native: _NativeIOOrigin
     context: tuple
     ledger: _NativeFileLedger
+    link_policy: object = None
 
     def __repr__(self):
         return "<OriginalNativeFileLineage unimplemented-effects redacted>"
@@ -492,6 +494,7 @@ class _EntryOrigin(NamedTuple):
     owner_type: type
     function: FunctionType
     code: CodeType
+    link_policy: object = None
 
     def __repr__(self):
         return "<GatewayEntryOrigin observed-not-admitted redacted>"
@@ -514,16 +517,70 @@ class EntryStartupData(NamedTuple):
 class GatewayEntryOwner:
     @classmethod
     def start(cls):
-        global _OWNER, _CELL, _STARTED
-        _require(cls is GatewayEntryOwner and _OWNER is None and _CELL is None and _STARTED is None)
-        owner = cls.__new__(cls)
+        global _OWNER, _CELL, _STARTED, _START_ATTEMPTED
+        _require(cls is GatewayEntryOwner and _OWNER is None and _CELL is None
+                 and _STARTED is None and _START_ATTEMPTED is False)
+        # Original entry/capture and inspection dependencies precede the first
+        # owner constructor. Its return cannot nominate a coherent replacement.
+        need, need_code = _require, _require.__code__
+        guard, guard_code = _origin_current, _origin_current.__code__
+        origin = guard(_ENTRY_ORIGIN)
+        link_policy = tuple.__getitem__(origin, 10)
+        owner_kind = GatewayEntryOwner
+        type_of, vars_of, len_of, tuple_of, all_of = type, vars, len, tuple, all
+        refused = RuntimeError
+        constructor = cls.__new__
+        class_rows = tuple_of((kind, tuple_of(vars_of(kind).items()), kind.__bases__)
+                              for kind in (owner_kind, GatewayEntryError, _EntryOrigin,
+                                           _NativeFileLineage))
+        functions = []
+        for _, items, _ in class_rows:
+            for _, item in items:
+                if type_of(item) in (classmethod, staticmethod):
+                    item = item.__func__
+                if type_of(item) is FunctionType:
+                    functions.append((item, item.__code__, item.__defaults__, item.__kwdefaults__))
+        constructor_globals = tuple_of((f.__globals__, tuple_of(f.__globals__.items()))
+                                       for f in (_EntryOrigin.__new__, _NativeFileLineage.__new__))
+        # A lost/raising constructor cannot be retried or re-enter start while
+        # its result is unknown. This is one fixed installed-entry attempt.
+        _START_ATTEMPTED = True
+        namespace = guard.__globals__
+        namespace_items = tuple_of(namespace.items())
+        owner = constructor(cls)
+        if (len_of(namespace) != len_of(namespace_items)
+                or not all_of(type_of(k) is str for k in namespace)
+                or not all_of(k in namespace and namespace[k] is v for k, v in namespace_items)
+                or _require is not need or need.__code__ is not need_code
+                or _origin_current is not guard or guard.__code__ is not guard_code
+                or _ENTRY_ORIGIN is not origin or _START_ATTEMPTED is not True
+                or type_of(owner) is not owner_kind):
+            raise refused('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+        for kind, items, bases in class_rows:
+            if type_of(kind) is not type_of:
+                raise refused('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+            actual = vars_of(kind)
+            if (kind.__bases__ is not bases or len_of(actual) != len_of(items)
+                    or not all_of(type_of(k) is str for k in actual)
+                    or not all_of(k in actual and actual[k] is v for k, v in items)):
+                raise refused('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+        if not all_of(f.__code__ is code and f.__defaults__ is defaults
+                      and f.__kwdefaults__ is kw for f, code, defaults, kw in functions):
+            raise refused('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+        for actual, items in constructor_globals:
+            if (len_of(actual) != len_of(items) or not all_of(type_of(k) is str for k in actual)
+                    or not all_of(k in actual and actual[k] is v for k, v in items)):
+                raise refused('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+        need(guard(origin) is origin and tuple.__getitem__(origin, 10) is link_policy
+             and _OWNER is None and _CELL is None and _STARTED is None)
         _OWNER = owner  # before bootstrap/import/re-exec effects
         owner._scope = owner._activation = owner._bootstrap = owner._started_cell = None
         owner._ready = owner._failed = False
         failed = False
         started = None
         try:
-            origin = _origin_current(_ENTRY_ORIGIN)
+            need(guard(origin) is origin and _ENTRY_ORIGIN is origin
+                 and tuple.__getitem__(origin, 10) is link_policy)
             _require(type(sys.modules) is dict
                      and not any(name in sys.modules for name in (
                          "hermes_bootstrap", "pm.environments", "gateway.run",
@@ -541,7 +598,8 @@ class GatewayEntryOwner:
             ledger = _NativeFileLedger(owner, interpreter.native_io, context,
                                        [], [0, 0], [None], [False], [], [None],
                                        [None, None, None], phase)
-            native_files = _NativeFileLineage(owner, interpreter.native_io, context, ledger)
+            native_files = _NativeFileLineage(owner, interpreter.native_io, context, ledger,
+                                             link_policy)
             s = _Invocation(context, main, file, vars(main).get("__spec__"),
                             sys.argv, _arguments(sys.argv),
                             sys.orig_argv, _arguments(sys.orig_argv), interpreter,
@@ -626,6 +684,9 @@ class GatewayEntryOwner:
                  and s.native_files.context is s.context
                  and type(s.native_file_ledger) is _NativeFileLedger
                  and s.native_files.ledger is s.native_file_ledger
+                 and tuple.__len__(s.native_files) == 5
+                 and tuple.__getitem__(s.native_files, 4)
+                     is tuple.__getitem__(started[5], 10)
                  and s.native_file_ledger.entry is self
                  and s.native_file_ledger.native is s.interpreter.native_io
                  and s.native_file_ledger.context is s.context
@@ -709,6 +770,11 @@ def _origin_current(origin):
              and origin.owner_type is GatewayEntryOwner and type(origin.module) is ModuleType
              and type(origin.namespace) is dict and vars(origin.module) is origin.namespace
              and sys.modules.get(origin.name) is origin.module)
+    # Pointer preservation only: link helper/type validation is repeated when
+    # that fixed policy is actually used, not cached as permission for any work.
+    _require(tuple.__len__(origin) == 11
+             and type(tuple.__getitem__(origin, 10)) is tuple
+             and tuple.__len__(tuple.__getitem__(origin, 10)) == 5)
     values = origin.namespace
     method = vars(GatewayEntryOwner).get("start")
     _require(type(method) is classmethod and type(origin.function) is FunctionType
@@ -719,6 +785,27 @@ def _origin_current(origin):
              and (origin.spec is None or (type(origin.spec) is ModuleSpec
                   and vars(origin.spec).get("origin") is origin.origin
                   and vars(origin.spec).get("loader") is origin.loader)))
+    return origin
+
+
+def _link_policy_current(origin):
+    """Validate the actual held early DATA seal; not native/link admission."""
+    _require(type(origin) is tuple and len(origin) == 5
+             and type(origin[2]) is tuple and len(origin[2]) == 5)
+    row = origin[2][4]
+    _require(type(row) is tuple and len(row) == 7 and type(row[0]) is str
+             and row[0] == 'factory' and type(row[1]) is FunctionType
+             and type(row[3]) is dict and all(type(k) is str for k in row[3])
+             and row[3].get('factory') is row[1]
+             and row[1].__code__ is row[2] and row[1].__globals__ is row[3]
+             and row[1].__defaults__ is row[4] and row[1].__kwdefaults__ is row[5]
+             and type(row[5]) is dict and all(type(k) is str for k in row[5])
+             and type(row[6]) is tuple and len(row[5]) == len(row[6])
+             and all(type(pair) is tuple and len(pair) == 2 and type(pair[0]) is str
+                     and pair[0] in row[5] and row[5][pair[0]] is pair[1]
+                     for pair in row[6]))
+    actual = row[1](origin)  # actual captured guard, never a current export
+    _require(actual is origin[3][3][1])
     return origin
 
 
@@ -740,8 +827,84 @@ def _capture_origin():
     origin = None if spec is None else vars(spec).get("origin")
     loader = None if spec is None else vars(spec).get("loader")
     _require(origin is None or (type(origin) is str and origin == file))
-    return _EntryOrigin(__name__, module, values, file, spec, origin, loader,
-                        GatewayEntryOwner, function, function.__code__)
+    # This is the initial module-load boundary, before start/__new__/bootstrap.
+    # Initialization imports may execute code. Hold and reseal our own original
+    # namespace, classes, helpers and generated constructors across them.
+    type_of, vars_of, len_of, tuple_of, all_of = type, vars, len, tuple, all
+    module_kind, sys_module = ModuleType, sys
+    refused = RuntimeError
+    module_items = tuple_of(values.items())
+    classes = (GatewayEntryOwner, GatewayEntryError, _EntryOrigin, _NativeFileLineage)
+    class_rows = tuple_of((kind, tuple_of(vars_of(kind).items()), kind.__bases__)
+                          for kind in classes)
+    functions = [item for item in values.values() if type_of(item) is FunctionType]
+    for _, items, _ in class_rows:
+        for _, item in items:
+            if type_of(item) in (classmethod, staticmethod):
+                item = item.__func__
+            if type_of(item) is FunctionType:
+                functions.append(item)
+    function_rows = tuple_of((f, f.__code__, f.__defaults__, f.__kwdefaults__,
+                              () if f.__kwdefaults__ is None else tuple_of(f.__kwdefaults__.items()))
+                             for f in functions)
+    constructor = vars_of(_EntryOrigin)['__new__']
+    if type_of(constructor) is staticmethod:
+        constructor = constructor.__func__
+    constructor_globals = tuple_of((f.__globals__, tuple_of(f.__globals__.items()))
+                                   for f in (constructor, _NativeFileLineage.__new__))
+    origin_kind, owner_kind, guard = _EntryOrigin, GatewayEntryOwner, _link_policy_current
+    registry, sys_namespace = sys.modules, vars_of(sys)
+
+    def seal():
+        if (type_of(module) is not module_kind or type_of(sys_module) is not module_kind
+                or vars_of(module) is not values or len_of(values) != len_of(module_items)
+                or not all_of(type_of(k) is str for k in values)
+                or not all_of(k in values and values[k] is v for k, v in module_items)
+                or not all_of(type_of(k) is str for k in sys_namespace)
+                or sys_namespace.get('modules') is not registry
+                or not all_of(type_of(k) is str for k in registry)
+                or registry.get(__name__) is not module):
+            raise refused('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+        for kind, items, bases in class_rows:
+            if type_of(kind) is not type_of:
+                raise refused('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+            namespace = vars_of(kind)
+            if (kind.__bases__ is not bases or len_of(namespace) != len_of(items)
+                    or not all_of(type_of(k) is str for k in namespace)
+                    or not all_of(k in namespace and namespace[k] is v for k, v in items)):
+                raise refused('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+        for f, code, defaults, kw, pairs in function_rows:
+            if (f.__code__ is not code or f.__defaults__ is not defaults or f.__kwdefaults__ is not kw
+                    or (kw is not None and (not all_of(type_of(k) is str for k in kw)
+                        or len_of(kw) != len_of(pairs)
+                        or not all_of(k in kw and kw[k] is v for k, v in pairs)))):
+                raise refused('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+        for namespace, items in constructor_globals:
+            if (len_of(namespace) != len_of(items) or not all_of(type_of(k) is str for k in namespace)
+                    or not all_of(k in namespace and namespace[k] is v for k, v in items)):
+                raise refused('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+
+    from . import link_factory_origin
+
+    seal()  # never call a helper nominated by changes to this entry module
+    _require(type_of(link_factory_origin) is module_kind)
+    link_namespace = vars_of(link_factory_origin)
+    _require(all_of(type_of(k) is str for k in link_namespace))
+    capture = link_namespace.get('capture')
+    _require(type(capture) is FunctionType and capture.__globals__ is link_namespace)
+    link_policy = capture()
+    seal()
+    _require(guard(link_policy) is link_policy)
+    seal()
+    fields = (__name__, module, values, file, spec, origin, loader,
+              owner_kind, function, function.__code__, link_policy)
+    actual = constructor(origin_kind, *fields)
+    seal()
+    _require(type(actual) is origin_kind and tuple.__len__(actual) == len(fields)
+             and all(tuple.__getitem__(actual, i) is value for i, value in enumerate(fields)))
+    _require(guard(link_policy) is link_policy)
+    seal()
+    return actual
 
 
 _ENTRY_ORIGIN = _capture_origin()
