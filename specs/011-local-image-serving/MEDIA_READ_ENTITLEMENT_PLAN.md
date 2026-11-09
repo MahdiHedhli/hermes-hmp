@@ -244,3 +244,9 @@ completeexpectedsnapshot and finalcohort/deadline checks.43cases passbothPython,
 reviewreportsnoconcrete blocker in unwiredlayer. DuplicateCASdoesnotreplaygrant;
 postcommitreadbackloss staysunknown. Peer/consent/admission/deadlineprovenance and
 nativecoordination are separate missingtransport/lifecycle prerequisites.
+
+OP1 responsecodec atadf41e2 distinguishes committed/conflict/refused/unknown;
+committed fields mustmatch exact requestedtransition.69cases pass eachPython and
+reviewfoundnoconcrete codecblocker. Replycorrelation isnot runtimeauthority proof.
+Branchlintcleanupade8fce passes fullserver/toolsRuff plus360focusedcases; fresh
+1,176-case integration running, no combined qualification claimedyet.

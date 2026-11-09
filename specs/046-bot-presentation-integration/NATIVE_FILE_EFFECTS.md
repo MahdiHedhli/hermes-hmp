@@ -1,5 +1,14 @@
 ## November 8 — reviewed host updates deployed; character integration remains open
 
+Operator response preparation `adf41e2` has attempt-bound committed/conflict/
+refused/unknown codecs: committed means the exact requested decision and next
+revision; other statuses carry no grant. Both69-case suites pass; independent
+review found no concrete codec blocker. Missing/malformed post-write responses
+must remain unknown, not refused. No transport or live permission route is enabled.
+Accumulated lint cleanup at `ade8fce` clears full server/tools Ruff checks and360
+focused regressions; a new1,176-case integration run is active, not yet qualified.
+Runtime peer/consent/admission and native publication coordination remain open.
+
 Operator executor preparation `d788615` now performs real coordinated Store CAS
 and readback on worker threads with original listener/actor/Store binding and
 pre/postcommit cohort/deadline checks. Both43-case suites pass: duplicate old
