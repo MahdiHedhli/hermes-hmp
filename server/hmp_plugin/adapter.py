@@ -699,9 +699,9 @@ class HmpAdapter(BasePlatformAdapter):
                 return False
             try:
                 return await self._connect_serial(is_reconnect=is_reconnect)
-            except asyncio.CancelledError:
-                # A cancelled async waiter is not proof that bootstrap/native work
-                # ended. Block replacement until an actual owner can reconcile it.
+            except BaseException:
+                # Missing bootstrap completion is not proof native work ended.
+                # Block replacement until an actual owner can reconcile it.
                 self._startup_unresolved = True
                 raise
 
@@ -976,7 +976,7 @@ class HmpAdapter(BasePlatformAdapter):
         async with self._lifecycle_lock:
             try:
                 await self._disconnect_serial()
-            except asyncio.CancelledError:
+            except BaseException:
                 self._disconnect_unresolved = True
                 raise
             if self._server is None and self._retired_stores_ready():

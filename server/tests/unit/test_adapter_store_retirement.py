@@ -379,3 +379,38 @@ def test_cancelled_wait_for_lifecycle_lock_does_not_poison_disconnect(adapter_mo
             adapter._lifecycle_lock.release()
 
     asyncio.run(scenario())
+
+
+def test_failed_disconnect_does_not_return_connected_for_retained_old_server(adapter_module):
+    async def scenario():
+        adapter, srv, store = fixture(adapter_module, debt=0)
+
+        async def failed_stop(*, notify):
+            assert notify is False
+            raise RuntimeError("synthetic unresolved stop completion")
+
+        srv.stop = failed_stop
+        with pytest.raises(RuntimeError, match="unresolved stop"):
+            await adapter.disconnect()
+        assert adapter._disconnect_unresolved and adapter._server is srv
+        assert await adapter.connect() is False and store.closes == 0
+
+    asyncio.run(scenario())
+
+
+def test_failed_bootstrap_cannot_automatically_start_another_attempt(adapter_module, monkeypatch):
+    async def scenario():
+        adapter = adapter_module.HmpAdapter(SimpleNamespace(extra={"port": 12345}))
+        calls = []
+
+        def failed_open(_adapter):
+            calls.append(1)
+            raise OSError("synthetic unresolved bootstrap failure")
+
+        monkeypatch.setattr(adapter_module, "open_components", failed_open)
+        with pytest.raises(OSError):
+            await adapter.connect()
+        assert adapter._startup_unresolved
+        assert await adapter.connect() is False and calls == [1]
+
+    asyncio.run(scenario())
