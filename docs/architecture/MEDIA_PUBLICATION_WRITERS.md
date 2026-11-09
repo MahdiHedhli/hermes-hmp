@@ -63,3 +63,28 @@ binding, complete Store entry/retirement/migration coverage and native bot/confi
 mutation contracts remain required. The existing final synchronous diagnostic
 collector is unchanged. Actor tests therefore do NOT close LM-ENT1-P1 or qualify
 complete authority, responsiveness, runtime, device or release behavior.
+
+## Shutdown/lifetime preparation — 07a02c5
+
+Publication close and mutation lifetime retirement are distinct. The actor stores
+an original debt intent BEFORE requesting a mutation receipt, retains that receipt
+before acknowledging it, and preserves unknown/unsettled debt through close.
+Closed settlement may retire only exact original debt; it cannot restore currency
+or provide a business-success acknowledgement. Cleanup has separate bounded
+capacity and releases the original reservation only when its callback really ends.
+
+wait_drained is available only on the original closed loop and requires empty
+mutation debt. It does not prove arbitrary worker threads terminated or that an
+uncertain COMMIT/ROLLBACK outcome became known. A timeout never erases debt or
+authorizes Store close. Unknown begin/partial settlement may conservatively retain
+debt indefinitely. The listener must keep cleanup delivery alive until its owned
+SQL work can settle; it cannot stop the loop first and infer successful retirement.
+
+The fixed original Store-finally path is the required ended-SQL handoff. Merely
+possessing a receipt is not independent ended-worker proof; do not expose cleanup
+as a user/remote mutation API. Tests cover a held real Store worker across close,
+no early drain, original-receipt cleanup, unknown begin return debt and cleanup
+under saturated new-begin admission. Both291-case suites pass. Independent delta
+review found no new concrete blocker under these assumptions. Adapter lifecycle,
+operator/native/config coordination and complete serving-path qualification remain
+unimplemented; no live resources are managed by this actor yet.
