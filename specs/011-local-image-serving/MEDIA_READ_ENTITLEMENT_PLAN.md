@@ -114,3 +114,21 @@ safe old-process drain before schema migration, real packaging/runtime/device
 qualification, and explicit host/device opt-in decisions. No automatic rollback
 from schema 4, mobile self-grant, approval privilege expansion, or new permission
 is authorized by this implementation document.
+
+## Independent review — blockers on fb82aef
+
+Read-only reviewer verified exact backend fb82aef and mobile 463c6bf. No concrete
+mobile lifecycle blocker was found in the inspected paths; this is not full release
+review. Backend delivery remains blocked by two findings:
+
+1. The final authority checkpoint can invoke a bot/auth callback after media
+   comparisons. Re-sample media decision, settings and API after the last callback,
+   compare the held authority, and prohibit further authority-bearing callbacks
+   before publication. Add a final-callback causal mutation regression.
+2. Across the worker await, the handler retains a context without rejoining the
+   request application's current context and original identity/store/bridge cohort.
+   Reject a replaced app context or dependency before final collection/publication.
+   Add an original-context replacement regression.
+
+No deployed host contains these new diagnostics. Fixes and independent re-review
+remain required. Synchronous final-check latency and migration gates remain open.
