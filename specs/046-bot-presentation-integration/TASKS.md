@@ -1,5 +1,14 @@
 ## November 8 — reviewed host updates deployed; character integration remains open
 
+Publication actor preparation `d6f57d4` adds bounded worker-to-listener handshakes
+for the optional Store observer, refusing loop-thread waits and late acknowledgements.
+Queue debt is retained until actual callback retirement; sticky failure/cohort drift
+is checked after currency operations. Independent review confirmed the two identified
+actor refinements fixed. Both287-case suites pass, including real Store worker and
+synthetic deadline/allocation/failure cases. The actor remains unwired; operatorIPC,
+full Store/lifecycle and native/config coordination remain absent. This does not
+close the existing final-collector responsiveness defect or qualify deployment.
+
 Store publication preparation now reaches real transaction boundaries: optional
 construction-time observer at code `ab2fd5e` invalidates before SQL and records
 confirmed commit/rollback certainty under the original lock. No begin receipt

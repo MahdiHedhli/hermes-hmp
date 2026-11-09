@@ -215,3 +215,8 @@ known commit/rollback settlement and uncertainty. ReviewNone-receipt finding fix
 is documentation-only descendant. The listener does not install an observer;
 writer census/coordinator/native contracts remain incomplete. See published
 docs/architecture/MEDIA_PUBLICATION_WRITERS.md on the focused source branch.
+
+P2 actor checkpointd6f57d4: worker-only listener rendezvous and postoperation
+failure/cohort seals prepared;287cases pass eachPython. Independent review confirms
+two actor findings repaired. No listener installs it, operatorIPC/native/config
+writer coverage is missing, and P1 remains unresolved on the actual serving path.
