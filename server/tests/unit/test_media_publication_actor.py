@@ -84,3 +84,47 @@ def test_uncertain_settlement_and_shutdown_cannot_publish():
         actor.close()
         with pytest.raises(PublicationUnavailable): await asyncio.to_thread(actor.begin)
     asyncio.run(scenario())
+
+
+@pytest.mark.parametrize('operation', ('candidate', 'claim'))
+def test_worker_failure_during_currency_clock_never_returns_currency(monkeypatch, operation):
+    from hmp_plugin import media_publication as p
+    async def scenario():
+        actor = a.MediaPublicationActor(); cohort = (object(), object(), object())
+        ticket = actor.candidate(SCOPE, cohort)
+        original = p.time.monotonic_ns
+        def clock():
+            worker = threading.Thread(target=actor._failed.set)
+            worker.start(); worker.join()
+            return original()
+        monkeypatch.setattr(p.time, 'monotonic_ns', clock)
+        with pytest.raises(PublicationUnavailable):
+            if operation == 'candidate': actor.candidate(SCOPE, cohort)
+            else: actor.claim_once(ticket, SCOPE, cohort)
+        actor.close()
+    asyncio.run(scenario())
+
+
+def test_pre_enqueue_future_allocation_failure_releases_only_unused_slot(monkeypatch):
+    async def scenario():
+        actor = a.MediaPublicationActor()
+        original = a.concurrent.futures.Future
+        def broken(): raise MemoryError('synthetic allocation failure')
+        # Construct the thread before patching concurrent.futures, because
+        # asyncio.to_thread itself uses that module's Future factory.
+        errors = []
+        def worker():
+            try: actor.begin()
+            except PublicationUnavailable: errors.append(True)
+        thread = threading.Thread(target=worker)
+        monkeypatch.setattr(a.concurrent.futures, 'Future', broken)
+        thread.start(); thread.join(2)
+        monkeypatch.setattr(a.concurrent.futures, 'Future', original)
+        assert not thread.is_alive() and errors == [True]
+        await asyncio.sleep(0)
+        acquired = [actor._slots.acquire(blocking=False) for _ in range(33)]
+        assert acquired == [True] * 32 + [False]
+        for _ in range(32): actor._slots.release()
+        with pytest.raises(PublicationUnavailable): actor.candidate(SCOPE, (1, 2, 3))
+        actor.close()
+    asyncio.run(scenario())

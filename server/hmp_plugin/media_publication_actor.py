@@ -35,11 +35,25 @@ class MediaPublicationActor:
 
     def candidate(self, scope: tuple, cohort: tuple):
         self._owner()
-        return self._publisher.candidate(scope, cohort)
+        publisher, loop, thread = self._publisher, self._loop, self._thread
+        result = publisher.candidate(scope, cohort)
+        self._post_operation(publisher, loop, thread)
+        return result
 
     def claim_once(self, ticket, scope: tuple, cohort: tuple) -> bool:
         self._owner()
-        return self._publisher.claim_once(ticket, scope, cohort)
+        publisher, loop, thread = self._publisher, self._loop, self._thread
+        result = publisher.claim_once(ticket, scope, cohort)
+        self._post_operation(publisher, loop, thread)
+        return result
+
+    def _post_operation(self, publisher, loop, thread) -> None:
+        if (self._failed.is_set() or self._publisher is not publisher
+                or self._loop is not loop or self._thread is not thread
+                or not loop.is_running()):
+            self._failed.set()
+            publisher.close()
+            raise PublicationUnavailable()
 
     def close(self) -> None:
         if threading.current_thread() is not self._thread:
@@ -84,22 +98,30 @@ class MediaPublicationActor:
             raise PublicationUnavailable()  # no loop-thread rendezvous/deadlock
         if self._failed.is_set() or not self._loop.is_running():
             raise PublicationUnavailable()
-        if not self._slots.acquire(blocking=False):
-            raise PublicationUnavailable()
-        reply = concurrent.futures.Future()
-        deadline = time.monotonic() + _ACK_WAIT_S
+        reserved = None  # unknown acquisition is not proof a slot is unused
+        enqueue_attempted = False
         try:
+            reserved = self._slots.acquire(blocking=False)
+            if reserved is False:
+                raise PublicationUnavailable()
+            reply = concurrent.futures.Future()
+            deadline = time.monotonic() + _ACK_WAIT_S
+            enqueue_attempted = True
             self._loop.call_soon_threadsafe(
                 self._deliver, reply, deadline, operation, receipt, certain,
             )
             result = reply.result(timeout=max(0, deadline - time.monotonic()))
-            if time.monotonic() >= deadline:
+            if self._failed.is_set() or time.monotonic() >= deadline:
                 raise PublicationUnavailable()
             return result
         except BaseException:
-            # Do not release the slot early: enqueue may have happened and the
-            # callback must retire it. Unknown enqueue can retain debt until close.
+            if reserved is False:
+                raise PublicationUnavailable() from None  # capacity refusal, no operation
             self._fail()
+            if reserved is True and not enqueue_attempted:
+                self._slots.release()  # proven unused; no callback can own it
+            # Otherwise retain debt until actual callback retirement. Unknown
+            # enqueue/acquisition may retain debt until this closed actor retires.
             raise PublicationUnavailable() from None
 
     def begin(self) -> MutationTicket:
