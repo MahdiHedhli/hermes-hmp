@@ -1,5 +1,14 @@
 ## November 8 — reviewed host updates deployed; character integration remains open
 
+Mobile media UI source `6485c25` adds independent image-access guidance to the
+chat overview readiness panel, with no grant/Fix action. It distinguishes missing
+image rights, disabled host opt-in and unavailable API; existing scope/refresh
+fences discard late results after bot changes. Ten focused panel tests and 56
+selected-bot/Bot Chat regressions pass; focused Flutter analysis is clean.
+This completes the first source UI path, not review/runtime/physical qualification.
+Independent review, backend final-check latency and schema/deployment gates remain;
+no new build was installed and no live rights/settings changed.
+
 Mobile media lifecycle source `0dcbbb4` binds discovery and bot diagnostics to
 the captured foreground API and original pairing lifecycle scope. Switching during
 either await cancels the result; late revocation affects only its original host.
