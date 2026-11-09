@@ -979,14 +979,16 @@ class HmpAdapter(BasePlatformAdapter):
         ctx = srv.ctx if original_ctx is None else original_ctx
         store = ctx.store if original_store is None else original_store
         close = store.close if original_close is None else original_close
+        def rejoin():
+            current = getattr(self, "_server", None)
+            if (srv.ctx is not ctx or ctx.store is not store
+                    or (current is not None and current is not srv)):
+                raise RuntimeError("Store retirement scope changed; retain original Store")
+
         await srv.wait_operator_drain()
-        current = getattr(self, "_server", None)
-        if (srv.ctx is not ctx or ctx.store is not store
-                or (current is not None and current is not srv)):
-            raise RuntimeError("Store retirement scope changed; retain original Store")
+        rejoin()
         self._close_generation(ctx)
-        if srv.ctx is not ctx or ctx.store is not store:
-            raise RuntimeError("Store retirement scope changed; retain original Store")
+        rejoin()  # generation cleanup may replace even an otherwise identical server/Store owner
         close()  # original bound method; never a newer ctx's Store, never automatically replayed
 
     @staticmethod
