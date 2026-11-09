@@ -1,5 +1,14 @@
 ## November 8 — reviewed host updates deployed; character integration remains open
 
+Publication preparation `385b1de` now has24 tests on each supported Python version,
+including exact real-code line/return interruptions at begin, settlement, close,
+candidate and publication-claim handoffs. No acknowledgement means the example
+caller starts no write/sample/publication; completed definite settlement is not
+replayed after a lost return. These examples do not qualify real CLI/store/native
+orchestration, which remains unwired. Initial settlement defect is independently
+confirmed fixed; causal handoff-test review is requested. P1 responsiveness, all
+writer coordination, native/config evidence and device/release gates remain open.
+
 LM-ENT1-P2 source `22e5a58` prepares an UNWIRED listener-thread publication
 currency state machine: bounded single-use request/cohort tickets, invalidation
 before mutation, nested pending barriers and sticky uncertain outcomes. Independent

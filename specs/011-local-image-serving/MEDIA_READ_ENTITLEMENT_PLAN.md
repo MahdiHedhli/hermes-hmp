@@ -202,3 +202,9 @@ P2 preparation22e5a58 is an unwired currency primitive, not authorization.14case
 pass on both interpreters. Initial review interruption finding has a source repair;
 re-review/line-return fault coverage and all writer coordination remain open.
 Candidate must be minted BEFORE worker sampling begins and held through claim.
+
+P2 handoff checkpoint385b1de:24 cases pass each interpreter, including exact-line
+and return-event interruption. Example callers require original receipt before
+write/sample/publish. Lost settlement acknowledgement never triggers mutation or
+settlement replay; definite completed settlement may remain internally settled.
+This does not qualify actual caller wiring, still required before integration.
