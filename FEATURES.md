@@ -1,6 +1,16 @@
 ## November 8 — reviewed host updates deployed; character integration remains open
 
 
+Mutation service source `be1f84b` passes142 combined read/FD/layout/codec/CAS/service
+cases on both Python3.14.9 and3.11.15, plus full Ruff. The17 service cases now cover
+malformed frames, waiting-client bound, foreign connection challenge/cohort, worker
+timeout/cancellation and post-enqueue lost acknowledgement. A causal failing control
+reproduced late wrapped worker diagnostics reaching the async log; the source fix
+consumes that late exception without early worker retirement. The failed control is
+retained. The service is still unwired and independent service review is pending;
+no host/device/release upgrade or resolved native publication gate is claimed.
+
+
 Separate operator transport source `b719992` now has a single-use connection challenge,
 same-UID peer check, fixed private socket, bounded workers and actual concurrent-worker
 retirement after timeout/cancellation. Seven synthetic socket/Store/actor cases pass
