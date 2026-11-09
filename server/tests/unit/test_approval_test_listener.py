@@ -127,6 +127,7 @@ def test_stop_observer_cancel_keeps_join_owner_and_all_dependencies(tmp_path, mo
             async def cleanup(self):
                 events.append("runner_destroyed")
         srv._runner = Runner()
+        srv._start_runner = srv._runner  # synthetic original startup owner
         srv._on_closed = lambda: events.append("store_callback")
         observer = asyncio.create_task(srv.stop())
         await endpoint.entered.wait()
@@ -237,6 +238,8 @@ def test_adapter_disconnect_retains_record_store_and_pointer_until_real_join(
                 entered.set()
                 await release.wait()
                 events.append("joined")
+            async def wait_operator_drain(self):
+                assert events.count("joined") == 1 and release.is_set()
         srv = Listener()
         adapter._server = srv
         adapter._record = tmp_path / "synthetic-listener.json"
@@ -367,3 +370,73 @@ def test_composed_disconnect_keeps_store_until_readiness_debt_joins(
         asyncio.run(scenario())
     finally:
         original_close()
+
+
+def test_context_replacement_with_copied_fields_cannot_revive_approval_generation(
+        tmp_path, monkeypatch):
+    env = Env(tmp_path)
+
+    async def scenario():
+        srv, _, _ = arm(env, monkeypatch)
+        await srv.start_approval_test(tmp_path / "synthetic-listener.json", "b" * 32)
+        current = env.ctx.approval_test_current
+        original = srv.ctx
+        assert current() is True
+        # Even exact-looking copied authority fields are a different context owner.
+        srv.ctx = SimpleNamespace(**vars(original))
+        assert current() is False
+        srv.ctx = original
+        assert current() is False
+        await srv.stop(notify=False)
+
+    try:
+        asyncio.run(scenario())
+    finally:
+        env.store.close()
+
+
+def test_replaced_context_before_approval_start_creates_no_service(tmp_path, monkeypatch):
+    env = Env(tmp_path)
+
+    async def scenario():
+        srv, _, factories = arm(env, monkeypatch)
+        original = srv.ctx
+        srv.ctx = SimpleNamespace(**vars(original))
+        await srv.start_approval_test(tmp_path / "synthetic-listener.json", "b" * 32)
+        assert not factories and not Endpoint.instances and srv._at1_service is None
+        srv.ctx = original
+        await srv.stop(notify=False)
+
+    try:
+        asyncio.run(scenario())
+    finally:
+        env.store.close()
+
+
+def test_unknown_shutdown_publication_cannot_start_approval_endpoint(tmp_path, monkeypatch):
+    env = Env(tmp_path)
+
+    async def scenario():
+        srv, _, factories = arm(env, monkeypatch)
+        loop = asyncio.get_running_loop()
+        original = loop.create_task
+
+        def create(coro, *args, **kwargs):
+            if getattr(getattr(coro, "cr_code", None), "co_name", None) == "_stop_owned":
+                raise MemoryError("synthetic shutdown task publication refusal")
+            return original(coro, *args, **kwargs)
+
+        monkeypatch.setattr(loop, "create_task", create)
+        try:
+            with pytest.raises(RuntimeError, match="shutdown ownership unresolved"):
+                await srv.stop(notify=False)
+            assert srv._stop_owner is None
+            await srv.start_approval_test(tmp_path / "synthetic-listener.json", "b" * 32)
+            assert not factories and not Endpoint.instances and srv._at1_service is None
+        finally:
+            srv._stop_coro.close()  # fixture knows no task was enqueued
+
+    try:
+        asyncio.run(scenario())
+    finally:
+        env.store.close()
