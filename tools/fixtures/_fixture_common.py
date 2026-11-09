@@ -252,11 +252,21 @@ def ensure_runtime_deps(build: BuildInfo, *, timeout: float = 300.0) -> None:
         " except m.PackageNotFoundError:out[name]=None\n"
         "print(json.dumps(out))"
     )
-    result = subprocess.run(
-        [str(build.venv_python), "-I", "-c", script],
-        env=clean_hermes_env(), capture_output=True, text=True,
-        timeout=timeout, check=False,
+    message = (
+        "fixture dependencies unavailable; prepare aiohttp, cryptography and qrcode "
+        "with the target build's locked environment workflow before launch"
     )
+    result = None
+    try:
+        result = subprocess.run(
+            [str(build.venv_python), "-I", "-c", script],
+            env=clean_hermes_env(), capture_output=True, text=True,
+            timeout=timeout, check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        pass  # release the child exception/diagnostics before fixed public refusal
+    if result is None:
+        raise FixtureSafetyError(message)
     try:
         metadata = json.loads(result.stdout)
         valid = (result.returncode == 0 and type(metadata) is dict
@@ -265,7 +275,4 @@ def ensure_runtime_deps(build: BuildInfo, *, timeout: float = 300.0) -> None:
     except (ValueError, TypeError):
         valid = False
     if not valid:
-        raise FixtureSafetyError(
-            "fixture dependencies unavailable; prepare aiohttp, cryptography and qrcode "
-            "with the target build's locked environment workflow before launch"
-        )
+        raise FixtureSafetyError(message)

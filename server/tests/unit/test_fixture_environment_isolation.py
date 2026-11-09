@@ -99,3 +99,21 @@ def test_dependency_preflight_never_installs_or_leaks_child_diagnostics(tmp_path
     assert command[:3] == [str(build.venv_python), "-I", "-c"]
     assert "UNKNOWN_FUTURE_PROVIDER_TOKEN" not in kwargs["env"]
     assert "uv" not in command and "pip" not in command and "install" not in command
+
+
+@pytest.mark.parametrize("failure", ("launch", "timeout"))
+def test_dependency_child_launch_failures_drop_private_exception_context(tmp_path, monkeypatch, failure):
+    module = common()
+
+    def run(*_args, **_kwargs):
+        if failure == "timeout":
+            raise module.subprocess.TimeoutExpired("synthetic", 1,
+                output="private-child-output", stderr="private-child-error")
+        raise OSError("private-launch-error")
+
+    monkeypatch.setattr(module.subprocess, "run", run)
+    build = module.BuildInfo("synthetic", tmp_path / "source", tmp_path / "python")
+    with pytest.raises(module.FixtureSafetyError, match="locked environment") as exc:
+        module.ensure_runtime_deps(build)
+    assert "private" not in str(exc.value)
+    assert exc.value.__context__ is None and exc.value.__cause__ is None
