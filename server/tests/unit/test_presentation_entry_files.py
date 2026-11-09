@@ -28,7 +28,8 @@ from hmp_plugin.presentation_startup_selection import StartupSelectionOwner
 from hmp_plugin.presentation_gateway_recipe import GatewayRecipeOwner
 from hmp_plugin.presentation_gateway_package import GatewayPackageOwner
 from hmp_plugin import (presentation_startup_cache, presentation_source_digest,
-                        presentation_native_metadata)
+                        presentation_native_metadata, presentation_startup_probe,
+                        presentation_startup_probe_policy)
 sys.path.insert(0, str(base / "native"))
 entry = GatewayEntryOwner.start()
 namespace.__path__ = []
@@ -217,6 +218,7 @@ def test_actual_entry_and_wrapper_files(tmp_path, mutation):
     for name in ("presentation_gateway_activation.py", "presentation_startup_artifacts.py",
                  "presentation_startup_selection.py", "presentation_gateway_recipe.py",
                  "presentation_gateway_package.py", "presentation_startup_cache.py",
+                 "presentation_startup_probe.py", "presentation_startup_probe_policy.py",
                  "presentation_source_digest.py", "presentation_native_metadata.py",
                  "presentation_metadata_custody.py"):
         shutil.copyfile(SERVER / "hmp_plugin" / name, tmp_path / "hmp_plugin" / name)
