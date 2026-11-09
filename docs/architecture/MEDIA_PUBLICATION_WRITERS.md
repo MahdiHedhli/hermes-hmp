@@ -291,3 +291,31 @@ No live incident is observed or claimed. This repair currently exists only in
 isolated source; a minimal separately reviewed/tested backport and deployment is
 needed before the production risk is considered resolved. Do not activate schema4
 or the media mutation service merely to deploy the read-only lifetime repair.
+
+## Original media-lane retirement preparation — 1f8fd9a
+
+An unwired MediaOperatorRetirement now captures the original service, actor, Store,
+budget, executor, operation/mutation ledgers and publication/failure objects plus
+loop/thread and identity/bridge/IID/generation/nonce scope. Shutdown closes service
+admission and actor publication before any await. One retained Task joins actual
+service worker debt and actor SQL settlement; cancelling a waiter does not cancel
+that owner. Completion requires the original scope and both original ledgers empty.
+
+It NEVER closes Store or claims all HTTP/read/native borrowers finished. Its
+completion check is valid only for that exact Store and original scope. Unknown
+creation retains its coroutine and sticky state, never inferring that it was
+unqueued or creating a replacement owner. The adapter must retain unresolved
+coordinator/coroutine ownership. Failed/cancelled owner work returns a distinct
+private failure token, not success or private unhandled-task diagnostics. A known
+retained Task may be observed again after reporting registration loss; this waits
+on the same owner rather than replaying shutdown or SQL.
+
+Both199-case combined suites pass unchanged on Python3.14.9/3.11.15 and full Ruff
+passes. Independent finite source/delta reviews found no further concrete blocker.
+Eight retirement cases cover idle/idempotent/exact-Store/noclose, cancelled waiter
+with actual worker borrow, actual Store rollback and actor settlement, unknown
+submission despite separately observed commit, before/after scheduling return
+loss, callback registration loss and changed-generation refusal. Whole-listener
+integration and resource ownership, schema migration, native/config publication,
+physical image display and release qualification remain open. No deployed host
+uses this coordinator or the new media mutation service.
