@@ -10,6 +10,7 @@ Contract: specs/001-connect-and-browse/contracts/fixture-format.md
 from __future__ import annotations
 
 import os
+import json
 import socket
 import subprocess
 import sys
@@ -239,18 +240,32 @@ def run_seed_script(
 
 
 def ensure_runtime_deps(build: BuildInfo, *, timeout: float = 300.0) -> None:
-    """`--serve` needs `aiohttp` (the HMP listener) and `qrcode` (`hermes hmp pair offer`'s
-    renderer, in case anything ever reaches it) inside the build's own venv; `cryptography` and
-    `pyyaml` are already Hermes dependencies. Installed via `uv` (T004 uses the same tool), never
-    `pip` (uv-managed venvs ship without pip). Idempotent — `uv pip install` is a no-op when the
-    package is already the requested version."""
-    subprocess.run(
-        [
-            "uv", "pip", "install", "--python", str(build.venv_python),
-            "aiohttp", "cryptography", "qrcode",
-        ],
-        check=True,
-        capture_output=True,
-        text=True,
-        timeout=timeout,
+    """Verify prepared metadata only; a fixture launch never installs unpinned code.
+
+    Prepare these packages explicitly through the target's locked environment
+    workflow. Presence is a prerequisite, not API/runtime qualification.
+    """
+    script = (
+        "import importlib.metadata as m,json; out={}\n"
+        "for name in ('aiohttp','cryptography','qrcode'):\n"
+        " try:out[name]=m.version(name)\n"
+        " except m.PackageNotFoundError:out[name]=None\n"
+        "print(json.dumps(out))"
     )
+    result = subprocess.run(
+        [str(build.venv_python), "-I", "-c", script],
+        env=clean_hermes_env(), capture_output=True, text=True,
+        timeout=timeout, check=False,
+    )
+    try:
+        metadata = json.loads(result.stdout)
+        valid = (result.returncode == 0 and type(metadata) is dict
+                 and set(metadata) == {"aiohttp", "cryptography", "qrcode"}
+                 and all(type(v) is str and bool(v) for v in metadata.values()))
+    except (ValueError, TypeError):
+        valid = False
+    if not valid:
+        raise FixtureSafetyError(
+            "fixture dependencies unavailable; prepare aiohttp, cryptography and qrcode "
+            "with the target build's locked environment workflow before launch"
+        )

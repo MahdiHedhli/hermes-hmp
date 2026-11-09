@@ -71,3 +71,31 @@ def test_seed_child_uses_fixed_module_path_and_no_inherited_credentials(tmp_path
     assert command == [str(build.venv_python), str(tmp_path / "synthetic-helper.py")]
     assert env["PYTHONPATH"] == str(module.SERVER_DIR)
     assert "UNKNOWN_FUTURE_PROVIDER_TOKEN" not in env
+
+
+@pytest.mark.parametrize("reply,code", (("{\"aiohttp\":\"1\",\"cryptography\":\"2\",\"qrcode\":\"3\"}", 0),
+    ("{\"aiohttp\":null,\"cryptography\":\"2\",\"qrcode\":null}", 0),
+    ("private-child-diagnostic", 1), ("[]", 0)))
+def test_dependency_preflight_never_installs_or_leaks_child_diagnostics(tmp_path, monkeypatch, reply, code):
+    from types import SimpleNamespace
+    module = common()
+    monkeypatch.setenv("UNKNOWN_FUTURE_PROVIDER_TOKEN", "synthetic-test-value")
+    calls = []
+
+    def run(command, **kwargs):
+        calls.append((command, kwargs))
+        return SimpleNamespace(returncode=code, stdout=reply, stderr="private-child-diagnostic")
+
+    monkeypatch.setattr(module.subprocess, "run", run)
+    build = module.BuildInfo("synthetic", tmp_path / "source", tmp_path / "python")
+    if code == 0 and reply.startswith('{"aiohttp":"1"'):
+        module.ensure_runtime_deps(build)
+    else:
+        with pytest.raises(module.FixtureSafetyError, match="locked environment") as exc:
+            module.ensure_runtime_deps(build)
+        assert "private-child-diagnostic" not in str(exc.value)
+    assert len(calls) == 1
+    command, kwargs = calls[0]
+    assert command[:3] == [str(build.venv_python), "-I", "-c"]
+    assert "UNKNOWN_FUTURE_PROVIDER_TOKEN" not in kwargs["env"]
+    assert "uv" not in command and "pip" not in command and "install" not in command
