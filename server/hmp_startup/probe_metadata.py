@@ -294,7 +294,7 @@ def _fresh_probe_resource_tail(owner, resource):
     _need(type(origin) is tuple and len(origin) == 7
           and type(origin[0]) is ModuleType
           and sys.modules.get('hmp_startup.probe_native') is origin[0]
-          and type(origin[1]) is tuple and len(origin[1]) == 6
+          and type(origin[1]) is tuple and len(origin[1]) == 7
           and type(origin[2]) is tuple and len(origin[2]) == 26)
     if type(resource.metadata) is origin[1][0][0]:
         for name, function, code in origin[2]:

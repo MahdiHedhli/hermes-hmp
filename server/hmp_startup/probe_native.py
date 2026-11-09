@@ -76,8 +76,10 @@ class _ProbeFinish(NamedTuple):
 def _new_probe_engine_origin():
     module = sys.modules.get(__name__)
     _require(type(module) is ModuleType and vars(module) is globals())
+    from .cache_probe import CacheProbeData
+
     kinds = (_ProbeExecution, _ProbeConsumer, _ProbeReturn, _ProbeCommit,
-             metadata._ReportedMissingMetadataReturn, _ProbeFinish)
+             metadata._ReportedMissingMetadataReturn, _ProbeFinish, CacheProbeData)
     types = tuple((kind, kind._fields,
                    tuple(vars(kind).get(name) for name in kind._fields)) for kind in kinds)
     functions = tuple((name, globals()[name], globals()[name].__code__) for name in (
@@ -101,7 +103,7 @@ def _engine_origin_tail(origin):
              and type(origin[0]) is ModuleType
              and sys.modules.get(__name__) is origin[0]
              and vars(origin[0]) is globals()
-             and type(origin[1]) is tuple and len(origin[1]) == 6
+             and type(origin[1]) is tuple and len(origin[1]) == 7
              and type(origin[2]) is tuple and len(origin[2]) == 26
              and origin[3] is OSError.__dict__['errno']
              and origin[4] is OSError.__dict__['filename']
@@ -236,6 +238,11 @@ def _opened_chain_tail(execution, closed=False):
                  and type(entry[5]) is tuple and len(entry[5]) == 5
                  and all(type(value) is int for value in entry[5])
                  and type(entry[6]) is _ProbeCommit
+                 and type(entry[6].consumer) is _ProbeConsumer
+                 and entry[6].consumer.execution is execution
+                 and type(entry[6].sequence) is int
+                 and 0 <= entry[6].sequence < len(execution.history)
+                 and execution.history[entry[6].sequence] is entry[6]
                  and entry[6].identity is entry[5]
                  and entry[6].site == position * 6
                  and reg.scope.records[position] is entry[3])
@@ -434,7 +441,8 @@ def _open_ancestor(execution, commit, held):
 
 
 def _finish(execution, predecessor, held):
-    _require(execution.finished == [False] and type(held) is list)
+    _require(type(execution) is _ProbeExecution
+             and execution.finished == [False] and type(held) is list)
     resources = tuple(held)
     outcome = _finished_state_tail(execution, predecessor, resources)
     values = (execution, predecessor, resources, outcome)
@@ -452,7 +460,10 @@ def _finished_state_tail(execution, predecessor, held):
     _history_tail(execution, predecessor)
     _opened_chain_tail(execution, closed=True)
     reg = execution.registration
-    _require(type(held) is tuple)
+    _require(type(held) is tuple
+             and all(type(entry) is tuple and len(entry) == 2
+                     and type(entry[0]) is _NativeOpenedDescriptor
+                     and type(entry[1]) is int for entry in held))
     _require(execution.next_site[0] == len(execution.plan.definitions)
              and execution.pending[0] is None and type(execution.outcome[0]) is tuple
              and len(execution.outcome[0]) == 4

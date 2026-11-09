@@ -384,7 +384,8 @@ class RuntimeCacheProbeOwner:
                  and type(actual.resources) is tuple)
         outcome, resources = actual.outcome, actual.resources
         _require(finish_tail(actual.execution, actual.predecessor, resources) is outcome)
-        kind = CacheProbeData
+        kind = origin[1][6][0]
+        _require(CacheProbeData is kind)
         fields = kind._fields
         members = tuple(vars(kind).get(name) for name in fields)
         constructor, constructor_code = kind.__new__, kind.__new__.__code__
