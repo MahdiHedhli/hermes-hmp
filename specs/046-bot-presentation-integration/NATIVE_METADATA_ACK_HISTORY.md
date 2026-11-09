@@ -1,3 +1,16 @@
+## November 9 — complete runtime/cache metadata sequence implemented; deployment pending
+
+Source `41100a4` wires the complete runtime-source and declared-cache file sequence through the shared metadata engine: original opened-directory observations, no-follow leaf-before stat, opened-leaf identity, actual EOF followed by leaf checks, and final ancestor checks including the root. Each step carries the caller’s literal prior return and original baseline. The actual final return is held across reserved descriptor closes; finish checks the original complete ACK chain, EOF, capsule retirement, closed descriptor chain, exact debit/reserve accounting and current lifecycle. Unwired owner policies retain the zero-cursor guard. This is complete runtime/cache file integration, not completion of the entire character pipeline.
+
+Causal controls exposed two finish defects in the earlier uninstalled source: a late weak-reference callback could alter earlier custody/ACK mirrors before acceptance, and a foreign final ordinal could invoke a comparison hook before refusal. The repaired finish observes weak-reference death before a final callback-free mirror seal and checks exact integer types before comparisons. The preserved baseline has one normal pass and three expected failing controls. The repaired four-case suite passes, with independent read-only source/evidence review. Four cache controls also pass, including normal integrated reading, copied-plan rejection, late ledger drift and interrupted EOF. Test successor `e3a78c6` adds two passing integration cases: a complete empty file with a real EOF and loss of the actual final return, which refuses without adopting a matching history entry or replaying work. Production bytes are unchanged across these test successors.
+
+All ten selected current-interpreter cases pass across three unchanged-source runs. The combined ten-case Python 3.11.15 suite also passes: ten tests, zero failures/errors/skips, unchanged source. The prior post-read 13-case minimum-interpreter run has also finished with 13 passes, zero failures/errors/skips and unchanged source. Earlier standalone metadata tests still need migration to the actual integrated call boundary; no legacy production opt-out is being added for them.
+
+Bot-character images and host-local chat images remain unfinished and undeployed. Other metadata policies/all39 sites, remaining native operations, startup/factory/service/runtime integration, resource/deadline limits and physical/release acceptance remain open. No candidate host/app deployment, restart, grants, model/provider change, pairing, job execution or release submission occurred. The full roadmap goal remains active.
+
+
+The following design notes are historical where superseded above; remaining acceptance requirements still apply.
+
 # Original metadata ACK history
 
 This is an isolated engine extension, not an installed character feature or a
