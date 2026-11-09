@@ -463,3 +463,32 @@ This deploys only the small read-context parity repair atop the earlier safety
 backport. The feature-branch bootstrap/retirement/media additions remain uninstalled.
 Partial listener/builder resource recovery, all other borrowers, migration, native
 publication and physical/release qualification remain open.
+
+## MR-START2b1: original runner/site/start owner — 641e39c
+
+HmpServer now retains one shielded actual startup Task and its coroutine. Its
+original runner is recorded before setup awaits, and site before purge/start
+awaits; original context/runner/site scope is checked after each await. Duplicate
+start waits on the same owner. Caller cancellation does not cancel or drop that
+owner. Stop fences startup before waiting for its actual owner to return, then
+cleans the retained runner. Cleanup acknowledgement loss keeps the runner and the
+known stop owner, without automatic cleanup replay or a false closed event.
+
+Unknown start Task creation retains sticky state/coroutine, cannot create another
+start owner and cannot certify shutdown. Unknown watcher publication similarly
+prevents a closed proof. Start-owner exceptions/cancellation produce a private
+failure token, not private unobserved-task diagnostics. A blocked actual setup or
+site can deliberately delay shutdown indefinitely rather than fabricate retirement.
+
+Both370-case combined suites pass unchanged on3.14.9/3.11.15 and Ruff passes.
+Independent finite source/test review found no new concrete blocker within this
+slice. Six synthetic runner/site cases cover setup failure, cancelled waiter and
+actual-site join, duplicate start, cleanup return loss and before/after Task-create
+acknowledgement loss. Fixture-only hidden-Task cleanup is not production proof;
+real TLS behavior remains covered separately by the existing server tests.
+
+This does NOT complete partial startup cleanup/activation. Context-wide teardown
+seals, stop-owner creation uncertainty/no-replay, auxiliary service/dispatcher
+publication, adapter reconciliation of partial listeners and all other Store
+borrowers remain open, as do builder failures, migration, native publication and
+physical/release acceptance. No source changes from this checkpoint were deployed.
