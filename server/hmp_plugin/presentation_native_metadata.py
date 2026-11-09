@@ -1199,7 +1199,8 @@ def _produce_directory_metadata(owner, consumer):
     operation = _admit_directory_operation(owner, consumer)
     result, ledger, phase = operation.result, operation.ledger, operation.phase
     callee, arguments = operation.callee, operation.arguments
-    raw, snapshot, actual = result.unset, None, None
+    unset, held_state = result.unset, operation.state
+    raw, snapshot, actual = unset, None, None
     probe = type(consumer) is _ProbeConsumer
     category = 'returned' if probe else _fixed_metadata_role(consumer.resource)
     native = operation.native
@@ -1252,29 +1253,32 @@ def _produce_directory_metadata(owner, consumer):
                  and result.acknowledged[0] is None
                  and type(consumer.commit) is list and len(consumer.commit) == 1
                  and consumer.commit[0] is None)
-        try:
-            if operation.operation == 4:
-                if probe:
-                    _probe_current_lifetime_tail(owner, consumer)
-                raw = callee(arguments[0])
-            else:
-                if probe:
-                    _probe_current_lifetime_tail(owner, consumer)
+        if probe:
+            # Lifecycle/control failures belong to integrity refusal, never to
+            # the native diagnostic classifier below.
+            _probe_current_lifetime_tail(owner, consumer)
+        if operation.operation == 4:
+            raw = callee(arguments[0])
+        else:
+            try:
                 raw = callee(arguments[0], dir_fd=arguments[1], follow_symlinks=False)
-            raw_cell[0] = raw  # actual C return, before allocation or validation
+            except missing_type as error:
+                if not probe:
+                    raise
+                _require(type(error) is missing_type)
+                number = error_number.__get__(error, missing_type)
+                filename = error_filename.__get__(error, missing_type)
+                _require(type(number) is int and number == enoent
+                         and type(filename) is str and filename == arguments[0])
+                missing = _ReportedMissingMetadataReturn(operation, result, consumer)
+                _require(type(missing) is _ReportedMissingMetadataReturn
+                         and missing.operation is operation and missing.result is result
+                         and missing.consumer is consumer)
+        # Capture the literal return before allocation/validation. This store
+        # and the returned-state publication are OUTSIDE diagnostic handling.
+        if missing is None:
+            raw_cell[0] = raw
             operation.state[1] = True
-        except missing_type as error:
-            if not probe:
-                raise
-            _require(operation.operation == 3 and type(error) is missing_type)
-            number = error_number.__get__(error, missing_type)
-            filename = error_filename.__get__(error, missing_type)
-            _require(type(number) is int and number == enoent
-                     and type(filename) is str and filename == arguments[0])
-            missing = _ReportedMissingMetadataReturn(operation, result, consumer)
-            _require(type(missing) is _ReportedMissingMetadataReturn
-                     and missing.operation is operation and missing.result is result
-                     and missing.consumer is consumer)
         operation.ended[0] = True
         if missing is None:
             _returned_directory_operation_tail(owner, consumer, operation, raw)
@@ -1298,6 +1302,12 @@ def _produce_directory_metadata(owner, consumer):
         _require(_pending_directory_return_tail(owner, consumer, actual) is actual)
         return actual
     except BaseException:
+        # This held local is assigned ONLY by the literal native call. Even if
+        # a later bookkeeping store failed, retain actual returned history;
+        # never reconstruct it from a current result cell or false diagnostic.
+        if (raw is not unset and type(held_state) is list and len(held_state) == 3
+                and held_state[1] is False):
+            held_state[1] = True
         # No refund/replay. Retire only held original data, preserving replacement slots.
         if type(operation.ended) is list and len(operation.ended) == 1:
             operation.ended[0] = True
