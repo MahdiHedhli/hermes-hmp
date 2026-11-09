@@ -144,7 +144,7 @@ def _action(cursor):
             None if cursor.ancestor == 0 else cursor.ancestor - 1)
 
 
-def _advance(cursor, category, identity=None):
+def _transition(cursor, category, identity=None):
     """Consume decoded policy DATA; this is never a native result/ACK guard."""
     _cursor_tail(cursor)
     _need(type(category) is str
@@ -186,9 +186,24 @@ def _advance(cursor, category, identity=None):
             else:
                 kind = 'confirmation' if kind == 'pre_stat' else 'finished'
                 ancestor = 0
-    result = _StartupCursor(policy, kind, component, ancestor, identities,
-                            expected, missing, cursor, cursor.sequence + 1)
-    return _cursor_tail(result)
+    return (policy, kind, component, ancestor, identities, expected, missing,
+            cursor, cursor.sequence + 1)
+
+
+def _validate_advance(cursor, category, identity, result):
+    _cursor_tail(result)
+    expected = _transition(cursor, category, identity)
+    _need(result.policy is cursor.policy and result.predecessor is cursor
+          and tuple.__len__(result) == len(expected)
+          and all(tuple.__getitem__(result, index) == value
+                  for index, value in enumerate(expected)))
+    return result
+
+
+def _advance(cursor, category, identity=None):
+    values = _transition(cursor, category, identity)
+    result = _StartupCursor(*values)
+    return _validate_advance(cursor, category, identity, result)
 
 
 def _outcome(cursor):
