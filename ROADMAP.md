@@ -1,4 +1,12 @@
-## November 9 — declared-file character pipeline advances; delivery remains unfinished
+## November 9 — bot-character pipeline checks opened-file identity
+
+The uninstalled shared metadata engine now checks the actual opened leaf descriptor against the literal earlier no-follow stat receipt (`72c5e4b`). It carries the real ordered directory/stat/open sequence, requires the same original declared file and full nine-field identity, and acknowledges only a matching actual fstat result. It never adopts a new baseline from the opened file. Five current-interpreter cases pass across two unchanged-source runs: normal identity, real timestamp-change rejection, copied/missing predecessor refusal, and ended-operation return-loss cleanup. Independent read-only source review found no new blocker in this bounded extension.
+
+The preceding actual-predecessor repair's broader current-interpreter selection (`a09eeda`) is now terminal: 23 passed, zero failures/errors/skips, unchanged source. The new combined 28-case Python 3.11.15 selection at `72c5e4b` is running; no result is claimed yet. These fixtures exercise runtime source reading and deliberately refuse the incomplete walker before delivering a character. They do not prove cache integration, all-site operation accounting, CPU/RSS/deadline bounds, full service/native/device acceptance or release readiness.
+
+Character images and host-local chat images remain unfinished and undeployed. Complete actual EOF/post-read and final-ancestor joins plus an end-to-end file sequence/finish proof are next; the unwired zero-cursor guard remains intact. Existing EOF and metadata closure helpers describe the latest operation with live descriptors, so later metadata debits and final closes need separate strictly bound historical-receipt/finish handling, not weakened current-operation checks or reconstructed acknowledgements. No host/app deployment, permission, provider, model, pairing, job or release change occurred. The full roadmap goal remains active.
+
+### Earlier checkpoints (historical; superseded by later results where noted)
 
 The uninstalled character metadata engine now carries an actual no-follow leaf-before stat through the existing custody/admission/policy/ACK/retirement lifecycle. It retains the same native result's full nine-field file identity and primitive timestamp, after the actual ordered directory ACK prefix. Fixed name/opened-parent joins reject copied history and wrong resources; unsafe file permissions refuse after the one actual stat without acknowledgement. The original 20-case current-interpreter selection at `a5f2b1d` passed with unchanged source.
 

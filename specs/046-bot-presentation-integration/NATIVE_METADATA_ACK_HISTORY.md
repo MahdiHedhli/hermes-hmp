@@ -60,3 +60,14 @@ The shared engine now supports only the original directory and leaf-before
 roles, with literal no-follow stat for the latter. Same-result timestamp DATA
 does not activate source-effect conversion or complete the walker. Actual
 leaf-opened/post-EOF/ancestor predecessor and baseline joins remain required.
+
+## Opened-leaf baseline extension
+
+Source72c5e4b retains the repaired literal predecessor handoff for the actual
+opened leaf. Before admission, its predecessor must be the original
+leaf-before commit for the same held walk and expected declaration. Pending
+policy compares the actual new full identity against that immutable earlier
+identity, then carries the same actual fstat timestamp separately. Changed
+mtime, copied/missing predecessor and lost producer return have focused current
+execution coverage; minimum-floor combined regression is pending. This adds no
+fullwalker completion, source-timestamp conversion or media authority.

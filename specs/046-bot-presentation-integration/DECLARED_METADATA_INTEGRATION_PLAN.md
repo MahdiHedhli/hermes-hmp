@@ -97,3 +97,25 @@ Independent review follows exact source and causal outcomes. Pure policy tests
 cannot qualify these joins. All39-site migration, reported-missing diagnostics,
 readlink/enumeration, remaining six-operation accounting, service/runtime and
 physical device/release acceptance remain explicit unfinished work.
+
+## November 9 source checkpoint
+
+Shared caller source72c5e4b supports original directory, leaf-before and
+leaf-opened roles. The opened role binds the actual leaf allocation and the
+literal previous leaf-before return. Its pre-admission closure checks the same
+walk/expected row and original predecessor; its policy compares all nine fields
+of the actual fstat identity against that held earlier identity before ACK.
+Current source passes five focused opened-leaf cases across two runs. The
+combined28 floor selection is pending. These are runtime-source fixtures, not
+cache/fullwalker/native/device qualification.
+
+Next integrate the actual EOF receipt, post-read pair and final ancestors with
+held original baselines. A current closed-read guard requires the latest read
+debit and IDLE; it cannot be repurposed unchanged after later metadata debits.
+Keep it strict and add a separately bound historical receipt join for the
+literal actual EOF return. Final metadata receipt closure also requires live
+FDs/current debit; after reserved closes, use an actual pre-close sequence-finish
+return with strict historical cleanup joins. Do not replace either proof with
+current cursor/history alone or caller-selected bypass flags. Change terminal
+cursor/cohort and fullwalker completion together with complete wiring, while
+preserving the zero-cursor guard for every unwired policy.
