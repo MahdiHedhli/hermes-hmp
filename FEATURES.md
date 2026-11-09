@@ -1,5 +1,12 @@
 ## November 8 — reviewed host updates deployed; character integration remains open
 
+Both 256-case media-readiness/contract/plugin-surface suites at `fb82aef` have
+now passed, zero failures/errors/skips and unchanged source. Mobile branch
+`feat/media-readiness-mobile-20261108` source `46bee41` adds strict content-free
+discovery/readiness DTOs: 34 Dart tests pass and focused analysis reports no issues.
+This is decoder-only progress; authenticated API transport, context lifecycle and
+phone UI are not implemented yet. No device/build/deployment qualification claimed.
+
 Media-readiness discovery is implemented at source `e1edd5f` through authenticated
 `GET /media-readiness/capabilities`: protocol support only, explicitly no remote
 permission writes. Its 85-case current-interpreter readiness suite passes.
