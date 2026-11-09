@@ -542,3 +542,21 @@ Fresh readonly inventory: iPad installed 2026110702, Android beta 6 connected, i
 currently disconnected. No app launch/install/UI qualification or host/media activation.
 
 Next: diagnose S5 media reference provenance and migration/version claims, then frozen inverse/route/module contracts with independent review; do not replace a failed guard with automatic acceptance.
+
+
+## Reviewed original failure reconciliation — full rerun pending
+
+Reconciliation source `1afc818` addresses the remaining original media/migration/
+source-contract failures in selected checks. S5 now uses actual current permission
+generations, explicitly rejects unversioned/wrong-generation callers, and retains native
+kind-forgery refusal. Legacy migrations prove no explicit media grants and preserved
+controls/data. Historical hashes remain unchanged behind exact test-only composition
+inverses; eleven new modules are individually enumerated. Review found and resolved a
+newline-normalizing witness reader; actual-file CRLF/lone-CR tests now protect raw bytes.
+1,127 selected cases pass unchanged on both pinned runtimes, zero failures/errors/skips;
+finite independent review accepted these test contracts, not all native semantics.
+Together with prior socket checks they cover all47 original failure cases. Full unit
+rerun is still required;14 missing native prerequisites and1 Linux-only skip remain.
+No deployment/activation or device qualification; broader feature goal stays active.
+
+Next: rerun complete unit selection with short owned paths and preserve all outcomes; configure exact native prerequisites separately, never convert skips or historical composition into release approval. Builder/native media authority/migration and physical gates remain.

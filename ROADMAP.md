@@ -1,5 +1,18 @@
 ## November 9 — shutdown ownership checks pass; media integration remains open
 
+Reconciliation source `1afc818` addresses the remaining original media/migration/
+source-contract failures in selected checks. S5 now uses actual current permission
+generations, explicitly rejects unversioned/wrong-generation callers, and retains native
+kind-forgery refusal. Legacy migrations prove no explicit media grants and preserved
+controls/data. Historical hashes remain unchanged behind exact test-only composition
+inverses; eleven new modules are individually enumerated. Review found and resolved a
+newline-normalizing witness reader; actual-file CRLF/lone-CR tests now protect raw bytes.
+1,127 selected cases pass unchanged on both pinned runtimes, zero failures/errors/skips;
+finite independent review accepted these test contracts, not all native semantics.
+Together with prior socket checks they cover all47 original failure cases. Full unit
+rerun is still required;14 missing native prerequisites and1 Linux-only skip remain.
+No deployment/activation or device qualification; broader feature goal stays active.
+
 Wide unit regression at `428583f` is NOT qualified: 47 failed, 8,182 passed,
 15 skipped; 190 passing subtests are additional JUnit nodes. Repair `7f3ac82` restores
 readonly push-status counts on exact known schema 3/4 without migration/auth/writes,
