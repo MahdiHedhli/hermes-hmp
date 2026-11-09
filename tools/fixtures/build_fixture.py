@@ -496,11 +496,12 @@ def serve_instances(
                 if h not in pending:
                     pending.append(h)
         if pending:
-            marker = out_dir / "shutdown-pending.json"
-            marker.write_text(json.dumps({"processes": [
-                {"key": h.key, "pid": h.process.pid, "stopAttempted": h.stop_owner.stop_attempted}
-                for h in pending], "forced": False}) + "\n", encoding="utf-8")
-            marker.chmod(0o600)
+            try:
+                fc.write_shutdown_pending(out_dir, "shutdown-pending.json", {"processes": [
+                    {"key": h.key, "pid": h.process.pid, "stopAttempted": h.stop_owner.stop_attempted}
+                    for h in pending], "forced": False})
+            except Exception:
+                pass  # marker failure never certifies cleanup or exposes raw child diagnostics
             raise fc.FixtureSafetyError("fixture graceful shutdown unresolved; retain process and artifacts")
 
     signal.signal(signal.SIGINT, lambda signum, frame: (cleanup(), sys.exit(130)))

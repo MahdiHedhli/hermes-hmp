@@ -158,15 +158,22 @@ def run_selfcheck(
             failures = check_instance(manifest, by_key[key], info)
             all_failures += [f"[{build_label}/{key}] {f}" for f in failures]
     finally:
-        owner.request_stop()
+        pending = False
+        try:
+            owner.request_stop()
+        except Exception:
+            pending = True  # retain original ownership even after lost signal acknowledgement
         try:
             owner.wait_stopped(30)
-        except fc.FixtureSafetyError:
-            marker = out_dir / "selfcheck-shutdown-pending.json"
-            marker.write_text(json.dumps({"pid": proc.pid, "stopAttempted": owner.stop_attempted,
-                                          "forced": False}) + "\n", encoding="utf-8")
-            marker.chmod(0o600)
-            raise
+        except Exception:
+            pending = True
+        if pending:
+            try:
+                fc.write_shutdown_pending(out_dir, "selfcheck-shutdown-pending.json", {
+                    "pid": proc.pid, "stopAttempted": owner.stop_attempted, "forced": False})
+            except Exception:
+                pass
+            raise fc.FixtureSafetyError("fixture graceful shutdown unresolved; retain process and artifacts")
     return all_failures
 
 

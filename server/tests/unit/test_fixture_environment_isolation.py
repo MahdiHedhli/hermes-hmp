@@ -155,3 +155,52 @@ def test_fixture_shutdown_refuses_foreign_process():
         owner.request_stop()
     with pytest.raises(module.FixtureSafetyError, match="owner changed"):
         owner.wait_stopped(0)
+
+
+def test_shutdown_marker_private_from_creation_and_never_follows_symlink(tmp_path):
+    import stat
+    module = common()
+    module.write_shutdown_pending(tmp_path, "shutdown-pending.json", {"forced": False})
+    assert stat.S_IMODE((tmp_path / "shutdown-pending.json").stat().st_mode) == 0o600
+    target = tmp_path / "untouched.txt"
+    target.write_text("original")
+    (tmp_path / "selfcheck-shutdown-pending.json").symlink_to(target)
+    with pytest.raises(FileExistsError):
+        module.write_shutdown_pending(tmp_path, "selfcheck-shutdown-pending.json", {"forced": False})
+    assert target.read_text() == "original"
+
+
+def test_selfcheck_request_error_still_waits_and_records_original_process(tmp_path, monkeypatch):
+    import io
+    import json
+    directory = Path(__file__).resolve().parents[3] / "tools/fixtures"
+    before = list(sys.path)
+    sys.path.insert(0, str(directory))
+    spec = importlib.util.spec_from_file_location("hmp_selfcheck_cleanup_test", directory / "selfcheck.py")
+    module = importlib.util.module_from_spec(spec)
+    try:
+        spec.loader.exec_module(module)
+    finally:
+        sys.path[:] = before
+    events = []
+
+    class Process:
+        pid = 123456
+        stdout = io.StringIO('{"key":"synthetic"}\n')
+        def poll(self): return None
+        def terminate(self):
+            events.append("terminate")
+            raise OSError("private-stop-diagnostic")
+        def wait(self, **_kwargs):
+            events.append("wait")
+            raise module.subprocess.TimeoutExpired("synthetic", 1)
+        def kill(self): raise AssertionError("force forbidden")
+
+    monkeypatch.setattr(module.subprocess, "Popen", lambda *_args, **_kwargs: Process())
+    monkeypatch.setattr(module, "check_instance", lambda *_args: [])
+    with pytest.raises(module.fc.FixtureSafetyError, match="retain process") as exc:
+        module.run_selfcheck("stock-base", tmp_path, {"instances": [{"key": "synthetic"}]})
+    assert events == ["terminate", "wait"]
+    marker = json.loads((tmp_path / "selfcheck-shutdown-pending.json").read_text())
+    assert marker == {"pid": 123456, "stopAttempted": True, "forced": False}
+    assert "private" not in str(exc.value) and exc.value.__context__ is None

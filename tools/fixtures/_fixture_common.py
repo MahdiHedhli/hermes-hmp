@@ -302,3 +302,15 @@ class FixtureProcessOwner:
             pending = True
         if pending:
             raise FixtureSafetyError("fixture graceful shutdown unresolved; retain process and artifacts")
+
+
+def write_shutdown_pending(out_dir: Path, name: str, payload: dict) -> None:
+    """Private exclusive marker creation: never overwrite or follow an existing entry."""
+    if name not in {"shutdown-pending.json", "selfcheck-shutdown-pending.json"}:
+        raise FixtureSafetyError("invalid shutdown marker name")
+    assert_outside_real_home(out_dir, "fixture shutdown output")
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
+    fd = os.open(Path(out_dir) / name, flags, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as stream:
+        json.dump(payload, stream)
+        stream.write("\n")
