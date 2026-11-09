@@ -122,6 +122,7 @@ def exercise(frame):
         sys.setprofile(prior)
         if gc_before:gc.enable()
     facts.update(case=resource_case,filesystem_native_calls=len(native_calls),foreign_hooks=list(foreign_hooks))
+    facts['boundary_complete']=True
     path=Path(sys.argv[1])/'fresh-probe-resource-stage.json'
     fd=os.open(path,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
     with os.fdopen(fd,'w') as stream:json.dump(facts,stream,sort_keys=True)
@@ -131,7 +132,7 @@ trace_synthetic_boundary(RuntimeCacheProbeOwner._observe_owned.__code__,
 try:owner.observe()
 except CacheProbeError:pass
 else:raise AssertionError('injected prefix boundary must stop legacy observation')
-assert seen==[True] and facts and owner._failed and not owner._ready
+assert seen==[True] and facts.get('boundary_complete') is True and owner._failed and not owner._ready
 assert owner._bytes_read==0 and owner._origin.records==[]
 print(json.dumps({'mutation':mutation,'runtime_admitted':False}))
 '''
