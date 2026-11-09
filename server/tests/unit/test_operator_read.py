@@ -728,3 +728,39 @@ def test_owned_unix_timeout_retains_debt_until_callback_returns(
             assert not service.path.exists()
             assert cleanup_errors == []
     asyncio.run(scenario())
+
+
+def test_cancelling_all_async_waiters_does_not_retire_actual_read_worker(monkeypatch):
+    entered, release = threading.Event(), threading.Event()
+
+    def blocked(*_args):
+        entered.set()
+        assert release.wait(3)
+        return {"synthetic": True}
+
+    monkeypatch.setattr(operator_read, "_collect", blocked)
+    budget = ReadWorkerBudget()
+    ctx = SimpleNamespace(read_worker_budget=budget, readiness_generation=GEN)
+    service = operator_read.OperatorReadService(ctx, "/private/tmp/synthetic", NONCE)
+
+    async def scenario():
+        caller = asyncio.create_task(service._context(RID, "0" * 32))
+        try:
+            assert await asyncio.to_thread(entered.wait, 1)
+            # Model framework cancellation of all async waiters in this isolated
+            # loop; a synchronous worker borrow cannot end merely with its waiter.
+            current = asyncio.current_task()
+            waiters = [task for task in asyncio.all_tasks() if task is not current]
+            for task in waiters:
+                task.cancel()
+            await asyncio.gather(*waiters, return_exceptions=True)
+            assert caller.done()
+            assert (budget.active, budget.operator) == (1, 1)
+            assert await service.stop() == 1
+            assert not service._drained.is_set()
+        finally:
+            release.set()
+            await asyncio.wait_for(service.wait_drained(), 1)
+        assert (budget.active, budget.operator) == (0, 0)
+
+    asyncio.run(scenario())
