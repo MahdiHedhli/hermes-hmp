@@ -87,7 +87,7 @@ def finish_failure_trace(frame,event,arg):
     return finish_failure_trace
 def finish_failure_global(frame,event,arg):
     if (frame.f_code.co_name=='_require'
-            and frame.f_code.co_filename in (startup_native.__file__,cache_module.__file__)):
+            and frame.f_code in (startup_native._require.__code__,cache_module._require.__code__)):
         return finish_failure_trace
     return None
 def scope_ended(frame):
