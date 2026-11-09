@@ -224,6 +224,7 @@ def test_actual_entry_and_wrapper_files(tmp_path, mutation):
                  "gateway_approval.py", "gateway_continuation.py", "bytecode_headers.py",
                  "cache_candidates.py", "cache_context.py", "cache_selection.py",
                  "runtime_reader.py", "source_compiler.py", "cache_probe.py", "probe_metadata.py",
+                 "probe_native.py",
                  "cache_reader.py", "cache_decoder.py"):
         shutil.copyfile(SERVER / "hmp_startup" / name, tmp_path / "hmp_startup" / name)
     (tmp_path / "hmp_startup/unused.py").write_text("# SYNTHETIC UNUSED\n")

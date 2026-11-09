@@ -66,6 +66,7 @@ class _FreshProbePlan(NamedTuple):
     commits: list
     ancestors: list
     resource_origin: tuple
+    engine_origin: tuple
 
     def __repr__(self):
         return '<FreshProbePlan original DATA no-admission>'
@@ -127,6 +128,9 @@ def _new_fresh_probe_plan(owner, root, selected, context):
           and _ProbeObservationResource is _NativeProbeMetadataResource)
     resource_origin = (_NativeProbeMetadataResource, owner_kind, module,
                        helper_module, helper, helper.__code__)
+    from .probe_native import _new_probe_engine_origin
+
+    engine_origin = _new_probe_engine_origin()
     site_kind, plan_kind = _ProbeSite, _FreshProbePlan
     site_fields, plan_fields = site_kind._fields, plan_kind._fields
     site_members = tuple(vars(site_kind).get(field) for field in site_fields)
@@ -145,7 +149,7 @@ def _new_fresh_probe_plan(owner, root, selected, context):
     values = (owner, root, selected, row, location, path, components,
               proof, context, owner_kind, module,
               pure, pure_code, observe, observe_code,
-              definitions, variants, [0, None], [], [], resource_origin)
+              definitions, variants, [0, None], [], [], resource_origin, engine_origin)
     result = plan_kind(*values)
     if need.__code__ is not need_code:
         raise error_type from None
@@ -199,6 +203,7 @@ def _fresh_probe_plan_tail(owner, scope, original):
           and type(owner) is original.owner_type
           and scope.native_probe_plan is original
           and scope.native_probe_origin is original.resource_origin
+          and scope.native_probe_engine_origin is original.engine_origin
           and type(scope.parent) is tuple and len(scope.parent) == 2
           and scope.parent[0] is original.root and scope.parent[1] is original.selected
           and type(original.root) is tuple and len(original.root) == 3
@@ -278,6 +283,28 @@ def _fresh_probe_resource_tail(owner, resource):
     sites require the distinct probe consumer/history/diagnostic lifecycle, not
     another DirectoryConsumer owner or a caller-selected path/operation.
     """
+    _need(type(resource) is _ProbeObservationResource and resource.owner is owner
+          and type(resource.registration) is _NativeScopeRegistration
+          and type(resource.registration.scope) is _Scope)
+    scope = resource.registration.scope
+    plan = scope.native_probe_plan
+    _need(type(plan) is _FreshProbePlan
+          and scope.native_probe_engine_origin is plan.engine_origin)
+    origin = plan.engine_origin
+    _need(type(origin) is tuple and len(origin) == 6
+          and type(origin[0]) is ModuleType
+          and sys.modules.get('hmp_startup.probe_native') is origin[0]
+          and type(origin[1]) is tuple and len(origin[1]) == 4
+          and type(origin[2]) is tuple and len(origin[2]) == 13)
+    if type(resource.metadata) is origin[1][0][0]:
+        for name, function, code in origin[2]:
+            _need(type(name) is str and type(function) is FunctionType
+                  and vars(origin[0]).get(name) is function
+                  and function.__globals__ is vars(origin[0]) and function.__code__ is code)
+        # Exact retained engine helper, never a current module nomination.
+        _need(origin[2][3][0] == '_resource_tail')
+        return origin[2][3][1](owner, resource)
+    _need(vars(owner).get('_probe_execution') is None)
     _need(type(resource) is _ProbeObservationResource and resource.owner is owner
           and type(owner) is RuntimeCacheProbeOwner
           and type(resource.registration) is _NativeScopeRegistration
