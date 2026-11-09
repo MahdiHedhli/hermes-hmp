@@ -1,5 +1,14 @@
 ## November 8 — reviewed host updates deployed; character integration remains open
 
+Independent review found final-callback and request-context freshness gaps in
+undeployed media backend `fb82aef`, despite its passing 1,059-case integration run.
+Source `f7f5084` repairs post-callback media checks, original request/dependency
+cohort binding, clock ordering and final IID/listener-generation seals. Both
+89-case readiness suites pass, including causal callback/context regressions;
+independent re-review is pending. Performance/contention, non-atomic source reads,
+legacy fallback revocation, migration and runtime/device gates remain open.
+No source-review or release clearance, grant, opt-in or deployment is claimed.
+
 Mobile media independence repair `463c6bf` keeps image inspection available when
 the separate jobs/model diagnostic fails, preserving scope/generation checks.
 All 67 combined UI/chat tests and six large-text accessibility regressions pass;

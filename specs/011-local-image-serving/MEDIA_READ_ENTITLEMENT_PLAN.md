@@ -132,3 +132,8 @@ review. Backend delivery remains blocked by two findings:
 
 No deployed host contains these new diagnostics. Fixes and independent re-review
 remain required. Synchronous final-check latency and migration gates remain open.
+
+
+Repair checkpoint f7f5084: all reviewed callback/context findings have source
+repairs and causal tests; 89 readiness cases pass on both interpreters. Independent
+re-review is pending; prior blockers are not declared closed by self-testing.
