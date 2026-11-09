@@ -6,7 +6,7 @@ from .test_presentation_gateway_approval import operator_composed_script
 
 
 @pytest.mark.parametrize('case', ('normal', 'copied_predecessor', 'wrong_parent',
-                                 'wrong_name', 'unsafe_mode'))
+                                 'wrong_name', 'unsafe_mode', 'coherent_predecessor'))
 def test_original_declared_leaf_before(tmp_path, monkeypatch, case):
     script, fixture_mutation = operator_composed_script('links')
     script = script.replace('GatewayPackageOwner.verify_recipe(recipe)',
@@ -76,6 +76,11 @@ def at_original_stat(actual_owner,name,parent,scope,registration=None):
         resource=a._prepare_native_metadata_resource(owner,registration,held,descriptor,name)
         before=tuple(registration.native_ledger.counts)
         if leaf_case=='copied_predecessor':metadata.commits[-1]=commits[-1]._replace()
+        if leaf_case=='coherent_predecessor':
+            replacement=commits[-1]._replace()
+            metadata.commits[-1]=replacement
+            commits[-1].consumer.commit[0]=replacement
+            commits[-1].operation.result.acknowledged[0]=replacement
         if leaf_case=='wrong_parent':
             other=frame.f_locals['held'][-2][0]
             resource=resource._replace(descriptor=other,arguments=(name,other.fd))
@@ -88,14 +93,27 @@ def at_original_stat(actual_owner,name,parent,scope,registration=None):
             assert native_entries==[4]*ordinal+([3] if entered else [])
             assert tuple(registration.native_ledger.counts)==(before[0]+int(entered),before[1])
             assert metadata.progress[0]==ordinal
-            assert all(operation.result.acknowledged[0] is original
-                       for operation,original in zip((c.operation for c in commits),commits))
+            if leaf_case=='coherent_predecessor':
+                assert metadata.commits[-1] is replacement
+                assert commits[-1].consumer.commit[0] is replacement
+                assert commits[-1].operation.result.acknowledged[0] is replacement
+                assert replacement is not commits[-1]
+            else:
+                assert all(operation.result.acknowledged[0] is original
+                           for operation,original in zip((c.operation for c in commits),commits))
             if entered:
                 assert captured[-1][0].state==[True,True,True]
                 assert captured[-1][0].result.acknowledged==[None]
                 assert registration.native_ledger.failed==[True]
             observed.update(refused=True,native_leaf_entries=int(entered),cursor=ordinal)
             raise
+        if leaf_case=='coherent_predecessor':
+            observed.update(unexpected_coherent_copy_accepted=True,
+                leaf_ack=commit.operation.result.acknowledged[0] is commit,
+                adopted_copy=commit.consumer.predecessor is replacement,
+                actual_previous_return_distinct=commits[-1] is not replacement,
+                native_leaf_entries=native_entries.count(3))
+            raise RuntimeError('synthetic coherent-copy control reached actual leaf ACK')
         assert leaf_case=='normal' and len(leaf_returns)==1
         assert commit.identity==leaf_returns[0][0] and commit.mtime==leaf_returns[0][1]
         assert len(commit.identity)==9 and type(commit.mtime) in (int,float)
@@ -127,6 +145,7 @@ try:
     diagnostic=Path(sys.argv[1])/'metadata-leaf-before-stage.json'
     fd=os.open(diagnostic,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
     with os.fdopen(fd,'w') as stream:json.dump(observed,stream,sort_keys=True)
+    assert not observed.get('unexpected_coherent_copy_accepted',False), 'coherent current mirrors replaced literal prior return'
 finally:
     sys.setprofile(profile_before)
     m._prepare_metadata_operation_with_custody=factory
