@@ -208,3 +208,10 @@ and return-event interruption. Example callers require original receipt before
 write/sample/publish. Lost settlement acknowledgement never triggers mutation or
 settlement replay; definite completed settlement may remain internally settled.
 This does not qualify actual caller wiring, still required before integration.
+
+P2 Store checkpoint:ab2fd5e optional observer encloses real transaction handoff,
+known commit/rollback settlement and uncertainty. ReviewNone-receipt finding fixed.
+280cases pass bothPythonversions with matchingserverfingerprints; floor113b611
+is documentation-only descendant. The listener does not install an observer;
+writer census/coordinator/native contracts remain incomplete. See published
+docs/architecture/MEDIA_PUBLICATION_WRITERS.md on the focused source branch.

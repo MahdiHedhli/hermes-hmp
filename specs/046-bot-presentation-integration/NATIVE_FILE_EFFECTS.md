@@ -1,5 +1,15 @@
 ## November 8 — reviewed host updates deployed; character integration remains open
 
+Store publication preparation now reaches real transaction boundaries: optional
+construction-time observer at code `ab2fd5e` invalidates before SQL and records
+confirmed commit/rollback certainty under the original lock. No begin receipt
+means no SQL/settlement; lost SQL or observer acknowledgements never trigger replay.
+Review found and confirmed repair of a None-receipt handling defect. Both280-case
+Store/publication suites pass with matching server fingerprints (floor113b611 adds
+documentation only). The observer is not installed by any listener. Startup/raw
+helpers, other-process/operator writes and native/config coordination remain open;
+no authorization, responsiveness, runtime or deployment clearance is claimed.
+
 Publication preparation `385b1de` now has24 tests on each supported Python version,
 including exact real-code line/return interruptions at begin, settlement, close,
 candidate and publication-claim handoffs. No acknowledgement means the example
