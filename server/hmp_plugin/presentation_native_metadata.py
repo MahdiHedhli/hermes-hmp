@@ -458,6 +458,20 @@ def _declared_leaf_identity(snapshot, actor_uid, expected_size):
     return identity
 
 
+def _declared_leaf_before_data(snapshot, actor_uid, expected_size):
+    """Fixed leaf-before identity/timestamp DATA; never an operation allowance.
+
+    Preserve the original _file/path_stats integer conversion of this same
+    native snapshot's st_mtime, including truncation toward zero before epoch.
+    The eventual fixed consumer must still bind the original declaration,
+    actual native return and source-digest predecessor before publication.
+    """
+    identity = _declared_leaf_identity(snapshot, actor_uid, expected_size)
+    timestamp = snapshot.mtime
+    _require(type(timestamp) in (int, float) and -2 ** 64 < timestamp < 2 ** 64)
+    return identity, int(timestamp)
+
+
 def _latched_directory_resource_tail(owner, consumer):
     """Original already-latched cohort DATA; not a phase check or work grant."""
     _require(type(consumer) is _DirectoryConsumer and consumer.owner is owner
