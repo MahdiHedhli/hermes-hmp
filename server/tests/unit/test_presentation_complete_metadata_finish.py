@@ -5,7 +5,9 @@ from . import test_presentation_entry_files as base
 from .test_presentation_gateway_approval import operator_composed_script
 
 
-@pytest.mark.parametrize('case', ('normal', 'empty', 'lost_final', 'late_link', 'late_ack', 'foreign_ordinal'))
+@pytest.mark.parametrize('case', ('normal', 'empty', 'lost_final', 'late_link', 'late_ack', 'foreign_ordinal',
+                                 'copied_directory_baseline', 'wrong_directory_baseline',
+                                 'foreign_root_parent', 'changed_directory'))
 def test_actual_complete_metadata_finish(tmp_path, monkeypatch, case):
     script, fixture_mutation = operator_composed_script('links')
     if case == 'empty':
@@ -30,7 +32,8 @@ owner=RuntimeSourceReadOwner.retain(continuation,index)
 actual_run=m._run_directory_observation
 actual_finish=m._finished_declared_file_tail
 actual_capsule=m._finished_capsule_tail
-commits=[];finish_calls=[];late=[];foreign_hooks=[];observed={}
+commits=[];finish_calls=[];late=[];foreign_hooks=[];observed={};early_held=[]
+early_cases=('copied_directory_baseline','wrong_directory_baseline','foreign_root_parent','changed_directory')
 foreign=object()
 class ForeignOrdinal:
     def __eq__(self,other):
@@ -38,6 +41,61 @@ class ForeignOrdinal:
         raise RuntimeError('synthetic final ordinal hook')
 
 def observe_run(actual_owner,*args):
+    resource=args[0]
+    if actual_owner is owner and finish_case in early_cases:
+        site=resource.site
+        target=(site[1]=='directory_after_hash' and (
+            (finish_case in ('copied_directory_baseline','wrong_directory_baseline') and site[0]==4 and site[2]==0)
+            or (finish_case=='foreign_root_parent' and site[0]==3 and site[2]==0)
+            or (finish_case=='changed_directory' and site[0]==4 and site[2]==len(resource.held_walk[0].components)-2)))
+        if target:
+            predecessor,baseline,eof=args[1:]
+            held=resource.held_walk;metadata=held[5]
+            assert predecessor is commits[-1] and eof.eof is True
+            assert baseline is commits[site[2]] and baseline.site==(4,'directory',site[2])
+            original_resource=resource
+            if finish_case=='copied_directory_baseline':baseline=baseline._replace()
+            elif finish_case=='wrong_directory_baseline':baseline=commits[1]
+            elif finish_case=='foreign_root_parent':
+                assert resource.descriptor is None and resource.arguments==('/',None)
+                other=baseline.resource.descriptor
+                resource=resource._replace(descriptor=other,arguments=('/',other.fd))
+            before=tuple(resource.registration.native_ledger.counts)
+            attempts=len(resource.registration.native_ledger.attempts)
+            entries=[];mode=None
+            if finish_case=='changed_directory':
+                mode=os.stat(dep_root,follow_symlinks=False).st_mode&0o777
+                os.chmod(dep_root,mode^0o010)
+            def target_native(frame,event,arg):
+                if (event=='c_call' and frame.f_code is m._produce_directory_metadata.__code__
+                        and arg is resource.registration.native_origin.operations[site[0]]):entries.append(True)
+            prior=sys.getprofile();assert prior is None
+            early_held.append(held)
+            sys.setprofile(target_native)
+            try:
+                try:actual_run(actual_owner,resource,predecessor,baseline,eof)
+                except a.ArtifactObservationError:
+                    entered=int(finish_case=='changed_directory')
+                    ledger=resource.registration.native_ledger
+                    assert entries==[True]*entered
+                    assert tuple(ledger.counts)==(before[0]+entered,before[1])
+                    assert len(ledger.attempts)==attempts+entered
+                    assert metadata.progress==[len(commits),None]
+                    assert metadata.commits[-1] is predecessor
+                    assert predecessor.operation.result.acknowledged[0] is predecessor
+                    assert eof.result.acknowledged[0] is eof and eof.result.raw[0] is eof.result.unset
+                    if entered:
+                        operation=ledger.attempts[-1]
+                        assert operation.state==[True,True,True] and operation.result.acknowledged==[None]
+                        assert ledger.failed==[True]
+                    observed.update(early_refused=True,target_native_entries=entered,
+                                    literal_baseline_retained=original_resource.held_walk is held,
+                                    actual_eof_preserved=True)
+                    raise
+                else:raise AssertionError('altered final directory inputs must refuse')
+            finally:
+                sys.setprofile(prior)
+                if mode is not None:os.chmod(dep_root,mode)
     result=actual_run(actual_owner,*args)
     if actual_owner is owner:
         commits.append(result)
@@ -81,7 +139,11 @@ try:
     try:owner.read()
     except RuntimeReadError:observed['owner_refused']=True
     else:observed['owner_ready']=owner._ready
-    if finish_case=='lost_final':
+    if finish_case in early_cases:
+        assert not finish_calls and len(early_held)==1 and observed.get('early_refused')
+        held=early_held[0];last=commits[-1]
+        assert held[5].progress==[len(commits),None]
+    elif finish_case=='lost_final':
         assert not finish_calls and commits
         last=commits[-1];held=last.resource.held_walk
         assert last.next_ordinal==len(held[5].definitions)
@@ -91,7 +153,7 @@ try:
         assert len(finish_calls)==1
         held,last=finish_calls[0]
     observed.update(case=finish_case,metadata_sites=len(commits),
-                    complete_definition_sequence=True,late_events=len(late),
+                    complete_definition_sequence=finish_case not in early_cases,late_events=len(late),
                     foreign_hooks=list(foreign_hooks),
                     walk_state=held[0].state[0],file_progress=held[2][0],
                     gc_disabled=not gc.isenabled())
@@ -112,7 +174,7 @@ try:
         owner.release();assert owner._original_buffer==bytearray()
     else:
         assert observed.get('owner_refused')
-        assert observed.get('finish_refused') or finish_case=='lost_final'
+        assert observed.get('finish_refused') or finish_case=='lost_final' or finish_case in early_cases
         assert not owner._ready and owner._failed and owner._original_buffer==bytearray()
         assert held[0].state==[1] and held[2]==[0]
         if finish_case.startswith('late_'):assert late==[True]
