@@ -269,13 +269,14 @@ def _directory_material_tail(owner, consumer):
 
 
 def _fixed_metadata_role(resource):
-    """Closed original directory/leaf-before roles, never a caller dispatcher."""
+    """Closed original directory/leaf-before/opened roles, never caller dispatch."""
     _require(type(resource) is _NativeMetadataResource
              and type(resource.site) is tuple and len(resource.site) == 3
              and type(resource.site[0]) is int and type(resource.site[1]) is str)
     operation, role = resource.site[:2]
     _require((operation == 4 and role == 'directory')
-             or (operation == 3 and role == 'leaf_before'))
+             or (operation == 3 and role == 'leaf_before')
+             or (operation == 4 and role == 'leaf_opened'))
     return role
 
 
@@ -283,13 +284,13 @@ def _fixed_metadata_resource_tail(owner, resource):
     """Rejoin the actual directory FD or original leaf name/opened parent."""
     role = _fixed_metadata_role(resource)
     _require(type(resource.arguments) is tuple
-             and len(resource.arguments) == (1 if role == 'directory' else 2))
+             and len(resource.arguments) == (1 if resource.site[0] == 4 else 2))
     walk = resource.held_walk[0]
     component = resource.site[2]
     _native_metadata_component_tail(owner, resource.registration, walk,
                                     resource.descriptor,
-                                    component if role == 'directory' else component - 1)
-    if role == 'directory':
+                                    component if resource.site[0] == 4 else component - 1)
+    if resource.site[0] == 4:
         _require(resource.arguments[0] is resource.descriptor.fd)
     else:
         _require(type(resource.arguments[0]) is str
@@ -390,7 +391,7 @@ def _prepare_directory_consumer(owner, operation, predecessor=None):
              and type(operation.result) is _MetadataResult)
     resource, result = operation.resource, operation.result
     _resource_tail(owner, resource)
-    _require(_fixed_metadata_role(resource) in ('directory', 'leaf_before')
+    _require(_fixed_metadata_role(resource) in ('directory', 'leaf_before', 'leaf_opened')
              and operation.registration is resource.registration
              and type(operation.state) is list and len(operation.state) == 3
              and all(type(value) is bool and value is False for value in operation.state)
@@ -516,6 +517,15 @@ def _directory_predecessors_tail(owner, consumer):
                  and commit.consumer.history is consumer.history)
         commit = commit.consumer.predecessor
     _require(commit is None)
+    if _fixed_metadata_role(resource) == 'leaf_opened':
+        predecessor = consumer.predecessor
+        _require(type(predecessor) is _DirectoryPolicyCommit
+                 and predecessor.resource.held_walk is resource.held_walk
+                 and type(predecessor.site) is tuple and len(predecessor.site) == 3
+                 and predecessor.site[0] == 3 and predecessor.site[1] == 'leaf_before'
+                 and predecessor.resource.variant.expected is resource.variant.expected
+                 and type(predecessor.identity) is tuple and len(predecessor.identity) == 9
+                 and all(type(value) is int for value in predecessor.identity))
     return consumer
 
 
@@ -595,7 +605,7 @@ def _latched_directory_resource_tail(owner, consumer):
              and metadata.variants[resource.ordinal] is resource.variant
              and type(resource.site) is tuple and len(resource.site) == 3
              and type(resource.site[0]) is int and resource.site[0] in (3, 4)
-             and _fixed_metadata_role(resource) in ('directory', 'leaf_before')
+             and _fixed_metadata_role(resource) in ('directory', 'leaf_before', 'leaf_opened')
              and type(resource.site[2]) is int
              and operation.owner is owner and operation.registration is registration
              and operation.ledger is registration.native_ledger
@@ -1080,6 +1090,15 @@ def _consume_directory_policy(owner, consumer, actual):
             # Preserve the same actual result's primitive timestamp. Conditional
             # source-effect conversion stays with the complete walker integration.
             mtime = actual.snapshot.mtime
+            if _fixed_metadata_role(resource) == 'leaf_opened':
+                # This is the literal preceding caller return, not a new baseline
+                # sampled from current history or the newly opened descriptor.
+                predecessor = consumer.predecessor
+                _require(type(predecessor) is _DirectoryPolicyCommit
+                         and type(predecessor.identity) is tuple
+                         and len(predecessor.identity) == 9
+                         and all(type(value) is int for value in predecessor.identity)
+                         and identity == predecessor.identity)
         _consuming_directory_return_tail(owner, consumer, actual)
         commit = _DirectoryPolicyCommit(owner, operation, consumer, resource, resource.site,
                                          resource.ordinal, resource.ordinal + 1, identity, mtime)
@@ -1162,7 +1181,7 @@ def _acked_directory_history_tail(owner, consumer, commit):
              and len(operation.arguments) == (1 if operation.operation == 4 else 2)
              and type(resource.site) is tuple and len(resource.site) == 3
              and type(resource.site[0]) is int and resource.site[0] in (3, 4)
-             and _fixed_metadata_role(resource) in ('directory', 'leaf_before')
+             and _fixed_metadata_role(resource) in ('directory', 'leaf_before', 'leaf_opened')
              and type(resource.site[2]) is int)
     metadata = _native_declared_metadata_cohort_tail(owner, registration, resource.held_walk)
     _directory_predecessors_tail(owner, consumer)
