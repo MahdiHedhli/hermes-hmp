@@ -321,3 +321,20 @@ qualification remain open; live hosts retain only the reviewed c7482f1 safety ba
 - MR-LIFE2: integrate the retained media coordinator with original HmpServer/adapter teardown and other borrower drains without default activation.
 - MR-LIFE3: qualify quiesced schema4 migration, cross-process writer coordination and rollback.
 - MR-LIFE4: native-owned final authority publication remains a separate inspected contract gap; no cached boolean substitute.
+
+
+## MR-LIFE2a optional listener retention reviewed
+
+MR-LIFE2a source `13703e9` adds optional original-context media retirement retention
+to HmpServer, defaultNone/noactivation. Network cleanup can finish while media debt
+remains; actualstop+closed and originalctx/readservice/mediaowner/Store rejoin around
+eachawait precede debt clearance. Both308-case combined suites pass unchanged on
+3.14.9/3.11.15 plus Ruff; independent finite review found no further concrete blocker,
+and the final guard wrap is AST-identical to reviewed d7dfcba. Initial305 run failed
+two historical route-count assertions for the earlier GET diagnostics; exactroute
+matching remains and that failed receipt is not qualified. Adapter Store-owner/
+reconnect protection, broader borrower retirement, schema/native/config publication
+and physical/release tests remain open. This is only the listener half of MR-LIFE2;
+no adapter supplies the coordinator and deployed hosts remain c7482f1 unchanged.
+
+MR-LIFE2b next: retain each original server/Store retirement owner in the adapter; block replacement/reconnect on unresolved creation/drain/close outcome; never close a new ctx Store via an old callback. Preserve known normal teardown and no default media activation.

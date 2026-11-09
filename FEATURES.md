@@ -1,6 +1,19 @@
 ## November 8 — reviewed host updates deployed; character integration remains open
 
 
+MR-LIFE2a source `13703e9` adds optional original-context media retirement retention
+to HmpServer, defaultNone/noactivation. Network cleanup can finish while media debt
+remains; actualstop+closed and originalctx/readservice/mediaowner/Store rejoin around
+eachawait precede debt clearance. Both308-case combined suites pass unchanged on
+3.14.9/3.11.15 plus Ruff; independent finite review found no further concrete blocker,
+and the final guard wrap is AST-identical to reviewed d7dfcba. Initial305 run failed
+two historical route-count assertions for the earlier GET diagnostics; exactroute
+matching remains and that failed receipt is not qualified. Adapter Store-owner/
+reconnect protection, broader borrower retirement, schema/native/config publication
+and physical/release tests remain open. This is only the listener half of MR-LIFE2;
+no adapter supplies the coordinator and deployed hosts remain c7482f1 unchanged.
+
+
 Media-lane retirement source `1f8fd9a` now closes admission/publication before
 awaiting original service workers and actor SQL settlement. It retains one owner
 through waiter cancellation, unknown scheduling/submit outcomes and changed scope;
