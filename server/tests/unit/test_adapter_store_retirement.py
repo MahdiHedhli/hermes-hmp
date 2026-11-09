@@ -678,6 +678,15 @@ def test_explicit_disconnect_recovers_actual_partial_listener_once(adapter_modul
         assert not adapter._startup_unresolved and not adapter._disconnect_unresolved
         await adapter.disconnect()
         assert store.closes == 1 and events.count("cleanup") == 1
+        admitted = []
+
+        def next_open(_adapter):
+            admitted.append(True)
+            raise adapter_module.identity.IdentityError("synthetic preallocation refusal")
+
+        monkeypatch.setattr(adapter_module, "open_components", next_open)
+        assert await adapter.connect() is False  # controlled refusal after actual reconnect admission
+        assert admitted == [True] and adapter._opening is None
 
     asyncio.run(scenario())
 
@@ -724,5 +733,73 @@ def test_partial_recovery_close_ack_loss_never_replays_or_unblocks(adapter_modul
         assert adapter._opening is opening and not opening.closed
         assert adapter._startup_unresolved and await adapter.connect() is False
         assert listener.closed.is_set()
+
+    asyncio.run(scenario())
+
+
+def test_partial_recovery_cancel_after_store_close_joins_same_success(adapter_module, monkeypatch):
+    async def scenario():
+        adapter, listener, store, events, _, _ = partial_real_listener(adapter_module, monkeypatch)
+        close = store.close
+        observer = None
+
+        def close_then_cancel_waiter():
+            close()
+            observer.cancel()
+
+        store.close = close_then_cancel_waiter  # captured by original component Future
+        with pytest.raises(ConnectionError):
+            await adapter.connect()
+        opening = adapter._opening
+        observer = asyncio.create_task(adapter.disconnect())
+        with pytest.raises(asyncio.CancelledError):
+            await observer
+        owner = opening.retirement_owner
+        assert store.closes == 1 and owner.task.done()
+        assert owner.task.result() is owner.completion and not opening.closed
+        await adapter.disconnect()
+        assert opening.closed and adapter._opening is None and store.closes == 1
+        assert events.count("cleanup") == 1 and listener.closed.is_set()
+        assert not adapter._startup_unresolved and not adapter._disconnect_unresolved
+
+    asyncio.run(scenario())
+
+
+def test_partial_recovery_uses_original_bootstrap_close_method(adapter_module, monkeypatch):
+    async def scenario():
+        adapter, _, store, _, _, _ = partial_real_listener(adapter_module, monkeypatch)
+        foreign = FakeStore()
+        with pytest.raises(ConnectionError):
+            await adapter.connect()
+        store.close = foreign.close  # mutation after the original bound method was retained
+        await adapter.disconnect()
+        assert store.closes == 1 and foreign.closes == 0
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("replacement", ("context", "opening"))
+def test_partial_recovery_generation_callback_drift_cannot_close_store(adapter_module,
+                                                                      monkeypatch, replacement):
+    async def scenario():
+        adapter, _, store, _, _, _ = partial_real_listener(adapter_module, monkeypatch)
+        with pytest.raises(ConnectionError):
+            await adapter.connect()
+        opening = adapter._opening
+        foreign = FakeStore()
+
+        def change(_ctx):
+            if replacement == "context":
+                opening.ctx = SimpleNamespace(store=foreign)
+            else:
+                adapter._opening = object()
+
+        adapter._close_generation = change
+        with pytest.raises(RuntimeError, match="partial listener bootstrap unresolved"):
+            await adapter.disconnect()
+        assert store.closes == 0 and foreign.closes == 0
+        assert opening.retirement_owner.task.result() is opening.retirement_owner.failure
+        assert adapter._startup_unresolved and adapter._disconnect_unresolved
+        assert await adapter.connect() is False
 
     asyncio.run(scenario())
