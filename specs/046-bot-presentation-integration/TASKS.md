@@ -1,5 +1,14 @@
 ## November 8 — reviewed host updates deployed; character integration remains open
 
+Shutdown preparation `07a02c5` separates publication close from original Store
+mutation retirement. Debt is reserved before begin and survives missing receipts,
+close and drain timeouts; exact-receipt cleanup has independent bounded capacity
+and never restores publication or implies a known commit. Both291-case suites pass;
+independent delta review found no new concrete blocker under the fixed ended-SQL
+handoff assumption. Unknown debt cannot be force-cleared or used to close Store.
+The actor remains unwired; operator/native/config and actual listener lifecycle
+integration remain unfinished. No production responsiveness or release claim.
+
 Publication actor preparation `d6f57d4` adds bounded worker-to-listener handshakes
 for the optional Store observer, refusing loop-thread waits and late acknowledgements.
 Queue debt is retained until actual callback retirement; sticky failure/cohort drift
