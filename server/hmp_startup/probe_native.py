@@ -82,7 +82,7 @@ def _new_probe_engine_origin():
         '_produce', '_policy', '_run_observation', '_open_ancestor',
         '_finish', '_run_fresh_probe', '_lifecycle_tail',
         '_prepare_shared_consumer', '_latch_shared_consumer', '_produce_shared',
-        '_consume_shared', '_ack_shared', '_retired_shared', '_history_mirrors_tail'))
+        '_consume_shared', '_ack_shared', '_retired_shared', '_history_mirrors_tail', '_attached_shared'))
     return (module, types, functions, OSError.__dict__['errno'],
             OSError.__dict__['filename'], errno.ENOENT)
 
@@ -93,7 +93,7 @@ def _engine_origin_tail(origin):
              and sys.modules.get(__name__) is origin[0]
              and vars(origin[0]) is globals()
              and type(origin[1]) is tuple and len(origin[1]) == 4
-             and type(origin[2]) is tuple and len(origin[2]) == 20
+             and type(origin[2]) is tuple and len(origin[2]) == 21
              and origin[3] is OSError.__dict__['errno']
              and origin[4] is OSError.__dict__['filename']
              and type(origin[5]) is int and origin[5] == errno.ENOENT)
@@ -145,7 +145,7 @@ def _execution_tail(execution):
     return execution
 
 
-def _history_mirrors_tail(execution, predecessor):
+def _history_mirrors_tail(execution, predecessor, attached=None):
     _execution_tail(execution)
     history, reg = execution.history, execution.registration
     actual = predecessor
@@ -172,9 +172,13 @@ def _history_mirrors_tail(execution, predecessor):
                  and type(operation.ended) is list and len(operation.ended) == 1
                  and operation.ended[0] is True
                  and result.acknowledged[0] is actual
-                 and result.consumer[0] is actual.consumer
-                 and result.custody_link == [None]
-                 and actual.consumer.custody[1].state == [True, True, False])
+                 and result.consumer[0] is actual.consumer)
+        if actual is attached:
+            _require(sequence == len(history) - 1
+                     and actual.consumer.custody[1].state == [False, False, False])
+        else:
+            _require(result.custody_link == [None]
+                     and actual.consumer.custody[1].state == [True, True, False])
         actual = actual.consumer.predecessor
     _require(actual is None)
     _require((not history and execution.next_site[0] == 0) or
@@ -616,4 +620,29 @@ def _retired_shared(owner, consumer, commit, origin, marker, record):
              and consumer.execution.pending[0] is None
              and consumer.operation.phase.current[0] is consumer.operation.phase.idle
              and consumer.operation.phase.result == [None])
+    return commit
+
+
+def _attached_shared(owner, consumer, commit):
+    """Literal original ACK while capsule is attached; never a file/EOF claim."""
+    _require(type(consumer) is _ProbeConsumer and type(commit) is _ProbeCommit
+             and consumer.execution.owner is owner and commit.consumer is consumer)
+    execution, operation = consumer.execution, consumer.operation
+    _history_mirrors_tail(execution, commit, attached=commit)
+    origin, marker, link, slot, state, reference = consumer.custody
+    _require(operation.result.custody_origin is origin
+             and operation.result.custody_link is link and operation.result.custody_slot is slot
+             and slot[0] is marker and marker.state is state and marker.reference is reference)
+    cells = _directory_payload_cells(owner, origin, marker, link[0])
+    _require(cells.raw[0] is operation.result.unset
+             and cells.snapshot[0] is cells.envelope[0] is cells.category[0] is None
+             and cells.consumption[0] is commit
+             and operation.result.acknowledged[0] is commit
+             and execution.pending[0] is None
+             and operation.phase.current[0] is operation.phase.idle
+             and operation.phase.result == [None] and operation.ledger.inflight == [None]
+             and operation.ledger.failed == [False]
+             and operation.ledger.counts[0] is operation.budget[3]
+             and operation.ledger.counts[1] is operation.budget[2])
+    _history_mirrors_tail(execution, commit, attached=commit)
     return commit

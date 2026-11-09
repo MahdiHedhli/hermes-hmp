@@ -300,13 +300,13 @@ def _probe_stage_functions(owner, resource):
     """Actual registered origin selects fixed internal stages, never a caller."""
     _require(type(resource) is _NativeProbeMetadataResource
              and type(resource.registration) is _NativeScopeRegistration)
-    _resource_tail(owner, resource)
+    _native_work_registration_tail(owner, resource.registration)
     scope = resource.registration.scope
     origin = scope.native_probe_engine_origin
     _require(type(origin) is tuple and len(origin) == 6
              and type(origin[0]) is ModuleType and type(origin[2]) is tuple)
     wanted = ('_prepare_shared_consumer', '_latch_shared_consumer',
-              '_produce_shared', '_consume_shared', '_ack_shared', '_retired_shared')
+              '_produce_shared', '_consume_shared', '_ack_shared', '_attached_shared', '_retired_shared')
     stages = []
     for name in wanted:
         rows = tuple(row for row in origin[2] if type(row) is tuple and len(row) == 3
@@ -318,6 +318,18 @@ def _probe_stage_functions(owner, resource):
                  and vars(origin[0]).get(name) is function)
         stages.append(function)
     return tuple(stages)
+
+
+
+def _rejoin_probe_stages(owner, resource, origin, stages):
+    """Rejoin retained originals after preceding stage callbacks; no nomination."""
+    _require(type(resource) is _NativeProbeMetadataResource
+             and type(resource.registration) is _NativeScopeRegistration
+             and resource.registration.scope.native_probe_engine_origin is origin
+             and type(stages) is tuple and len(stages) == 7)
+    actual = _probe_stage_functions(owner, resource)
+    _require(resource.registration.scope.native_probe_engine_origin is origin
+             and all(current is held for current, held in zip(actual, stages, strict=True)))
 
 
 def _probe_latched_resource_tail(owner, consumer):
@@ -2014,14 +2026,16 @@ def _run_directory_observation(owner, resource, predecessor=None, baseline=None,
     producer_started = producer_unwound = complete = retired = False
     # Retain these fixed function references across preparation callbacks. This
     # is not a caller-selected dispatcher or a new admission surface.
-    prepare, latch, produce, consume, acknowledge, retired_tail = (
+    probe_origin = probe_stages = None
+    prepare, latch, produce, consume, acknowledge, attached_tail, retired_tail = (
         _prepare_directory_consumer, _latch_directory_consumer,
         _produce_directory_metadata, _consume_directory_policy, _ack_directory_policy,
-        _retired_directory_commit_tail)
+        _acked_directory_commit_tail, _retired_directory_commit_tail)
     if type(resource) is _NativeProbeMetadataResource:
         _require(baseline is None and eof is None)
-        prepare, latch, produce, consume, acknowledge, retired_tail = (
-            _probe_stage_functions(owner, resource))
+        probe_origin = resource.registration.scope.native_probe_engine_origin
+        probe_stages = _probe_stage_functions(owner, resource)
+        prepare, latch, produce, consume, acknowledge, attached_tail, retired_tail = probe_stages
     try:
         # Reject a foreign actor before allocating/latching caller-owned custody.
         # This is eligibility only: the producer still samples the actor at its
@@ -2047,25 +2061,37 @@ def _run_directory_observation(owner, resource, predecessor=None, baseline=None,
         held_link, held_slot = marker.owner_link, marker.marker_slot
         held_state, held_reference = marker.state, marker.reference
         custody = (origin, marker, held_link, held_slot, held_state, held_reference)
+        if probe_stages is not None:
+            _rejoin_probe_stages(owner, resource, probe_origin, probe_stages)
         consumer = prepare(owner, operation, predecessor, baseline, eof, custody)
         _require(consumer.predecessor is predecessor
              and consumer.baseline is baseline and consumer.eof is eof
              and consumer.custody is custody)
+        if probe_stages is not None:
+            _rejoin_probe_stages(owner, resource, probe_origin, probe_stages)
         _require(latch(owner, consumer) is consumer
                  and consumer.predecessor is predecessor
                  and consumer.baseline is baseline and consumer.eof is eof
              and consumer.custody is custody)
         producer_started = True
         try:
+            if probe_stages is not None:
+                _rejoin_probe_stages(owner, resource, probe_origin, probe_stages)
             actual = produce(owner, consumer)
         finally:
             # Control flow, not a current stored ended flag: the actual fixed
             # synchronous call returned or raised before this caller continues.
             producer_unwound = True
+        if probe_stages is not None:
+            _rejoin_probe_stages(owner, resource, probe_origin, probe_stages)
         commit = consume(owner, consumer, actual)
+        if probe_stages is not None:
+            _rejoin_probe_stages(owner, resource, probe_origin, probe_stages)
         acked = acknowledge(owner, consumer, actual, commit)
+        if probe_stages is not None:
+            _rejoin_probe_stages(owner, resource, probe_origin, probe_stages)
         _require(acked is commit
-                 and _acked_directory_commit_tail(owner, consumer, commit) is commit)
+                 and attached_tail(owner, consumer, commit) is commit)
         complete = True
     except BaseException:  # noqa: S110 - never log private raw-bearing exceptions
         pass
@@ -2193,6 +2219,8 @@ def _run_directory_observation(owner, resource, predecessor=None, baseline=None,
             _native_actor_context(native.actor_calls, (native.native, native.thread_native),
                                   operation.context)
             _native_post_actor_state(owner, actor_state, actor_arguments)
+            if probe_stages is not None:
+                _rejoin_probe_stages(owner, resource, probe_origin, probe_stages)
             _require(retired_tail(
                 owner, consumer, commit, origin, marker, record) is commit)
             return commit
