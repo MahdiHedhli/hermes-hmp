@@ -39,7 +39,8 @@ def rig(monkeypatch, *, setup_error=False, cleanup_error=False, block_site=False
             events.append("site-returned")
 
     ctx = SimpleNamespace(
-        identity=object(), push_hints=SimpleNamespace(clear=lambda: None), direct_send_deps=None
+        identity=object(), store=object(), prompt_store=None,
+        push_hints=SimpleNamespace(clear=lambda: None), direct_send_deps=None
     )
     listener = server.HmpServer(ctx, server.ListenerSettings("127.0.0.1", 12345))
     monkeypatch.setattr(server, "server_ssl_context", lambda *_args: None)
