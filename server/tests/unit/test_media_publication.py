@@ -118,3 +118,99 @@ def test_interrupted_settlement_retains_pending_barrier(monkeypatch, certain):
     with pytest.raises(m.PublicationUnavailable): owner.candidate(SCOPE, cohort)
     assert mutation in owner._pending
     if not certain: assert owner._poisoned
+
+
+def _interrupt_at(function, operation, *, marker=None):
+    """Interrupt the actual Python line/return boundary, without production hooks."""
+    import inspect
+    import sys
+    code = function.__func__.__code__
+    source, first = inspect.getsourcelines(function)
+    line = None if marker is None else first + next(
+        i for i, text in enumerate(source) if marker in text)
+    reached = []
+    def trace(frame, event, arg):
+        if frame.f_code is code and (
+            (marker is None and event == 'return')
+            or (marker is not None and event == 'line' and frame.f_lineno == line)
+        ):
+            reached.append(True)
+            raise KeyboardInterrupt('synthetic handoff loss')
+        return trace
+    previous = sys.gettrace()
+    try:
+        sys.settrace(trace)
+        with pytest.raises(KeyboardInterrupt): operation()
+    finally:
+        sys.settrace(previous)
+    assert reached == [True]
+
+
+@pytest.mark.parametrize('marker', ('self._pending[ticket] = None', None))
+def test_begin_handoff_loss_never_authorizes_outer_write(marker):
+    owner = m.MediaPublication(); cohort = (object(), object(), object())
+    old = owner.candidate(SCOPE, cohort)
+    writes = []
+    def outer():
+        receipt = owner.begin_mutation()
+        writes.append(receipt)  # never reached without receiving original receipt
+    _interrupt_at(owner.begin_mutation, outer, marker=marker)
+    assert writes == []
+    assert not owner.claim_once(old, SCOPE, cohort)
+    if marker is None:
+        with pytest.raises(m.PublicationUnavailable): owner.candidate(SCOPE, cohort)
+    else:
+        # Invalidation completed but the writer never received permission to start.
+        assert owner.claim_once(owner.candidate(SCOPE, cohort), SCOPE, cohort)
+
+
+@pytest.mark.parametrize('certain', (True, False))
+@pytest.mark.parametrize('marker', ('del self._pending[ticket]', None))
+def test_settlement_line_or_return_loss_has_no_automatic_replay(certain, marker):
+    owner = m.MediaPublication(); cohort = (object(), object(), object())
+    mutation = owner.begin_mutation()
+    writes = ['one completed synthetic mutation']
+    def outer():
+        owner.settle_mutation(mutation, certain=certain)
+        writes.append('acknowledged')
+    _interrupt_at(owner.settle_mutation, outer, marker=marker)
+    assert writes == ['one completed synthetic mutation']
+    if not certain or marker is not None:
+        with pytest.raises(m.PublicationUnavailable): owner.candidate(SCOPE, cohort)
+    else:
+        # Settlement really completed. A missing caller acknowledgement is NOT a
+        # reason to repeat the mutation or manufacture a second settlement receipt.
+        assert owner.claim_once(owner.candidate(SCOPE, cohort), SCOPE, cohort)
+        with pytest.raises(m.PublicationUnavailable): owner.settle_mutation(mutation, certain=True)
+
+
+@pytest.mark.parametrize('marker', ('self._candidates.clear()', None))
+def test_close_line_and_return_loss_stay_closed(marker):
+    owner = m.MediaPublication(); cohort = (object(), object(), object())
+    ticket = owner.candidate(SCOPE, cohort)
+    _interrupt_at(owner.close, owner.close, marker=marker)
+    assert not owner.claim_once(ticket, SCOPE, cohort)
+    with pytest.raises(m.PublicationUnavailable): owner.candidate(SCOPE, cohort)
+
+
+def test_lost_candidate_return_cannot_start_sampling_and_retention_expires(monkeypatch):
+    owner = m.MediaPublication(); cohort = (object(), object(), object())
+    samples = []
+    def outer():
+        ticket = owner.candidate(SCOPE, cohort)
+        samples.append(ticket)
+    _interrupt_at(owner.candidate, outer)
+    assert samples == [] and len(owner._candidates) == 1
+    monkeypatch.setattr(m.time, 'monotonic_ns', lambda: 10 ** 30)
+    owner.candidate(SCOPE, cohort)
+    assert len(owner._candidates) == 1  # expired orphan replaced, never accumulated
+
+
+def test_lost_claim_return_cannot_publish_or_reuse_receipt():
+    owner = m.MediaPublication(); cohort = (object(), object(), object())
+    ticket = owner.candidate(SCOPE, cohort); sent = []
+    def outer():
+        if owner.claim_once(ticket, SCOPE, cohort): sent.append('publish')
+    _interrupt_at(owner.claim_once, outer)
+    assert sent == []
+    assert not owner.claim_once(ticket, SCOPE, cohort)
