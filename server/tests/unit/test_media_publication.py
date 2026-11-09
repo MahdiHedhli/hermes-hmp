@@ -126,8 +126,11 @@ def _interrupt_at(function, operation, *, marker=None):
     import sys
     code = function.__func__.__code__
     source, first = inspect.getsourcelines(function)
-    line = None if marker is None else first + next(
-        i for i, text in enumerate(source) if marker in text)
+    matches = [] if marker is None else [
+        i for i, text in enumerate(source) if marker in text]
+    if marker is not None:
+        assert len(matches) == 1, 'handoff marker must identify exactly one source line'
+    line = None if marker is None else first + matches[0]
     reached = []
     def trace(frame, event, arg):
         if frame.f_code is code and (
