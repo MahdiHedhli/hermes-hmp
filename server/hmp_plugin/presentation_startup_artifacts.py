@@ -3095,11 +3095,57 @@ class StartupArtifactOwner:
                 _require(type(source) is _PackageSource)
                 owner._bytes_read = source.count_cell[2]
             digest_context = None if source is None else source.owner._origin.source_digest
-            s = _Scope(activation, activation._scope, expected,
-                       (os.getpid(), os.geteuid(), threading.get_ident()), [], source, runtime,
-                       None if digest_context is None else [], cache, digest_context,
-                       None if digest_context is None else digest_context.native_files,
-                       None if digest_context is None else [None])
+            # Retain the constructor inputs before crossing its callback boundary.
+            # A returned tuple must not nominate replacement state for publication.
+            kind = _Scope
+            fields = vars(kind)['_fields']
+            members = tuple(vars(kind).get(name) for name in fields)
+            dispatch_names = ('__getattribute__', '__getattr__', '__getitem__',
+                              '__len__', '__iter__')
+            dispatch = tuple(vars(kind).get(name) for name in dispatch_names)
+            constructor = vars(kind)['__new__']
+            if type(constructor) is staticmethod:
+                constructor = constructor.__func__
+            constructor_code = constructor.__code__
+            context = (os.getpid(), os.geteuid(), threading.get_ident())
+            records = []
+            reads = None if digest_context is None else []
+            native_files = None if digest_context is None else digest_context.native_files
+            slot = None if digest_context is None else [None]
+            values = (activation, activation._scope, expected, context, records,
+                      source, runtime, reads, cache, digest_context, native_files,
+                      slot, None, None, None, None, None)
+            owner_dict = vars(owner)
+            owner_entries = tuple(owner_dict.items())
+            activation_cell = activation._artifact_cell
+            need, need_code = _require, _require.__code__
+            item, length = tuple.__getitem__, tuple.__len__
+            s = constructor(kind, *values)
+            if need.__code__ is not need_code:
+                raise ArtifactObservationError(owner) from None
+            current_constructor = vars(kind).get('__new__')
+            if type(current_constructor) is staticmethod:
+                current_constructor = current_constructor.__func__
+            need(_Scope is kind and type(s) is kind
+                 and current_constructor is constructor
+                 and constructor.__code__ is constructor_code
+                 and vars(kind).get('_fields') is fields
+                 and all(vars(kind).get(name) is member
+                         for name, member in zip(fields, members, strict=True))
+                 and all(vars(kind).get(name) is member
+                         for name, member in zip(dispatch_names, dispatch, strict=True))
+                 and length(s) == len(values)
+                 and all(item(s, index) is value for index, value in enumerate(values))
+                 and vars(owner) is owner_dict and len(owner_dict) == len(owner_entries)
+                 and all(type(key) is str for key in owner_dict)
+                 and all(key in owner_dict and owner_dict[key] is value
+                         for key, value in owner_entries)
+                 and activation._artifact_owner is owner
+                 and activation._artifact_cell is activation_cell
+                 and type(records) is list and len(records) == 0
+                 and (reads is None or type(reads) is list and len(reads) == 0)
+                 and (slot is None or type(slot) is list
+                      and len(slot) == 1 and slot[0] is None))
             owner._scope = owner._origin = s
             owner._cell = (owner, s)
             owner._root_cell = (activation, owner, s)
