@@ -1,5 +1,22 @@
 ## November 8 — reviewed host updates deployed; character integration remains open
 
+Independent media-read entitlement backend is implemented on focused source
+`1f39122` (not deployed). Store schema 4 adds explicit per-device allow/deny
+with revision-fenced issuance/fetch and operator-only typed confirmation;
+it does not grant approval-answer, jobs, models or bot membership. The integrated
+797-case suite at `8c88920` passed on Python 3.14.9 and 3.11.15 with no failures,
+errors or skips and unchanged source. Six additional operator interruption cases
+cover cancel, listener nonce/generation drift, expiry, a concurrent decision and
+lost acknowledgement; the resulting 15-case runtime suite passes on both versions.
+Readiness/capability negotiation and mobile diagnostics remain unfinished.
+No schema migration, media grant, host opt-in or device acceptance is claimed.
+Deployment must drain the old process before schema migration; cold old-version
+startup rejects schema 4, but an already-running old process is not stopped by
+that check. Legacy approval-owner fallback remains unversioned: removal denies
+fetch, but restoration can revive an old reference. Explicit media deny/regrant
+is revision-fenced and does not revive old references. This legacy limitation
+remains open; no universal revocation qualification is claimed.
+
 Declared bytecode-cache reader work has advanced separately: frozen producer
 `9d5e549` adds exact-type preflight and original-cohort cleanup, with three
 malformed-field cases passing on both interpreters (3 each, no skips, unchanged
