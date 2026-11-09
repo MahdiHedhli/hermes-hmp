@@ -39,6 +39,7 @@ CONTRACT_MODULES = {
     "push_hints.py",
     "push_resolve.py",
     "push_dispatch.py",
+    "push_retirement.py",  # single retained relay-close owner; no media/schema activation
     "push_relay.py",
     "auth.py",
     "reads.py",
