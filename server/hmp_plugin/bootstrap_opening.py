@@ -64,31 +64,39 @@ class BootstrapOpening:
         return ctx
 
     def close_unpublished(self, adapter):
-        future = self.future
+        future, ctx, store, close = self.future, self.ctx, self.store, self.close
+        original_adapter = self.adapter
+
+        def rejoin():
+            if (
+                adapter is not original_adapter
+                or self.adapter is not original_adapter
+                or adapter._opening is not self
+                or adapter._server is not None
+                or self.server is not None
+                or self.future is not future
+                or self.ctx is not ctx
+                or self.store is not store
+                or self.close is not close
+                or ctx is None
+                or ctx.store is not store
+                or close is None
+            ):
+                raise BootstrapUnresolvedError()
+
+        rejoin()
         if (
-            adapter is not self.adapter
-            or adapter._opening is not self
-            or adapter._server is not None
-            or self.server is not None
-            or future is None
+            future is None
             or not future.done()
             or future.cancelled()
-            or self.ctx is None
-            or self.ctx.store is not self.store
-            or self.close is None
             or self.close_attempted
+            or future.result() is not ctx
         ):
-            raise BootstrapUnresolvedError()
-        if future.result() is not self.ctx:
             raise BootstrapUnresolvedError()
         self.close_attempted = True  # any lost close acknowledgement prohibits replay
-        adapter._close_generation(self.ctx)
-        if (
-            adapter._opening is not self
-            or adapter._server is not None
-            or self.server is not None
-            or self.ctx.store is not self.store
-        ):
+        adapter._close_generation(ctx)
+        rejoin()
+        if self.close_attempted is not True:
             raise BootstrapUnresolvedError()
-        self.close()
+        close()  # held original method, never a field reread after generation callbacks
         self.closed = True
