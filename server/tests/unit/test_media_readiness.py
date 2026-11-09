@@ -207,3 +207,37 @@ def test_replaced_application_context_cannot_publish_old_worker_result(tmp_path,
         finally:
             client.server.app[CTX_KEY] = env.ctx
     run(env, scenario)
+
+
+@pytest.mark.parametrize('mutation', ('clock_flag', 'last_api_generation'))
+def test_final_callback_seal_has_no_clock_or_generation_gap(tmp_path, monkeypatch, mutation):
+    from .hmp_kit import Env, pair, get, run
+    from hmp_plugin import server
+    from hmp_plugin.contract import AuthzState
+    env = Env(tmp_path)
+    env.bridge.authz_state = lambda user, profile: AuthzState.AUTHORIZED
+    settings = {'local_media': {'enabled': True}}
+    env.ctx.readiness_settings = lambda: settings
+    calls = []
+    if mutation == 'clock_flag':
+        original = server._readiness_now
+        def clock(ctx):
+            calls.append(1)
+            if len(calls) == 3:
+                settings['local_media']['enabled'] = False
+            return original(ctx)
+        monkeypatch.setattr(server, '_readiness_now', clock)
+    else:
+        def available():
+            calls.append(1)
+            if len(calls) == 4:
+                env.ctx.readiness_generation = 'a' * 32
+            return False
+        env.ctx.media_available = available
+    async def scenario(client):
+        device = await pair(env, client)
+        status, data = await get(client, '/bots/default/media-readiness',
+                                 headers=env.headers(device))
+        assert len(calls) == (3 if mutation == 'clock_flag' else 4)
+        assert status == 503 and 'media' not in data
+    run(env, scenario)
