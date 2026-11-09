@@ -29,7 +29,7 @@ def prepared(monkeypatch):
     context, lineage = (7, 1000, 9), object()
     cells = [[], [None], [None], [None], [None]]
     classes = tuple((kind, tuple(vars(kind).items()), ())
-                    for kind in (Owner, Entry, Activation, Owner))
+                    for kind in (Owner, Entry, Activation, Owner, Entry))
     cohort = (((vars(owner), ()), (vars(activation), ()), ({}, ()), ({}, ()), ({}, ())),
               tuple((cell, tuple(cell)) for cell in cells), classes)
 

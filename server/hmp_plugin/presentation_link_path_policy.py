@@ -362,7 +362,7 @@ def _scope_blueprint_cohort(cohort):
         _need(type(values) is list and type(entries) is tuple
               and len(values) == len(entries)
               and all(values[i] is entry for i, entry in enumerate(entries)))
-    _need(type(cohort[2]) is tuple and len(cohort[2]) == 4)
+    _need(type(cohort[2]) is tuple and len(cohort[2]) == 5)
     for row in cohort[2]:
         _need(type(row) is tuple and len(row) == 3 and type(row[0]) is type
               and type(row[1]) is tuple and type(row[2]) is tuple)

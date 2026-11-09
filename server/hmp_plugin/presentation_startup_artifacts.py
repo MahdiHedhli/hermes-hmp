@@ -3197,6 +3197,27 @@ class StartupArtifactOwner:
                 need(type(runtime_guard) is FunctionType and runtime_guard.__code__ is runtime_code
                      and runtime.entry_type._pure_current is runtime_guard)
                 runtime_guard(runtime.entry, runtime.inputs, runtime.cell)
+                # The runtime source is DATA. Its internally consistent copied
+                # plan must not replace the actual plan in retained entry inputs.
+                runtime_entry = tuple.__getitem__(runtime, 0)
+                runtime_entry_kind = tuple.__getitem__(runtime, 1)
+                runtime_inputs = tuple.__getitem__(runtime, 2)
+                runtime_cell = tuple.__getitem__(runtime, 3)
+                runtime_entry_names = vars(runtime_entry)
+                runtime_input_kind = type(runtime_inputs)
+                need(tuple.__len__(runtime_inputs) == 16
+                     and type(runtime_entry) is runtime_entry_kind
+                     and runtime_entry_names.get('_inputs') is runtime_inputs
+                     and runtime_entry_names.get('_root_cell') is runtime_cell)
+                runtime_original_plan = tuple.__getitem__(runtime_inputs, 12)
+                need(type(runtime_original_plan) is link_origin[4][3][0]
+                     and tuple.__len__(runtime_original_plan) == 15)
+                runtime_original_link = tuple.__getitem__(runtime_original_plan, 14)
+                need(type(runtime_original_link) is link_origin[4][4][0]
+                     and tuple.__getitem__(runtime, 6) is runtime_original_plan
+                     and tuple.__getitem__(runtime, 7) is runtime_original_link
+                     and tuple.__getitem__(runtime_original_plan, 7) is expected
+                     and tuple.__getitem__(runtime_inputs, 4) is tuple.__getitem__(source, 0))
                 link_tail, link_tail_code = tail_row[1], tail_row[2]
                 source_check, source_check_code = _source_current, _source_current.__code__
 
@@ -3235,7 +3256,7 @@ class StartupArtifactOwner:
                             or owner_namespace.get('StartupArtifactOwner') is not owner_kind
                             or type(owner) is not owner_kind):
                         raise error_type(owner) from None
-                    need(digest_context.binding is digest_binding
+                    need(tuple.__getitem__(digest_context, 1) is digest_binding
                          and digest_binding[0] is invocation and digest_binding[2] is started
                          and tuple.__getitem__(started, 5) is entry_origin
                          and tuple.__getitem__(invocation, 9) is native_files
@@ -3243,8 +3264,19 @@ class StartupArtifactOwner:
                          and tuple.__getitem__(entry_origin, 10) is link_origin
                          and origin_entry_names.get('_ENTRY_ORIGIN') is entry_origin
                          and origin_entry_names.get('GatewayEntryOwner') is tuple.__getitem__(entry_origin, 7)
-                         and runtime.guard is runtime_guard and runtime_guard.__code__ is runtime_code
-                         and runtime.entry_type._pure_current is runtime_guard)
+                         and tuple.__getitem__(runtime, 0) is runtime_entry
+                         and tuple.__getitem__(runtime, 1) is runtime_entry_kind
+                         and tuple.__getitem__(runtime, 2) is runtime_inputs
+                         and tuple.__getitem__(runtime, 3) is runtime_cell
+                         and tuple.__getitem__(runtime, 4) is runtime_guard
+                         and runtime_guard.__code__ is runtime_code
+                         and vars(runtime_entry_kind).get('_pure_current') is runtime_guard
+                         and tuple.__getitem__(runtime, 6) is runtime_original_plan
+                         and tuple.__getitem__(runtime, 7) is runtime_original_link
+                         and runtime_entry_names.get('_inputs') is runtime_inputs
+                         and runtime_entry_names.get('_root_cell') is runtime_cell
+                         and tuple.__getitem__(runtime_inputs, 12) is runtime_original_plan
+                         and tuple.__getitem__(runtime_original_plan, 14) is runtime_original_link)
                     function_row_current(current_row)
                     need(current_row[1](link_origin) is link_origin)
                     for row in (current_row, blueprint_row, factory_row, tail_row, cohort_row):
@@ -3254,7 +3286,7 @@ class StartupArtifactOwner:
                 # Factory reads these snapshots, never owner getters or grants.
                 classes = []
                 for selected in (owner_kind, runtime.entry_type, type(activation),
-                                 tuple.__getitem__(entry_origin, 7)):
+                                 tuple.__getitem__(entry_origin, 7), runtime_input_kind):
                     namespace = vars(selected)
                     need(type(selected) is type and all(type(k) is str for k in namespace))
                     functions = []
@@ -3348,6 +3380,20 @@ class StartupArtifactOwner:
                                 or len(kw) != len(pairs)
                                 or any(k not in kw or kw[k] is not value for k, value in pairs)))):
                         raise error_type(owner) from None
+                if (tuple.__getitem__(runtime, 0) is not runtime_entry
+                        or tuple.__getitem__(runtime, 1) is not runtime_entry_kind
+                        or tuple.__getitem__(runtime, 2) is not runtime_inputs
+                        or tuple.__getitem__(runtime, 3) is not runtime_cell
+                        or tuple.__getitem__(runtime, 6) is not runtime_original_plan
+                        or tuple.__getitem__(runtime, 7) is not runtime_original_link
+                        or type(runtime_inputs) is not runtime_input_kind
+                        or runtime_entry_names.get('_inputs') is not runtime_inputs
+                        or runtime_entry_names.get('_root_cell') is not runtime_cell
+                        or tuple.__getitem__(runtime_inputs, 12) is not runtime_original_plan
+                        or tuple.__getitem__(runtime_original_plan, 14) is not runtime_original_link
+                        or tuple.__getitem__(runtime_original_plan, 7) is not expected
+                        or tuple.__getitem__(runtime_inputs, 4) is not tuple.__getitem__(source, 0)):
+                    raise error_type(owner) from None
                 # Rejoin actual source/entry pointer identities without calling
                 # a current getter after the last callback-bearing origin seal.
                 if (tuple.__getitem__(digest_context, 1) is not digest_binding
@@ -3490,6 +3536,20 @@ class StartupArtifactOwner:
                                 or len(kw) != len(pairs)
                                 or any(k not in kw or kw[k] is not value for k, value in pairs)))):
                         raise error_type(owner) from None
+                if (tuple.__getitem__(runtime, 0) is not runtime_entry
+                        or tuple.__getitem__(runtime, 1) is not runtime_entry_kind
+                        or tuple.__getitem__(runtime, 2) is not runtime_inputs
+                        or tuple.__getitem__(runtime, 3) is not runtime_cell
+                        or tuple.__getitem__(runtime, 6) is not runtime_original_plan
+                        or tuple.__getitem__(runtime, 7) is not runtime_original_link
+                        or type(runtime_inputs) is not runtime_input_kind
+                        or runtime_entry_names.get('_inputs') is not runtime_inputs
+                        or runtime_entry_names.get('_root_cell') is not runtime_cell
+                        or tuple.__getitem__(runtime_inputs, 12) is not runtime_original_plan
+                        or tuple.__getitem__(runtime_original_plan, 14) is not runtime_original_link
+                        or tuple.__getitem__(runtime_original_plan, 7) is not expected
+                        or tuple.__getitem__(runtime_inputs, 4) is not tuple.__getitem__(source, 0)):
+                    raise error_type(owner) from None
                 # Rejoin actual source/entry pointer identities without calling
                 # a current getter after the last callback-bearing origin seal.
                 if (tuple.__getitem__(digest_context, 1) is not digest_binding
