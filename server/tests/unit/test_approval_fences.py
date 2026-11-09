@@ -383,6 +383,9 @@ def test_the_disconnect_path_closes_the_generation(
         async def stop(self, *, notify: bool) -> None:
             stopped.append(notify)
 
+        async def wait_operator_drain(self) -> None:
+            assert stopped == [False]  # synthetic adapter ordering port, not native drain proof
+
     hmp._server = Srv()
     asyncio.run(hmp.disconnect())
     assert stopped == [False] and ctx.prompt_store.closed is True

@@ -146,7 +146,7 @@ def test_missing_store_is_not_created(tmp_path):
     assert not root.exists()
 
 
-@pytest.mark.parametrize("schema", [1, 2, 4])
+@pytest.mark.parametrize("schema", [1, 2, 5])
 def test_unqualified_store_is_not_migrated(fixture, schema):
     root, store = fixture
     with store.transaction() as conn:
@@ -231,3 +231,20 @@ def test_default_reader_uses_only_gated_optional_diagnostics(fixture, monkeypatc
     code, out, err = run(root, store, None, compat=lambda: CompatResult(CompatStatus.SUPPORTED))
     assert code == 0 and not err and "relay_configured: yes" in out
     assert calls == [root]
+
+
+@pytest.mark.parametrize("schema", (3, 4))
+def test_known_push_table_schemas_are_read_without_migration(fixture, monkeypatch, schema):
+    root, store = fixture
+    with store.transaction() as conn:
+        conn.execute("UPDATE meta SET schema_version = ?", (schema,))
+    store.close()
+    before = hashes(root)
+
+    def forbidden(*_args, **_kwargs):
+        raise AssertionError("diagnostics must not migrate")
+
+    monkeypatch.setattr(Store, "migrate", forbidden)
+    code, out, err = run(root, store)
+    assert code == 0 and not err and "active_registration_count: 0" in out
+    assert hashes(root) == before
