@@ -5,9 +5,13 @@ from . import test_presentation_entry_files as base
 from .test_presentation_gateway_approval import operator_composed_script
 
 
-@pytest.mark.parametrize('case', ('normal', 'late_link', 'late_ack', 'foreign_ordinal'))
+@pytest.mark.parametrize('case', ('normal', 'empty', 'lost_final', 'late_link', 'late_ack', 'foreign_ordinal'))
 def test_actual_complete_metadata_finish(tmp_path, monkeypatch, case):
     script, fixture_mutation = operator_composed_script('links')
+    if case == 'empty':
+        original = r'(dep_root / "__init__.py").write_text("VALUE = 1\n")'
+        assert script.count(original) == 1
+        script = script.replace(original, '(dep_root / "__init__.py").write_text("")')
     script = script.replace('GatewayPackageOwner.verify_recipe(recipe)',
                             'GatewayPackageOwner.verify_recipe_source_hashes(recipe,entry)')
     script = script[:script.rfind('print(json.dumps')]
@@ -35,7 +39,10 @@ class ForeignOrdinal:
 
 def observe_run(actual_owner,*args):
     result=actual_run(actual_owner,*args)
-    if actual_owner is owner:commits.append(result)
+    if actual_owner is owner:
+        commits.append(result)
+        if finish_case=='lost_final' and result.next_ordinal==len(result.resource.metadata.definitions):
+            raise RuntimeError('synthetic lost actual final metadata return')
     return result
 
 def finish(actual_owner,registration,held,last):
@@ -74,8 +81,15 @@ try:
     try:owner.read()
     except RuntimeReadError:observed['owner_refused']=True
     else:observed['owner_ready']=owner._ready
-    assert len(finish_calls)==1
-    held,last=finish_calls[0]
+    if finish_case=='lost_final':
+        assert not finish_calls and commits
+        last=commits[-1];held=last.resource.held_walk
+        assert last.next_ordinal==len(held[5].definitions)
+        assert held[5].progress==[len(held[5].definitions),None]
+        observed.update(actual_last_return_lost=True,complete_native_sequence=True)
+    else:
+        assert len(finish_calls)==1
+        held,last=finish_calls[0]
     observed.update(case=finish_case,metadata_sites=len(commits),
                     complete_definition_sequence=True,late_events=len(late),
                     foreign_hooks=list(foreign_hooks),
@@ -87,13 +101,18 @@ try:
     fd=os.open(path,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
     with os.fdopen(fd,'w') as stream:json.dump(observed,stream,sort_keys=True)
     assert foreign_hooks==[], 'final ordinal must refuse before foreign comparison'
-    if finish_case=='normal':
+    if finish_case in ('normal','empty'):
         assert observed.get('finish_accepted') and observed.get('owner_ready')
         assert held[0].state==[2] and held[2]==[1]
         assert bytes(owner._original_buffer)==(dep_root/'__init__.py').read_bytes()
+        if finish_case=='empty':
+            assert owner._bytes_read==0 and last.consumer.eof.eof is True
+            assert last.consumer.eof.operation.state==[True,True,False]
+            assert last.consumer.eof.result.acknowledged[0] is last.consumer.eof
         owner.release();assert owner._original_buffer==bytearray()
     else:
-        assert observed.get('finish_refused') and observed.get('owner_refused')
+        assert observed.get('owner_refused')
+        assert observed.get('finish_refused') or finish_case=='lost_final'
         assert not owner._ready and owner._failed and owner._original_buffer==bytearray()
         assert held[0].state==[1] and held[2]==[0]
         if finish_case.startswith('late_'):assert late==[True]
