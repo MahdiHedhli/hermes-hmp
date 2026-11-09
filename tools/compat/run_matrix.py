@@ -21,13 +21,10 @@ For each build named in `tools/hermes_builds/builds.yaml` (already extracted by 
      whose self-check AND read suite both passed. A build that fails either step is reported, not
      silently dropped, and contributes no entry.
 
-Also runs the unsupported-path check (SC-007): copies one already-qualified build's tree, alters
-one byte of a single `bridge_files` file (changing its fingerprint so no listed entry matches),
-and asserts the real `CompatGate` answers `UNSUPPORTED` / `hermes_build_unsupported` (ERR-2a) for
-it, with zero bridge calls -- verified by confirming `hmp_plugin.bridge` is never imported for an
-unsupported build, checked in a fresh subprocess so nothing from this process's own imports (or
-pytest's collection of `tests/integration/test_reads_fixture.py`, which never touches `bridge.py`
-either) can leave a false negative.
+Also runs a synthetic minimum-version policy check after a build qualifies: listed,
+unlisted and unknown-version builds with the required APIs remain available;
+below-floor versions and missing required APIs are refused. This check does not
+import native Hermes and does not replace the real self-check or read suite.
 
 This tool never writes `server/hmp_plugin/read_compat_builds.json` itself (T064's job, done with
 human judgement, not mechanically here) -- it only emits candidate entries as JSON, for T064 to
@@ -238,89 +235,47 @@ def process_build(spec: BuildSpec, builds_dir: Path, scratch: Path) -> dict[str,
     return result
 
 
-_UNSUPPORTED_PATH_CHECK_SCRIPT = """
-import json
-import sys
+def minimum_version_policy_check(scratch: Path) -> dict[str, Any]:
+    """Synthetic policy check only; native self-check/read suites remain mandatory.
 
-sys.path.insert(0, sys.argv[1])  # server/
-sys.path.insert(0, sys.argv[2])  # the mutated Hermes tree
+    Tested fingerprints describe evidence. They must neither authorize missing
+    APIs nor prevent use of an unlisted version above the declared floor.
+    """
+    from hmp_plugin.compat import CompatGate, Feature, CompatStatus
+    from hmp_plugin.hermes_version import HermesVersion, Scheme, VersionSource, UNKNOWN_VERSION
 
-from pathlib import Path
+    newer = HermesVersion(Scheme.SEMVER, (0, 99, 0), VersionSource.LITERAL)
+    older = HermesVersion(Scheme.SEMVER, (0, 0, 0), VersionSource.LITERAL)
+    calls = []
 
-from hmp_plugin import compat as compat_mod
+    def evaluate(version, *, listed=False, missing=False):
+        def probe(_root, _table):
+            calls.append(1)
+            return ("synthetic-required-api",) if missing else ()
 
-mutated_root = Path(sys.argv[2])
-read_compat_path = Path(sys.argv[3])
+        return CompatGate(
+            root_locator=lambda: scratch,
+            version_reader=lambda _root: version,
+            probe=probe,
+            evidence=lambda _root: {f: "synthetic-tested" if listed else None for f in Feature},
+            hook_probe=lambda *_args: True,
+        ).evaluate()
 
-# Point compat's root locator straight at the mutated tree, in place of the real
-# `importlib.util.find_spec(HERMES_ROOT_MARKER_MODULE)` resolution a real Hermes install would
-# give -- this subprocess never installs Hermes, it only needs `locate_hermes_root()`'s answer.
-compat_mod.locate_hermes_root = lambda: mutated_root
-
-gate = compat_mod.default_gate(read_compat_path=read_compat_path)
-result = gate.evaluate()
-bridge_imported = "hmp_plugin.bridge" in sys.modules
-print(json.dumps({
-    "status": result.status.value,
-    "why": result.why.value if result.why else None,
-    "bridge_imported": bridge_imported,
-}))
-"""
-
-
-def unsupported_path_check(builds_dir: Path, qualified_label: str, scratch: Path) -> dict[str, Any]:
-    """SC-007: an unlisted build (a qualified build's tree with one `bridge_files` file altered
-    by one byte) must be refused `UNSUPPORTED` / `hermes_build_unsupported` (ERR-2a), with zero
-    bridge calls. Run in a fresh subprocess so nothing this process (or pytest's own collection)
-    already imported can hide a real bridge import."""
-    import shutil
-
-    src = builds_dir / qualified_label / "src"
-    from hmp_plugin.compat import load_read_compat_list
-
-    bridge_files = load_read_compat_list(READ_COMPAT_PATH).bridge_files
-    mutated_root = scratch / "unsupported_mutant"
-    if mutated_root.exists():
-        shutil.rmtree(mutated_root)
-    # The gate refuses the mutation before it imports Hermes. Copy only the files its
-    # fingerprint reads; a complete source tree may contain a multi-gigabyte .venv.
-    for rel in bridge_files:
-        target = mutated_root / rel
-        target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(src / rel, target)
-    altered = mutated_root / bridge_files[0]
-    altered.write_bytes(altered.read_bytes() + b"\n# SC-007 mutation\n")
-
-    script_path = scratch / "_sc007_check.py"
-    script_path.write_text(_UNSUPPORTED_PATH_CHECK_SCRIPT, encoding="utf-8")
-    proc = subprocess.run(
-        [
-            sys.executable, str(script_path),
-            str(SERVER_DIR), str(mutated_root), str(READ_COMPAT_PATH),
-        ],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    status = why = bridge_imported = None
-    parsed = None
-    for line in proc.stdout.splitlines():
-        try:
-            parsed = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-    if parsed is not None:
-        status = parsed.get("status")
-        why = parsed.get("why")
-        bridge_imported = parsed.get("bridge_imported")
-    ok = status == "unsupported" and why == "hermes_build_unsupported" and bridge_imported is False
-    return {
-        "ok": ok,
-        "status": status,
-        "why": why,
-        "bridge_imported": bridge_imported,
-        "stderr_tail": "\n".join(proc.stderr.splitlines()[-30:]) if not ok else "",
+    listed = evaluate(newer, listed=True)
+    unlisted = evaluate(newer)
+    unknown = evaluate(UNKNOWN_VERSION)
+    missing = evaluate(newer, listed=True, missing=True)
+    calls.clear()
+    below = evaluate(older)
+    facts = {
+        "listed_supported": listed.status is CompatStatus.SUPPORTED,
+        "unlisted_supported": unlisted.status is CompatStatus.SUPPORTED,
+        "unknown_version_probes_supported": unknown.status is CompatStatus.SUPPORTED,
+        "missing_api_refused": missing.status is CompatStatus.UNSUPPORTED,
+        "below_floor_refused_without_probe": below.status is CompatStatus.UNSUPPORTED and not calls,
     }
+    return {"ok": all(facts.values()), "scope": "synthetic minimum-version policy; no native runtime qualification", **facts}
+
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -382,9 +337,9 @@ def main(argv: list[str] | None = None) -> int:
     qualified = [r for r in results if r["qualified"]]
     unsupported: dict[str, Any] | None = None
     if qualified:
-        unsupported = unsupported_path_check(builds_dir, qualified[0]["label"], args.out)
+        unsupported = minimum_version_policy_check(args.out)
         print(
-            f"run_matrix: SC-007 unsupported-path check: {'OK' if unsupported['ok'] else 'FAIL'} "
+            f"run_matrix: minimum-version/evidence policy check: {'OK' if unsupported['ok'] else 'FAIL'} "
             f"{unsupported}",
             file=sys.stderr,
         )
@@ -401,7 +356,7 @@ def main(argv: list[str] | None = None) -> int:
             }
             for r in qualified
         ],
-        "sc007_unsupported_path_check": unsupported,
+        "minimum_version_policy_check": unsupported,
     }
     text = json.dumps(matrix, indent=2) + "\n"
     print(text)
