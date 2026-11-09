@@ -1,6 +1,19 @@
 ## November 8 — reviewed host updates deployed; character integration remains open
 
 
+MR-LIFE2b source `5f684b8` retains each original adapter server/context/Store/close
+owner before dropping its listener pointer. Pending/failed/unknown retirement blocks
+connect beforeopen_components; cancelled waiters do not cancel actualowners and
+unknown creation/close outcomes never trigger automatic replay. Originalscope is
+rejoined afterdrain andaftergenerationcleanup; a failing40ac2e0 control reproduced
+the missing server-reference recheck and is retained. Both342-case combined suites
+pass unchanged on3.14.9/3.11.15 plus Ruff, including25 existing adapter cases and9
+new faults; independent finite review found no further concrete blocker. This is
+boundedsource verification, not concurrent startup/allborrower/migration/native
+publication or physical/release qualification. The adapter still starts no new
+media service; both live hosts remain on c7482f1 with no changes this turn.
+
+
 MR-LIFE2a source `13703e9` adds optional original-context media retirement retention
 to HmpServer, defaultNone/noactivation. Network cleanup can finish while media debt
 remains; actualstop+closed and originalctx/readservice/mediaowner/Store rejoin around

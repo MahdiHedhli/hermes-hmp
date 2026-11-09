@@ -338,3 +338,20 @@ and physical/release tests remain open. This is only the listener half of MR-LIF
 no adapter supplies the coordinator and deployed hosts remain c7482f1 unchanged.
 
 MR-LIFE2b next: retain each original server/Store retirement owner in the adapter; block replacement/reconnect on unresolved creation/drain/close outcome; never close a new ctx Store via an old callback. Preserve known normal teardown and no default media activation.
+
+
+## MR-LIFE2b retained adapter owners source reviewed
+
+MR-LIFE2b source `5f684b8` retains each original adapter server/context/Store/close
+owner before dropping its listener pointer. Pending/failed/unknown retirement blocks
+connect beforeopen_components; cancelled waiters do not cancel actualowners and
+unknown creation/close outcomes never trigger automatic replay. Originalscope is
+rejoined afterdrain andaftergenerationcleanup; a failing40ac2e0 control reproduced
+the missing server-reference recheck and is retained. Both342-case combined suites
+pass unchanged on3.14.9/3.11.15 plus Ruff, including25 existing adapter cases and9
+new faults; independent finite review found no further concrete blocker. This is
+boundedsource verification, not concurrent startup/allborrower/migration/native
+publication or physical/release qualification. The adapter still starts no new
+media service; both live hosts remain on c7482f1 with no changes this turn.
+
+Next qualification: serialize/capture concurrent startup and bootstrap cancellation ownership, inventory every HTTP/native/thread Store borrower, then qualify quiesced schema4 migration/rollback. Native final authority publication remains blocked on an inspected contract, not substituted by a cached boolean. No activation from this checkpoint.
