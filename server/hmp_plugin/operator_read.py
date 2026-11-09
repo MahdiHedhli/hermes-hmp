@@ -456,7 +456,9 @@ class OperatorReadService:
                 or ctx is not self._read_origin_ctx or self._read_budget is None
                 or ctx.read_worker_budget is not self._read_budget):
             raise OperatorUnavailableError("operator context unavailable")
-        intent = object()  # allocation occurs before any capacity acquisition
+        generation = ctx.readiness_generation
+        deadline = time.monotonic() + DEADLINE_S
+        intent = object()  # preconditions/allocations precede capacity acquisition
         try:
             self._read_operations[intent] = None
         except BaseException:
@@ -475,8 +477,6 @@ class OperatorReadService:
             self._read_budget.poisoned = True
             self._stopping = True
             raise OperatorUnavailableError("operator context unavailable")
-        generation = ctx.readiness_generation
-        deadline = time.monotonic() + DEADLINE_S
         try:
             original = self._read_pool.submit(
                 _collect_media if media else _collect,
