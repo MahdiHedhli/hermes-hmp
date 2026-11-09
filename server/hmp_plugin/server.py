@@ -668,8 +668,18 @@ def _collect_media_readiness(ctx: ServerContext, **scope: Any) -> dict[str, obje
     decision = ctx.store.media_read_decision(ctx.iid, scope["device_id"])
     if decision is None:
         raise readiness.ReadinessUnavailableError()
+    decision.validate()
     permission = ctx.media_read_permission(scope["device_id"])
-    entitlement = "granted" if permission is not None else "missing"
+    expected_allowed = decision.allowed is True
+    if decision.allowed is None:
+        owners = ctx.owner_device_ids()
+        if type(owners) is not frozenset or any(type(item) is not str for item in owners):
+            raise readiness.ReadinessUnavailableError()
+        expected_allowed = decision.fallback_controls is not False and scope["device_id"] in owners
+    # An operational reader failure is not evidence that an operator omitted rights.
+    if (permission is not None) is not expected_allowed:
+        raise readiness.ReadinessUnavailableError()
+    entitlement = "granted" if expected_allowed else "missing"
     if ctx.readiness_settings is None:
         raise readiness.ReadinessUnavailableError()
     setting = media_readiness.host_setting(ctx.readiness_settings())

@@ -62,4 +62,7 @@ def test_route_is_authenticated_read_only_and_does_not_probe_images(tmp_path):
         assert env.store.media_read_decision(env.iid, device.device_id) == before
         status, _ = await get(client, path + '?extra=1', headers=env.headers(device))
         assert status == 400
+        env.bridge.authz_state = lambda user, profile: AuthzState.NOT_SERVED
+        status, data = await get(client, path, headers=env.headers(device))
+        assert status == 404 and 'media' not in data
     run(env, scenario)
