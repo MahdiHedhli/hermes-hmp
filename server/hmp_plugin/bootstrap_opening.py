@@ -21,6 +21,7 @@ class BootstrapOpening:
         self._context = None
         self.started = False
         self.close_attempted = False
+        self.retirement_owner = None
         self.closed = False
         self.pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
 

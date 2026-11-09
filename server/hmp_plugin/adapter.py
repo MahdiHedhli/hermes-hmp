@@ -626,10 +626,11 @@ _AT1_PLUGIN_MODULE = sys.modules[__package__]
 class _RetiringStore:
     """Original ownership retained even when task creation/close acknowledgement is lost."""
 
-    def __init__(self, srv):
+    def __init__(self, srv, *, original_close=None, original_guard=None):
         self.server, self.ctx = srv, srv.ctx
         self.store = self.ctx.store
-        self.close = self.store.close
+        self.close = self.store.close if original_close is None else original_close
+        self.guard = original_guard
         self.completion, self.failure = object(), object()
         self.coro = None
         self.task = None
@@ -939,7 +940,7 @@ class HmpAdapter(BasePlatformAdapter):
             del self._retiring_stores[key]
         return not self._retiring_stores
 
-    def _retain_store_owner(self, srv):
+    def _retain_store_owner(self, srv, *, original_close=None, original_guard=None):
         key = id(srv)
         if self._retirement_setup_unknown:
             raise RuntimeError("Store retirement unresolved; retain original listener")
@@ -950,7 +951,8 @@ class HmpAdapter(BasePlatformAdapter):
             return existing
         self._retirement_setup_unknown = True  # before allocations/registration/possible enqueue
         try:
-            owner = _RetiringStore(srv)
+            owner = _RetiringStore(srv, original_close=original_close,
+                                   original_guard=original_guard)
             self._retiring_stores[key] = owner
             owner.coro = self._retire_owned_store(owner)
             owner.task = asyncio.create_task(owner.coro)
@@ -964,7 +966,7 @@ class HmpAdapter(BasePlatformAdapter):
         try:
             await self._close_after_operator_drain(
                 owner.server, original_ctx=owner.ctx, original_store=owner.store,
-                original_close=owner.close,
+                original_close=owner.close, original_guard=owner.guard,
             )
             return owner.completion
         except BaseException:
@@ -1003,15 +1005,14 @@ class HmpAdapter(BasePlatformAdapter):
         opening = self._opening
         if opening is not None and self._server is None:
             if opening.server is not None:
-                raise RuntimeError(
-                    "partial listener bootstrap unresolved; retain original resources"
-                )
-            await opening.wait()  # same actual Future, never a new component opening
-            opening.close_unpublished(self)
-            if self._opening is not opening or not opening.closed:
-                raise RuntimeError("bootstrap cleanup unresolved")
-            self._opening = None
-            self._startup_unresolved = False
+                await self._recover_partial_listener(opening)
+            else:
+                await opening.wait()  # same actual Future, never a new component opening
+                opening.close_unpublished(self)
+                if self._opening is not opening or not opening.closed:
+                    raise RuntimeError("bootstrap cleanup unresolved")
+                self._opening = None
+                self._startup_unresolved = False
         srv = self._server
         if srv is not None:
             await srv.stop(notify=False)
@@ -1027,13 +1028,54 @@ class HmpAdapter(BasePlatformAdapter):
             self._drop_record()
         self._mark_disconnected()
 
+    async def _recover_partial_listener(self, opening):
+        srv, future, ctx = opening.server, opening.future, opening.ctx
+        store, close = opening.store, opening.close
+        owner = opening.retirement_owner
+
+        def rejoin():
+            if (self._opening is not opening or self._server is not None
+                    or opening.adapter is not self or opening.server is not srv
+                    or opening.future is not future or opening.ctx is not ctx
+                    or opening.store is not store or opening.close is not close
+                    or ctx is None or ctx.store is not store or srv.ctx is not ctx
+                    or opening.closed is not False
+                    or opening.retirement_owner is not owner
+                    or opening.close_attempted is not (owner is not None)):
+                raise RuntimeError("partial listener bootstrap unresolved; retain original resources")
+
+        rejoin()
+        if (not callable(getattr(srv, "stop", None))
+                or not callable(getattr(srv, "wait_operator_drain", None))):
+            raise RuntimeError("partial listener bootstrap unresolved; retain original resources")
+        await opening.wait()  # actual original component Future must have returned
+        rejoin()
+        await srv.stop(notify=False)  # actual listener owner, never a new startup
+        rejoin()
+        if owner is None:
+            owner = self._retain_store_owner(srv, original_close=close, original_guard=rejoin)
+            opening.retirement_owner = owner
+            opening.close_attempted = True  # transfer original close; unpublished close cannot replay
+        if owner.server is not srv or owner.ctx is not ctx or owner.store is not store:
+            raise RuntimeError("partial listener retirement owner changed")
+        result = await asyncio.shield(owner.task)
+        rejoin()
+        if result is not owner.completion:
+            raise RuntimeError("partial listener Store close unresolved; do not replay")
+        opening.closed = True
+        self._opening = None
+        self._startup_unresolved = False
+
     async def _close_after_operator_drain(
         self, srv: server.HmpServer, *, original_ctx=None, original_store=None, original_close=None,
+        original_guard=None,
     ) -> None:
         ctx = srv.ctx if original_ctx is None else original_ctx
         store = ctx.store if original_store is None else original_store
         close = store.close if original_close is None else original_close
         def rejoin():
+            if original_guard is not None:
+                original_guard()
             current = getattr(self, "_server", None)
             if (srv.ctx is not ctx or ctx.store is not store
                     or (current is not None and current is not srv)):

@@ -647,3 +647,82 @@ def test_bootstrap_worker_preserves_original_context_without_leaking_worker_chan
         assert scope.get() is marker
 
     asyncio.run(scenario())
+
+
+def partial_real_listener(adapter_module, monkeypatch, *, fail_close=False, block_site=False):
+    from .test_listener_startup_ownership import rig
+
+    listener, runner, events, entered, release = rig(
+        monkeypatch, setup_error=not block_site, block_site=block_site
+    )
+    store = FakeStore(fail=fail_close)
+    listener.ctx.store = store
+    adapter = adapter_module.HmpAdapter(SimpleNamespace(extra={"port": 12345}))
+    adapter._close_generation = lambda _ctx: events.append("generation-closed")
+    monkeypatch.setattr(adapter_module, "open_components", lambda _adapter: listener.ctx)
+    monkeypatch.setattr(adapter_module.server, "HmpServer", lambda *_args, **_kwargs: listener)
+    return adapter, listener, store, events, entered, release
+
+
+def test_explicit_disconnect_recovers_actual_partial_listener_once(adapter_module, monkeypatch):
+    async def scenario():
+        adapter, listener, store, events, _, _ = partial_real_listener(adapter_module, monkeypatch)
+        with pytest.raises(ConnectionError):
+            await adapter.connect()
+        opening = adapter._opening
+        assert store.closes == 0 and adapter._startup_unresolved
+        await adapter.disconnect()
+        assert listener.closed.is_set() and events.count("cleanup") == 1
+        assert store.closes == 1 and opening.closed and opening.close_attempted
+        assert adapter._opening is None and adapter._retired_stores_ready()
+        assert not adapter._startup_unresolved and not adapter._disconnect_unresolved
+        await adapter.disconnect()
+        assert store.closes == 1 and events.count("cleanup") == 1
+
+    asyncio.run(scenario())
+
+
+def test_cancelled_partial_recovery_joins_same_listener_before_store_close(adapter_module,
+                                                                         monkeypatch):
+    async def scenario():
+        adapter, listener, store, events, entered, release = partial_real_listener(
+            adapter_module, monkeypatch, block_site=True
+        )
+        caller = asyncio.create_task(adapter.connect())
+        await entered.wait()
+        caller.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await caller
+        opening = adapter._opening
+        recovery = asyncio.create_task(adapter.disconnect())
+        await asyncio.sleep(0)
+        recovery.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await recovery
+        assert adapter._opening is opening and store.closes == 0
+        release.set()
+        await adapter.disconnect()
+        assert listener.closed.is_set() and events.count("cleanup") == 1 and store.closes == 1
+        assert events.index("site-returned") < events.index("cleanup")
+        assert not adapter._startup_unresolved and not adapter._disconnect_unresolved
+
+    asyncio.run(scenario())
+
+
+def test_partial_recovery_close_ack_loss_never_replays_or_unblocks(adapter_module, monkeypatch):
+    async def scenario():
+        adapter, listener, store, events, _, _ = partial_real_listener(
+            adapter_module, monkeypatch, fail_close=True
+        )
+        with pytest.raises(ConnectionError):
+            await adapter.connect()
+        opening = adapter._opening
+        for _ in range(2):
+            with pytest.raises(RuntimeError, match="Store close unresolved"):
+                await adapter.disconnect()
+        assert store.closes == 1 and events.count("cleanup") == 1
+        assert adapter._opening is opening and not opening.closed
+        assert adapter._startup_unresolved and await adapter.connect() is False
+        assert listener.closed.is_set()
+
+    asyncio.run(scenario())
