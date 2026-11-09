@@ -212,3 +212,41 @@ def test_unknown_stop_owner_creation_never_replays_cleanup(monkeypatch, after_en
                 listener._stop_coro.close()  # only the fixture knows no Task was created
 
     asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("replacement", ("context", "dependencies", "runner"))
+def test_shutdown_rejoins_original_cohort_after_read_service_wait(monkeypatch, replacement):
+    async def scenario():
+        listener, runner, events, _, _ = rig(monkeypatch, setup_error=True)
+        with pytest.raises(RuntimeError):
+            await listener.start()
+        ctx = listener.ctx
+        clears = []
+        ctx.push_hints = SimpleNamespace(clear=lambda: clears.append("original"))
+        foreign = SimpleNamespace(
+            push_hints=SimpleNamespace(clear=lambda: clears.append("foreign")),
+            direct_send_deps=None,
+        )
+
+        async def stop_read():
+            await asyncio.sleep(0)
+            if replacement == "context":
+                listener.ctx = foreign
+            elif replacement == "dependencies":
+                ctx.direct_send_deps = object()
+            else:
+                listener._runner = object()
+            return 0
+
+        read = SimpleNamespace(stop=stop_read)
+        listener._operator_read = read
+        for _ in range(2):
+            with pytest.raises(RuntimeError, match="shutdown scope changed"):
+                await listener.stop()
+        assert not clears and "cleanup" not in events
+        assert listener._operator_read is read
+        assert listener._operator_read_drained is read
+        assert not listener.closed.is_set()
+        assert listener._start_runner is runner
+
+    asyncio.run(scenario())

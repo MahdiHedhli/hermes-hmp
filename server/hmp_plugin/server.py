@@ -2286,6 +2286,27 @@ class HmpServer:
             await asyncio.shield(owner)
             if self._start_owner is not owner:
                 raise RuntimeError("listener startup owner changed; retain original resources")
+        ctx = self._operator_origin_ctx
+        hints, deps = ctx.push_hints, ctx.direct_send_deps
+        store = getattr(ctx, "store", None)
+        fields = ("_operator_read", "_at1_endpoint", "_at1_service",
+                  "_push_dispatcher", "_push_watch", "_watch", "_runner")
+        cohort = {name: getattr(self, name) for name in fields}
+
+        def rejoin():
+            if (self.ctx is not ctx or ctx.push_hints is not hints
+                    or ctx.direct_send_deps is not deps
+                    or getattr(ctx, "store", None) is not store
+                    or any(getattr(self, name) is not value
+                           for name, value in cohort.items())):
+                raise RuntimeError("listener shutdown scope changed; retain original resources")
+
+        def retired(name):
+            rejoin()
+            setattr(self, name, None)
+            cohort[name] = None
+
+        rejoin()
         retirement = self._media_retirement_owner
         if retirement is not None:
             # A sentinel forces the adapter through combined drain before Store close.
@@ -2298,9 +2319,12 @@ class HmpServer:
                 retirement.begin()  # close admission/publication BEFORE any shutdown await
             except BaseException:
                 self._media_retirement_error = True
-        service, self._operator_read = self._operator_read, None
+        service = cohort["_operator_read"]
         if service is not None:
+            self._operator_read_drained = service
             debt = await service.stop()
+            rejoin()
+            retired("_operator_read")
             self.operator_worker_debt = debt + (1 if retirement is not None else 0)
             self._operator_read_drained = service
             if debt:
@@ -2308,34 +2332,45 @@ class HmpServer:
         endpoint = self._at1_endpoint
         service = self._at1_service
         if endpoint is not None:
-            if await endpoint.close() is not True:
+            result = await endpoint.close()
+            rejoin()
+            if result is not True:
                 raise RuntimeError("approval test cleanup unavailable")
         elif service is not None:
             await service.shutdown()
+            rejoin()
         # All AT1 leases/authority reads/native owners have joined at this point.
-        self.ctx.push_hints.clear()
-        dispatcher, self._push_dispatcher = self._push_dispatcher, None
+        rejoin()
+        hints.clear()
+        dispatcher = cohort["_push_dispatcher"]
         if dispatcher is not None:
             await dispatcher.close()
+            retired("_push_dispatcher")
+        rejoin()
         await self._cancel_pending_sends()
-        push_watch, self._push_watch = self._push_watch, None
+        rejoin()
+        push_watch = cohort["_push_watch"]
         if push_watch is not None and push_watch is not asyncio.current_task():
             push_watch.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await push_watch
-        watch, self._watch = self._watch, None
+            rejoin()
+        retired("_push_watch")
+        watch = cohort["_watch"]
         if watch is not None and watch is not asyncio.current_task():
             watch.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await watch
-        runner = self._runner
+            rejoin()
+        retired("_watch")
+        runner = cohort["_runner"]
         if self._start_runner is not None and runner is not self._start_runner:
             raise RuntimeError("listener runner owner changed; retain original resources")
         if runner is not None:
             await runner.cleanup()
-            if self._runner is not runner:
-                raise RuntimeError("listener runner owner changed; retain original resources")
-            self._runner = None
+            rejoin()
+            retired("_runner")
+        rejoin()
         if self._startup_publication_unknown:
             raise RuntimeError("listener task publication unresolved; retain original resources")
         if not self.closed.is_set():
