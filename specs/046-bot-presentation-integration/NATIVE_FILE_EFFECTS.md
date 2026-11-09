@@ -1,5 +1,7 @@
 ## November 9 — full unit failures cleared; device launch checks advance
 
+Schema-three push shutdown source repair `49c2a5f` now retains actual authorization/key/gate borrowers and relay-close ownership through server drain. The isolated regression and232push/listener/adapter/server checks pass with source unchanged. This is not deployed: independent ownership review, floor parity and lifecycle composition remain open; failed-builder ownership remains separate. Installed hosts remain `5ecd2ba`. No new build, grants, media opt-in or release submission.
+
 Full reconciled unit reruns at `889a31b` report zero failures/errors with unchanged
 source: current8,257passed/15skipped; floor8,255passed/17skipped, plus190passing
 subtests each. Strict qualification remains false: native prerequisites, Linux-only
