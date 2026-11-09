@@ -80,7 +80,7 @@ def _new_probe_engine_origin():
         '_make_shared_commit', '_commit_shared_tail', '_acked_shared_history', '_publish_shared_ack'))
     return (module, types, functions, OSError.__dict__['errno'],
             OSError.__dict__['filename'], errno.ENOENT,
-            (metadata, tuple((name, getattr(metadata, name), getattr(metadata, name).__code__)
+            (metadata, tuple((name, vars(metadata).get(name), vars(metadata).get(name).__code__)
                              for name in ('_produce_directory_metadata',
                                           '_consume_directory_policy', '_ack_directory_policy'))))
 
@@ -101,7 +101,7 @@ def _engine_origin_tail(origin):
              and sys.modules.get('hmp_plugin.presentation_native_metadata') is metadata)
     for name, function, code in origin[6][1]:
         _require(type(name) is str and type(function) is FunctionType
-                 and getattr(metadata, name) is function and function.__code__ is code
+                 and vars(metadata).get(name) is function and function.__code__ is code
                  and function.__globals__ is vars(metadata))
     for kind, fields, members in origin[1]:
         _require(type(kind) is type and vars(kind).get('_fields') is fields

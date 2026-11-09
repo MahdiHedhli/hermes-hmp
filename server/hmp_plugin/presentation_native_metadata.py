@@ -335,7 +335,7 @@ def _rejoin_probe_stages(owner, resource, origin, stages):
 
 def _probe_policy_helper(owner, consumer, name):
     """Closed original probe policy projection, never a client callback."""
-    _require(type(consumer) is _ProbeConsumer
+    _require(type(consumer) is _ProbeConsumer and type(name) is str
              and name in ('_make_shared_commit', '_commit_shared_tail',
                           '_acked_shared_history', '_publish_shared_ack'))
     operation = tuple.__getitem__(consumer, 1)

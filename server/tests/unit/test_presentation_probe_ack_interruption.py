@@ -54,7 +54,15 @@ route={
  'phase_result':(m._ack_directory_policy.__code__,'phase.current[0] = phase.idle'),
  'lost_ack_return':(m._ack_directory_policy.__code__,'return commit'),
 }
-trace_synthetic_boundary(*route[ack_case],interrupted)
+code,fragment=route[ack_case]
+# The ACK and failure-cleanup paths intentionally contain similar stores.
+# Select the first actual normal-ACK statement, not an ambiguous substring.
+lines=Path(code.co_filename).read_text().splitlines()
+end=max(line for _,_,line in code.co_lines() if line is not None)
+matches=[i+1 for i in range(code.co_firstlineno-1,end) if fragment in lines[i]]
+assert matches, (ack_case,fragment)
+_synthetic_trace_routes.setdefault(code,{})[matches[0]]=interrupted
+sys.settrace(synthetic_trace)
 def observed(frame):
     if faults:native_after.append(True)
 for native in reg.native_origin.operations[3:5]:
