@@ -128,3 +128,46 @@ def test_pre_enqueue_future_allocation_failure_releases_only_unused_slot(monkeyp
         with pytest.raises(PublicationUnavailable): actor.candidate(SCOPE, (1, 2, 3))
         actor.close()
     asyncio.run(scenario())
+
+
+def test_close_retains_store_until_actual_worker_settlement(tmp_path):
+    async def scenario():
+        actor = a.MediaPublicationActor()
+        store = Store(tmp_path / 'store.sqlite3', mutation_observer=actor); store.migrate()
+        entered = threading.Event(); release = threading.Event()
+        def write():
+            with store.transaction():
+                entered.set(); assert release.wait(2)
+                store.insert_user('synthetic', 'owner', 1)
+        work = asyncio.create_task(asyncio.to_thread(write))
+        assert await asyncio.to_thread(entered.wait, 2)
+        assert actor.outstanding_mutations() == 1
+        actor.close()
+        with pytest.raises(TimeoutError):
+            await asyncio.wait_for(actor.wait_drained(), .02)
+        assert actor.outstanding_mutations() == 1
+        release.set()
+        with pytest.raises(RuntimeError, match='settlement outcome unavailable'):
+            await work
+        await asyncio.wait_for(actor.wait_drained(), .2)
+        assert actor.outstanding_mutations() == 0
+        assert store._conn.execute('SELECT count(*) FROM users').fetchone()[0] == 1
+        with pytest.raises(PublicationUnavailable): actor.candidate(SCOPE, (1, 2, 3))
+        store.close()  # actual worker ended, not merely a shutdown observation timeout
+    asyncio.run(scenario())
+
+
+def test_unsettled_original_receipt_is_not_erased_by_close_or_drain_timeout():
+    async def scenario():
+        actor = a.MediaPublicationActor()
+        receipt = await asyncio.to_thread(actor.begin)
+        actor.close()
+        assert actor.outstanding_mutations() == 1
+        with pytest.raises(TimeoutError): await asyncio.wait_for(actor.wait_drained(), .01)
+        assert actor.outstanding_mutations() == 1
+        # Only the actual receipt-holder can retire this debt. No replay of a write.
+        with pytest.raises(PublicationUnavailable):
+            await asyncio.to_thread(actor.settle, receipt, certain=True)
+        await asyncio.wait_for(actor.wait_drained(), .2)
+        assert actor.outstanding_mutations() == 0
+    asyncio.run(scenario())

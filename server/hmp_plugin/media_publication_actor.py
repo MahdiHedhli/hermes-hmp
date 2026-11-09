@@ -25,6 +25,8 @@ class MediaPublicationActor:
         self._publisher = MediaPublication()
         self._failed = threading.Event()
         self._slots = threading.BoundedSemaphore(_MAX_PENDING)
+        self._mutations: dict[MutationTicket, None] = {}
+        self._drained = asyncio.Event()
 
     def _owner(self) -> None:
         if threading.current_thread() is not self._thread:
@@ -60,10 +62,29 @@ class MediaPublicationActor:
             raise PublicationUnavailable()
         self._failed.set()
         self._publisher.close()
+        self._refresh_drain()
 
     def _poison(self) -> None:
         # Called on the owner loop, never by the waiting worker.
         self._publisher.close()
+        self._refresh_drain()
+
+    def _refresh_drain(self) -> None:
+        if self._failed.is_set() and not self._mutations:
+            self._drained.set()
+        else:
+            self._drained.clear()
+
+    def outstanding_mutations(self) -> int:
+        if threading.current_thread() is not self._thread:
+            raise PublicationUnavailable()
+        return len(self._mutations)
+
+    async def wait_drained(self) -> None:
+        if (asyncio.get_running_loop() is not self._loop
+                or not self._failed.is_set()):
+            raise PublicationUnavailable()
+        await self._drained.wait()
 
     def _fail(self) -> None:
         self._failed.set()
@@ -74,20 +95,34 @@ class MediaPublicationActor:
 
     def _deliver(self, reply, deadline, operation, receipt, certain) -> None:
         try:
-            if self._failed.is_set() or time.monotonic() >= deadline:
+            closed = self._failed.is_set() or time.monotonic() >= deadline
+            if closed:
                 self._failed.set()
                 self._publisher.close()
-                raise PublicationUnavailable()
             if operation == 'begin':
+                if closed:
+                    raise PublicationUnavailable()
                 result = self._publisher.begin_mutation()
-            else:
-                self._publisher.settle_mutation(receipt, certain=certain)
+                self._mutations[result] = None  # original debt BEFORE acknowledgement
+                self._refresh_drain()
+            elif operation == 'settle':
+                if type(receipt) is not MutationTicket or receipt not in self._mutations:
+                    raise PublicationUnavailable()
+                if not closed:
+                    self._publisher.settle_mutation(receipt, certain=certain)
+                # Closed settlement is cleanup only, never publication authority.
+                # The fixed Store observer calls only after its actual SQL returns.
+                del self._mutations[receipt]
+                self._refresh_drain()
                 result = None
+            else:
+                raise PublicationUnavailable()
             reply.set_result(result)
         except BaseException:
             # A partial operation has unknown completion. Keep all admission shut.
             self._failed.set()
             self._publisher.close()
+            self._refresh_drain()
             if not reply.done():
                 reply.set_exception(PublicationUnavailable())
         finally:
@@ -96,7 +131,8 @@ class MediaPublicationActor:
     def _request(self, operation: str, receipt=None, certain=False):
         if threading.current_thread() is self._thread:
             raise PublicationUnavailable()  # no loop-thread rendezvous/deadlock
-        if self._failed.is_set() or not self._loop.is_running():
+        if ((self._failed.is_set() and operation != 'settle')
+                or not self._loop.is_running()):
             raise PublicationUnavailable()
         reserved = None  # unknown acquisition is not proof a slot is unused
         enqueue_attempted = False
