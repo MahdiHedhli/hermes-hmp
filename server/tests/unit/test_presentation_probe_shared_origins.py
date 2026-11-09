@@ -60,9 +60,9 @@ elif origin_case in ('shared_stage_selector','namespace_rejoin'):
         faults.append(True)
         fault_budget.append((tuple(reg.native_ledger.counts),len(reg.native_ledger.attempts)))
         vars(m)[name]=foreign_helper
-    target=(m._produce_probe_shared.__code__ if origin_case=='shared_stage_selector'
+    target=(m._run_directory_observation.__code__ if origin_case=='shared_stage_selector'
             else m._rejoin_probe_stages.__code__)
-    statement=('operation = tuple.__getitem__(consumer, 1)' if origin_case=='shared_stage_selector'
+    statement=('actual = produce(owner, consumer)' if origin_case=='shared_stage_selector'
                else 'actual = _probe_stage_functions(owner, resource)')
     trace_synthetic_boundary(target,statement,substitute)
     observe_synthetic_native(a.os.stat,m._produce_directory_metadata.__code__,
