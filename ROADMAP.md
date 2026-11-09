@@ -1,5 +1,13 @@
 ## November 8 — reviewed host updates deployed; character integration remains open
 
+Mobile media API source `467e576` now reads discovery and per-bot diagnostics
+through the existing pinned authenticated transport. Discovery-only 404/405 is
+legacy unknown; malformed success is protocol unknown; bot 404 remains a refusal.
+No alternate route, remote grant, or feature mutation is attempted. All 53 focused
+Dart domain/media-wire/existing-AR1 tests pass and focused analysis has no issues.
+Context lifecycle integration, UI, independent review and device qualification
+remain open. This source is not built/installed/deployed.
+
 Both 256-case media-readiness/contract/plugin-surface suites at `fb82aef` have
 now passed, zero failures/errors/skips and unchanged source. Mobile branch
 `feat/media-readiness-mobile-20261108` source `46bee41` adds strict content-free
