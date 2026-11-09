@@ -1008,15 +1008,15 @@ class HmpAdapter(BasePlatformAdapter):
         opening = self._opening
         if opening is not None and self._server is None:
             if opening.server is not None:
-                # Partial native listener startup needs its own actual start/stop owner.
-                # Retain it rather than infer shutdown from an interrupted await.
-                raise RuntimeError("partial listener startup cleanup unresolved")
-            await opening.wait()
-            opening.close_unpublished(self)
-            if self._opening is not opening or not opening.closed:
-                raise RuntimeError("bootstrap cleanup unresolved")
-            self._opening = None
-            self._startup_unresolved = False
+                await self._recover_partial_listener(opening)
+                opening = None
+            if opening is not None:
+                await opening.wait()
+                opening.close_unpublished(self)
+                if self._opening is not opening or not opening.closed:
+                    raise RuntimeError("bootstrap cleanup unresolved")
+                self._opening = None
+                self._startup_unresolved = False
         srv = self._server
         if srv is not None:
             await srv.stop(notify=False)
@@ -1031,6 +1031,44 @@ class HmpAdapter(BasePlatformAdapter):
         else:
             self._drop_record()
         self._mark_disconnected()
+
+    async def _recover_partial_listener(self, opening):
+        srv, future, ctx = opening.server, opening.future, opening.ctx
+        store, close = opening.store, opening.close
+        owner = opening.retirement_owner
+
+        def rejoin():
+            if (self._opening is not opening or self._server is not None
+                    or opening.adapter is not self or opening.server is not srv
+                    or opening.future is not future or opening.ctx is not ctx
+                    or opening.store is not store or opening.close is not close
+                    or ctx is None or ctx.store is not store or srv.ctx is not ctx
+                    or opening.closed is not False
+                    or opening.retirement_owner is not owner
+                    or opening.close_attempted is not (owner is not None)):
+                raise RuntimeError("partial listener bootstrap unresolved; retain original resources")
+
+        rejoin()
+        if (not callable(getattr(srv, "stop", None))
+                or not callable(getattr(srv, "wait_operator_drain", None))):
+            raise RuntimeError("partial listener bootstrap unresolved; retain original resources")
+        await opening.wait()  # actual original component Future must have returned
+        rejoin()
+        await srv.stop(notify=False)  # actual listener owner, never a new startup
+        rejoin()
+        if owner is None:
+            owner = self._retain_store_owner(srv, original_close=close, original_guard=rejoin)
+            opening.retirement_owner = owner
+            opening.close_attempted = True  # transfer original close; unpublished close cannot replay
+        if owner.server is not srv or owner.ctx is not ctx or owner.store is not store:
+            raise RuntimeError("partial listener retirement owner changed")
+        result = await asyncio.shield(owner.task)
+        rejoin()
+        if result is not owner.completion:
+            raise RuntimeError("partial listener Store close unresolved; do not replay")
+        opening.closed = True
+        self._opening = None
+        self._startup_unresolved = False
 
     async def _close_after_operator_drain(
         self, srv: server.HmpServer, *, original_ctx=None, original_store=None, original_close=None,

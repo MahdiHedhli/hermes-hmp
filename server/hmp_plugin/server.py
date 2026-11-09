@@ -1845,6 +1845,16 @@ class HmpServer:
         self._operator_read_drained: Any = None
         self.operator_worker_debt = 0
         self._stop_owner: asyncio.Task[None] | None = None
+        self._operator_origin_ctx = ctx
+        self._start_owner = self._start_coro = None
+        self._start_attempted = self._start_fenced = False
+        self._start_complete, self._start_failed = object(), object()
+        self._start_runner = self._start_site = None
+        self._startup_publication_unknown = False
+        self._watch_coro = self._push_watch_coro = None
+        self._stop_attempted = False
+        self._stop_coro = None
+        self._stop_complete = object()
         self._at1_owners = approval_test_owners
         self._at1_attempted = False
         self._at1_live = False
@@ -1855,37 +1865,71 @@ class HmpServer:
         ctx.on_identity_changed = self._identity_changed
 
     async def start(self) -> None:
+        if self._start_fenced:
+            raise RuntimeError("listener startup unavailable")
         if not address_allowed(self.settings.bind):
             raise ListenerConfigError("bind must be a loopback or tailnet IP address (TR-4)")
-        ssl_ctx = server_ssl_context(self.ctx.identity, self._identity_changed)
-        app = build_app(self.ctx)
-        runner = _HmpAppRunner(
-            app,
-            access_log_class=AllowListedAccessLogger,
-            access_log=logging.getLogger(ACCESS_LOGGER_NAME),
-            logger=_ParserSafeLogger(),
-            shutdown_timeout=SHUTDOWN_TIMEOUT_S,
-            handle_signals=False,
-        )
-        await runner.setup()
-        site = web.TCPSite(
-            runner, self.settings.bind, self.settings.port, ssl_context=ssl_ctx, reuse_address=True
-        )
+        if not self._start_attempted:
+            self._start_attempted = True
+            try:
+                self._start_coro = self._start_joined()
+                self._start_owner = asyncio.get_running_loop().create_task(self._start_coro)
+            except BaseException:
+                raise RuntimeError("listener startup ownership unresolved") from None
+        owner = self._start_owner
+        if owner is None:
+            raise RuntimeError("listener startup ownership unresolved")
+        result = await asyncio.shield(owner)
+        if (self._start_owner is not owner or self._start_fenced
+                or result is not self._start_complete):
+            raise RuntimeError("listener startup incomplete")
+
+    def _startup_scope(self, runner, site=None):
+        if (self._start_fenced or self.ctx is not self._operator_origin_ctx
+                or self._runner is not runner or self._start_runner is not runner
+                or (site is not None and self._start_site is not site)):
+            raise RuntimeError("listener startup scope unavailable")
+
+    async def _start_joined(self):
         try:
+            ssl_ctx = server_ssl_context(self.ctx.identity, self._identity_changed)
+            app = build_app(self.ctx)
+            runner = _HmpAppRunner(
+                app, access_log_class=AllowListedAccessLogger,
+                access_log=logging.getLogger(ACCESS_LOGGER_NAME), logger=_ParserSafeLogger(),
+                shutdown_timeout=SHUTDOWN_TIMEOUT_S, handle_signals=False,
+            )
+            self._start_runner = runner
+            self._runner = runner  # retain BEFORE first setup await
+            await runner.setup()
+            self._startup_scope(runner)
+            site = web.TCPSite(
+                runner, self.settings.bind, self.settings.port,
+                ssl_context=ssl_ctx, reuse_address=True,
+            )
+            self._start_site = site
             await self._purge_push_once()
+            self._startup_scope(runner, site)
             await site.start()
+            self._startup_scope(runner, site)
+            sockets = getattr(site._server, "sockets", None) or ()
+            if sockets:
+                host, port = sockets[0].getsockname()[:2]
+                self.bound = (str(host), int(port))
+            self._startup_publication_unknown = True
+            self._watch_coro = self._watchdog()
+            self._watch = asyncio.get_running_loop().create_task(self._watch_coro)
+            self._push_watch_coro = self._push_purge_loop()
+            self._push_watch = asyncio.get_running_loop().create_task(self._push_watch_coro)
+            self._startup_publication_unknown = False
+            await self._start_push_dispatcher()
+            self._startup_scope(runner, site)
+            log_event("listener_start", outcome="ok")
+            return self._start_complete
         except BaseException:
-            await runner.cleanup()
-            raise
-        self._runner = runner
-        sockets = getattr(site._server, "sockets", None) or ()
-        if sockets:
-            host, port = sockets[0].getsockname()[:2]
-            self.bound = (str(host), int(port))
-        self._watch = asyncio.get_running_loop().create_task(self._watchdog())
-        self._push_watch = asyncio.get_running_loop().create_task(self._push_purge_loop())
-        await self._start_push_dispatcher()
-        log_event("listener_start", outcome="ok")
+            # The retained original owner emits no private unobserved exception.
+            # Partial setup is cleaned only by the separate actual stop owner.
+            return self._start_failed
 
     async def start_operator_read(self, anchor_dir: Path, nonce: str) -> None:
         from .operator_read import OperatorReadService
@@ -2087,15 +2131,41 @@ class HmpServer:
         await cancel(SHUTDOWN_TIMEOUT_S)
 
     async def stop(self, *, notify: bool = True) -> None:
-        """Fence immediately; retain and shield the single actual teardown owner."""
         self._at1_live = False
+        self._start_fenced = True
         if not notify:
             self._on_closed = None
-        if self._stop_owner is None:
-            self._stop_owner = asyncio.get_running_loop().create_task(self._stop_joined())
-        await asyncio.shield(self._stop_owner)
+        if not self._stop_attempted:
+            self._stop_attempted = True
+            try:
+                self._stop_coro = self._stop_owned()
+                self._stop_owner = asyncio.get_running_loop().create_task(self._stop_coro)
+            except BaseException:
+                raise RuntimeError("listener cleanup ownership unresolved") from None
+        owner = self._stop_owner
+        if owner is None:
+            raise RuntimeError("listener cleanup ownership unresolved")
+        result = await asyncio.shield(owner)
+        if self._stop_owner is not owner or result is not self._stop_complete:
+            raise RuntimeError("listener cleanup incomplete")
+
+    async def _stop_owned(self):
+        try:
+            await self._stop_joined()
+        except BaseException:
+            return None
+        return self._stop_complete
 
     async def _stop_joined(self) -> None:
+        start = self._start_owner
+        if self._start_attempted:
+            if start is None:
+                raise RuntimeError("listener startup ownership unresolved")
+            await asyncio.shield(start)
+            if self._start_owner is not start:
+                raise RuntimeError("listener startup scope changed")
+        if self._startup_publication_unknown or self.ctx is not self._operator_origin_ctx:
+            raise RuntimeError("listener startup ownership unresolved")
         service, self._operator_read = self._operator_read, None
         if service is not None:
             debt = await service.stop()
@@ -2137,9 +2207,14 @@ class HmpServer:
             watch.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await watch
-        runner, self._runner = self._runner, None
+        runner = self._runner
         if runner is not None:
+            if self._start_runner is not runner:
+                raise RuntimeError("listener runner scope changed")
             await runner.cleanup()
+            if self._runner is not runner:
+                raise RuntimeError("listener runner scope changed")
+            self._runner = None
         if not self.closed.is_set():
             self.closed.set()
             if self._on_closed is not None:
