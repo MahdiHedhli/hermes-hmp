@@ -149,20 +149,31 @@ def ensure_plugin_data_dir(paths: InstancePaths) -> None:
     Path(paths.home, *_PLUGIN_DATA_RELATIVE).mkdir(parents=True, exist_ok=True)
 
 
+_PROCESS_ENV_KEYS = frozenset({
+    "PATH", "HOME", "USERPROFILE", "SYSTEMROOT", "WINDIR", "COMSPEC", "PATHEXT",
+    "TMPDIR", "TMP", "TEMP", "LANG", "LC_ALL", "LC_CTYPE", "TZ", "TERM",
+})
+_FIXTURE_ENV_KEYS = frozenset({"HERMES_HOME", "XDG_STATE_HOME"})
+
+
 def clean_hermes_env(*, extra: dict[str, str] | None = None) -> dict[str, str]:
-    """A minimal, isolated environment for any subprocess that must not see the caller's own
-    Hermes/XDG state (fixture-format.md rule 1: "unsets every inherited HERMES_* variable").
-    Callers add `HERMES_HOME` / `XDG_STATE_HOME` (already safety-checked) via `extra`."""
-    base = {
-        k: v
-        for k, v in os.environ.items()
-        if not k.startswith("HERMES_") and not k.startswith("XDG_")
-    }
-    # A minimal PATH is enough for `git`/`uv`/the venv's own interpreter; never let a stray
-    # HERMES_* var survive through PATH-adjacent tooling.
-    base.setdefault("PATH", os.environ.get("PATH", "/usr/bin:/bin:/usr/sbin:/sbin"))
-    base.setdefault("HOME", os.environ.get("HOME", str(Path.home())))
+    """Allowlisted process settings only; never forward caller credentials/injection knobs.
+
+    This is environment isolation, not filesystem sandboxing. The native helper's
+    explicit home flags and assert_instance_paths_safe remain required. Trusted
+    seed callers set their fixed SERVER_DIR PYTHONPATH after this function returns.
+    """
+    base = {key: value for key, value in os.environ.items() if key in _PROCESS_ENV_KEYS}
+    base.setdefault("PATH", "/usr/bin:/bin:/usr/sbin:/sbin")
+    base.setdefault("HOME", str(Path.home()))
     if extra:
+        if any(key not in _FIXTURE_ENV_KEYS for key in extra):
+            raise FixtureSafetyError("unsupported fixture environment setting")
+        for key, value in extra.items():
+            if type(value) is not str or not value or "\x00" in value:
+                raise FixtureSafetyError("invalid fixture environment path")
+            assert_outside_real_home(Path(value), key)
+            assert_never_real_hermes_dir(Path(value), key)
         base.update(extra)
     return base
 
