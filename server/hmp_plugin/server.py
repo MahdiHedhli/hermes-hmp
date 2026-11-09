@@ -693,7 +693,8 @@ def _collect_media_readiness(ctx: ServerContext, **scope: Any) -> dict[str, obje
     payload = media_readiness.project(entitlement=entitlement, host=setting, api=api)
     checkpoint()
     return {"protocol": 1, "checked_at": _readiness_now(ctx),
-            "generation": scope["generation"], "media": payload}
+            "generation": scope["generation"], "media": payload,
+            "_authority": (decision, permission)}
 
 
 async def handle_media_readiness(request: web.Request) -> web.Response:
@@ -776,12 +777,14 @@ async def _handle_readiness(request: web.Request, *, media: bool) -> web.Respons
                 profile=profile, device_id=who.device_id, deadline=deadline,
                 generation=generation,
             )
-            if current["media"] != payload["media"]:
+            if (current["media"] != payload["media"]
+                    or current["_authority"] != payload["_authority"]):
                 raise readiness.ReadinessUnavailableError()
         except HmpError:
             raise
         except Exception:
             raise HmpError(ErrorCode.READINESS_UNAVAILABLE) from None
+        payload.pop("_authority")  # internal snapshot never enters the wire DTO
     try:
         body = wire.dump_json(payload)
     except Exception:

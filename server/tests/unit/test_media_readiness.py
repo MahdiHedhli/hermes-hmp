@@ -100,3 +100,42 @@ def test_route_discards_snapshot_changed_during_config_callback(tmp_path, change
         assert 'media' not in data
         assert env.store.owner_controls_decision(device.device_id) is None
     run(env, scenario)
+
+
+@pytest.mark.parametrize('change', ('deny_regrant', 'generation', 'bot_revoke'))
+def test_route_final_delivery_fence_discards_post_worker_changes(tmp_path, monkeypatch, change):
+    import threading
+    from .hmp_kit import Env, pair, get, run
+    from hmp_plugin import server
+    from hmp_plugin.contract import AuthzState
+    env = Env(tmp_path)
+    env.bridge.authz_state = lambda user, profile: AuthzState.AUTHORIZED
+    env.ctx.readiness_settings = lambda: {'local_media': {'enabled': False}}
+    original = server._collect_media_readiness
+    changed = []
+
+    async def scenario(client):
+        device = await pair(env, client)
+        initial = env.store.media_read_decision(env.iid, device.device_id)
+        assert env.store.set_media_read(initial, allowed=True, now=env.clock.now)
+
+        def collect(ctx, **scope):
+            result = original(ctx, **scope)
+            if threading.current_thread() is not threading.main_thread() and not changed:
+                changed.append(True)
+                if change == 'deny_regrant':
+                    for allowed in (False, True):
+                        previous = env.store.media_read_decision(env.iid, device.device_id)
+                        assert env.store.set_media_read(previous, allowed=allowed, now=env.clock.now)
+                elif change == 'generation':
+                    env.ctx.readiness_generation = 'a' * 32
+                else:
+                    env.bridge.authz_state = lambda user, profile: AuthzState.NOT_SERVED
+            return result
+
+        monkeypatch.setattr(server, '_collect_media_readiness', collect)
+        status, data = await get(client, '/bots/default/media-readiness',
+                                 headers=env.headers(device))
+        assert changed and status == (404 if change == 'bot_revoke' else 503), data
+        assert 'media' not in data and '_authority' not in str(data)
+    run(env, scenario)
