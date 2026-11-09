@@ -121,6 +121,7 @@ from .logging_policy import (
     log_handler_exception,
 )
 from .pairing import handle_pair_complete, handle_pair_request
+from .push_retirement import RelayCloseOwner
 from .push_dispatch import PushDispatcher, RelayPort
 from .reads import require_bot_authorized
 
@@ -1832,6 +1833,10 @@ class HmpServer:
         # path is invented here; source tests inject the same listener port.
         self._push_relay_factory = push_relay_factory
         self._push_dispatcher: PushDispatcher | None = None
+        self._push_start_dispatcher = None
+        self._push_start_relay = None
+        self._push_relay_owner = None
+        self._push_dispatcher_drained = None
         self._runner: web.AppRunner | None = None
         self._watch: asyncio.Task[None] | None = None
         self._push_watch: asyncio.Task[None] | None = None
@@ -1966,7 +1971,11 @@ class HmpServer:
         relay = None
         try:
             relay = self._push_relay_factory()
-            dispatcher = PushDispatcher(self.ctx, relay, require_gate=_require_approvals_gate)
+            self._push_start_relay = relay
+            self._push_relay_owner = RelayCloseOwner(relay)
+            dispatcher = PushDispatcher(self.ctx, relay, require_gate=_require_approvals_gate,
+                                        relay_owner=self._push_relay_owner)
+            self._push_start_dispatcher = dispatcher  # retain before worker publication
             dispatcher.start()
             self._push_dispatcher = dispatcher
         except Exception:
@@ -1974,10 +1983,10 @@ class HmpServer:
                 with contextlib.suppress(Exception):
                     await dispatcher.close()
             elif relay is not None:
-                # Constructor failure must not leak a just-created client.
+                # Keep the one actual close even when the bounded observer expires.
                 with contextlib.suppress(Exception):
-                    async with asyncio.timeout(1):
-                        await relay.close()
+                    if self._push_relay_owner is not None:
+                        await self._push_relay_owner.close_bounded(1)
             with contextlib.suppress(Exception):
                 log_event("push_dispatch", outcome="creation_failed")
 
@@ -2044,6 +2053,12 @@ class HmpServer:
         service = self._operator_read_drained
         if service is not None:
             await service.wait_drained()
+        dispatcher = self._push_dispatcher_drained
+        if dispatcher is not None:
+            await dispatcher.wait_drained()
+        elif self._push_relay_owner is not None:
+            await self._push_relay_owner.wait_drained()
+        self.operator_worker_debt = 0
 
     async def _cancel_pending_sends(self) -> None:
         """Review round 3: cancel in-flight direct sends and wait, bounded, so a stop does not
@@ -2081,9 +2096,20 @@ class HmpServer:
             await service.shutdown()
         # All AT1 leases/authority reads/native owners have joined at this point.
         self.ctx.push_hints.clear()
-        dispatcher, self._push_dispatcher = self._push_dispatcher, None
+        dispatcher = self._push_dispatcher or self._push_start_dispatcher
+        if (self._push_dispatcher is not None and self._push_start_dispatcher is not None
+                and self._push_dispatcher is not self._push_start_dispatcher):
+            raise RuntimeError("push cleanup scope changed")
         if dispatcher is not None:
+            self._push_dispatcher_drained = dispatcher
             await dispatcher.close()
+            if dispatcher.retirement_pending:
+                self.operator_worker_debt += 1
+            self._push_dispatcher = None
+        elif self._push_relay_owner is not None:
+            await self._push_relay_owner.close_bounded(1)
+            if not self._push_relay_owner.successful:
+                self.operator_worker_debt += 1
         await self._cancel_pending_sends()
         push_watch, self._push_watch = self._push_watch, None
         if push_watch is not None and push_watch is not asyncio.current_task():

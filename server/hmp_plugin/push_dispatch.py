@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import inspect
 import threading
 import time
 from collections import OrderedDict
@@ -22,6 +23,7 @@ from .gate import direct_send_gate
 from .logging_policy import log_event
 from .prompts import ApprovalInserted, RowView
 from .push_config import RelayConfig
+from .push_retirement import RelayCloseOwner
 from .push_hints import HintBinding
 from .push_issuer import derive_collapse, rederive_route
 from .push_registration import _inputs, _key
@@ -135,6 +137,7 @@ class PushDispatcher:
         relay: RelayPort,
         *,
         require_gate: Gate,
+        relay_owner: RelayCloseOwner | None = None,
         monotonic: Callable[[], float] = time.monotonic,
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
         jitter: Callable[[], float] = lambda: int.from_bytes(crypto.random_bytes(2), "big") / 65535,
@@ -155,6 +158,17 @@ class PushDispatcher:
         self.open_until = 0.0
         self.half_open = False
         self.store = ctx.prompt_store
+        self._origin_ctx, self._origin_relay = ctx, relay
+        self._relay_owner = relay_owner if relay_owner is not None else RelayCloseOwner(relay)
+        if self._relay_owner.relay is not relay:
+            raise ValueError("relay owner mismatch")
+        self._origin_relay_owner = self._relay_owner
+        self._origin_store, self._origin_hints = self.store, ctx.push_hints
+        self._owned_tasks: dict[object, tuple[object, object, asyncio.Task | None]] = {}
+        self._close_attempted = False
+        self._close_owner: asyncio.Task | None = None
+        self._close_coro = None
+        self._close_complete = object()
 
     def start(self) -> None:
         if self.closed or self.workers or self.store is None or self.store.closed:
@@ -162,11 +176,7 @@ class PushDispatcher:
         try:
             for _ in range(CONCURRENCY):
                 coro = self._worker()
-                try:
-                    self.workers.append(self.loop.create_task(coro))
-                except BaseException:
-                    coro.close()
-                    raise
+                self.workers.append(self._spawn_owned(coro))
             self.store.set_insertion_observer(self.observe)
         except BaseException:
             self.closed = True
@@ -284,38 +294,38 @@ class PushDispatcher:
         return (row, route, availability.relay) if route is not None else None
 
     async def _ready(self, pending: Pending):
-        key = await _key(self.ctx)  # non-repairing key I/O is off the listener loop
+        key = await self._await_owned(_key(self.ctx))  # non-repairing key I/O is off the listener loop
         if self._current(pending, key) is None or self.ctx.bridge is None:
             return None
         bridge = self.ctx.bridge
         authz = bridge.authz_state
-        await asyncio.to_thread(
+        await self._await_owned(asyncio.to_thread(
             require_bot_authorized,
             bridge,
             pending.event.inserted.key[1],
             pending.event.inserted.key[2],
-        )
+        ))
         if (
             self.ctx.bridge is not bridge
             or bridge.authz_state != authz
             or self._current(pending, key) is None
         ):
             return None
-        endpoint = await self.require_gate(
+        endpoint = await self._await_owned(self.require_gate(
             self.ctx, pending.event.inserted.key[2], member=pending.event.inserted.surface
-        )
+        ))
         if (
             self.ctx.bridge is not bridge
             or bridge.authz_state != authz
             or self._current(pending, key) is None
         ):
             return None
-        await asyncio.to_thread(
+        await self._await_owned(asyncio.to_thread(
             require_bot_authorized,
             bridge,
             pending.event.inserted.key[1],
             pending.event.inserted.key[2],
-        )
+        ))
         current = self._current(pending, key)
         gate = direct_send_gate(
             base_write_gate=self.ctx.write_gate(),
@@ -350,7 +360,7 @@ class PushDispatcher:
         if self.monotonic() < self.open_until:
             _log("breaker_open")
             return
-        key = await _key(self.ctx)
+        key = await self._await_owned(_key(self.ctx))
         if key is None or self._view(event.inserted) is None or self.monotonic() >= event.deadline:
             return
         recipients = 0
@@ -406,9 +416,8 @@ class PushDispatcher:
         if slot.task is None:
             coro = self._trailing(slot)
             try:
-                slot.task = self.loop.create_task(coro)
+                slot.task = self._spawn_owned(coro)
             except BaseException:
-                coro.close()
                 slot.pending = None
                 raise
 
@@ -536,8 +545,106 @@ class PushDispatcher:
                 return
             await self.sleep(delay)
 
+    def _spawn_owned(self, coro):
+        intent = object()
+        wrapper = self._run_owned(coro)
+        self._owned_tasks[intent] = (coro, wrapper, None)
+        try:
+            task = self.loop.create_task(wrapper)
+        except BaseException:
+            self.closed = True
+            # Enqueue may have happened: retain coroutine/intent, never replay.
+            raise
+        self._owned_tasks[intent] = (coro, wrapper, task)
+
+        def settled(original):
+            _consume_result(original)
+            if inspect.iscoroutine(coro):
+                # A known Task may be cancelled before its wrapper first runs.
+                # Only actual Task settlement permits closing the unused coroutine.
+                coro.close()
+            if self._owned_tasks.get(intent) == (coro, wrapper, original):
+                del self._owned_tasks[intent]
+
+        task.add_done_callback(settled)
+        return task
+
+    async def _await_owned(self, coro):
+        # Borrower tasks are not worker/slot cancellation targets. Their actual
+        # await (including to_thread Future) survives a cancelled dispatch waiter.
+        task = self._spawn_owned(coro)
+        result = await asyncio.shield(task)
+        if isinstance(result, BaseException):
+            raise result
+        return result
+
+    async def _run_owned(self, coro):
+        try:
+            return await coro
+        except BaseException as exc:
+            # A lost publication handle must not expose private relay failures.
+            return exc
+
+    def _retirement_scope(self):
+        if (self.ctx is not self._origin_ctx or self.relay is not self._origin_relay
+                or self._relay_owner is not self._origin_relay_owner
+                or self.store is not self._origin_store
+                or self.ctx.prompt_store is not self._origin_store
+                or self.ctx.push_hints is not self._origin_hints):
+            raise RuntimeError("push retirement scope changed")
+
+    @property
+    def retirement_pending(self) -> bool:
+        owner = self._close_owner
+        return (owner is None or not owner.done() or owner.cancelled()
+                or owner.result() is not self._close_complete or bool(self._owned_tasks)
+                or not self._relay_owner.successful)
+
+    async def wait_drained(self) -> None:
+        self._retirement_scope()
+        owner = self._close_owner
+        if owner is None:
+            raise RuntimeError("push cleanup ownership unresolved")
+        result = await asyncio.shield(owner)
+        self._retirement_scope()
+        if self._close_owner is not owner or result is not self._close_complete:
+            raise RuntimeError("push cleanup unresolved")
+        entries = tuple(self._owned_tasks.values())
+        if any(task is None for _, _, task in entries):
+            raise RuntimeError("push task publication unresolved")
+        for _, _, task in entries:
+            await asyncio.shield(asyncio.gather(task, return_exceptions=True))
+            self._retirement_scope()
+        await self._relay_owner.wait_drained()
+        self._retirement_scope()
+        if self.retirement_pending:
+            raise RuntimeError("push cleanup unresolved")
+
     async def close(self) -> None:
         self.closed = True
+        if not self._close_attempted:
+            self._close_attempted = True
+            try:
+                self._close_coro = self._close_owned()
+                self._close_owner = self.loop.create_task(self._close_coro)
+            except BaseException:
+                raise RuntimeError("push cleanup ownership unresolved") from None
+        owner = self._close_owner
+        if owner is None:
+            raise RuntimeError("push cleanup ownership unresolved")
+        result = await asyncio.shield(owner)
+        if self._close_owner is not owner or result is not self._close_complete:
+            raise RuntimeError("push cleanup unresolved")
+
+    async def _close_owned(self):
+        try:
+            await self._close_joined()
+        except BaseException:
+            return None
+        return self._close_complete
+
+    async def _close_joined(self) -> None:
+        self._retirement_scope()
         if self.ctx.prompt_store is self.store and self.store is not None:
             with contextlib.suppress(Exception):
                 self.store.set_insertion_observer(None)
@@ -545,14 +652,16 @@ class PushDispatcher:
         tasks = [*self.workers, *(s.task for s in self.slots.values() if s.task is not None)]
         for task in tasks:
             task.cancel()
-        closer = self.loop.create_task(self.relay.close())
+        closer = self._relay_owner.begin()
         tasks.append(closer)
         done, pending = await asyncio.wait(tasks, timeout=CLOSE_S)
+        self._retirement_scope()
         for task in done:
             _consume_result(task)
         for task in pending:
             task.add_done_callback(_consume_result)
-            task.cancel()
+            if task is not closer:
+                task.cancel()
         self.slots.clear()
         self.counters.clear()
         while not self.queue.empty():
