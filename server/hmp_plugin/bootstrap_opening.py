@@ -89,7 +89,7 @@ class BootstrapOpening:
             future is None
             or not future.done()
             or future.cancelled()
-            or self.close_attempted
+            or self.close_attempted is not False
             or future.result() is not ctx
         ):
             raise BootstrapUnresolvedError()

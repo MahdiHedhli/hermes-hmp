@@ -568,3 +568,58 @@ def test_unpublished_cleanup_cannot_follow_callback_replacement_fields(adapter_m
         assert opening.close_attempted and not opening.closed
 
     asyncio.run(scenario())
+
+
+def test_partial_listener_failure_retains_component_owner_without_guessing_store_close(
+    adapter_module, monkeypatch
+):
+    async def scenario():
+        adapter = adapter_module.HmpAdapter(SimpleNamespace(extra={"port": 12345}))
+        store = FakeStore()
+        ctx = SimpleNamespace(store=store)
+
+        class PartialServer:
+            def __init__(self, original_ctx, *_args, **_kwargs):
+                assert original_ctx is ctx
+                self.ctx = original_ctx
+
+            async def start(self):
+                raise OSError("synthetic partial listener failure")
+
+        monkeypatch.setattr(adapter_module, "open_components", lambda _adapter: ctx)
+        monkeypatch.setattr(adapter_module.server, "HmpServer", PartialServer)
+        with pytest.raises(ConnectionError, match="did not start"):
+            await adapter.connect()
+        owner = adapter._opening
+        assert owner.ctx is ctx and owner.server.ctx is ctx and owner.future.done()
+        assert adapter._server is None and store.closes == 0
+        with pytest.raises(RuntimeError, match="partial listener bootstrap unresolved"):
+            await adapter.disconnect()
+        assert adapter._opening is owner and store.closes == 0
+        assert await adapter.connect() is False
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("flag", (None, 0, 1, [], {}, "trap"))
+def test_bootstrap_close_flag_requires_exact_false_without_foreign_bool(adapter_module, flag):
+    async def scenario():
+        adapter = adapter_module.HmpAdapter(SimpleNamespace(extra={"port": 12345}))
+        adapter._close_generation = lambda _ctx: None
+        store = FakeStore()
+        ctx = SimpleNamespace(store=store)
+        opening = adapter_module.BootstrapOpening(lambda _adapter: ctx, adapter)
+        adapter._opening = opening
+        opening.start()
+        await opening.wait()
+
+        class Trap:
+            def __bool__(self):
+                raise AssertionError("foreign boolean hook executed")
+
+        opening.close_attempted = Trap() if flag == "trap" else flag
+        with pytest.raises(RuntimeError, match="retain original resources"):
+            opening.close_unpublished(adapter)
+        assert store.closes == 0
+
+    asyncio.run(scenario())
