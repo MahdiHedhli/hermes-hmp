@@ -3089,6 +3089,7 @@ class StartupArtifactOwner:
         owner._scope = owner._origin = owner._cell = owner._root_cell = None
         owner._count_cell = owner._initial_count_cell = None
         owner._cache_fact = None
+        owner._startup_probe_execution = None
         owner._bytes_read = 0
         try:
             if source is not None:
@@ -3112,14 +3113,30 @@ class StartupArtifactOwner:
             reads = None if digest_context is None else []
             native_files = None if digest_context is None else digest_context.native_files
             slot = None if digest_context is None else [None]
-            values = (activation, activation._scope, expected, context, records,
-                      source, runtime, reads, cache, digest_context, native_files,
-                      slot, None, None, None, None, None)
             owner_dict = vars(owner)
             owner_entries = tuple(owner_dict.items())
             activation_cell = activation._artifact_cell
             need, need_code = _require, _require.__code__
             item, length = tuple.__getitem__, tuple.__len__
+            startup_origin = None
+            if cache is not None and native_files is not None:
+                from .presentation_startup_probe import _new_startup_probe_origin
+                startup_origin = _new_startup_probe_origin(owner, cache, context, expected)
+            if _require is not need or need.__code__ is not need_code:
+                raise ArtifactObservationError(owner) from None
+            before_constructor = vars(kind).get('__new__')
+            if type(before_constructor) is staticmethod:
+                before_constructor = before_constructor.__func__
+            need(_Scope is kind and before_constructor is constructor
+                 and constructor.__code__ is constructor_code
+                 and vars(owner) is owner_dict and len(owner_dict) == len(owner_entries)
+                 and all(key in owner_dict and owner_dict[key] is value
+                         for key, value in owner_entries)
+                 and activation._artifact_owner is owner
+                 and activation._artifact_cell is activation_cell)
+            values = (activation, activation._scope, expected, context, records,
+                      source, runtime, reads, cache, digest_context, native_files,
+                      slot, None, None, None, None, startup_origin)
             s = constructor(kind, *values)
             if _require is not need or need.__code__ is not need_code:
                 raise ArtifactObservationError(owner) from None

@@ -5,6 +5,9 @@ import errno
 import stat
 from dataclasses import dataclass
 from typing import NamedTuple
+from types import FunctionType
+
+from .presentation_startup_artifacts import StartupArtifactOwner, _Scope, _descriptor_closed_in_scope
 
 
 class CacheObservationError(Exception):
@@ -52,6 +55,7 @@ class _ProbeEffect:
     unknown: bool = False
     result: _Missing | None = None
     descriptors: tuple | None = None
+    native_finish: object = None
 
 
 class _CachePass(NamedTuple):
@@ -62,6 +66,7 @@ class _CachePass(NamedTuple):
     missing: tuple
     effects: tuple
     count: tuple
+    native_finishes: tuple
 
     def __repr__(self):
         return "<OriginalCacheAbsencePass sampled-DATA redacted>"
@@ -188,7 +193,7 @@ def _ancestors_current(owner, scope, ancestors, native_registration=None):
     _require(_native_walk_scope(owner, native_registration) is scope)
 
 
-def _probe(source, owner, phase, index, native_registration=None):
+def _legacy_probe(source, owner, phase, index, native_registration=None):
     from .presentation_startup_artifacts import (
         StartupArtifactOwner,
         _native_registration_tail,
@@ -260,6 +265,97 @@ def _probe(source, owner, phase, index, native_registration=None):
     return result, effect
 
 
+
+def _probe(source, owner, phase, index, native_registration=None, previous=None):
+    from .presentation_startup_artifacts import (
+        StartupArtifactOwner, _native_walk_scope, _native_work_origin_tail,
+        _native_actor_context, _native_pre_actor_state, _native_post_actor_state,
+    )
+    scope = _native_walk_scope(owner, native_registration)
+    if scope.native_files is None:
+        _require(native_registration is None)
+        result, effect = _legacy_probe(source, owner, phase, index)
+        return result, effect, None
+    _require(type(owner) is StartupArtifactOwner and scope.cache is source
+             and type(scope.native_startup_probe_origin) is tuple)
+    from . import presentation_startup_probe as native
+    origin = scope.native_startup_probe_origin
+    _require(origin[2] is native and origin[3] is native._resource_tail
+             and origin[4] is native._resource_tail.__code__)
+    native._engine_origin_tail(origin[5])
+    native._blueprint_tail(origin[6])
+    _native_work_origin_tail(owner, native_registration, native_registration.native_origin)
+    arguments = (scope, source, phase, index, previous, native_registration)
+    actor_state = _native_pre_actor_state(owner, arguments)
+    native_origin = native_registration.native_origin
+    _native_actor_context(native_origin.actor_calls,
+                          (native_origin.native, native_origin.thread_native), native_registration.context)
+    _native_post_actor_state(owner, actor_state, arguments)
+    owned_current(source, owner)
+    count, root, cell = owner._count_cell, owner._root_cell, owner._cell
+    owner_dict, owner_entries = vars(owner), tuple(vars(owner).items())
+    effects, prefix = source.effects, tuple(source.effects)
+    before, after = source.before, source.after
+    _require(type(effects) is list and len(effects) == phase*len(source.paths)+index)
+    kind, _, _, constructor, _, _, _ = origin[6][8][2]
+    effect = object.__new__(kind)
+    effect_dict = vars(effect)  # original empty allocation before constructor callback
+    constructor(effect, source, phase, index, count)
+    native._blueprint_tail(origin[6])
+    expected = dict(source=source, phase=phase, index=index, count=count, attempted=False,
+                    returned=False, unknown=False, result=None, descriptors=None, native_finish=None)
+    _require(type(effect) is _ProbeEffect and vars(effect) is effect_dict
+             and len(effect_dict) == len(expected)
+             and all(type(key) is str for key in effect_dict)
+             and all(key in effect_dict and effect_dict[key] is value for key, value in expected.items())
+             and vars(owner) is owner_dict and len(owner_dict) == len(owner_entries)
+             and all(key in owner_dict and owner_dict[key] is value for key, value in owner_entries)
+             and source.effects is effects and len(effects) == len(prefix)
+             and all(current is original for current, original in zip(effects, prefix, strict=True))
+             and source.before is before and source.after is after)
+    list.append(effects, effect)
+    dict.__setitem__(effect_dict, 'attempted', True)
+    actual = result = None
+    failed = False
+    try:
+        plan = native._new_startup_plan(source, owner, phase, index, effect, previous, native_registration)
+        actual = native._run_startup_probe(owner, scope, native_registration, plan)
+        native._historical_finish_tail(actual)
+        missing_kind, fields, members, missing_constructor, code = actual.execution.origin[1][6]
+        values = actual.outcome
+        result = missing_constructor(missing_kind, *values)
+        native._historical_finish_tail(actual)
+        _require(type(result) is _Missing and tuple.__len__(result) == len(values)
+                 and all(tuple.__getitem__(result, i) is value for i, value in enumerate(values))
+                 and vars(effect) is effect_dict and len(effect_dict) == len(expected)
+                 and effect_dict.get('attempted') is True
+                 and all(effect_dict.get(key) is value for key, value in expected.items() if key != 'attempted')
+                 and vars(owner) is owner_dict and len(owner_dict) == len(owner_entries)
+                 and all(owner_dict.get(key) is value for key, value in owner_entries
+                         if key != '_startup_probe_execution')
+                 and owner_dict.get('_startup_probe_execution') is actual.execution
+                 and source.effects is effects and len(effects) == len(prefix)+1
+                 and effects[-1] is effect
+                 and all(effects[i] is original for i, original in enumerate(prefix))
+                 and source.before is before and source.after is after
+                 and owner._scope is owner._origin is scope and owner._root_cell is root
+                 and owner._cell is cell and owner._count_cell is count)
+        descriptors = tuple(row for row, _ in actual.resources)
+        dict.__setitem__(effect_dict, 'result', result)
+        dict.__setitem__(effect_dict, 'descriptors', descriptors)
+        dict.__setitem__(effect_dict, 'native_finish', actual)
+        dict.__setitem__(effect_dict, 'returned', True)
+        owner_dict['_startup_probe_execution'] = None
+    except BaseException:
+        failed = True
+    if failed:
+        if vars(effect) is effect_dict:
+            dict.__setitem__(effect_dict, 'unknown', True)
+        owner._unknown = True
+        raise CacheObservationError from None
+    return result, effect, actual
+
+
 def observe_pass(source, owner, phase, previous, native_registration=None):
     from .presentation_startup_artifacts import _native_registration_tail, _native_walk_scope
 
@@ -276,13 +372,29 @@ def observe_pass(source, owner, phase, previous, native_registration=None):
               and source.after[0] is None and len(source.effects) == 0)
              or (phase == 1 and type(previous) is _CachePass and source.before[0] is previous
                  and source.after[0] is None and len(source.effects) == len(source.paths)))
-    missing, effects = [], []
+    missing, effects, native_finishes = [], [], []
     for index in range(len(source.paths)):
-        value, effect = _probe(source, owner, phase, index, native_registration)
+        value, effect, native_finish = _probe(source, owner, phase, index, native_registration, previous)
         missing.append(value)
         effects.append(effect)
+        native_finishes.append(native_finish)
         _require(owner._count_cell is count and (phase == 0 or source.before[0] is previous))
-    result = _CachePass(owner, owner._origin, source, phase, tuple(missing), tuple(effects), count)
+    values = (owner, owner._origin, source, phase, tuple(missing), tuple(effects), count, tuple(native_finishes))
+    if scope.native_files is not None:
+        kind, fields, members, constructor, code, bases, dispatch = scope.native_startup_probe_origin[6][8][3]
+        _require(_CachePass is kind and kind.__new__ is constructor and constructor.__code__ is code
+                 and kind.__bases__ is bases and vars(kind).get('_fields') is fields
+                 and all(vars(kind).get(name) is member for name, member in zip(fields, members, strict=True))
+                 and all(vars(kind).get(name) is value for name, value in dispatch))
+    else:
+        kind, fields, constructor, code = _CachePass, _CachePass._fields, _CachePass.__new__, _CachePass.__new__.__code__
+        members = tuple(vars(kind).get(name) for name in fields)
+    result = constructor(kind, *values)
+    _require(_CachePass is kind and kind._fields is fields and kind.__new__ is constructor
+             and constructor.__code__ is code and type(result) is kind
+             and all(vars(kind).get(name) is member for name, member in zip(fields, members, strict=True))
+             and tuple.__len__(result) == len(values)
+             and all(tuple.__getitem__(result, i) is value for i, value in enumerate(values)))
     if phase == 1:
         _require(len(previous.missing) == len(result.missing))
         for before, after in zip(previous.missing, result.missing, strict=True):
@@ -302,34 +414,85 @@ def observe_pass(source, owner, phase, previous, native_registration=None):
     return result
 
 
-def seal(source, owner, before, after):
-    from .presentation_startup_artifacts import _descriptor_closed_in_scope
-
-    owned_current(source, owner)
-    _require(type(before) is _CachePass and type(after) is _CachePass
-             and source.before[0] is before and source.after[0] is after
+def _cache_seal_mirrors(source, owner, before, after, scope, calls):
+    """Fixed pure closure after every historical observation has unwound."""
+    _require(type(owner) is StartupArtifactOwner and type(scope) is _Scope
+             and owner._scope is owner._origin is scope and scope.cache is source
+             and owner._failed is False and owner._unknown is False
+             and type(source) is _CacheSource and type(before) is _CachePass and type(after) is _CachePass)
+    # These are held original policy helpers, not caller-nominated callbacks.
+    # Validate each against this exact registered Scope before invocation.
+    if scope.native_files is not None:
+        origin = scope.native_startup_probe_origin
+        _require(type(origin) is tuple and len(origin) == 7 and type(calls) is tuple)
+        for actual, cohort, mirrors, code in calls:
+            _require(type(mirrors) is FunctionType and mirrors.__code__ is code
+                     and mirrors.__globals__ is vars(origin[2])
+                     and vars(origin[2]).get('_historical_finish_mirrors') is mirrors
+                     and any(type(row) is tuple and len(row) == 3
+                             and row[0] == '_historical_finish_mirrors'
+                             and row[1] is mirrors and row[2] is code for row in origin[5][2]))
+            _require(mirrors(actual, scope, cohort) is actual)
+    _require(type(source.before) is list and len(source.before) == 1 and source.before[0] is before
+             and type(source.after) is list and len(source.after) == 1 and source.after[0] is after
              and before.owner is owner and after.owner is owner
-             and before.scope is owner._origin is after.scope
-             and before.source is source is after.source
-             and type(before.phase) is int and type(after.phase) is int
-             and before.phase == 0 and after.phase == 1
-             and before.count is owner._initial_count_cell
-             and after.count is owner._count_cell
-             and type(before.missing) is tuple and type(after.missing) is tuple
-             and len(before.missing) == len(after.missing) == len(source.paths)
-             and len(source.effects) == 2 * len(source.paths))
+             and before.scope is scope is after.scope and before.source is source is after.source
+             and type(before.phase) is int and before.phase == 0
+             and type(after.phase) is int and after.phase == 1
+             and before.count is owner._initial_count_cell and after.count is owner._count_cell
+             and type(source.effects) is list and len(source.effects) == 2*len(source.paths))
+    position = 0
     for result in (before, after):
         _require(type(result.missing) is tuple and type(result.effects) is tuple
-                 and len(result.effects) == len(result.missing) == len(source.paths))
+                 and type(result.native_finishes) is tuple
+                 and len(result.native_finishes) == len(result.effects) == len(result.missing) == len(source.paths))
         for index, effect in enumerate(result.effects):
-            _require(effect is source.effects[result.phase * len(source.paths) + index]
-                     and effect.phase == result.phase and effect.index == index
-                     and effect.count is result.count
+            _require(type(effect) is _ProbeEffect and effect is source.effects[position]
+                     and effect.source is source and type(effect.phase) is int and effect.phase == result.phase
+                     and type(effect.index) is int and effect.index == index and effect.count is result.count
                      and effect.returned is True and effect.unknown is False
                      and type(effect.result) is _Missing and effect.result is result.missing[index]
                      and effect.result.path is source.paths[index]
                      and type(effect.descriptors) is tuple
-                     and all(_descriptor_closed_in_scope(row, owner._origin)
-                             and any(original is row for original in owner._origin.records)
-                             for row in effect.descriptors))
+                     and effect.native_finish is result.native_finishes[index])
+            _missing_shape(effect.result)
+            _require(all(_descriptor_closed_in_scope(row, scope)
+                         and any(original is row for original in scope.records) for row in effect.descriptors))
+            if scope.native_files is not None:
+                actual = result.native_finishes[index]
+                _require(position < len(calls) and calls[position][0] is actual
+                         and actual.outcome[0] is effect.result.path
+                         and type(actual.outcome[1]) is int and actual.outcome[1] == effect.result.index
+                         and actual.outcome[2] is effect.result.ancestors
+                         and len(actual.resources) == len(effect.descriptors)
+                         and all(row is effect.descriptors[i] for i, (row, _) in enumerate(actual.resources)))
+            else:
+                _require(result.native_finishes[index] is None)
+            position += 1
+    _require(scope.native_files is None or position == len(calls))
     return source
+
+
+def seal(source, owner, before, after):
+    owned_current(source, owner)
+    scope = owner._origin
+    mirrors, mirrors_code = _cache_seal_mirrors, _cache_seal_mirrors.__code__
+    calls = []
+    if scope.native_files is not None:
+        from . import presentation_startup_probe as native
+        native._engine_origin_tail(scope.native_startup_probe_origin[5])
+        native._blueprint_tail(scope.native_startup_probe_origin[6])
+        _require(type(before) is _CachePass and type(after) is _CachePass
+                 and type(before.native_finishes) is tuple and type(after.native_finishes) is tuple)
+        for actual in (*before.native_finishes, *after.native_finishes):
+            cohort = native._historical_cohort(actual, scope)
+            helper = native._historical_finish_mirrors
+            calls.append((actual, cohort, helper, helper.__code__))
+    calls = tuple(calls)
+    mirrors(source, owner, before, after, scope, calls)
+    if scope.native_files is not None:
+        for actual, _, _, _ in calls:
+            _require(native._historical_finish_tail(actual) is actual)
+    if _cache_seal_mirrors is not mirrors or mirrors.__code__ is not mirrors_code:
+        raise CacheObservationError from None
+    return mirrors(source, owner, before, after, scope, calls)

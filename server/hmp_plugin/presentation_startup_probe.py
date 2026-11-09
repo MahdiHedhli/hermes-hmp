@@ -303,7 +303,9 @@ def _resource(execution, predecessor):
                  (action[1], None if descriptor is None else descriptor.fd))
     values = (execution.owner, execution.registration, execution, plan.variants[index],
               plan.definitions[index], index, descriptor, arguments)
-    resource = _NativeStartupProbeMetadataResource(*values)
+    kind, _, _, constructor, _, _, _ = plan.blueprint[8][6]
+    resource = constructor(kind, *values)
+    _blueprint_tail(plan.blueprint)
     _require(type(resource) is _NativeStartupProbeMetadataResource
              and all(tuple.__getitem__(resource, i) is value for i, value in enumerate(values)))
     return _resource_tail(execution.owner, resource)
@@ -771,7 +773,15 @@ def _policy_pins_tail(blueprint):
     _require(vars(policy).get('_StartupPathPolicy') is kinds[0][0]
              and vars(policy).get('_StartupCursor') is kinds[1][0]
              and globals().get('_StartupPlan') is blueprint[8][0][0]
-             and globals().get('_StartupSite') is blueprint[8][1][0])
+             and globals().get('_StartupSite') is blueprint[8][1][0]
+             and globals().get('_NativeStartupProbeMetadataResource') is blueprint[8][6][0]
+             and globals().get('_Scope') is blueprint[8][7][0])
+    cache_module = blueprint[9][0][0]
+    _require(type(cache_module) is ModuleType
+             and sys.modules.get('hmp_plugin.presentation_startup_cache') is cache_module
+             and all(vars(cache_module).get(name) is blueprint[8][index][0]
+                     for index, name in ((2, '_ProbeEffect'), (3, '_CachePass'),
+                                         (4, '_Missing'), (5, '_CacheSource'))))
     for kind, fields, members, constructor, code, bases, dispatch in (*kinds, *blueprint[8]):
         _require(type(kind) is type and kind.__bases__ is bases
                  and type(constructor) is FunctionType and constructor.__code__ is code
@@ -839,10 +849,11 @@ def _new_startup_probe_origin(owner, source, context, expected):
                    tuple(pin(kind) for kind in (policy._StartupPathPolicy, policy._StartupCursor)),
                    vars(policy)['_ACTIONS'])
     kinds = tuple(pin(kind) for kind in (_StartupPlan, _StartupSite, cache._ProbeEffect,
-                                         cache._CachePass, cache._Missing))
+                                         cache._CachePass, cache._Missing, cache._CacheSource,
+                                         _NativeStartupProbeMetadataResource, _Scope))
     cache_pins = tuple((cache, name, vars(cache)[name], vars(cache)[name].__code__)
                        for name in ('source_current', 'owned_current', '_missing_shape',
-                                    '_probe', 'observe_pass', 'seal'))
+                                    '_probe', '_legacy_probe', 'observe_pass', '_cache_seal_mirrors', 'seal'))
     engine_origin = _new_probe_engine_origin()
     rows = tuple(policy._new_policy(path, context[1]) for path in paths)
     blueprint = (owner, source, context, expected, paths, rows, policy_pins,
@@ -907,7 +918,8 @@ def _new_startup_plan(source, owner, phase, index, effect, previous, registratio
         _require(type(variant) is _StartupSite and variant.owner is owner
                  and variant.source is source and type(variant.phase) is int and variant.phase == phase
                  and type(variant.index) is int and variant.index == index
-                 and variant.site is definitions[ordinal] and variant.ordinal == ordinal)
+                 and variant.site is definitions[ordinal] and type(variant.ordinal) is int
+                 and variant.ordinal == ordinal)
     _startup_plan_tail(plan, registration)
     return plan
 
