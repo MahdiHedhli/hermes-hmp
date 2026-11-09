@@ -380,7 +380,7 @@ def _unused_directory_intent_tail(owner, operation):
 
 
 def _prepare_directory_consumer(owner, operation):
-    """Bind one actual unused intent to the fixed runtime/cache directory policy.
+    """Bind one actual unused intent to a fixed runtime/cache metadata policy.
 
     Other owner/configuration/tree policies need their own reviewed consumers.
     Nothing here publishes ACTIVE, debits allowance or invokes native work.
@@ -872,7 +872,7 @@ def _pending_directory_return_tail(owner, consumer, actual):
 
 
 def _produce_directory_metadata(owner, consumer):
-    """One fixed captured fstat with original return custody; no policy ACK.
+    """One fixed captured fstat/no-follow stat with original custody; no policy ACK.
 
     This producer is unwired. Its caller must retain the actual return and use
     the fixed policy consumer; PENDING cannot admit more work or descriptor close.
@@ -1177,6 +1177,8 @@ def _acked_directory_history_tail(owner, consumer, commit):
              and type(commit.identity) is tuple
              and len(commit.identity) == _fixed_metadata_identity_size(consumer.resource)
              and all(type(value) is int for value in commit.identity)
+             and (commit.mtime is None if _fixed_metadata_role(resource) == 'directory'
+                  else type(commit.mtime) in (int, float))
              and type(result) is _MetadataResult
              and type(result.attempt) is list and len(result.attempt) == 1
              and result.attempt[0] is operation
