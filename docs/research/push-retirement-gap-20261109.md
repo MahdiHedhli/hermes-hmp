@@ -27,3 +27,15 @@ Independent read-only review found that the initial `b9d7505` task-only journal 
 - `/private/tmp/hermes-qa-push-actual-drain-floor-kwa1tfek/receipt.json`
 
 The earlier 494/497/498/499-case checkpoints do not qualify the final native-borrower repair. No suite or review certifies successful relay closure: result-consuming ownership proves task settlement, not successful resource closure. Failed dispatcher constructor/start retention still needs repair. Other Store borrowers, partial adapter recovery, native media authority/migration and physical qualification remain open. No host install/restart, provider/send, grant or media activation occurred.
+
+## MR-PUSH2 retained failed startup and original relay close
+
+Exact source `0adba020e93146a1fa96149597eb8af53dea742d` (main lifecycle change `75465f1`) retains the returned relay before dispatcher construction and retains the dispatcher before worker startup. Constructor/start failures keep those owners for listener shutdown and drain. A shared `RelayCloseOwner` records one actual close operation/coroutine/Task, retains unknown creation acknowledgement without replay, and never cancels the actual closer merely because bounded observation expires. Dispatcher drain requires successful return from that original close operation; failed close cannot certify retirement. Original dispatcher/relay-owner substitution is rejected before cleanup effects.
+
+507 combined tests pass unchanged on Python 3.14.9 and 3.11.15, with zero failures/errors/skips:
+- `/private/tmp/hermes-qa-push-startup-retirement-current-hxg73wt5/receipt.json`
+- `/private/tmp/hermes-qa-push-startup-retirement-floor-4jwfvhb6/receipt.json`
+
+Seven additional synthetic cases cover failed start/constructor with slow retained close, failed close/no replay, pre/post-enqueue acknowledgement loss, and cleanup-owner substitution. Finite independent read-only review accepted both base and alias guard changes with no new blocker. Successful return from the RelayPort close coroutine is not an independent audit of resources its implementation might suppress internally. Failure before the factory returns remains that factory's partial-resource contract. No host deployment, provider/send or media activation occurred.
+
+Next: explicit adapter cleanup of a retained partial listener, using actual same-listener stop/drain and original Store ownership transfer before reconnect. Failed component-builder allocations, other borrowers, native media publication authority/migration, whole-plugin regression and physical/release qualification remain open. This branch is not release-ready.
