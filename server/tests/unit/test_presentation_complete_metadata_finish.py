@@ -32,7 +32,7 @@ owner=RuntimeSourceReadOwner.retain(continuation,index)
 actual_run=m._run_directory_observation
 actual_finish=m._finished_declared_file_tail
 actual_capsule=m._finished_capsule_tail
-commits=[];finish_calls=[];late=[];foreign_hooks=[];observed={};early_held=[]
+commits=[];finish_calls=[];late=[];foreign_hooks=[];observed={};early_held=[];failed_consumers=[]
 early_cases=('copied_directory_baseline','wrong_directory_baseline','foreign_root_parent','changed_directory')
 foreign=object()
 class ForeignOrdinal:
@@ -80,7 +80,14 @@ def observe_run(actual_owner,*args):
                     assert entries==[True]*entered
                     assert tuple(ledger.counts)==(before[0]+entered,before[1])
                     assert len(ledger.attempts)==attempts+entered
-                    assert metadata.progress==[len(commits),None]
+                    assert metadata.progress[0]==len(commits)
+                    if entered:
+                        pending=ledger.attempts[-1].result.consumer[0]
+                        assert type(pending) is m._DirectoryConsumer
+                        assert pending.operation is ledger.attempts[-1] and pending.commit==[None]
+                        assert metadata.progress[1] is pending
+                        failed_consumers.append(pending)
+                    else:assert metadata.progress[1] is None
                     assert metadata.commits[-1] is predecessor
                     assert predecessor.operation.result.acknowledged[0] is predecessor
                     assert eof.result.acknowledged[0] is eof and eof.result.raw[0] is eof.result.unset
@@ -142,7 +149,12 @@ try:
     if finish_case in early_cases:
         assert not finish_calls and len(early_held)==1 and observed.get('early_refused')
         held=early_held[0];last=commits[-1]
-        assert held[5].progress==[len(commits),None]
+        assert held[5].progress[0]==len(commits)
+        if finish_case=='changed_directory':
+            assert len(failed_consumers)==1 and held[5].progress[1] is failed_consumers[0]
+            assert failed_consumers[0].operation.result.consumer[0] is failed_consumers[0]
+            assert failed_consumers[0].commit==[None]
+        else:assert held[5].progress[1] is None and failed_consumers==[]
     elif finish_case=='lost_final':
         assert not finish_calls and commits
         last=commits[-1];held=last.resource.held_walk
