@@ -409,3 +409,60 @@ def test_intent_allocation_failure_occurs_before_budget_reservation(tmp_path, mo
             await finish(actor, store, service)
 
     asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("acquired", (False, True))
+def test_budget_acquisition_return_loss_retains_intent_and_poisoned_admission(
+    tmp_path, monkeypatch, acquired
+):
+    async def scenario():
+        actor, store, ctx, request, service = await open_service(tmp_path)
+        reserve = ctx.read_worker_budget.reserve
+        submitted = []
+
+        def lost_return(*, operator):
+            if acquired:
+                assert reserve(operator=operator) is True
+            raise MemoryError("synthetic budget acquisition return loss")
+
+        def forbidden(*_args, **_kwargs):
+            submitted.append(True)
+            raise AssertionError("uncertain reservation reached submit")
+
+        monkeypatch.setattr(ctx.read_worker_budget, "reserve", lost_return)
+        monkeypatch.setattr(service._pool, "submit", forbidden)
+        try:
+            raw = await service._decide(request, time.monotonic() + 1)
+            assert decode_reply(raw, request=request).status == "unknown"
+            assert not submitted and service._operator_debt() == 1
+            assert ctx.read_worker_budget.poisoned is True
+            assert ctx.read_worker_budget.operator == int(acquired)
+            assert await service.stop() == 1
+            assert not service._drained.is_set()
+            assert store.media_read_decision(ctx.iid, request.device_id).revision == 0
+        finally:
+            await service.stop()
+            actor.close()
+            await actor.wait_drained()
+            # Test knows submission was never called; service's unknown acquisition
+            # is intentionally NOT reconciled into a false successful drain.
+            store.close()
+
+    asyncio.run(scenario())
+
+
+def test_definite_capacity_refusal_removes_only_unacquired_intent(tmp_path, monkeypatch):
+    async def scenario():
+        actor, store, ctx, request, service = await open_service(tmp_path)
+        monkeypatch.setattr(ctx.read_worker_budget, "reserve", lambda **_kwargs: False)
+        try:
+            raw = await service._decide(request, time.monotonic() + 1)
+            assert decode_reply(raw, request=request).status == "refused"
+            assert service._operator_debt() == 0
+            assert not ctx.read_worker_budget.poisoned
+            assert ctx.read_worker_budget.operator == 0
+            assert store.media_read_decision(ctx.iid, request.device_id).revision == 0
+        finally:
+            await finish(actor, store, service)
+
+    asyncio.run(scenario())
