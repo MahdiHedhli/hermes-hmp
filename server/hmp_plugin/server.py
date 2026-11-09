@@ -684,7 +684,8 @@ def _collect_media_readiness(ctx: ServerContext, **scope: Any) -> dict[str, obje
     if ctx.readiness_settings is None:
         raise readiness.ReadinessUnavailableError()
     setting = media_readiness.host_setting(ctx.readiness_settings())
-    api = "available" if ctx.media_snapshot() is not None else "unavailable"
+    bound = ctx.media_snapshot()
+    api = "available" if bound is not None else "unavailable"
     checkpoint()
     # Refuse superseded per-device rights and host settings, including changes during callbacks.
     if (ctx.store.media_read_decision(ctx.iid, scope["device_id"]) != decision
@@ -693,6 +694,13 @@ def _collect_media_readiness(ctx: ServerContext, **scope: Any) -> dict[str, obje
         raise readiness.ReadinessUnavailableError()
     payload = media_readiness.project(entitlement=entitlement, host=setting, api=api)
     checkpoint()
+    # The checkpoint invokes authorization callbacks. Sample its dependent media
+    # state afterward; nothing authority-bearing may follow these comparisons.
+    if (ctx.store.media_read_decision(ctx.iid, scope["device_id"]) != decision
+            or ctx.media_read_permission(scope["device_id"]) != permission
+            or media_readiness.host_setting(ctx.readiness_settings()) != setting
+            or ctx.media_snapshot() != bound):
+        raise readiness.ReadinessUnavailableError()
     return {"protocol": 1, "checked_at": _readiness_now(ctx),
             "generation": scope["generation"], "media": payload,
             "_authority": (decision, permission)}
@@ -723,6 +731,12 @@ async def _handle_readiness(request: web.Request, *, media: bool) -> web.Respons
         ctx = context(request)
     except Exception:
         raise HmpError(ErrorCode.READINESS_UNAVAILABLE) from None
+    original_cohort = (ctx.identity, ctx.store, ctx.bridge)
+    def media_context_current() -> bool:
+        return (context(request) is ctx
+                and ctx.identity is original_cohort[0]
+                and ctx.store is original_cohort[1]
+                and ctx.bridge is original_cohort[2])
     who = _readiness_bearer(request)
     profile = request.match_info.get("p", "")
     if _READINESS_PROFILE_RE.fullmatch(profile) is None:
@@ -780,6 +794,8 @@ async def _handle_readiness(request: web.Request, *, media: bool) -> web.Respons
         log_handler_exception(exc)
         raise HmpError(ErrorCode.READINESS_UNAVAILABLE) from None
     if media:
+        if not media_context_current():
+            raise HmpError(ErrorCode.READINESS_UNAVAILABLE)
         # Final synchronous authority/readback fence after the worker await. Never await
         # between this comparison and response construction. These authority readers can
         # perform SQLite/native config I/O; this is not a nonblocking performance claim.
@@ -789,7 +805,8 @@ async def _handle_readiness(request: web.Request, *, media: bool) -> web.Respons
                 profile=profile, device_id=who.device_id, deadline=deadline,
                 generation=generation,
             )
-            if (current["media"] != payload["media"]
+            if (not media_context_current()
+                    or current["media"] != payload["media"]
                     or current["_authority"] != payload["_authority"]):
                 raise readiness.ReadinessUnavailableError()
         except HmpError:
