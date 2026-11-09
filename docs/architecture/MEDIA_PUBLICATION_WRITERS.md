@@ -144,3 +144,23 @@ found no concrete blocker in the initial unwired executor; independent review al
 Transport/admission/consent/deadline origin, response framing, operator
 IPC and native/config publication coordination remain incomplete. No route calls
 this executor and no live permission changed.
+
+## Transport namespace preparation — c3ae41b
+
+A separate focused branch prepares closed read/media socket layouts. The default
+read socket and512-byte read parser/handler remain unchanged. Only the fixed
+media-operator.sock namespace can select a4096-byte future envelope bound; this
+selection alone still installs no mutation handler. Bound-parent/entry checks and
+cleanup use the original selected name, with one inode sample at cleanup. Full
+server/tools lint and56 read/FD/layout tests pass on each interpreter. Independent
+read-only review found no concrete namespace/FD regression in the finite refactor.
+An isolated subset exposed an existing adapter-fixture import-order dependency;
+it now declares that fixture explicitly, retaining the failed run's evidence.
+
+The write service is NOT implemented. Before enabling it: bind one short-lived
+server challenge to one verified same-UID connection and original listener cohort,
+consume it before queueing, bound accepted connections and actual worker futures,
+and preserve original worker/debt through timeout and stop. A cancelled async
+wrapper is not proof that its underlying thread finished. Existing read sockets
+must never acquire mutation operations by fallback or unknown operation parsing.
+Human CLI consent and actual current authority remain separate obligations.
