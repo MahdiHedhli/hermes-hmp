@@ -2195,11 +2195,24 @@ class HmpServer:
         return self._stop_complete
 
     async def _stop_joined(self) -> None:
+        entry_ctx = self.ctx
+        entry_hints, entry_deps = entry_ctx.push_hints, entry_ctx.direct_send_deps
+        entry_store = getattr(entry_ctx, "store", None)
+
+        def startup_rejoin():
+            if (self.ctx is not entry_ctx or entry_ctx is not self._operator_origin_ctx
+                    or entry_ctx.push_hints is not entry_hints
+                    or entry_ctx.direct_send_deps is not entry_deps
+                    or getattr(entry_ctx, "store", None) is not entry_store):
+                raise RuntimeError("listener shutdown scope changed; retain original resources")
+
+        startup_rejoin()
         start = self._start_owner
         if self._start_attempted:
             if start is None:
                 raise RuntimeError("listener startup ownership unresolved")
             await asyncio.shield(start)
+            startup_rejoin()
             if self._start_owner is not start:
                 raise RuntimeError("listener startup scope changed")
         if self._startup_publication_unknown or self.ctx is not self._operator_origin_ctx:
@@ -2209,6 +2222,7 @@ class HmpServer:
             if owner is None:
                 raise RuntimeError("operator read startup ownership unresolved")
             await asyncio.shield(owner)
+            startup_rejoin()
             if (self._operator_start_owner is not owner
                     or self._operator_read is not self._operator_start_service):
                 raise RuntimeError("operator read startup scope changed")
