@@ -233,7 +233,9 @@ def tool_ids(body: bytes) -> list[int]:
 
 
 def caller(rig: Rig, device_id: str) -> Any:
-    return real_registry.Caller(device_id, USER, rig.env.iid, PROFILE)
+    decision = rig.env.store.media_read_decision(rig.env.iid, device_id)
+    return real_registry.Caller(device_id, USER, rig.env.iid, PROFILE,
+                                () if decision is None else decision.generation)
 
 
 # ---------------------------------------------------------------------------------------------
