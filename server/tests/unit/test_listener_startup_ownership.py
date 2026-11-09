@@ -175,3 +175,40 @@ def test_unknown_start_owner_creation_cannot_retry_or_certify_shutdown(monkeypat
                 await runner.cleanup()  # fixture-only cleanup, never a listener drain proof
 
     asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("after_enqueue", (False, True))
+def test_unknown_stop_owner_creation_never_replays_cleanup(monkeypatch, after_enqueue):
+    async def scenario():
+        listener, _runner, events, _, _ = rig(monkeypatch, setup_error=True)
+        with pytest.raises(RuntimeError):
+            await listener.start()
+        loop, actual, calls = asyncio.get_running_loop(), [], []
+        original = loop.create_task
+
+        def create(coro, *args, **kwargs):
+            if getattr(getattr(coro, "cr_code", None), "co_name", None) != "_stop_owned":
+                return original(coro, *args, **kwargs)
+            calls.append(1)
+            if after_enqueue:
+                actual.append(original(coro, *args, **kwargs))
+            raise MemoryError("synthetic stop task acknowledgement loss")
+
+        monkeypatch.setattr(loop, "create_task", create)
+        try:
+            with pytest.raises(RuntimeError, match="shutdown ownership unresolved"):
+                await listener.stop()
+            if actual:
+                await actual[0]  # fixture observation is not a retained production owner
+            with pytest.raises(RuntimeError, match="shutdown ownership unresolved"):
+                await listener.stop()
+            assert len(calls) == 1
+            assert events.count("cleanup") == int(after_enqueue)
+            assert listener._stop_owner is None
+            with pytest.raises(RuntimeError):
+                await listener.wait_operator_drain()
+        finally:
+            if not after_enqueue:
+                listener._stop_coro.close()  # only the fixture knows no Task was created
+
+    asyncio.run(scenario())

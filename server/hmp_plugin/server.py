@@ -1958,7 +1958,10 @@ class HmpServer:
         self._operator_read: Any = None
         self._operator_read_drained: Any = None
         self.operator_worker_debt = 0
-        self._stop_owner: asyncio.Task[None] | None = None
+        self._stop_owner: asyncio.Task[Any] | None = None
+        self._stop_attempted = False
+        self._stop_coro: Any = None
+        self._stop_complete = object()
         self._start_owner: asyncio.Task[Any] | None = None
         self._start_coro: Any = None
         self._start_attempted = False
@@ -2246,9 +2249,32 @@ class HmpServer:
         self._start_fenced = True
         if not notify:
             self._on_closed = None
-        if self._stop_owner is None:
-            self._stop_owner = asyncio.get_running_loop().create_task(self._stop_joined())
-        await asyncio.shield(self._stop_owner)
+        if not self._stop_attempted:
+            self._stop_attempted = True
+            try:
+                self._stop_coro = self._stop_owned()
+                self._stop_owner = asyncio.get_running_loop().create_task(self._stop_coro)
+            except BaseException:
+                raise RuntimeError("listener shutdown ownership unresolved") from None
+        owner = self._stop_owner
+        if owner is None:
+            raise RuntimeError("listener shutdown ownership unresolved")
+        result = await asyncio.shield(owner)
+        if self._stop_owner is not owner:
+            raise RuntimeError("listener shutdown ownership unresolved")
+        if isinstance(result, BaseException):
+            raise result
+        if result is not self._stop_complete:
+            raise RuntimeError("listener shutdown incomplete")
+
+    async def _stop_owned(self):
+        # A lost create_task acknowledgement must neither replay cleanup nor emit
+        # an unobserved private Task exception. Only the retained owner proves join.
+        try:
+            await self._stop_joined()
+        except BaseException as exc:
+            return exc
+        return self._stop_complete
 
     async def _stop_joined(self) -> None:
         if self._start_attempted:
