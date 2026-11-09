@@ -414,3 +414,131 @@ def test_failed_bootstrap_cannot_automatically_start_another_attempt(adapter_mod
         assert await adapter.connect() is False and calls == [1]
 
     asyncio.run(scenario())
+
+
+def test_cancelled_open_retains_actual_future_and_explicit_cleanup_closes_unpublished_store(
+    adapter_module, monkeypatch
+):
+    import threading
+
+    async def scenario():
+        adapter = adapter_module.HmpAdapter(SimpleNamespace(extra={"port": 12345}))
+        adapter._close_generation = lambda _ctx: None
+        entered, release = threading.Event(), threading.Event()
+        store, calls = FakeStore(), []
+        ctx = SimpleNamespace(store=store)
+
+        def components(_adapter):
+            calls.append(1)
+            entered.set()
+            assert release.wait(3)
+            return ctx
+
+        monkeypatch.setattr(adapter_module, "open_components", components)
+        caller = asyncio.create_task(adapter.connect())
+        try:
+            assert await asyncio.to_thread(entered.wait, 1)
+            caller.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await caller
+            opening = adapter._opening
+            assert opening.future is not None and not opening.future.done()
+            assert not opening.future.cancelled() and store.closes == 0
+            assert await adapter.connect() is False and calls == [1]
+            cleanup = asyncio.create_task(adapter.disconnect())
+            await asyncio.sleep(0)
+            assert not cleanup.done() and store.closes == 0
+            release.set()
+            await cleanup
+            assert opening.future.done() and opening.ctx is ctx and opening.closed
+            assert store.closes == 1 and adapter._opening is None
+            assert not adapter._startup_unresolved and not adapter._disconnect_unresolved
+        finally:
+            release.set()
+            await asyncio.gather(caller, return_exceptions=True)
+
+    asyncio.run(scenario())
+
+
+def test_unpublished_close_return_loss_is_never_replayed(adapter_module, monkeypatch):
+    import threading
+
+    async def scenario():
+        adapter = adapter_module.HmpAdapter(SimpleNamespace(extra={"port": 12345}))
+        adapter._close_generation = lambda _ctx: None
+        entered, release = threading.Event(), threading.Event()
+        store = FakeStore(fail=True)
+
+        def components(_adapter):
+            entered.set()
+            assert release.wait(3)
+            return SimpleNamespace(store=store)
+
+        monkeypatch.setattr(adapter_module, "open_components", components)
+        caller = asyncio.create_task(adapter.connect())
+        try:
+            assert await asyncio.to_thread(entered.wait, 1)
+            caller.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await caller
+            opening = adapter._opening
+            release.set()
+            with pytest.raises(OSError):
+                await adapter.disconnect()
+            assert opening.close_attempted and store.closes == 1 and not opening.closed
+            with pytest.raises(RuntimeError):
+                await adapter.disconnect()
+            assert store.closes == 1 and await adapter.connect() is False
+        finally:
+            release.set()
+            await asyncio.gather(caller, return_exceptions=True)
+
+    asyncio.run(scenario())
+
+
+def test_unknown_bootstrap_submit_keeps_returned_context_but_cannot_claim_cleanup(
+    adapter_module, monkeypatch
+):
+    import threading
+
+    async def scenario():
+        adapter = adapter_module.HmpAdapter(SimpleNamespace(extra={"port": 12345}))
+        store, release, actual = FakeStore(), threading.Event(), []
+
+        def components(_adapter):
+            assert release.wait(3)
+            return SimpleNamespace(store=store)
+
+        original_start = adapter_module.BootstrapOpening.start
+
+        def start(owner):
+            submit = owner.pool.submit
+
+            def lost_ack(*args, **kwargs):
+                actual.append(submit(*args, **kwargs))
+                raise MemoryError("synthetic bootstrap enqueue acknowledgement loss")
+
+            monkeypatch.setattr(owner.pool, "submit", lost_ack)
+            return original_start(owner)
+
+        monkeypatch.setattr(adapter_module, "open_components", components)
+        monkeypatch.setattr(adapter_module.BootstrapOpening, "start", start)
+        try:
+            with pytest.raises(RuntimeError, match="retain original resources"):
+                await adapter.connect()
+            opening = adapter._opening
+            assert opening is not None and opening.future is None
+            assert await adapter.connect() is False and len(actual) == 1
+            release.set()
+            ctx = await asyncio.wrap_future(actual[0])
+            assert opening.ctx is ctx and opening.store is store
+            with pytest.raises(RuntimeError):
+                await adapter.disconnect()
+            assert store.closes == 0 and adapter._opening is opening
+        finally:
+            release.set()
+            if actual:
+                await asyncio.wrap_future(actual[0])
+            adapter._opening.pool.shutdown(wait=False, cancel_futures=False)
+
+    asyncio.run(scenario())

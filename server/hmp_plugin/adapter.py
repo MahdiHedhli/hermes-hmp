@@ -74,6 +74,7 @@ from gateway.platforms.base import BasePlatformAdapter, SendResult
 
 from . import cli, compat, direct_send, identity, prompts, reads, server
 from .authorize import Authorize
+from .bootstrap_opening import BootstrapOpening
 from .cli import listener_record_path
 from .contract import PLATFORM_NAME, OtherWhy, WriteGateState
 from .logging_policy import log_event
@@ -620,7 +621,6 @@ _AT1_ADAPTER_MODULE = sys.modules[__name__]
 _AT1_PLUGIN_MODULE = sys.modules[__package__]
 
 
-from .bootstrap_opening import BootstrapOpening
 
 
 class _RetiringStore:
@@ -1003,7 +1003,9 @@ class HmpAdapter(BasePlatformAdapter):
         opening = self._opening
         if opening is not None and self._server is None:
             if opening.server is not None:
-                raise RuntimeError("partial listener bootstrap unresolved; retain original resources")
+                raise RuntimeError(
+                    "partial listener bootstrap unresolved; retain original resources"
+                )
             await opening.wait()  # same actual Future, never a new component opening
             opening.close_unpublished(self)
             if self._opening is not opening or not opening.closed:
