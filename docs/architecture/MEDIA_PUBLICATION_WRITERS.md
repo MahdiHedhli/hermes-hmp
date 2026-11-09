@@ -239,3 +239,27 @@ initial current run failed7 cleanup cases because newer asyncio removes its Unix
 socket on close; the fixture correction retains missing-ok cleanup for the older
 runtime, without relaxing protocol assertions. The initial failed receipt remains
 unqualified. No host activation, live permission change or phone display is claimed.
+
+## CLI source integration — 8b15a7a
+
+The grant/deny CLI now retains read → exact typed confirmation → fresh context
+comparison, then submits one closed request through the verified socket client.
+It no longer calls Store.set_media_read or falls back to a direct SQL write when
+the service is absent. A pre-send unavailable result is distinct from Unknown;
+Unknown/malformed/missing outcomes require inspection without automatic replay.
+A committed reply still requires authoritative stored and original live-context
+readback. Read-only media-read status and existing global CLI TTY guards remain.
+
+Both186-case combined suites pass unchanged on Python3.14.9/3.11.15, full Ruff
+passes, and independent read-only CLI review found no concrete blocker in the
+finite delta. Four new synthetic cases run the actual confirmation function,
+actual socket client and service, actor and Store CAS for allow/deny/wrong/EOF.
+The CLI Store mutator lookup is forbidden in that fixture; the service uses its
+original captured mutator. Host TLS/listener context is explicitly mocked in this
+fixture and therefore not runtime-qualified. Seven additional CLI boundary cases
+cover unavailable/unknown/conflict/refused/malformed replies and read-only status.
+
+This replaces the earlier direct-writer checkpoint only in isolated source. The
+adapter does not start the service; deployed5e remains unchanged. Listener/actor
+retirement, schema4 quiesced migration, other-process/native/config publication and
+physical/release checks remain open. No live device grant or host flag changed.
