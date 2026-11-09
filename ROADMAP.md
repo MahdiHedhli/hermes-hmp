@@ -1,5 +1,13 @@
 ## November 8 — reviewed host updates deployed; character integration remains open
 
+Media freshness regressions now have isolated negative controls: restoring the
+matching prior server implementations reproduces stale HTTP 200 responses where
+503 is required. One initial mismatched callback-count case was excluded and rerun
+against the correct intermediate source; its mutation then reached stale delivery.
+Candidate `f7f5084` remains unchanged and its combined 1,063-case current-interpreter
+run is active; no result or floor run is claimed yet. These controls establish
+regression sensitivity, not atomic revocation, performance or release acceptance.
+
 Independent review found final-callback and request-context freshness gaps in
 undeployed media backend `fb82aef`, despite its passing 1,059-case integration run.
 Source `f7f5084` repairs post-callback media checks, original request/dependency

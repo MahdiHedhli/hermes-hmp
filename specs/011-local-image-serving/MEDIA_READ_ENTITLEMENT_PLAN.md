@@ -141,3 +141,8 @@ re-review is pending; prior blockers are not declared closed by self-testing.
 Independent reviewer subsequently verified exact f7f5084 and resolved the identified
 ordering/context defects, with no new blocker in the inspected delta. This is not
 full security, performance, runtime or release qualification.
+
+Causal negative controls restore matching pre-repair server implementations in an
+isolated worktree and reproduce stale200 responses at the reviewed failure sites.
+The mismatched callback-count control is excluded, with corrected control retained.
+A fresh combined1,063-case f7f5084 suite is running; floor not launched yet.
