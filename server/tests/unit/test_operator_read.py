@@ -760,6 +760,7 @@ def test_cancelling_all_async_waiters_does_not_retire_actual_read_worker(monkeyp
             assert not service._drained.is_set()
         finally:
             release.set()
+            await service.stop()
             await asyncio.wait_for(service.wait_drained(), 1)
         assert (budget.active, budget.operator) == (0, 0)
 
