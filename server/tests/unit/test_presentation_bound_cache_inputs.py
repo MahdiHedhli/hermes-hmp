@@ -116,9 +116,9 @@ def test_foreign_absence_proof_no_hooks(case):
     missing = (Foreign() if case == 'missing' else
                (_Missing(path, 0, (('/synthetic', (1, 2, 3, 4, Foreign())),)),)
                if case == 'ancestor' else ())
-    before = _CachePass(None, None, None, 0, missing, (), ())
+    before = _CachePass(None, None, None, 0, missing, (), (), ())
     after = _CachePass(None, None, None, 1,
-                       (_Missing(path, 0, ()),) if case == 'unequal' else missing, (), ())
+                       (_Missing(path, 0, ()),) if case == 'unequal' else missing, (), (), ())
     with pytest.raises(CacheSelectionError):
         _cache_proof(row, (), (None, None, None, before, after, None))
     assert calls == []
