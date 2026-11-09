@@ -1,4 +1,15 @@
-## November 8 — reviewed host updates deployed; character integration remains open
+## November 9 — shutdown ownership checks pass; media integration remains open
+
+MR-START2b2 source `3eee7d2` adds one retained shutdown attempt and checks the
+original context/resource cohort after cleanup waits. Lost task-creation acknowledgement
+cannot replay cleanup or certify Store drain. Three synthetic substitution cases verify
+that context, direct-send dependencies and runner replacement stop further cleanup.
+Both Python 3.14.9 and 3.11.15 pass 375 selected cases with unchanged tracked source,
+zero failures/errors/skips. This is bounded source evidence, not full lifecycle or
+physical qualification. Auxiliary startup publication, partial adapter recovery,
+all Store borrowers, migration/native media authority and device/release gates remain
+open. No new deployment: both hosts retain `5ecd2ba`; bot characters and host-local
+images are still unfinished. The broader feature goal stays active.
 
 
 MR-START2b1 source `641e39c` retains the original runner/site before awaitedstartup

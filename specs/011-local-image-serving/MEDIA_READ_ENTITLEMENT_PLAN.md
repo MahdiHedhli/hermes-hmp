@@ -424,3 +424,19 @@ otherborrowers, builder/migration/nativepublication and physical/release gates r
 open. No checkpointdeployment; image service staysinactive and livehosts remain5ecd2ba.
 
 MR-START2b2 next: seal teardown to original context/dependency owners across awaits; protect stop-task creation acknowledgement loss against replay; then qualify auxiliary service publication and explicit adapter partial-listener cleanup. Never infer whole Store retirement from this startup slice.
+
+
+## MR-START2b2 bounded stop ownership checkpoint
+
+MR-START2b2 source `3eee7d2` adds one retained shutdown attempt and checks the
+original context/resource cohort after cleanup waits. Lost task-creation acknowledgement
+cannot replay cleanup or certify Store drain. Three synthetic substitution cases verify
+that context, direct-send dependencies and runner replacement stop further cleanup.
+Both Python 3.14.9 and 3.11.15 pass 375 selected cases with unchanged tracked source,
+zero failures/errors/skips. This is bounded source evidence, not full lifecycle or
+physical qualification. Auxiliary startup publication, partial adapter recovery,
+all Store borrowers, migration/native media authority and device/release gates remain
+open. No new deployment: both hosts retain `5ecd2ba`; bot characters and host-local
+images are still unfinished. The broader feature goal stays active.
+
+Next: qualify auxiliary service publication and partial adapter recovery; do not activate media before the remaining authority, borrower and migration gates are resolved.
