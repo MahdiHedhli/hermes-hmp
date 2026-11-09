@@ -916,7 +916,8 @@ def test_owned_unix_timeout_retains_debt_until_callback_returns(
     asyncio.run(scenario())
 
 
-def test_cancelling_all_async_waiters_does_not_retire_actual_read_worker(monkeypatch):
+@pytest.mark.parametrize("media", (False, True))
+def test_cancelling_all_async_waiters_does_not_retire_actual_read_worker(monkeypatch, media):
     entered, release = threading.Event(), threading.Event()
 
     def blocked(*_args):
@@ -924,13 +925,13 @@ def test_cancelling_all_async_waiters_does_not_retire_actual_read_worker(monkeyp
         assert release.wait(3)
         return {"synthetic": True}
 
-    monkeypatch.setattr(operator_read, "_collect", blocked)
+    monkeypatch.setattr(operator_read, "_collect_media" if media else "_collect", blocked)
     budget = ReadWorkerBudget()
     ctx = SimpleNamespace(read_worker_budget=budget, readiness_generation=GEN)
     service = operator_read.OperatorReadService(ctx, "/private/tmp/synthetic", NONCE)
 
     async def scenario():
-        caller = asyncio.create_task(service._context(RID, "0" * 32))
+        caller = asyncio.create_task(service._context(RID, "0" * 32, media=media))
         try:
             assert await asyncio.to_thread(entered.wait, 1)
             # Model framework cancellation of all async waiters in this isolated
@@ -1043,7 +1044,8 @@ def test_read_completion_releases_original_budget_after_context_budget_replaceme
     asyncio.run(scenario())
 
 
-def test_read_worker_preserves_original_context_and_isolates_worker_changes(monkeypatch):
+@pytest.mark.parametrize("media", (False, True))
+def test_read_worker_preserves_original_context_and_isolates_worker_changes(monkeypatch, media):
     import contextvars
 
     async def scenario():
@@ -1059,9 +1061,9 @@ def test_read_worker_preserves_original_context_and_isolates_worker_changes(monk
             scope.set("synthetic worker-only value")
             return {"synthetic": True}
 
-        monkeypatch.setattr(operator_read, "_collect", collect)
+        monkeypatch.setattr(operator_read, "_collect_media" if media else "_collect", collect)
         try:
-            assert await service._context(RID, "0" * 32) == {"synthetic": True}
+            assert await service._context(RID, "0" * 32, media=media) == {"synthetic": True}
             assert scope.get() is marker
         finally:
             await service.stop()
