@@ -150,3 +150,27 @@ A fresh combined1,063-case f7f5084 suite is running; floor not launched yet.
 Both fresh f7f5084 combined suites now pass1,063 cases each. Paired mobile5ca14a9
 passes66 client plus73 app/chat/accessibility cases after pinning. Full analysis
 is clean; runtime/performance/migration/legacy fallback and physical gates remain.
+
+## LM-ENT1-P1 — bounded publication responsiveness (open)
+
+An isolated loopback probe on exact f7f5084 injected150ms into the first
+main-thread settings callback. The largest5ms heartbeat gap increased from5.7ms
+to151.5ms; request elapsed increased from2.3ms to153.4ms. Both returned200. This
+is a synthetic causal availability demonstration, not a live-host performance
+benchmark. Source remained unchanged. Final synchronous authority checks therefore
+remain an integration/deployment blocker; passing functional tests do not close it.
+
+Required repair: keep blocking native/config/SQLite reads off the event loop while
+retaining current-instance/device/bot/media/flag/cohort freshness checks. A timeout
+must fail closed without cancelling the real worker, returning its permit early,
+or publishing a late DTO. Do not substitute stale cached authorization or a
+thread-local timestamp for an authoritative publication boundary. Inspect existing
+Store mutation coordination and native/config generations first; distinguish
+in-process writes, supported operator-process writes and native authority changes.
+An independent design review is requested before choosing the publication seam.
+
+Acceptance must include injected slow callback and contended-store cases, another
+request/heartbeat remaining responsive, fixed deadline refusal, no late DTO after
+revoke/flag change/cohort replacement, and exact worker-permit retention until real
+completion. Keep generation/authority negative controls. Real runtime latency and
+physical/device qualification remain separate from synthetic fixture evidence.
