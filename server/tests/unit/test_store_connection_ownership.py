@@ -853,3 +853,34 @@ def test_push_snapshot_unknown_boundary_poison_prevents_authority_reuse(
             store.insert_user("later", "Later", 3)
     finally:
         store.close()
+
+
+@pytest.mark.parametrize("phase", ("configure", "query"))
+def test_failed_migration_close_retains_connection_without_close_replay(tmp_path, monkeypatch, phase):
+    calls = []
+
+    class Connection:
+        def __setattr__(self, name, value):
+            if name == "row_factory" and phase == "configure":
+                raise RuntimeError("synthetic configure failure")
+            object.__setattr__(self, name, value)
+
+        def execute(self, *_args):
+            raise RuntimeError("synthetic query failure")
+
+        def close(self):
+            calls.append("close")
+            raise OSError("synthetic close acknowledgement loss")
+
+    connection = Connection()
+    monkeypatch.setattr(sqlite3, "connect", lambda *_args, **_kwargs: connection)
+    store = Store(tmp_path / "synthetic.sqlite")
+    with pytest.raises(RuntimeError, match="synthetic"):
+        store.migrate()
+    assert store._conn is connection and store._poisoned and store._close_uncertain
+    for _ in range(2):
+        with pytest.raises(RuntimeError, match="do not replay"):
+            store.close()
+    with pytest.raises(RuntimeError, match="state unavailable"):
+        store.migrate()
+    assert calls == ["close"]

@@ -477,6 +477,7 @@ class Store:
         self._write_lock = threading.Lock()
         self._transaction_owner: int | None = None
         self._poisoned = False
+        self._close_uncertain = False
 
     def migrate(self) -> None:
         """Open the database (creating it if needed) and apply the schema. Idempotent: safe to
@@ -506,8 +507,10 @@ class Store:
                     str(self._path), isolation_level=None, check_same_thread=False,
                     cached_statements=0,
                 )
-                conn.row_factory = sqlite3.Row
+                self._conn = conn  # retain before any fallible configuration/migration
             try:
+                if created:
+                    conn.row_factory = sqlite3.Row
                 # This first read must precede every PRAGMA that could change the database.
                 # A future schema is unavailable to *all* Store authority, not merely the
                 # request path; the failure branch below poisons this Store object.
@@ -546,8 +549,12 @@ class Store:
                 # a failure on the already-shared connection may leave its SQL state unknown.
                 self._poisoned = True
                 if created:
-                    with contextlib.suppress(Exception):
+                    try:
                         conn.close()
+                    except BaseException:
+                        self._close_uncertain = True
+                    else:
+                        self._conn = None
                 raise
             if created:
                 self._conn = conn
@@ -556,11 +563,14 @@ class Store:
         if self._transaction_owner == threading.get_ident() and not self._poisoned:
             raise RuntimeError("close during owned transaction")
         with self._write_lock:
+            if self._close_uncertain:
+                raise RuntimeError("Store close outcome unresolved; do not replay")
             if self._conn is not None:
                 try:
                     self._conn.close()
                 except BaseException:
                     self._poisoned = True
+                    self._close_uncertain = True
                     raise
                 self._conn = None
 
