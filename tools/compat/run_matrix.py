@@ -356,6 +356,9 @@ def main(argv: list[str] | None = None) -> int:
             }
             for r in qualified
         ],
+        # Retired allowlist check: preserve the old optional field as unevaluated,
+        # never report minimum-version support as an old-style fingerprint denial.
+        "sc007_unsupported_path_check": None,
         "minimum_version_policy_check": unsupported,
     }
     text = json.dumps(matrix, indent=2) + "\n"
