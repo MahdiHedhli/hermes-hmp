@@ -74,26 +74,10 @@ def lose_ack(frame):
 _synthetic_trace_routes.setdefault(a._close_native_file_known.__code__,{})[
     synthetic_line(a._close_native_file_known.__code__,
                    'close.result[0] = (close, fd, value)')]=lose_ack
-def finish_failure_trace(frame,event,arg):
-    if event=='exception':
-        rows=[];cursor=frame
-        while cursor is not None:
-            rows.append((cursor.f_code.co_name,cursor.f_lineno))
-            cursor=cursor.f_back
-        path=Path(sys.argv[1])/'startup-native-finish-failure.json'
-        if not path.exists():
-            fd=os.open(path,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
-            with os.fdopen(fd,'w') as stream:json.dump(rows,stream)
-    return finish_failure_trace
-def finish_failure_global(frame,event,arg):
-    if (frame.f_code.co_name=='_require'
-            and frame.f_code in (startup_native._require.__code__,cache_module._require.__code__)):
-        return finish_failure_trace
-    return None
 def scope_ended(frame):
     if not active_effects or frame.f_locals.get('plan').effect is not active_effects[0]:return
     restored.append(True)
-    sys.setprofile(prior_profile);sys.settrace(finish_failure_global)
+    sys.setprofile(prior_profile);sys.settrace(prior_trace)
     path=Path(sys.argv[1])/'startup-probe-observer-scope-stage.json'
     fd=os.open(path,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
     with os.fdopen(fd,'w') as stream:json.dump({'scope_ended':True,'known':len(held),'close_calls':len(attempted)},stream)
