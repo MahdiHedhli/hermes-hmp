@@ -53,7 +53,7 @@ def exercise(frame):
         missing=[commit for commit in actual.history if commit.category=='reported_missing']
         if engine_case=='missing':
             assert len(missing)==2 and missing[1].site==missing[0].site+2
-            assert all(commit.consumer.operation.state==[True,False,True] for commit in missing)
+            assert all(commit.consumer.operation.state==[True,False,False] for commit in missing)
         else:assert missing==[]
         assert all(commit.consumer.operation.ended==[True] for commit in actual.history)
         assert all(commit.consumer.custody[0].reference_call(

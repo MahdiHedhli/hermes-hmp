@@ -38,20 +38,13 @@ class _ProbeExecution(NamedTuple):
     outcome: list
     failed: list
     finished: list
+    budget: tuple
 
     def __repr__(self):
         return '<FreshProbeExecution experimental no-image-authority>'
 
 
-class _ProbeConsumer(NamedTuple):
-    execution: _ProbeExecution
-    operation: object
-    predecessor: object
-    commit: list
-    custody: tuple
-
-    def __repr__(self):
-        return '<FreshProbeConsumer fixed policy redacted>'
+_ProbeConsumer = metadata._ProbeConsumer
 
 
 class _ProbeReturn(NamedTuple):
@@ -85,9 +78,11 @@ def _new_probe_engine_origin():
                    tuple(vars(kind).get(name) for name in kind._fields)) for kind in kinds)
     functions = tuple((name, globals()[name], globals()[name].__code__) for name in (
         '_engine_origin_tail', '_execution_tail', '_history_tail',
-        '_resource_tail', '_resource', '_consumer_tail', '_fail',
+        '_resource_tail', '_resource', '_consumer_tail',
         '_produce', '_policy', '_run_observation', '_open_ancestor',
-        '_finish', '_run_fresh_probe'))
+        '_finish', '_run_fresh_probe', '_lifecycle_tail',
+        '_prepare_shared_consumer', '_latch_shared_consumer', '_produce_shared',
+        '_consume_shared', '_ack_shared', '_retired_shared', '_history_mirrors_tail'))
     return (module, types, functions, OSError.__dict__['errno'],
             OSError.__dict__['filename'], errno.ENOENT)
 
@@ -98,7 +93,7 @@ def _engine_origin_tail(origin):
              and sys.modules.get(__name__) is origin[0]
              and vars(origin[0]) is globals()
              and type(origin[1]) is tuple and len(origin[1]) == 4
-             and type(origin[2]) is tuple and len(origin[2]) == 13
+             and type(origin[2]) is tuple and len(origin[2]) == 20
              and origin[3] is OSError.__dict__['errno']
              and origin[4] is OSError.__dict__['filename']
              and type(origin[5]) is int and origin[5] == errno.ENOENT)
@@ -146,39 +141,57 @@ def _execution_tail(execution):
              and type(execution.failed) is list and execution.failed == [False]
              and type(execution.finished) is list and execution.finished == [False])
     _native_work_origin_tail(owner, reg, reg.native_origin)
+    _lifecycle_tail(owner, reg.scope, reg, plan)
     return execution
 
 
-def _history_tail(execution, predecessor):
+def _history_mirrors_tail(execution, predecessor):
     _execution_tail(execution)
     history, reg = execution.history, execution.registration
     actual = predecessor
     for sequence in range(len(history) - 1, -1, -1):
-        _require(type(actual) is _ProbeCommit and actual.sequence == sequence
+        _require(type(actual) is _ProbeCommit and type(actual.sequence) is int
+                 and actual.sequence == sequence
                  and history[sequence] is actual
                  and type(actual.consumer) is _ProbeConsumer
                  and actual.consumer.execution is execution
                  and actual.consumer.commit[0] is actual)
         operation = actual.consumer.operation
+        _require(type(operation) is metadata._MetadataOperation)
         result = operation.result
-        _require(type(operation) is metadata._MetadataOperation
+        _require(type(result) is metadata._MetadataResult
+                 and type(operation) is metadata._MetadataOperation
                  and operation.registration is reg and operation.owner is execution.owner
                  and type(operation.index) is int
                  and reg.native_ledger.attempts[operation.index] is operation
+                 and type(actual.category) is str and actual.category in ('returned', 'reported_missing')
+                 and type(operation.state) is list and len(operation.state) == 3
+                 and all(type(value) is bool for value in operation.state)
                  and operation.state == ([True, True, False] if actual.category == 'returned'
-                                         else [True, False, True])
-                 and operation.ended == [True]
+                                         else [True, False, False])
+                 and type(operation.ended) is list and len(operation.ended) == 1
+                 and operation.ended[0] is True
                  and result.acknowledged[0] is actual
                  and result.consumer[0] is actual.consumer
                  and result.custody_link == [None]
-                 and actual.consumer.custody[1].state == [True, True, False]
-                 and actual.consumer.custody[0].reference_call(
-                     actual.consumer.custody[1].reference) is None)
+                 and actual.consumer.custody[1].state == [True, True, False])
         actual = actual.consumer.predecessor
     _require(actual is None)
     _require((not history and execution.next_site[0] == 0) or
              (history and execution.next_site[0] == predecessor.next_site))
     return execution
+
+
+def _history_tail(execution, predecessor):
+    _history_mirrors_tail(execution, predecessor)
+    for commit in execution.history:
+        _require(type(commit) is _ProbeCommit and type(commit.consumer) is _ProbeConsumer)
+        origin, marker = commit.consumer.custody[:2]
+        metadata._origin_tail(origin)
+        _require(type(marker) is origin.marker_type
+                 and type(marker.reference) is origin.reference_type
+                 and origin.reference_call(marker.reference) is None)
+    return _history_mirrors_tail(execution, predecessor)
 
 
 def _resource_tail(owner, resource):
@@ -247,48 +260,11 @@ def _consumer_tail(consumer, predecessor):
     return operation
 
 
-def _fail(execution, operation):
-    execution.failed[0] = True
-    ledger = execution.registration.native_ledger
-    ledger.failed[0] = True
-    if ledger.failure[0] is None:
-        ledger.failure[0] = operation
-    ledger.phase.current[0] = ledger.phase.failed
-    if type(operation) is metadata._MetadataOperation:
-        operation.state[2] = True
-        operation.ended[0] = True
-    # Preserve debit, inflight/claim and foreign memory; no reset/refund/replay.
-
-
 def _produce(consumer, predecessor, cells):
-    operation = _consumer_tail(consumer, predecessor)
-    execution = consumer.execution
-    ledger, phase, native = operation.ledger, operation.phase, operation.native
-    counts, attempts = ledger.counts, ledger.attempts
-    _require(operation.state == [False, False, False] and operation.ended == [False]
-             and phase.current[0] is phase.idle and phase.result[0] is None
-             and ledger.inflight[0] is None and ledger.failed == [False]
-             and ledger.failure == [None] and len(attempts) == operation.index
-             and counts[0] is operation.budget[1] and counts[1] is operation.budget[2])
-    token = ledger.preparation
-    _require(type(token) is list and len(token) == 3)
-    token[0], token[1], token[2] = execution.owner, operation.registration, consumer
-    ledger.inflight[0] = phase.result[0] = token
-    phase.current[0] = phase.active
-    arguments = (consumer, operation, operation.callee, operation.arguments)
-    held = _native_pre_actor_state(execution.owner, arguments)
-    _native_actor_context(native.actor_calls, (native.native, native.thread_native), operation.context)
-    _native_post_actor_state(execution.owner, held, arguments)
     _consumer_tail(consumer, predecessor)
-    _require(ledger.inflight[0] is token and phase.result[0] is token
-             and token[0] is execution.owner and token[1] is operation.registration
-             and token[2] is consumer and ledger.failed == [False]
-             and len(attempts) == operation.index
-             and counts[0] is operation.budget[1] and counts[1] is operation.budget[2])
-    attempts.append(operation)
-    counts[0] = operation.budget[3]
-    operation.state[0] = True
-    ledger.inflight[0] = phase.result[0] = operation
+    execution = consumer.execution
+    operation = metadata._admit_directory_operation(execution.owner, consumer)
+    ledger, phase, native = operation.ledger, operation.phase, operation.native
     callee, args = operation.callee, operation.arguments
     raw_cell, category_cell, snapshot_cell, envelope_cell = cells[:4]
     missing_type = native.errors[1]
@@ -305,8 +281,12 @@ def _produce(consumer, predecessor, cells):
     # Only this narrow handler classifies an actual raised fixed stat call.
     try:
         if operation.operation == 4:
+            _lifecycle_tail(execution.owner, execution.registration.scope,
+                            execution.registration, execution.plan)
             raw = callee(args[0])
         else:
+            _lifecycle_tail(execution.owner, execution.registration.scope,
+                            execution.registration, execution.plan)
             raw = callee(args[0], dir_fd=args[1], follow_symlinks=False)
         raw_cell[0] = raw
         operation.state[1] = True
@@ -317,7 +297,8 @@ def _produce(consumer, predecessor, cells):
         _require(type(number) is int and number == enoent
                  and type(filename) is str and filename == args[0])
         category = 'reported_missing'
-        operation.state[2] = True  # irreversibly raised, not returned-success
+        # ended + typed reported-missing envelope records known raised; the
+        # shared third state slot remains false (it means unknown/failure).
     operation.ended[0] = True
     _consumer_tail(consumer, predecessor)
     snapshot = (None if category == 'reported_missing' else
@@ -345,7 +326,7 @@ def _policy(execution, actual, predecessor):
     position, offset = divmod(site, 6)
     missing = actual.category == 'reported_missing'
     _require(actual.category in ('returned', 'reported_missing')
-             and operation.state == ([True, False, True] if missing else [True, True, False]))
+             and operation.state == ([True, False, False] if missing else [True, True, False]))
     identity = None
     if not missing:
         _require(type(actual.snapshot) is metadata._NativeMetadataSnapshot
@@ -403,53 +384,18 @@ def _policy(execution, actual, predecessor):
 
 def _run_observation(execution, predecessor):
     resource = _resource(execution, predecessor)
-    operation = marker = payload = actual = commit = record = cells = None
-    succeeded = False
+    failed = False
     try:
-        operation, marker, payload = metadata._prepare_metadata_operation_with_custody(
-            execution.owner, resource)
-        result, origin = operation.result, operation.result.custody_origin
-        custody = (origin, marker, result.custody_link, result.custody_slot)
-        consumer = _ProbeConsumer(execution, operation, predecessor, [None], custody)
-        _require(type(consumer) is _ProbeConsumer and consumer.execution is execution
-                 and consumer.operation is operation and consumer.predecessor is predecessor)
-        result.consumer[0] = execution.pending[0] = consumer
-        cells = _directory_payload_cells(execution.owner, origin, marker, payload)
-        actual = _produce(consumer, predecessor, cells)
-        commit = _policy(execution, actual, predecessor)
-        _require(type(commit) is _ProbeCommit and commit.consumer is consumer
-                 and commit.sequence == len(execution.history) and consumer.commit == [None]
-                 and result.acknowledged == [None] and result.envelope[0] is actual)
-        consumer.commit[0] = result.acknowledged[0] = commit
-        execution.history.append(commit)
-        execution.next_site[0] = commit.next_site
-        if commit.outcome is not None:
-            _require(execution.outcome[0] is None)
-            execution.outcome[0] = commit.outcome
-        # No exception/traceback is retained; only raw-free category survives.
-        cells.raw[0] = result.unset
-        cells.category[0] = cells.snapshot[0] = cells.envelope[0] = cells.consumption[0] = None
-        actual = None
-        record = _retire_directory_payload_data(execution.owner, origin, marker, payload)
-        _require(record.detached and not record.unmatched_link and not record.unmatched_marker)
-        payload = cells = None
-        _require(origin.reference_call(marker.reference) is None)
-        _history_tail(execution, commit)
-        _require(execution.pending[0] is consumer and result.acknowledged[0] is commit
-                 and operation.phase.current[0] is operation.phase.pending
-                 and operation.phase.result[0] is operation and operation.ledger.failed == [False])
-        execution.pending[0] = None
-        operation.phase.result[0] = None
-        operation.phase.current[0] = operation.phase.idle
-        succeeded = True
+        return metadata._run_directory_observation(execution.owner, resource, predecessor)
     except BaseException:
-        _fail(execution, operation)
-    if not succeeded:
+        failed = True
+    if failed:
+        if type(execution.failed) is list and execution.failed == [False]:
+            execution.failed[0] = True
         raise metadata.ArtifactObservationError(execution.owner) from None
-    return commit
 
 
-def _open_ancestor(execution, commit):
+def _open_ancestor(execution, commit, held):
     _history_tail(execution, commit)
     position, offset = divmod(commit.site, 6)
     _require(offset == 0 and commit.category == 'returned'
@@ -459,13 +405,14 @@ def _open_ancestor(execution, commit):
     parent = None if position == 0 else execution.opened[position - 1][4]
     row, fd = StartupArtifactOwner._open(execution.owner, name, parent, True,
                                         execution.registration)
+    held.append((row, fd))  # actual return retained before any validation/callback
     execution.opened.append((position, name, parent, row, fd, commit.identity, commit))
     _require(type(row) is _NativeOpenedDescriptor and row.fd is fd
              and execution.registration.scope.records[position] is row)
     return commit
 
 
-def _finish(execution, predecessor):
+def _finish(execution, predecessor, held):
     _history_tail(execution, predecessor)
     reg = execution.registration
     _require(execution.next_site[0] == len(execution.plan.definitions)
@@ -479,6 +426,19 @@ def _finish(execution, predecessor):
              and reg.native_ledger.failed == [False]
              and reg.native_phase.current[0] is reg.native_phase.idle
              and reg.native_phase.result == [None])
+    budget = execution.budget
+    _require(type(budget) is tuple and len(budget) == 5
+             and reg.native_ledger.counts is budget[0]
+             and reg.native_ledger.attempts is budget[3]
+             and type(budget[1]) is int and type(budget[2]) is int and type(budget[4]) is int
+             and all(type(value) is int for value in reg.native_ledger.counts)
+             and reg.native_ledger.counts[0] == budget[1] + len(execution.history) + 2 * len(held)
+             and reg.native_ledger.counts[1] == budget[2]
+             and len(reg.native_ledger.attempts) == budget[4] + len(execution.history) + len(held)
+             and len(held) == len(execution.opened)
+             and all(row is execution.opened[i][3] and fd is execution.opened[i][4]
+                     for i, (row, fd) in enumerate(held)))
+    _history_mirrors_tail(execution, predecessor)
     execution.finished[0] = True
     return execution.outcome[0]
 
@@ -488,10 +448,26 @@ def _run_fresh_probe(owner, scope, registration, plan):
              and registration.scope is scope and scope.native_probe_plan is plan
              and vars(owner).get('_started') is True and scope.records == [])
     origin = _engine_origin_tail(plan.engine_origin)
-    execution = _ProbeExecution(owner, plan, registration, origin,
-                                vars(owner)['_count_cell'], [0], [None], [], [],
-                                [None], [False], [False])
+    _lifecycle_tail(owner, scope, registration, plan)
+    _native_work_origin_tail(owner, registration, registration.native_origin)
+    arguments = (scope, registration, plan, origin)
+    actor_state = _native_pre_actor_state(owner, arguments)
+    native = registration.native_origin
+    _native_actor_context(native.actor_calls, (native.native, native.thread_native), registration.context)
+    _native_post_actor_state(owner, actor_state, arguments)
+    _lifecycle_tail(owner, scope, registration, plan)
+    ledger = registration.native_ledger
+    budget = (ledger.counts, ledger.counts[0], ledger.counts[1], ledger.attempts, len(ledger.attempts))
+    values = (owner, plan, registration, origin, vars(owner)['_count_cell'],
+              [0], [None], [], [], [None], [False], [False], budget)
+    execution = _ProbeExecution(*values)
+    _engine_origin_tail(origin)
+    _lifecycle_tail(owner, scope, registration, plan)
+    _require(vars(owner).get('_probe_execution') is None and type(execution) is _ProbeExecution
+             and tuple.__len__(execution) == len(values)
+             and all(tuple.__getitem__(execution, i) is value for i, value in enumerate(values)))
     owner._probe_execution = execution
+    held = []
     predecessor = None
     complete = False
     try:
@@ -499,19 +475,145 @@ def _run_fresh_probe(owner, scope, registration, plan):
             _require(len(execution.history) < len(plan.definitions))
             predecessor = _run_observation(execution, predecessor)
             if predecessor.site % 6 == 0 and predecessor.next_site % 6 == 1:
-                _open_ancestor(execution, predecessor)
+                _open_ancestor(execution, predecessor, held)
         complete = True
     except BaseException:
         pass
     finally:
-        for row in reversed(execution.opened):
+        for row, fd in reversed(held):
             try:
-                StartupArtifactOwner._close(owner, row[3], row[4], scope, registration.root)
+                StartupArtifactOwner._close(owner, row, fd, scope, registration.root)
             except BaseException:
-                _descriptor_refused(row[3])
+                _descriptor_refused(row)
                 owner._unknown = True
                 complete = False
     if not complete:
         execution.failed[0] = True
         raise metadata.ArtifactObservationError(owner) from None
-    return _finish(execution, predecessor)
+    return _finish(execution, predecessor, held)
+
+
+def _lifecycle_tail(owner, scope, registration, plan):
+    """Pure original activation/continuation/source selection join; no effects."""
+    _require(registration.owner is owner and registration.scope is scope
+             and scope.native_probe_plan is plan and plan.owner is owner
+             and scope.parent[0] is plan.root and scope.parent[1] is plan.selected
+             and type(plan.root) is tuple and len(plan.root) == 3
+             and plan.root[1] is scope.activation
+             and vars(owner).get('_origin') is scope and vars(owner).get('_scope') is scope
+             and vars(owner).get('_probe_plan') is plan
+             and vars(owner).get('_started') is True
+             and vars(owner).get('_ready') is False and vars(owner).get('_failed') is False
+             and vars(owner).get('_unknown') is False
+             and vars(owner).get('_root_cell') is registration.root
+             and vars(owner).get('_cell') is registration.cell
+             and plan.selected.plan_row is plan.row and plan.row.location is plan.location
+             and plan.location.path is plan.path and plan.selected.proof is plan.proof
+             and plan.material.__code__ is plan.material_code
+             and plan.observe.__code__ is plan.observe_code
+             and vars(plan.owner_type).get('_pure') is plan.material
+             and vars(plan.owner_type).get('_observe_owned') is plan.observe)
+    active, parent = vars(scope.activation), vars(plan.root[0])
+    _require(active.get('_scope') is scope.activation_scope and active.get('_ready') is True
+             and active.get('_retired') is False and active.get('_uncertain') is False
+             and active.get('_continuation_owner') is plan.root[0]
+             and active.get('_continuation_cell') is plan.root
+             and parent.get('_root') is plan.root and parent.get('_source') is plan.root[2]
+             and parent.get('_ready') is True and parent.get('_failed') is False
+             and parent.get('_retired') is False)
+    return scope
+
+
+def _prepare_shared_consumer(owner, operation, predecessor, baseline, eof, custody):
+    _require(type(operation) is metadata._MetadataOperation
+             and type(operation.resource) is _NativeProbeMetadataResource
+             and baseline is None and eof is None)
+    execution = operation.resource.metadata
+    _history_tail(execution, predecessor)
+    _require(execution.pending[0] is None and operation.result.consumer == [None])
+    values = (execution, operation, predecessor, [None], custody)
+    consumer = _ProbeConsumer(*values)
+    _engine_origin_tail(execution.origin)
+    _require(type(consumer) is _ProbeConsumer
+             and all(tuple.__getitem__(consumer, i) is value for i, value in enumerate(values))
+             and execution.pending[0] is None and operation.result.consumer == [None])
+    operation.result.consumer[0] = consumer
+    return consumer
+
+
+def _latch_shared_consumer(owner, consumer, rejoin=False):
+    _require(type(consumer) is _ProbeConsumer and type(consumer.operation) is metadata._MetadataOperation)
+    execution = consumer.execution
+    _require(execution.owner is owner)
+    if not rejoin:
+        _history_tail(execution, consumer.predecessor)
+        _require(execution.pending[0] is None and consumer.operation.result.consumer[0] is consumer)
+        execution.pending[0] = consumer
+    _consumer_tail(consumer, consumer.predecessor)
+    return consumer
+
+
+def _produce_shared(owner, consumer):
+    _require(type(consumer) is _ProbeConsumer and consumer.execution.owner is owner)
+    result = consumer.operation.result
+    origin, marker, link, slot, state, reference = consumer.custody
+    payload = link[0]
+    cells = _directory_payload_cells(owner, origin, marker, payload)
+    try:
+        return _produce(consumer, consumer.predecessor, cells)
+    except BaseException:
+        # This fixed synchronous producer has unwound. End only this actual
+        # original intent; the common caller owns conditional routing/retirement.
+        ended = consumer.operation.ended
+        if type(ended) is list and len(ended) == 1 and ended[0] is False:
+            ended[0] = True
+        raise
+    finally:
+        payload = cells = None
+
+
+def _consume_shared(owner, consumer, actual):
+    _require(type(consumer) is _ProbeConsumer and consumer.execution.owner is owner)
+    commit = _policy(consumer.execution, actual, consumer.predecessor)
+    _consumer_tail(consumer, consumer.predecessor)
+    _require(consumer.commit == [None])
+    consumer.commit[0] = commit
+    return commit
+
+
+def _ack_shared(owner, consumer, actual, commit):
+    execution, operation = consumer.execution, consumer.operation
+    _require(type(consumer) is _ProbeConsumer and type(commit) is _ProbeCommit
+             and execution.owner is owner and commit.consumer is consumer
+             and consumer.commit[0] is commit and operation.result.envelope[0] is actual)
+    # This policy-specific ACK still requires full extraction/partial-store
+    # qualification. The common caller now owns independent raw retirement.
+    result = operation.result
+    _lifecycle_tail(owner, operation.registration.scope, operation.registration, execution.plan)
+    _require(result.acknowledged == [None] and execution.pending[0] is consumer)
+    result.acknowledged[0] = commit
+    result.raw[0] = result.unset
+    result.snapshot[0] = result.envelope[0] = result.category[0] = None
+    consumer.consumption[0] = commit
+    execution.history.append(commit)
+    execution.next_site[0] = commit.next_site
+    if commit.outcome is not None:
+        _require(execution.outcome[0] is None)
+        execution.outcome[0] = commit.outcome
+    execution.pending[0] = None
+    operation.phase.result[0] = None
+    operation.phase.current[0] = operation.phase.idle
+    return commit
+
+
+def _retired_shared(owner, consumer, commit, origin, marker, record):
+    _require(type(consumer) is _ProbeConsumer and consumer.execution.owner is owner
+             and type(commit) is _ProbeCommit and commit.consumer is consumer
+             and record.marker is marker and record.detached is True
+             and record.unmatched_link is False and record.unmatched_marker is False)
+    _history_tail(consumer.execution, commit)
+    _require(consumer.operation.result.acknowledged[0] is commit
+             and consumer.execution.pending[0] is None
+             and consumer.operation.phase.current[0] is consumer.operation.phase.idle
+             and consumer.operation.phase.result == [None])
+    return commit

@@ -260,6 +260,76 @@ class _DirectoryConsumer(NamedTuple):
         return '<DirectoryConsumer unqualified fixed policy redacted>'
 
 
+class _ProbeConsumer(NamedTuple):
+    """Closed probe policy, sharing lifecycle without claiming file/EOF policy."""
+    execution: object
+    operation: _MetadataOperation
+    predecessor: object
+    commit: list
+    custody: tuple
+
+    @property
+    def owner(self):
+        return self.execution.owner
+
+    @property
+    def resource(self):
+        return self.operation.resource
+
+    @property
+    def consumption(self):
+        return self.operation.result._cell(4)
+
+    @property
+    def baseline(self):
+        return None
+
+    @property
+    def eof(self):
+        return None
+
+    @property
+    def history(self):
+        return self.execution.history
+
+    def __repr__(self):
+        return '<ProbeConsumer fixed metadata policy redacted>'
+
+
+def _probe_stage_functions(owner, resource):
+    """Actual registered origin selects fixed internal stages, never a caller."""
+    _require(type(resource) is _NativeProbeMetadataResource
+             and type(resource.registration) is _NativeScopeRegistration)
+    _resource_tail(owner, resource)
+    scope = resource.registration.scope
+    origin = scope.native_probe_engine_origin
+    _require(type(origin) is tuple and len(origin) == 6
+             and type(origin[0]) is ModuleType and type(origin[2]) is tuple)
+    wanted = ('_prepare_shared_consumer', '_latch_shared_consumer',
+              '_produce_shared', '_consume_shared', '_ack_shared', '_retired_shared')
+    stages = []
+    for name in wanted:
+        rows = tuple(row for row in origin[2] if type(row) is tuple and len(row) == 3
+                     and type(row[0]) is str and row[0] == name)
+        _require(len(rows) == 1)
+        _, function, code = rows[0]
+        _require(type(function) is FunctionType and function.__code__ is code
+                 and function.__globals__ is vars(origin[0])
+                 and vars(origin[0]).get(name) is function)
+        stages.append(function)
+    return tuple(stages)
+
+
+def _probe_latched_resource_tail(owner, consumer):
+    _require(type(consumer) is _ProbeConsumer)
+    operation = tuple.__getitem__(consumer, 1)
+    _require(type(operation) is _MetadataOperation
+             and type(operation.resource) is _NativeProbeMetadataResource)
+    stages = _probe_stage_functions(owner, operation.resource)
+    _require(stages[1](owner, consumer, rejoin=True) is consumer)
+    return operation.resource
+
+
 def _directory_material_tail(owner, consumer):
     """Import-free original material closure, including constructor-return drift."""
     _require(type(consumer) is _DirectoryConsumer and consumer.owner is owner
@@ -353,7 +423,7 @@ def _undebited_directory_cells_tail(owner, operation):
              and type(operation.result) is _MetadataResult
              and type(operation.operation) is int and operation.operation in (3, 4))
     resource, result = operation.resource, operation.result
-    _require(type(resource) is _NativeMetadataResource
+    _require(type(resource) in (_NativeMetadataResource, _NativeProbeMetadataResource)
              and type(resource.registration) is _NativeScopeRegistration)
     registration = resource.registration
     ledger, phase = registration.native_ledger, registration.native_phase
@@ -729,6 +799,8 @@ def _declared_leaf_source_before_data(snapshot, actor_uid, expected_size):
 
 def _latched_directory_resource_tail(owner, consumer):
     """Original already-latched cohort DATA; not a phase check or work grant."""
+    if type(consumer) is _ProbeConsumer:
+        return _probe_latched_resource_tail(owner, consumer)
     _require(type(consumer) is _DirectoryConsumer and consumer.owner is owner
              and type(consumer.operation) is _MetadataOperation
              and type(consumer.resource) is _NativeMetadataResource
@@ -1942,8 +2014,14 @@ def _run_directory_observation(owner, resource, predecessor=None, baseline=None,
     producer_started = producer_unwound = complete = retired = False
     # Retain these fixed function references across preparation callbacks. This
     # is not a caller-selected dispatcher or a new admission surface.
-    produce, consume, acknowledge = (
-        _produce_directory_metadata, _consume_directory_policy, _ack_directory_policy)
+    prepare, latch, produce, consume, acknowledge, retired_tail = (
+        _prepare_directory_consumer, _latch_directory_consumer,
+        _produce_directory_metadata, _consume_directory_policy, _ack_directory_policy,
+        _retired_directory_commit_tail)
+    if type(resource) is _NativeProbeMetadataResource:
+        _require(baseline is None and eof is None)
+        prepare, latch, produce, consume, acknowledge, retired_tail = (
+            _probe_stage_functions(owner, resource))
     try:
         # Reject a foreign actor before allocating/latching caller-owned custody.
         # This is eligibility only: the producer still samples the actor at its
@@ -1969,11 +2047,11 @@ def _run_directory_observation(owner, resource, predecessor=None, baseline=None,
         held_link, held_slot = marker.owner_link, marker.marker_slot
         held_state, held_reference = marker.state, marker.reference
         custody = (origin, marker, held_link, held_slot, held_state, held_reference)
-        consumer = _prepare_directory_consumer(owner, operation, predecessor, baseline, eof, custody)
+        consumer = prepare(owner, operation, predecessor, baseline, eof, custody)
         _require(consumer.predecessor is predecessor
              and consumer.baseline is baseline and consumer.eof is eof
              and consumer.custody is custody)
-        _require(_latch_directory_consumer(owner, consumer) is consumer
+        _require(latch(owner, consumer) is consumer
                  and consumer.predecessor is predecessor
                  and consumer.baseline is baseline and consumer.eof is eof
              and consumer.custody is custody)
@@ -2115,7 +2193,7 @@ def _run_directory_observation(owner, resource, predecessor=None, baseline=None,
             _native_actor_context(native.actor_calls, (native.native, native.thread_native),
                                   operation.context)
             _native_post_actor_state(owner, actor_state, actor_arguments)
-            _require(_retired_directory_commit_tail(
+            _require(retired_tail(
                 owner, consumer, commit, origin, marker, record) is commit)
             return commit
         except BaseException:  # noqa: S110 - no raw exceptions or retry on disposal drift
