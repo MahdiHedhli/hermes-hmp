@@ -1974,33 +1974,37 @@ class HmpServer:
         The adapter owns record creation. This method never creates a directory,
         changes a permission, retries a generation or falls back to HTTP/native IPC.
         """
-        if self._at1_attempted or self._stop_owner is not None:
+        if (self._at1_attempted or self._start_fenced
+                or self.ctx is not self._operator_origin_ctx):
             return
         self._at1_attempted = True
-        if (self.bound is None or self.ctx.bridge is None or self._at1_owners is None
-                or not self.ctx.is_approvals_available() or not self.ctx.direct_send_effective()):
+        ctx = self._operator_origin_ctx
+        if (self.bound is None or ctx.bridge is None or self._at1_owners is None
+                or not ctx.is_approvals_available() or not ctx.direct_send_effective()):
             return
         service = None
         endpoint = None
         try:
-            generation = approval_test_host_codec.HostGeneration(self.ctx.iid, os.getpid(), nonce)
+            generation = approval_test_host_codec.HostGeneration(ctx.iid, os.getpid(), nonce)
             modules = (_AT1_SERVER_MODULE, approval_test_authority, approval_test_service,
                        approval_test_producer, approval_test_host_codec,
                        approval_test_host_transport, approval_test_routes,
                        sys.modules[ServerContext.__module__],
-                       sys.modules[type(self.ctx.bridge).__module__], *self._at1_owners)
-            factory, native_current = self.ctx.bridge.approval_test_producer_factory(
+                       sys.modules[type(ctx.bridge).__module__], *self._at1_owners)
+            factory, native_current = ctx.bridge.approval_test_producer_factory(
                 asyncio.get_running_loop()
             )
 
             def current() -> bool:
                 try:
                     valid = (
-                        self._at1_live and self._stop_owner is None
-                        and self.ctx.approval_test_service is service
-                        and self.ctx.approval_test_generation is generation
-                        and generation.pid == os.getpid() and generation.iid == self.ctx.iid
-                        and self.ctx.identity.still_current() is True
+                        self._at1_live and not self._start_fenced
+                        and self.ctx is ctx
+                        and self._at1_service is service
+                        and ctx.approval_test_service is service
+                        and ctx.approval_test_generation is generation
+                        and generation.pid == os.getpid() and generation.iid == ctx.iid
+                        and ctx.identity.still_current() is True
                         and all(sys.modules.get(module.__name__) is module for module in modules)
                         and native_current() is True
                     )
@@ -2012,14 +2016,14 @@ class HmpServer:
                 return valid
 
             service = approval_test_service.ApprovalTestService(
-                self.ctx, generation, generation_current=current,
+                ctx, generation, generation_current=current,
                 approvals_gate=_require_approvals_gate, producer_factory=factory,
                 native_current=native_current,
             )
             self._at1_service = service
-            self.ctx.approval_test_generation = generation
-            self.ctx.approval_test_service = service
-            self.ctx.approval_test_current = current
+            ctx.approval_test_generation = generation
+            ctx.approval_test_service = service
+            ctx.approval_test_current = current
             endpoint = approval_test_host_transport.HostIpcEndpoint(record, generation, service)
             self._at1_endpoint = endpoint
             self._at1_live = True
