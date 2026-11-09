@@ -37,3 +37,26 @@ before/after-detach interruption, existing plan and resource checks. Constructed
 fixtures prove only their stated scope. Full multi-site history, concurrency,
 revocation, remaining operations, runtime/service and physical acceptance remain
 required.
+
+## November 9 — literal predecessor return correction
+
+Historical consistency alone did not prove the prior returned receipt: the old
+preparation selected its predecessor from the current history list. A coherent
+copy in history, prior consumer commit and prior result ACK passed that check;
+the isolated causal control reached one leaf stat/ACK while the incomplete
+walker still refused completion. Do not treat earlier isolated-mirror tests as
+proof against this case.
+
+The fixed caller now carries its literal previous observation return into the
+next preparation. Ordinal zero requires None; every later ordinal requires the
+exact supplied commit in the original history slot. The same held object is
+rejoined after callbacks, consumer construction/publication and latch. Current
+mirrors confirm this anchor; they cannot nominate its replacement. No matching
+copied tuple or reconstructed chain substitutes for the actual caller return.
+
+Runtime source db91522 and test successor a09eeda pass the four causal cases on
+both supported interpreters, unchanged source. Broader regression is pending.
+The shared engine now supports only the original directory and leaf-before
+roles, with literal no-follow stat for the latter. Same-result timestamp DATA
+does not activate source-effect conversion or complete the walker. Actual
+leaf-opened/post-EOF/ancestor predecessor and baseline joins remain required.
