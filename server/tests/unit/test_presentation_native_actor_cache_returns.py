@@ -21,7 +21,7 @@ from hmp_plugin import presentation_startup_artifacts as artifacts
 from hmp_plugin import presentation_native_metadata as metadata
 producer=PRODUCER
 admission=ADMISSION
-native_calls=[];changed=[];foreign_calls=[];restore=[]
+native_calls=[];changed=[];foreign_calls=[];restore=[];actor_budgets=[]
 def foreign(*args,**kwargs):
     foreign_calls.append(True);raise AssertionError('foreign file function')
 def native_observed(frame):
@@ -35,6 +35,7 @@ def actor_profile(frame,event,arg):
     if caller.f_code is not admission.__code__ or caller.f_locals.get('owner') is not owner:return
     registration=caller.f_locals['operation'].registration
     if changed or arg is not registration.native_origin.actor_calls[2] or CHANGE=='normal':return
+    actor_budgets.append((tuple(registration.native_ledger.counts),len(registration.native_ledger.attempts)))
     if CHANGE=='registration':owner._native_scope_registration=registration._replace()
     else:restore.append(MODULE.os.NATIVE);MODULE.os.NATIVE=foreign
     changed.append(True)
@@ -48,7 +49,13 @@ finally:
     if restore:MODULE.os.NATIVE=restore[0]
 assert not foreign_calls
 assert all(row.close_attempted and row.closed for row in owner._origin.records)
-if CHANGE!='normal':assert owner._bytes_read==0
+if CHANGE!='normal':
+    assert owner._bytes_read==0 and len(actor_budgets)==1
+    ledger=owner._origin.native_registration_slot[0].native_ledger
+    used_reserved,attempts=actor_budgets[0]
+    closed=len(owner._origin.records)
+    assert ledger.counts==[used_reserved[0]+closed,used_reserved[1]-closed]
+    assert len(ledger.attempts)==attempts and ledger.failed==[True]
 print(json.dumps({'mutation':mutation,'runtime_admitted':False}))
 raise SystemExit(0)
 '''

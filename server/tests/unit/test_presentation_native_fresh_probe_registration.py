@@ -17,7 +17,7 @@ from hmp_startup import probe_native as engine
 record=owner._origin.native_registration_slot[0]
 actual_owned=RuntimeCacheProbeOwner._observe_owned
 actual_walk=pm._native_walk_scope
-calls=[];changed=[];argument_refusals=[]
+calls=[];changed=[];argument_refusals=[];supplied_budgets=[]
 def replace_record():
     copied=record._replace()
     owner._origin.native_registration_slot[0]=copied
@@ -39,10 +39,11 @@ if CHANGE in ('copied','missing'):
         if frame.f_locals['self'] is owner and not argument_refusals:
             argument=record._replace() if CHANGE=='copied' else None
             calls.append('supplied')
+            supplied_budgets.append((tuple(record.native_ledger.counts),len(record.native_ledger.attempts)))
             try:actual_owned(owner,frame.f_locals['s'],frame.f_locals['selected'],
                              frame.f_locals['path'],frame.f_locals['proof'],argument,
                              frame.f_locals['root'],frame.f_locals['cell'],frame.f_locals['count'])
-            except BaseException:argument_refusals.append(True)
+            except BaseException as error:argument_refusals.append(type(error) is metadata.ArtifactObservationError)
             else:argument_refusals.append(False)
             raise RuntimeError('SYNTHETIC_SUPPLIED_REGISTRATION_REFUSAL_ONLY')
     trace_synthetic_boundary(RuntimeCacheProbeOwner.observe.__code__,
@@ -54,6 +55,7 @@ if CHANGE=='stat':
             assert operation.registration is record
             forged=consumer._replace(operation=operation._replace(registration=record._replace()))
             calls.append('stat_prepare')
+            supplied_budgets.append((tuple(record.native_ledger.counts),len(record.native_ledger.attempts)))
             try:metadata._probe_current_lifetime_tail(owner,forged)
             except BaseException as error:argument_refusals.append(type(error) is metadata.ArtifactObservationError)
             else:argument_refusals.append(False)
@@ -84,7 +86,9 @@ try:
         assert owner._fact is None and pm._FACT is None
         assert owner._origin.activation._runtime_cache_probe_fact is None
         if CHANGE in ('copied','missing','actor','stat'):assert owner._origin.records==[]
-        if CHANGE in ('copied','missing','stat'):assert argument_refusals==[True]
+        if CHANGE in ('copied','missing','stat'):
+            assert argument_refusals==[True] and 'stat' not in calls
+            assert supplied_budgets==[(tuple(record.native_ledger.counts),len(record.native_ledger.attempts))]
         if CHANGE in ('actor','tail'):assert changed==[True]
     else:
         assert CHANGE=='normal' and result is owner and owner._ready
