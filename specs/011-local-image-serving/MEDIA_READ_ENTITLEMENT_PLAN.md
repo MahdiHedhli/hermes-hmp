@@ -440,3 +440,19 @@ open. No new deployment: both hosts retain `5ecd2ba`; bot characters and host-lo
 images are still unfinished. The broader feature goal stays active.
 
 Next: qualify auxiliary service publication and partial adapter recovery; do not activate media before the remaining authority, borrower and migration gates are resolved.
+
+
+## MR-START2c operator-read startup ownership
+
+MR-START2c source `c5222b6` retains the optional operator-read service before
+startup, gives startup one shielded actual task, and joins that task before teardown.
+Caller cancellation cannot abandon the service; unknown task-publication acknowledgement
+cannot retry startup or certify cleanup. Original-service replacement is refused before
+any foreign service is stopped. Five new synthetic cases cover cancellation, startup
+failure, pre/post-enqueue return loss and replacement. Both pinned Python runtimes pass
+380 selected tests with unchanged source and zero failures/errors/skips. This is not
+independent/full-native review or device qualification. Approval/push auxiliary startup,
+partial adapter recovery, all Store borrowers, migration and native media authority
+remain open. No deployment or media opt-in change; images/characters remain unfinished.
+
+Next: qualify approval/push auxiliary publication and recover partial adapter listeners only after actual original-scope cleanup; preserve all remaining borrower, native authority and release gates.

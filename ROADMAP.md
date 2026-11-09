@@ -1,5 +1,16 @@
 ## November 9 — shutdown ownership checks pass; media integration remains open
 
+MR-START2c source `c5222b6` retains the optional operator-read service before
+startup, gives startup one shielded actual task, and joins that task before teardown.
+Caller cancellation cannot abandon the service; unknown task-publication acknowledgement
+cannot retry startup or certify cleanup. Original-service replacement is refused before
+any foreign service is stopped. Five new synthetic cases cover cancellation, startup
+failure, pre/post-enqueue return loss and replacement. Both pinned Python runtimes pass
+380 selected tests with unchanged source and zero failures/errors/skips. This is not
+independent/full-native review or device qualification. Approval/push auxiliary startup,
+partial adapter recovery, all Store borrowers, migration and native media authority
+remain open. No deployment or media opt-in change; images/characters remain unfinished.
+
 MR-START2b2 source `3eee7d2` adds one retained shutdown attempt and checks the
 original context/resource cohort after cleanup waits. Lost task-creation acknowledgement
 cannot replay cleanup or certify Store drain. Three synthetic substitution cases verify
