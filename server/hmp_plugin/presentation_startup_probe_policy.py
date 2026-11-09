@@ -47,7 +47,8 @@ _ACTIONS = ('root_open', 'root_fstat', 'component_stat', 'component_open',
 
 
 def _new_policy(path, actor_uid):
-    _need(type(path) is str and type(actor_uid) is int and actor_uid >= 0
+    _need(type(path) is str and 1 < len(path) <= 4096
+          and type(actor_uid) is int and actor_uid >= 0
           and path.startswith('/')
           and all(32 <= ord(char) != 127 and not 0xD800 <= ord(char) <= 0xDFFF
                   for char in path)
@@ -60,9 +61,11 @@ def _new_policy(path, actor_uid):
 
 def _policy_tail(policy):
     _need(type(policy) is _StartupPathPolicy and type(policy.path) is str
+          and 1 < len(policy.path) <= 4096
           and type(policy.actor_uid) is int and policy.actor_uid >= 0
           and type(policy.components) is tuple and 2 <= len(policy.components) <= 65
           and all(type(part) is str for part in policy.components)
+          and sum(len(part) for part in policy.components) <= 4096
           and policy.components[0] == '/'
           and all(part not in ('', '.', '..') and '/' not in part
                   for part in policy.components[1:])

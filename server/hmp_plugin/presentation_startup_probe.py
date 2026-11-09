@@ -708,8 +708,11 @@ class _StartupPlan(NamedTuple):
     previous: object
 
 
-def _path_rows(path, context):
-    selected = policy._new_policy(path, context[1])
+def _path_rows(selected, context):
+    # Original components were retained before Scope. Allocate only this active
+    # path's bounded possible sites, not O(paths * components squared) at retain.
+    policy._policy_tail(selected)
+    _require(selected.actor_uid == context[1])
     keys = [('root_fstat', 0, 0)]
     for component in range(1, len(selected.components)):
         keys.append(('component_stat', component, 0))
@@ -772,19 +775,10 @@ def _blueprint_tail(blueprint):
              and source.plan.pending is expected and source.paths is paths
              and type(paths) is tuple and type(rows) is tuple and len(rows) == len(paths)
              and type(blueprint[7]) is tuple)
-    for path, row in zip(paths, rows, strict=True):
-        _require(type(path) is str and type(row) is tuple and len(row) == 3
-                 and type(row[0]) is policy._StartupPathPolicy and row[0].path is path
-                 and row[0].actor_uid == context[1]
-                 and type(row[1]) is tuple and type(row[2]) is tuple
-                 and len(row[1]) == len(row[2]) <= 8321)
-        policy._policy_tail(row[0])
-        for key, definition in zip(row[1], row[2], strict=True):
-            _require(type(key) is tuple and len(key) == 3 and type(key[0]) is str
-                     and type(key[1]) is int and type(key[2]) is int
-                     and type(definition) is tuple and len(definition) == 3
-                     and type(definition[0]) is int and definition[0] in (3, 4)
-                     and definition[1] is key[0] and type(definition[2]) is int)
+    for path, selected in zip(paths, rows, strict=True):
+        _require(type(path) is str and type(selected) is policy._StartupPathPolicy
+                 and selected.path is path and selected.actor_uid == context[1])
+        policy._policy_tail(selected)
     _engine_origin_tail(blueprint[7])
     return blueprint
 
@@ -824,7 +818,7 @@ def _new_startup_probe_origin(owner, source, context, expected):
                        for name in ('source_current', 'owned_current', '_missing_shape',
                                     '_probe', 'observe_pass', 'seal'))
     engine_origin = _new_probe_engine_origin()
-    rows = tuple(_path_rows(path, context) for path in paths)
+    rows = tuple(policy._new_policy(path, context[1]) for path in paths)
     blueprint = (owner, source, context, expected, paths, rows, policy_pins,
                  engine_origin, kinds, cache_pins)
     _blueprint_tail(blueprint)
@@ -867,7 +861,11 @@ def _new_startup_plan(source, owner, phase, index, effect, previous, registratio
              and type(phase) is int and phase in (0, 1) and type(index) is int
              and 0 <= index < len(blueprint[4])
              and vars(owner).get('_startup_probe_execution') is None)
-    selected, keys, definitions = blueprint[5][index]
+    original_policy = blueprint[5][index]
+    selected, keys, definitions = _path_rows(original_policy, blueprint[2])
+    _blueprint_tail(blueprint)
+    _require(selected is original_policy and type(keys) is tuple and type(definitions) is tuple
+             and len(keys) == len(definitions) <= 8321)
     variants = tuple(_StartupSite(owner, source, phase, index, site, ordinal)
                      for ordinal, site in enumerate(definitions))
     values = (owner, source, phase, index, selected, selected.components, definitions,
@@ -899,9 +897,9 @@ def _startup_plan_tail(plan, registration):
              and scope.cache is plan.source and scope.context is plan.blueprint[2]
              and scope.expected is plan.blueprint[3]
              and registration.root is plan.root and registration.cell is plan.cell
-             and plan.policy is plan.blueprint[5][plan.index][0]
-             and plan.keys is plan.blueprint[5][plan.index][1]
-             and plan.definitions is plan.blueprint[5][plan.index][2]
+             and plan.policy is plan.blueprint[5][plan.index]
+             and type(plan.keys) is tuple and type(plan.definitions) is tuple
+             and len(plan.keys) == len(plan.definitions) == len(plan.variants) <= 8321
              and plan.components is plan.policy.components
              and len(plan.source.effects) == plan.phase*len(plan.source.paths)+plan.index+1)
     if plan.phase == 0:
