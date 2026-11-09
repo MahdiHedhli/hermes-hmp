@@ -214,3 +214,28 @@ Unknown acquisition can conservatively block drain indefinitely despite no actua
 SQL; that is an unresolved lifecycle condition, not permission to close the Store.
 CLI consent/client, listener lifecycle integration, native/config/cross-process
 publication, migration/rollback and device/release qualification remain open.
+
+## Verified one-exchange host client — 3503b48
+
+The new unwired client uses only the fixed media-operator.sock under a verified
+private held parent, validates peer UID and repeated parent/socket identity, and
+requires a closed challenge matching the exact IID/nonce/generation. Its absolute
+local two-second deadline also bounds the accepted server expiry. It makes one
+send only, marking the outcome potentially submitted BEFORE sendall; truncated,
+malformed or missing reply, late binding/deadline drift or close failure thereafter
+is Unknown with no retry or direct Store fallback. A pre-send rejection reports
+that no decision was submitted. Filesystem syscalls are not proven nonblocking.
+
+Caller-verified live TLS/listener identity and fresh exact typed consent remain
+mandatory and are not implemented by the transport function. The CLI still uses
+its earlier direct Store mutation path; replacing that path and installing the
+service require separate coordinated lifecycle work, not an implicit fallback.
+Independent read-only review found no concrete blocker within this unwired client.
+
+Both35-case focused suites pass (23 service plus12 client cases). Real socket/Store
+commit and stale snapshot conflict, wrong peer, pre-send binding change, postreply
+binding/decode loss and malformed/wrong/expired server challenge are covered. The
+initial current run failed7 cleanup cases because newer asyncio removes its Unix
+socket on close; the fixture correction retains missing-ok cleanup for the older
+runtime, without relaxing protocol assertions. The initial failed receipt remains
+unqualified. No host activation, live permission change or phone display is claimed.
