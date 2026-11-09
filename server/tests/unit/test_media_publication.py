@@ -103,3 +103,18 @@ def test_invalidation_releases_retained_dependency_cohort():
     gc.collect(); assert ref() is None
     assert not owner.claim_once(ticket, SCOPE, (object(), object(), object()))
     owner.settle_mutation(mutation, certain=True)
+
+
+@pytest.mark.parametrize('certain', (True, False))
+def test_interrupted_settlement_retains_pending_barrier(monkeypatch, certain):
+    owner = m.MediaPublication(); cohort = (object(), object(), object())
+    mutation = owner.begin_mutation()
+    original = owner._advance
+    def interrupted():
+        original()
+        raise KeyboardInterrupt('synthetic settlement interruption')
+    monkeypatch.setattr(owner, '_advance', interrupted)
+    with pytest.raises(KeyboardInterrupt): owner.settle_mutation(mutation, certain=certain)
+    with pytest.raises(m.PublicationUnavailable): owner.candidate(SCOPE, cohort)
+    assert mutation in owner._pending
+    if not certain: assert owner._poisoned

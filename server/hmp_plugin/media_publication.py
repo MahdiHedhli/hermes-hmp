@@ -64,14 +64,14 @@ class MediaPublication:
     contract is implemented. Thread rejection cannot replace an RPC handshake.
     """
     def __init__(self) -> None:
-        self._thread = threading.get_ident()
+        self._thread = threading.current_thread()
         self._epoch = 0
         self._poisoned = False
         self._pending: dict[MutationTicket, None] = {}
         self._candidates: dict[PublicationTicket, tuple[int, int, tuple, tuple]] = {}
 
     def _owner(self) -> None:
-        if threading.get_ident() != self._thread:
+        if threading.current_thread() is not self._thread:
             raise PublicationUnavailable()
 
     def _advance(self) -> None:
@@ -97,11 +97,14 @@ class MediaPublication:
             raise PublicationUnavailable()
         if type(certain) is not bool:
             raise PublicationUnavailable()
-        del self._pending[ticket]
-        self._advance()  # commit AND definite rollback invalidate old candidates
         if not certain:
-            self._poisoned = True  # lost acknowledgement is not an automatic retry
+            # Poison BEFORE any transition can release the pending mutation.
+            self._poisoned = True
+            self._candidates.clear()
+        self._advance()  # pending remains closed across interrupted advancement
+        del self._pending[ticket]  # last: only a settled result releases this barrier
 
+    # Create BEFORE worker sampling begins, never after a completed authority read.
     def candidate(self, scope: tuple[str, str, str, int], cohort: tuple) -> PublicationTicket:
         self._owner()
         scope = _scope(scope)
