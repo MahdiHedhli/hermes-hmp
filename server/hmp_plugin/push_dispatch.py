@@ -157,6 +157,7 @@ class PushDispatcher:
         self.half_open = False
         self.store = ctx.prompt_store
         self._origin_ctx, self._origin_relay = ctx, relay
+        self._origin_store, self._origin_hints = self.store, ctx.push_hints
         self._owned_tasks: dict[object, tuple[object, object, asyncio.Task | None]] = {}
         self._close_attempted = False
         self._close_owner: asyncio.Task | None = None
@@ -571,7 +572,9 @@ class PushDispatcher:
 
     def _retirement_scope(self):
         if (self.ctx is not self._origin_ctx or self.relay is not self._origin_relay
-                or self.ctx.prompt_store is not self.store):
+                or self.store is not self._origin_store
+                or self.ctx.prompt_store is not self._origin_store
+                or self.ctx.push_hints is not self._origin_hints):
             raise RuntimeError("push retirement scope changed")
 
     @property

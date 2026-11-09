@@ -1038,3 +1038,22 @@ def test_known_push_task_cancelled_before_wrapper_entry_retires_original_corouti
         await dispatcher.wait_drained()
 
     run(env, scenario)
+
+
+def test_push_drain_rejects_coordinated_store_alias_replacement(env):
+    async def scenario(client):
+        _, _, _, _, dispatcher, _, _ = await prepare(env, client)
+        await dispatcher.close()
+        original = dispatcher.store
+        replacement = object()
+        env.ctx.prompt_store = replacement
+        dispatcher.store = replacement
+        try:
+            with pytest.raises(RuntimeError, match="scope changed"):
+                await dispatcher.wait_drained()
+        finally:
+            env.ctx.prompt_store = original
+            dispatcher.store = original
+        await dispatcher.wait_drained()
+
+    run(env, scenario)
