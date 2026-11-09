@@ -324,7 +324,8 @@ async def serve(request: web.Request) -> web.StreamResponse:
     """`GET /hmp/v1/bots/{p}/media/{ref}`. See the module docstring for the order."""
     who = bearer(request)  # 1
     ctx = context(request)
-    if not ctx.is_approval_owner_device(who.device_id):  # 2: before the gate
+    permission = ctx.media_read_permission(who.device_id)
+    if permission is None or permission.user_id != who.user_id:  # 2: before the gate
         raise _not_found()
     if _shaped_badly(request):  # 3
         raise HmpError(ErrorCode.BAD_REQUEST)
@@ -335,12 +336,16 @@ async def serve(request: web.Request) -> web.StreamResponse:
         raise HmpError(ErrorCode.MEDIA_UNAVAILABLE)
     # 5: the initial per-bot grant, ERR-3 unchanged, on the shared default executor.
     await asyncio.to_thread(require_bot_authorized, bridge, who.user_id, profile)
+    if not ctx.media_read_current(permission):
+        raise _not_found()
     service = request.app.get(MEDIA_SERVICE_KEY)
     bound = ctx.media_snapshot() if ctx.media_enabled() else None  # 6
     if bound is None or not _service_ok(service, bound):
         raise HmpError(ErrorCode.MEDIA_UNAVAILABLE)
     try:  # 7
-        caller = bound.registry_module.Caller(who.device_id, who.user_id, ctx.iid, profile)
+        caller = bound.registry_module.Caller(
+            who.device_id, who.user_id, ctx.iid, profile, permission.generation
+        )
         entry = bound.registry.lookup(ref, caller)
     except Exception:
         entry = None
@@ -370,6 +375,8 @@ async def serve(request: web.Request) -> web.StreamResponse:
         payload = lease.take()
         if payload is None:
             raise _not_found()
+        if not ctx.media_read_current(permission):
+            raise _not_found()
         status, future = lease.start(
             lambda: bridge.media_fetch_phase_two(binding, chain, registry_module), None
         )
@@ -379,7 +386,9 @@ async def serve(request: web.Request) -> web.StreamResponse:
             log_event(_LOG_EVENT, outcome="phase_two_refused")
             raise _not_found()
         # LM-12: from here to `prepare` there is no await, native call, file read or import.
-        response = _final_section(request, ctx, who, bound, service, ref, caller, entry, payload)
+        response = _final_section(
+            request, ctx, who, bound, service, ref, caller, entry, payload, permission
+        )
         return await _stream(request, response, payload)
     finally:
         payload = None
@@ -396,6 +405,7 @@ def _final_section(
     caller: Any,
     entry: Any,
     payload: Any,
+    permission: Any = None,
 ) -> web.StreamResponse:
     """Synchronous. The fresh bearer (existing `401` codes), owner, flag, availability snapshot,
     bound service, live registry entry and first-served CAS; any failure is `404`.
@@ -407,7 +417,8 @@ def _final_section(
         again = bearer(request)
         if again.device_id != who.device_id or again.user_id != who.user_id:
             raise _not_found()
-        if not ctx.is_approval_owner_device(again.device_id) or not ctx.media_enabled():
+        if (not ctx.media_read_current(permission) or permission.user_id != again.user_id
+                or not ctx.media_enabled()):
             raise _not_found()
         final = ctx.media_snapshot()
         if final is None or not final.same_as(bound):

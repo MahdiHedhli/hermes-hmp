@@ -61,6 +61,7 @@ from .contract import (
     WriteGateState,
 )
 from .logging_policy import log_bridge_exception, log_event
+from .media_permissions import MediaReadDecision
 from .prompts import (
     DesktopOwnershipPort,
     MemberState,
@@ -481,6 +482,34 @@ class ServerContext:
             if self.store.owner_controls_decision(device_id) is False:
                 return False
             return device_id in self.owner_device_ids()
+        except Exception as exc:
+            log_bridge_exception(exc)
+            return False
+
+    def media_read_permission(self, device_id: str) -> MediaReadDecision | None:
+        """Independent media right; missing decisions keep the existing owner-only policy."""
+        try:
+            decision = self.store.media_read_decision(self.iid, device_id)
+            if type(decision) is not MediaReadDecision:
+                return None
+            decision.validate()
+            if decision.allowed is False:
+                return None
+            if decision.allowed is None and (
+                decision.fallback_controls is False or device_id not in self.owner_device_ids()
+            ):
+                return None
+            return decision
+        except Exception as exc:
+            log_bridge_exception(exc)
+            return None
+
+    def media_read_current(self, decision: MediaReadDecision) -> bool:
+        try:
+            if type(decision) is not MediaReadDecision:
+                return False
+            decision.validate()
+            return self.media_read_permission(decision.device_id) == decision
         except Exception as exc:
             log_bridge_exception(exc)
             return False
