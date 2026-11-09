@@ -1,5 +1,13 @@
 ## November 8 — reviewed host updates deployed; character integration remains open
 
+Media-readiness causal tests at `d41750f` now revoke media rights or bot access,
+change listener generation, or change host opt-in inside a sampled callback.
+All discard the snapshot without a media DTO or unrelated controls changes.
+Both expanded 81-case suites pass with zero failures/errors/skips on Python
+3.14.9 and 3.11.15, unchanged source. These are callback-drift proofs, not final
+post-worker delivery/revocation qualification. Final delivery-fence review,
+mobile wiring, route contract/capability negotiation and physical testing remain.
+
 Media readiness source `701783e` now adds an authenticated, per-bot read-only
 `GET /bots/{p}/media-readiness` route with separate rights/host/API axes and
 no image-existence probe. Both 77-case readiness suites pass (Python 3.14.9
