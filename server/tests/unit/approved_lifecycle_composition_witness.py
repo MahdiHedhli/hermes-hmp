@@ -1028,3 +1028,8 @@ def reverse_current_lifecycle_server(source):
 
 def reverse_registry_permission_generation(source):
     return _reverse(source, REGISTRY_EDITS)
+
+
+def read_witness_source(path):
+    """Keep exact UTF-8 bytes: universal-newline text reads weaken byte fences."""
+    return path.read_bytes().decode("utf-8")

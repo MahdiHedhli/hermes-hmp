@@ -57,14 +57,14 @@ from hmp_plugin import request_ctx as real_request_ctx
 
 from .approved_at1_adapter_witness import reverse_approved_at1_adapter
 from .approved_lifecycle_composition_witness import (
-    reverse_current_lifecycle_adapter, reverse_current_lifecycle_server,
+    reverse_current_lifecycle_adapter, reverse_current_lifecycle_server, read_witness_source,
 )
 from .approved_push_bridge_witness import reverse_approved_push_diagnostics
 from .approved_readiness_composition_witness import reverse_readiness_adapter
 from .media_binding_world import LEGACY_ANCHOR, MEDIA_STEMS, PACKAGE, World
 
 TEST_LATCH = "_m3_test_process_latch"  # used only by the mutant that re-adds a process latch
-READ_SRC = {p.name: p.read_text(encoding="utf-8") for p in PACKAGE.glob("*.py")}
+READ_SRC = {p.name: read_witness_source(p) for p in PACKAGE.glob("*.py")}
 
 
 @pytest.fixture(autouse=True)
