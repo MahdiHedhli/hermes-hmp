@@ -69,3 +69,54 @@ def test_foreign_expected_and_mismatched_device_cannot_encode():
     with pytest.raises(MediaOperatorProtocolError):
         MediaReadMutation(value.iid, value.nonce, value.generation, value.attempt,
                           value.device_id, Foreign(), True).encode()
+
+
+from hmp_plugin.media_operator_protocol import encode_reply, decode_reply
+
+
+def committed(value):
+    return value.expected._replace(allowed=value.allowed, revision=value.expected.revision+1,
+                                   fallback_controls=None, fallback_revision=None)
+
+
+@pytest.mark.parametrize('status', ('committed', 'conflict', 'refused', 'unknown'))
+def test_reply_roundtrip_is_original_attempt_bound_and_redacted(status):
+    value = request()
+    decision = committed(value) if status == 'committed' else None
+    reply = decode_reply(encode_reply(value, status, decision), request=value)
+    assert reply.status == status and reply.decision == decision
+    assert repr(reply) == '<MediaOperatorReply redacted>'
+
+
+@pytest.mark.parametrize('field', ('iid', 'nonce', 'generation', 'attempt', 'device_id'))
+def test_reply_from_another_request_or_listener_is_rejected(field):
+    value = request(); body = json.loads(encode_reply(value, 'committed', committed(value)))
+    body[field] = 'other'
+    with pytest.raises(MediaOperatorProtocolError): decode_reply(json.dumps(body).encode(), request=value)
+
+
+@pytest.mark.parametrize('field,bad', [('user_id', 'other'), ('allowed', False),
+    ('revision', '0'), ('revision', '2'), ('instance_epoch', '1'), ('revocation_epoch', '1'),
+    ('fallback_controls', False), ('revision', 1)])
+def test_claimed_commit_must_match_exact_authoritative_transition(field, bad):
+    value = request(); body = json.loads(encode_reply(value, 'committed', committed(value)))
+    body['decision'][field] = bad
+    with pytest.raises(MediaOperatorProtocolError): decode_reply(json.dumps(body).encode(), request=value)
+
+
+@pytest.mark.parametrize('status', ('conflict', 'refused', 'unknown'))
+def test_noncommit_reply_cannot_carry_a_grant(status):
+    value = request()
+    with pytest.raises(MediaOperatorProtocolError): encode_reply(value, status, committed(value))
+
+
+@pytest.mark.parametrize('raw', [b'', b'not json', b'{}', b' ' * 2049])
+def test_missing_or_malformed_ack_is_not_decoded_as_refused_or_success(raw):
+    with pytest.raises(MediaOperatorProtocolError): decode_reply(raw, request=request())
+
+
+def test_reply_preserves_large_counter_without_json_number_rounding():
+    value = request(explicit=True, maximum=True)
+    # The exhausted revision cannot have a committed successor.
+    with pytest.raises(MediaOperatorProtocolError): encode_reply(value, 'committed', committed(value))
+    assert decode_reply(encode_reply(value, 'unknown'), request=value).status == 'unknown'
