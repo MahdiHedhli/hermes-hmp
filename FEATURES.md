@@ -1,5 +1,14 @@
 ## November 8 — reviewed host updates deployed; character integration remains open
 
+LM-ENT1-P2 source `22e5a58` prepares an UNWIRED listener-thread publication
+currency state machine: bounded single-use request/cohort tickets, invalidation
+before mutation, nested pending barriers and sticky uncertain outcomes. Independent
+review found a partial-settlement gap; source now poisons before releasing pending
+and retains the barrier across interrupted advancement. Fourteen tests pass on each
+Python version. Re-review and more interruption coverage remain pending. This
+helper supplies no authentication or writer-coverage proof and does not fix P1
+until Store/operator/native/config mutations participate. No live behavior changed.
+
 Measured open blocker LM-ENT1-P1: an isolated synthetic150ms delay in a final
 main-thread media settings callback causes151.5ms event-loop heartbeat latency
 (baseline5.7ms) on exact f7f5084; source unchanged. This confirms the documented

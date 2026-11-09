@@ -197,3 +197,8 @@ P2 is necessary preparation, not sufficient completion. Final authorization cann
 be relabeled an observation or replaced by stale cached grants. The new source
 route remains undeployed until the conjunction of mutation sources is justified;
 existing deployed features/rights are not disabled or changed.
+
+P2 preparation22e5a58 is an unwired currency primitive, not authorization.14cases
+pass on both interpreters. Initial review interruption finding has a source repair;
+re-review/line-return fault coverage and all writer coordination remain open.
+Candidate must be minted BEFORE worker sampling begins and held through claim.
