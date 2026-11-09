@@ -256,7 +256,8 @@ def _resource(execution, predecessor):
 
 
 def _consumer_tail(consumer, predecessor):
-    _require(type(consumer) is _ProbeConsumer)
+    _require(type(consumer) is _ProbeConsumer
+             and type(consumer.operation) is metadata._MetadataOperation)
     execution, operation = consumer.execution, consumer.operation
     _history_tail(execution, predecessor)
     _resource_tail(execution.owner, operation.resource)
