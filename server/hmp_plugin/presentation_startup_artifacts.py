@@ -1611,7 +1611,7 @@ def _close_native_file_known(owner, allocation, fd, original_ledger):
             inflight[0] = None
 
 
-def _native_read_walk_tail(owner, registration, walk, expected, step):
+def _native_read_walk_mirrors_tail(owner, registration, walk, expected, step):
     """Original declared-walk membership; no step construction or file effect."""
     _require(type(registration) is _NativeScopeRegistration and registration.owner is owner
              and type(registration.scope) is _Scope and type(walk) is _NativeDeclaredWalk
@@ -1630,7 +1630,13 @@ def _native_read_walk_tail(owner, registration, walk, expected, step):
              and type(walk.state[0]) is int and walk.state[0] == 1
              and type(walk.read_step) is list and len(walk.read_step) == 1
              and walk.read_step[0] is step)
+    return walk
+
+
+def _native_read_walk_tail(owner, registration, walk, expected, step):
+    walk = _native_read_walk_mirrors_tail(owner, registration, walk, expected, step)
     _native_work_registration_tail(owner, registration)
+    _require(_native_read_walk_mirrors_tail(owner, registration, walk, expected, step) is walk)
     return walk
 
 
@@ -1664,7 +1670,7 @@ def _native_declared_leaf_tail(owner, registration, walk, expected, descriptor):
     return descriptor
 
 
-def _native_read_lifecycle_tail(owner, registration, parents):
+def _native_read_lifecycle_mirrors_tail(owner, registration, parents):
     """Import-free current owner/activation/continuation lifetime closure."""
     _require(type(registration) is _NativeScopeRegistration and registration.owner is owner
              and type(registration.scope) is _Scope
@@ -1691,7 +1697,13 @@ def _native_read_lifecycle_tail(owner, registration, parents):
              and parent.get('_root') is root and parent.get('_source') is source
              and parent.get('_ready') is True and parent.get('_failed') is False
              and parent.get('_retired') is False)
+    return scope
+
+
+def _native_read_lifecycle_tail(owner, registration, parents):
+    scope = _native_read_lifecycle_mirrors_tail(owner, registration, parents)
     _native_work_registration_tail(owner, registration)
+    _require(_native_read_lifecycle_mirrors_tail(owner, registration, parents) is scope)
     return scope
 
 
@@ -1743,6 +1755,7 @@ def _native_cache_read_input_tail(owner, consumer, heads, attempt):
     namespace = vars(step.material_module)
     _require(type(namespace) is dict and len(namespace) <= 4096
              and all(type(key) is str for key in namespace)
+             and type(namespace.get('__name__')) is str
              and type(namespace.get('__name__')) is str
              and namespace.get('__name__') == 'hmp_startup.cache_reader'
              and namespace.get('DeclaredCacheReadOwner') is step.owner_type
@@ -2733,7 +2746,7 @@ def _native_runtime_read_commit_tail(owner, envelope, commit, source_buffer, tok
     return scope
 
 
-def _native_runtime_read_receipt_state_tail(owner, commit, step):
+def _native_runtime_read_receipt_mirrors_tail(owner, commit, step):
     """Held raw-free read receipt, not current-work or EOF admission authority."""
     _require(type(commit) is _NativeRuntimeReadCommit and type(step) is _NativeReadFileStep
              and commit.step is step and step.owner is owner
@@ -2742,8 +2755,18 @@ def _native_runtime_read_receipt_state_tail(owner, commit, step):
              and type(commit.consumer) is _NativeReadConsumer)
     operation, result, consumer = commit.operation, commit.result, commit.consumer
     registration = step.registration
-    _native_read_walk_tail(owner, registration, step.walk, step.expected, step)
-    _native_read_lifecycle_tail(owner, registration, step.parents)
+    _require(type(registration) is _NativeScopeRegistration
+             and type(step.scope) is _Scope and step.scope is registration.scope
+             and type(step.scope.activation) is GatewayActivationOwner
+             and type(consumer.committed) is list and len(consumer.committed) == 1
+             and type(consumer.consumption) is list and len(consumer.consumption) == 1
+             and type(step.progress) is list and len(step.progress) == 4
+             and type(step.progress[0]) is int and type(step.progress[1]) is int
+             and type(step.eof) is list and len(step.eof) == 1
+             and type(step.eof[0]) is bool and type(commit.eof) is bool
+             and type(commit.ordinal) is int and type(commit.remaining) is int
+             and type(commit.count) is tuple and len(commit.count) == 3
+             and type(commit.count[2]) is int)
     _require(operation.owner is owner and operation.registration is registration
              and operation.result is result and operation.consumer is consumer
              and result.consumer is consumer and consumer.file_step is step
@@ -2777,7 +2800,18 @@ def _native_runtime_read_receipt_state_tail(owner, commit, step):
     return commit
 
 
-def _native_cache_read_receipt_state_tail(owner, commit, step):
+def _native_runtime_read_receipt_state_tail(owner, commit, step):
+    _require(type(commit) is _NativeRuntimeReadCommit and type(step) is _NativeReadFileStep
+             and commit.step is step and step.owner is owner
+             and type(commit.operation) is _NativeFileOperation
+             and type(commit.result) is _NativeFileResultClaim
+             and type(commit.consumer) is _NativeReadConsumer)
+    _native_read_walk_tail(owner, step.registration, step.walk, step.expected, step)
+    _native_read_lifecycle_tail(owner, step.registration, step.parents)
+    return _native_runtime_read_receipt_mirrors_tail(owner, commit, step)
+
+
+def _native_cache_read_receipt_mirrors_tail(owner, commit, step):
     """Held raw-free cache receipt; no journal prefixes or new work authority."""
     _require(type(commit) is _NativeCacheReadCommit and type(step) is _NativeReadFileStep
              and commit.step is step and step.owner is owner
@@ -2786,8 +2820,18 @@ def _native_cache_read_receipt_state_tail(owner, commit, step):
              and type(commit.consumer) is _NativeReadConsumer)
     operation, result, consumer = commit.operation, commit.result, commit.consumer
     registration = step.registration
-    _native_read_walk_tail(owner, registration, step.walk, step.expected, step)
-    _native_read_lifecycle_tail(owner, registration, step.parents)
+    _require(type(registration) is _NativeScopeRegistration
+             and type(step.scope) is _Scope and step.scope is registration.scope
+             and type(step.scope.activation) is GatewayActivationOwner
+             and type(consumer.committed) is list and len(consumer.committed) == 1
+             and type(consumer.consumption) is list and len(consumer.consumption) == 1
+             and type(step.progress) is list and len(step.progress) == 4
+             and type(step.progress[0]) is int and type(step.progress[1]) is int
+             and type(step.eof) is list and len(step.eof) == 1
+             and type(step.eof[0]) is bool and type(commit.eof) is bool
+             and type(commit.ordinal) is int and type(commit.remaining) is int
+             and type(commit.count) is tuple and len(commit.count) == 3
+             and type(commit.count[2]) is int)
     _require(operation.owner is owner and operation.registration is registration
              and operation.result is result and operation.consumer is consumer
              and result.consumer is consumer and consumer.file_step is step
@@ -2818,6 +2862,7 @@ def _native_cache_read_receipt_state_tail(owner, commit, step):
              and all(type(value) is int for value in ledger.counts)
              and type(operation.budget[3]) is int)
     _native_read_accumulator_tail(owner, step, commit.count)
+    _require(type(step.material_module) is ModuleType)
     namespace, own = vars(step.material_module), vars(owner)
     _require(type(namespace) is dict and len(namespace) <= 4096
              and all(type(key) is str for key in namespace)
@@ -2848,6 +2893,17 @@ def _native_cache_read_receipt_state_tail(owner, commit, step):
     return commit
 
 
+
+
+def _native_cache_read_receipt_state_tail(owner, commit, step):
+    _require(type(commit) is _NativeCacheReadCommit and type(step) is _NativeReadFileStep
+             and commit.step is step and step.owner is owner
+             and type(commit.operation) is _NativeFileOperation
+             and type(commit.result) is _NativeFileResultClaim
+             and type(commit.consumer) is _NativeReadConsumer)
+    _native_read_walk_tail(owner, step.registration, step.walk, step.expected, step)
+    _native_read_lifecycle_tail(owner, step.registration, step.parents)
+    return _native_cache_read_receipt_mirrors_tail(owner, commit, step)
 
 
 def _native_runtime_read_history_tail(owner, commit, step):

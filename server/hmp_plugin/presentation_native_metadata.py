@@ -39,6 +39,10 @@ from .presentation_startup_artifacts import (
     _native_cache_read_history_tail,
     _native_runtime_read_receipt_state_tail,
     _native_cache_read_receipt_state_tail,
+    _native_runtime_read_receipt_mirrors_tail,
+    _native_cache_read_receipt_mirrors_tail,
+    _native_read_walk_mirrors_tail,
+    _native_read_lifecycle_mirrors_tail,
     _NativeOpenedDescriptor,
     _native_descriptor_closed,
     _prepare_native_metadata_resource,
@@ -1671,7 +1675,7 @@ def _abandon_known_directory_return(owner, consumer, actual, commit=None):
 
 
 
-def _finished_capsule_tail(owner, commit):
+def _finished_capsule_mirrors_tail(owner, commit):
     """Confirm the before-effect custody pinned in this actual returned commit."""
     _require(type(commit) is _DirectoryPolicyCommit
              and type(commit.consumer) is _DirectoryConsumer
@@ -1680,7 +1684,7 @@ def _finished_capsule_tail(owner, commit):
              and type(commit.operation.result) is _MetadataResult
              and type(commit.consumer.custody) is tuple and len(commit.consumer.custody) == 6)
     origin, marker, link, slot, state, reference = commit.consumer.custody
-    _origin_tail(origin)
+    _require(type(origin) is _PayloadOrigin)
     result = commit.operation.result
     _require(type(marker) is origin.marker_type and marker.owner is owner
              and marker.operation is commit.operation and marker.origin is origin
@@ -1692,9 +1696,114 @@ def _finished_capsule_tail(owner, commit):
              and marker.state is state and type(state) is list and len(state) == 3
              and state[0] is True and state[1] is True and state[2] is False
              and marker.reference is reference and type(reference) is origin.reference_type
+             and type(origin) is _PayloadOrigin)
+    return commit
+
+
+def _finished_capsule_tail(owner, commit):
+    """Observe original weak death; the caller must seal all mirrors afterward."""
+    _require(type(commit) is _DirectoryPolicyCommit
+             and type(commit.consumer) is _DirectoryConsumer
+             and type(commit.consumer.custody) is tuple and len(commit.consumer.custody) == 6)
+    origin, marker, link, slot, state, reference = commit.consumer.custody
+    _origin_tail(origin)
+    _require(type(reference) is origin.reference_type
              and origin.reference_callback.__get__(reference, origin.reference_type) is None
              and origin.reference_call(reference) is None)
     return commit
+
+
+def _finished_declared_file_mirrors_tail(owner, registration, held, last):
+    """Literal final pre-close return, complete history, and actual owned closes.
+
+    The fixed file caller holds the last observation's actual return across all
+    cleanup. Current mirrors only confirm it; none nominates a finish receipt.
+    This is not a replacement baseline, a current FD-open check or new work.
+    """
+    _require(type(last) is _DirectoryPolicyCommit and last.owner is owner
+             and type(last.consumer) is _DirectoryConsumer
+             and type(last.operation) is _MetadataOperation
+             and type(last.resource) is _NativeMetadataResource
+             and last.resource.registration is registration
+             and last.resource.held_walk is held)
+    resource, consumer = last.resource, last.consumer
+    metadata = _native_declared_metadata_cohort_tail(owner, registration, held)
+    _require(resource.metadata is metadata and consumer.resource is resource
+             and consumer.operation is last.operation
+             and consumer.history is metadata.commits
+             and type(metadata.definitions) is tuple and len(metadata.definitions) > 0
+             and metadata.progress[0] == len(metadata.definitions)
+             and metadata.progress[1] is None
+             and len(metadata.commits) == len(metadata.definitions)
+             and type(last.ordinal) is int and type(last.next_ordinal) is int
+             and last.ordinal == len(metadata.definitions) - 1
+             and last.next_ordinal == len(metadata.definitions)
+             and metadata.commits[-1] is last
+             and last.site is metadata.definitions[-1]
+             and last.site[0] == 3 and last.site[1] == 'directory_after_hash')
+    _metadata_predecessor_chain_tail(owner, consumer)
+    for ordinal, actual in enumerate(metadata.commits):
+        _require(type(actual) is _DirectoryPolicyCommit and actual.owner is owner
+                 and type(actual.resource) is _NativeMetadataResource
+                 and type(actual.operation) is _MetadataOperation
+                 and type(actual.operation.result) is _MetadataResult
+                 and type(actual.consumer) is _DirectoryConsumer
+                 and type(actual.ordinal) is int and type(actual.next_ordinal) is int
+                 and actual.ordinal == ordinal and actual.next_ordinal == ordinal + 1
+                 and actual.site is metadata.definitions[ordinal]
+                 and actual.resource.metadata is metadata
+                 and actual.resource.held_walk is held
+                 and actual.operation.owner is owner
+                 and actual.operation.resource is actual.resource
+                 and actual.consumer.operation is actual.operation
+                 and actual.consumer.resource is actual.resource
+                 and type(actual.consumer.commit) is list and len(actual.consumer.commit) == 1
+                 and actual.consumer.commit[0] is actual
+                 and type(actual.operation.result.acknowledged) is list
+                 and len(actual.operation.result.acknowledged) == 1
+                 and actual.operation.result.acknowledged[0] is actual
+                 and type(actual.operation.ended) is list and len(actual.operation.ended) == 1
+                 and actual.operation.ended[0] is True
+                 and type(actual.operation.state) is list and len(actual.operation.state) == 3
+                 and all(type(value) is bool for value in actual.operation.state)
+                 and actual.operation.state == [True, True, False])
+        _finished_capsule_mirrors_tail(owner, actual)
+    eof = consumer.eof
+    if consumer.class_name == 'RuntimeSourceReadOwner':
+        _require(type(eof) is _NativeRuntimeReadCommit)
+        _require(_native_runtime_read_receipt_mirrors_tail(owner, eof, eof.step) is eof)
+    else:
+        _require(consumer.class_name == 'DeclaredCacheReadOwner'
+                 and type(eof) is _NativeCacheReadCommit)
+        _require(_native_cache_read_receipt_mirrors_tail(owner, eof, eof.step) is eof)
+    _require(eof.eof is True and eof.remaining == 0 and eof.step.walk is held[0]
+             and eof.step.expected is metadata.expected)
+    descriptor = eof.step.descriptor
+    for _ in held[0].components:
+        _require(type(descriptor) is _NativeOpenedDescriptor)
+        _require(_native_descriptor_closed(descriptor, registration.native_ledger))
+        descriptor = descriptor.allocation.parent
+    _require(descriptor is None)
+    ledger, phase = registration.native_ledger, registration.native_phase
+    _require(last.operation.ledger is ledger
+             and ledger.attempts[last.operation.index] is last.operation
+             and len(ledger.attempts) == last.operation.index + 1
+             and ledger.counts[0] == last.operation.budget[3] + len(held[0].components)
+             and ledger.counts[1] == last.operation.budget[2] - len(held[0].components)
+             and ledger.failed[0] is False and ledger.failure[0] is None
+             and ledger.inflight[0] is None and phase.current[0] is phase.idle
+             and phase.result[0] is None)
+    _native_read_walk_mirrors_tail(owner, registration, eof.step.walk, eof.step.expected, eof.step)
+    _native_read_lifecycle_mirrors_tail(owner, registration, consumer.parents)
+    # Rejoin literal finish and complete cursor after callback-bearing closure.
+    _require(resource.held_walk is held and resource.metadata is metadata
+             and metadata.commits[-1] is last and consumer.eof is eof
+             and metadata.progress[0] == len(metadata.definitions)
+             and metadata.progress[1] is None
+             and ledger.counts[0] == last.operation.budget[3] + len(held[0].components)
+             and ledger.counts[1] == last.operation.budget[2] - len(held[0].components)
+             and ledger.failed[0] is False and ledger.inflight[0] is None)
+    return last
 
 
 def _finished_declared_file_tail(owner, registration, held, last):
@@ -1719,6 +1828,7 @@ def _finished_declared_file_tail(owner, registration, held, last):
              and metadata.progress[0] == len(metadata.definitions)
              and metadata.progress[1] is None
              and len(metadata.commits) == len(metadata.definitions)
+             and type(last.ordinal) is int and type(last.next_ordinal) is int
              and last.ordinal == len(metadata.definitions) - 1
              and last.next_ordinal == len(metadata.definitions)
              and metadata.commits[-1] is last
@@ -1787,6 +1897,7 @@ def _finished_declared_file_tail(owner, registration, held, last):
              and ledger.counts[0] == last.operation.budget[3] + len(held[0].components)
              and ledger.counts[1] == last.operation.budget[2] - len(held[0].components)
              and ledger.failed[0] is False and ledger.inflight[0] is None)
+    _require(_finished_declared_file_mirrors_tail(owner, registration, held, last) is last)
     return last
 
 
