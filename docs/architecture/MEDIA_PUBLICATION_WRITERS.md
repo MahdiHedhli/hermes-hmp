@@ -404,3 +404,41 @@ inactive. Concurrent-opening protection exists only in this source branch; retai
 that distinction until a separately qualified update is deployed. Remaining other
 borrowers, schema migration/rollback, native publication and physical/release gates
 are unchanged.
+
+## MR-START2a: actual component Future and returned context — bd7feef
+
+BootstrapOpening is recorded before enqueue, owns one actual concurrent Future,
+and retains a successful native function return/context/Store/bound close before
+that Future completes. Caller cancellation cannot cancel this worker or drop those
+resources. Unknown enqueue retains the owner even if a fixture separately sees its
+context return; no cleanup or retry is inferred from that observation.
+
+Before a listener object exists, explicit disconnect may await that same Future
+and close the exact unpublished context once. Original adapter/opening/future/ctx/
+Store/bound-close identities are held and rejoined around generation cleanup; any
+lost close acknowledgement prevents replay. Source review found mutable close/
+coherent-context substitutions in the initial version; bf5623a controls reproduced
+both and are retained. Close-state flags require exact False without foreign bool.
+A partial listener is retained before its first startup await and is NOT guessed
+to be cleaned up. Its recovery remains MR-START2b; previous eager Store close was
+removed. Controlled IdentityError False behavior retains the existing builder
+contract, not a new claim that every partial builder failure is qualified.
+
+The native worker preserves asyncio.to_thread caller-context semantics using one
+original copy_context captured before enqueue, context.run on the worker, and no
+context logging. The e972a56 control reproduced missing context transfer before this
+repair. That context may contain ambient scope references and must stay retained
+until actual completion/known transfer, never dropped due to waiter cancellation.
+
+Both363-case combined suites pass unchanged on3.14.9/3.11.15; Ruff passes and
+independent finite source/delta reviews found no further concrete blocker. New
+checks cover cancelled caller plus actual returned-context cleanup, close return
+loss, unknown enqueue, close/cohort substitution, retained partial listener,
+malformed close flags and context inheritance/isolation. They do not qualify all
+native profile authority, failed-builder allocation, partial runner/TLS cleanup,
+other borrowers, migration, publication or phone/release behavior.
+
+Next: audit context propagation in the earlier read-worker backport separately;
+then retain/reconcile each partial listener setup stage and failed builder resource.
+No native profile side effect or auth bypass is inferred from the context audit.
+Nothing from this source branch was deployed; live hosts remain c7482f1.
