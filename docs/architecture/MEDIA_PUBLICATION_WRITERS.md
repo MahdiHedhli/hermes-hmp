@@ -120,3 +120,27 @@ consistency. Independent read-only review found no concrete codec blocker. No
 transport, response receipt, runtime scope/nonce/peer verification, consent proof,
 CAS execution or listener wiring is provided by this codec. Attempt IDs are
 correlation only, not durable exactly-once authority. These remain explicit tasks.
+
+## OP1 trusted-local execution preparation — d788615
+
+The unwired MediaOperatorExecutor captures the original Store/observer, listener
+identity/bridge/IID/generation, publisher/failure state and bound transaction/CAS/
+read methods. Loop-thread calls refuse before native or SQL work. A bounded fresh
+monotonic deadline is mandatory; its provenance remains the future transport's
+responsibility, not something nonce/generation or a client-supplied float proves.
+
+A worker joins one coordinated Store transaction, checks the original cohort
+around identity callbacks, applies the complete expected snapshot CAS, and checks
+again before commit. Authoritative readback and postcommit cohort/deadline checks
+precede any result, including conflict. Missing results once SQL could start are
+fixed unknown outcomes; committed data is never rolled back or replayed by this
+layer. The object verifies neither socket peer identity nor human CLI consent.
+
+Both43-case codec/execution suites pass, including actual Store grant/revision1,
+duplicate old snapshot conflict without revision advance or Controls change,
+prewrite scope/deadline/loop refusals, postcommit readback loss, post-CAS/precommit
+cohort-drift rollback, and replaced publisher refusal. Independent source review
+found no concrete blocker in the initial unwired executor; narrowing delta review
+is pending. Transport/admission/consent/deadline origin, response framing, operator
+IPC and native/config publication coordination remain incomplete. No route calls
+this executor and no live permission changed.
