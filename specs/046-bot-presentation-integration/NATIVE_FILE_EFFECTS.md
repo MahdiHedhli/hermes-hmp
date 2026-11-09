@@ -1,6 +1,19 @@
 ## November 8 — reviewed host updates deployed; character integration remains open
 
 
+Minimal read-worker backport `c7482f131a5414c6b0d63ed5cb8ffb61b61fbfdc` is now
+installed on ColPanicM2 and LLY520. Both51-case read/FD and592-case listener/adapter/
+CLI/access/ownership suites pass on3.14.9/3.11.15; independent review, Ruff and
+Plugin Doctor pass. All109 installed files, fresh gateway/listener PID binding,
+expected TLS identity and preserved configuration/device-controls/schema snapshots
+were verified. Native versions remain0.22.7 and0.23.0 respectively. ColPanicM2's3
+profiles are ready; LLY520 retains ready Hermes/Belac/SchoolBot and prior unavailable
+Lucas/Serenity (health exit1, not all-bots success). RSWORK1 is repaired in this
+verified deployment; no live incident or production fault injection claimed. This
+backport adds no media/schema4/CLI features and changes no grants or host flags.
+Physical tests and separate image-service/native-authority integration remain open.
+
+
 Read-service prerequisite source `aaa29aa` fixes a demonstrated lifetime flaw: a
 cancelled asyncio.to_thread Task could retire capacity while its actual read thread
 remained blocked. Corrected979fbe0 control reproduced0 instead of1 retained borrow;
