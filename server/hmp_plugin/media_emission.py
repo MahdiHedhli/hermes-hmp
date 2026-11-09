@@ -1,7 +1,7 @@
 """Descriptor emission for the four read routes (spec 011 S4; HMP v1 §7e LM-4, LM-5, LM-9).
 
 One entry point, `read`, serves RO-3, RO-6, SES-2 (snapshot and paged) and SES-2a. It chooses the
-read ONCE, from the owner device, the exact-true host flag and the listener's availability
+read ONCE, from the media-entitled device, the exact-true host flag and the listener's availability
 snapshot. Any closed input runs the old read untouched: no media twin, no batch, no registry
 call, and exactly the old response bytes.
 
@@ -12,7 +12,8 @@ native scan. A failure of the twin keeps its original semantics. Any optional fa
 (a foreign sidecar or binding, a refused batch, grant revocation, a gate change) keeps the
 successful public text exactly and mints nothing; nothing here reruns a read.
 
-Minting is a synchronous section on the loop with no await: owner, exact-true flag, availability
+Minting is a synchronous section on the loop with no await: current permission generation,
+exact-true flag, availability
 snapshot and registry identity are rechecked and then each accepted row is minted newest first,
 at most 128. Authority comes from the fresh batch alone. A returned `role:"tool"`,
 `tool_name:"image_generate"` message whose row id the batch accepted gets a `WireMediaDescriptor`;
@@ -52,7 +53,7 @@ _PUBLIC_WITH_MESSAGES: Final = (SnapshotResponse, HistoryPage, SessionSnapshot)
 
 
 def _select(ctx: ServerContext, device_id: str) -> MediaBound | None:
-    """The one read selection: owner device, exact-true flag, availability snapshot."""
+    """The one read selection: media permission, exact-true flag, availability snapshot."""
     if ctx.media_read_permission(device_id) is None or not ctx.media_enabled():
         return None
     return ctx.media_snapshot()

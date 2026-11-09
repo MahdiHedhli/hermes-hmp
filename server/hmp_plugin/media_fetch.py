@@ -6,14 +6,17 @@ bookkeeping). It imports no `local_media_*` module: every accepted module it rea
 the references the listener bound at open (`ServerContext.media_snapshot`), and the listener
 binder (`adapter._media_fetch_bind`) proves this module's namespace, the service class and the
 carrier module are the very objects the bridge and the route run. Nothing here re-imports,
-attests or touches the filesystem per request.
+attests or reads image files directly per request. Authorization still performs synchronous
+SQLite reads; this is not a nonblocking database-I/O claim.
 
-Order (LM-10): bearer, non-owner `404` (before the gate), query/body/transfer-encoding `400`,
-rate limit, the initial per-bot grant (ERR-3, shared default executor), flag + availability
+Order (LM-10): bearer, missing media permission `404` (before the gate),
+query/body/transfer-encoding `400`, rate limit, the initial per-bot grant (ERR-3,
+shared default executor), flag + availability
 snapshot `503`, ref lookup `404`, then nonblocking permits `429`. Phase one (read, validate,
 hash) and phase two (final native check) run on the service's own 4-worker executor with the
 caller's `ContextVar`s copied into each, and share ONE monotonic 20 s deadline that starts at the
-phase-one submission. No native call, file read or import ever runs on the event loop.
+phase-one submission. Native image checks and file reads run on workers. Bearer and
+permission-store checks remain synchronous on the event loop.
 
 Lifetimes (LM-13). A buffer (instance) permit and the device permit belong to one `_Lease`. The
 lease is released only when the handler's `finally` has passed AND every submitted phase future's
@@ -24,7 +27,8 @@ hands its 8 MiB payload to the lease's lock-protected mailbox and RETURNS only a
 completed future ever retains the payload; if the handler's `finally` already passed, the worker
 drops the payload and publishes nothing. Callbacks hold the lease, never the payload.
 
-The final section (LM-12) is synchronous: fresh bearer, owner, flag, availability snapshot, bound
+The final section (LM-12) is synchronous: fresh bearer, permission generation, flag,
+availability snapshot, bound
 service identity, registry entry and first-served compare-and-set, with no `await` before the
 response is prepared. Streaming uses one 30 s deadline over `prepare`, every 64 KiB slice and EOF;
 after `prepare` a timeout, cancellation or error aborts the transport and returns only after that.
@@ -385,7 +389,8 @@ async def serve(request: web.Request) -> web.StreamResponse:
         if await _wait(future, deadline) is not True:
             log_event(_LOG_EVENT, outcome="phase_two_refused")
             raise _not_found()
-        # LM-12: from here to `prepare` there is no await, native call, file read or import.
+        # LM-12: no await or image-worker operation within final authorization.
+        # Bearer and permission checks still perform synchronous Store reads.
         response = _final_section(
             request, ctx, who, bound, service, ref, caller, entry, payload, permission
         )
@@ -407,7 +412,7 @@ def _final_section(
     payload: Any,
     permission: Any = None,
 ) -> web.StreamResponse:
-    """Synchronous. The fresh bearer (existing `401` codes), owner, flag, availability snapshot,
+    """Synchronous. Fresh bearer, permission generation, flag and availability snapshot,
     bound service, live registry entry and first-served CAS; any failure is `404`.
 
     `payload` is an argument of this frame, and a raised exception's traceback keeps the frame (and

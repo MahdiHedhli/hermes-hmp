@@ -101,6 +101,23 @@ def test_explicit_media_deny_closes_legacy_owner_without_changing_other_rights(
     fx.run(scenario)
 
 
+def test_unversioned_legacy_owner_restore_retains_legacy_reference_behavior(tmp_path, monkeypatch):
+    """Known compatibility limit: use persistent media denial for generation-safe revocation."""
+    fx = FetchRig(tmp_path, monkeypatch)
+
+    async def scenario(client):
+        device = await fx.rig.pair(client)
+        old = next(iter((await fx.mint(client)).values()))
+        fx.rig.owners.remove(device.device_id)
+        assert (await fx.get(client, old))[0] == 404
+        fx.rig.owners.add(device.device_id)
+        # A raw in-memory owner-list edit has no authoritative revision. This
+        # inherited fallback behavior must not be reported as non-revival proof.
+        assert (await fx.get(client, old))[0] == 200
+
+    fx.run(scenario)
+
+
 def test_operator_media_roundtrip_is_read_only_and_scoped(tmp_path):
     store = Store(tmp_path / 'media.sqlite3')
     store.migrate()
