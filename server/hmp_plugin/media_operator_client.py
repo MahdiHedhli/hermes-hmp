@@ -16,7 +16,7 @@ from . import wire
 from .media_operator_protocol import MediaReadMutation, decode_reply
 from .operator_read import _entry, _parent_fd, _peer_uid
 
-_SOCKET_NAME = "media-operator.sock"
+MEDIA_OPERATOR_SOCKET_NAME = "media-operator.sock"
 _HELLO_KEYS = frozenset(
     {
         "protocol",
@@ -64,7 +64,7 @@ def _line(client, *, maximum, deadline):
 
 def _binding(fd, path, parent, before):
     held, named_parent = os.fstat(fd), os.lstat(path.parent)
-    entry, named = _entry(fd, name=_SOCKET_NAME), os.lstat(path)
+    entry, named = _entry(fd, name=MEDIA_OPERATOR_SOCKET_NAME), os.lstat(path)
     if (
         (held.st_dev, held.st_ino) != (parent.st_dev, parent.st_ino)
         or (named_parent.st_dev, named_parent.st_ino) != (parent.st_dev, parent.st_ino)
@@ -87,13 +87,13 @@ def exchange_media_decision(path: Path, request: MediaReadMutation):
     fd = None
     submitted = False
     try:
-        if type(request) is not MediaReadMutation or path.name != _SOCKET_NAME:
+        if type(request) is not MediaReadMutation or path.name != MEDIA_OPERATOR_SOCKET_NAME:
             raise ValueError("invalid request")
         request.validate()
         body = wire.parse_body(request.encode(), max_bytes=2048, max_depth=3)
         deadline = time.monotonic() + 2.0
         fd, parent = _parent_fd(path)
-        before = _entry(fd, name=_SOCKET_NAME)
+        before = _entry(fd, name=MEDIA_OPERATOR_SOCKET_NAME)
         _binding(fd, path, parent, before)
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
             client.settimeout(_remaining(deadline))

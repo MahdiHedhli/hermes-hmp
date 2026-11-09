@@ -7,7 +7,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from hmp_plugin import cli, operator_read
+from hmp_plugin import cli, media_operator_client, operator_read
+from hmp_plugin.media_operator_protocol import MediaOperatorReply
 from hmp_plugin.request_ctx import ServerContext
 from hmp_plugin.store import Store
 
@@ -164,7 +165,12 @@ def test_operator_command_confirms_and_reads_back_only_media_permission(
     store.insert_user("user_a", "owner", 1)
     store.insert_device("dev_a", "user_a", "f" * 52, b"public", "phone", 1, state="ACTIVE")
     iid = "a" * 52
-    ctx = SimpleNamespace(store=store, out=io.StringIO(), now=lambda: 10)
+    ctx = SimpleNamespace(
+        store=store,
+        out=io.StringIO(),
+        now=lambda: 10,
+        custody=SimpleNamespace(anchor_dir=_owned_operator_parent() / "anchor"),
+    )
     reads = []
 
     def live(_ctx, device_id, actual_iid):
@@ -181,6 +187,24 @@ def test_operator_command_confirms_and_reads_back_only_media_permission(
             "expires_ms": 2**52,
         }
 
+    original_write = store.set_media_read
+    exchanges = []
+
+    def exchange(path, request):
+        assert path.name == media_operator_client.MEDIA_OPERATOR_SOCKET_NAME
+        assert request.iid == iid and request.device_id == "dev_a"
+        assert request.nonce == "a" * 32 and request.generation == "b" * 32
+        assert request.allowed is allowed
+        exchanges.append(request)
+        # Emulate the service boundary; the CLI's own Store mutator is forbidden.
+        written = original_write(request.expected, allowed=request.allowed, now=10)
+        return MediaOperatorReply("committed", written)
+
+    def forbidden(*_args, **_kwargs):
+        raise AssertionError("CLI must not write Store directly")
+
+    monkeypatch.setattr(media_operator_client, "exchange_media_decision", exchange)
+    monkeypatch.setattr(store, "set_media_read", forbidden)
     monkeypatch.setattr(cli, "_load_identity", lambda _ctx: SimpleNamespace(iid=iid))
     monkeypatch.setattr(cli, "_media_operator_context", live)
     monkeypatch.setattr(
@@ -194,7 +218,7 @@ def test_operator_command_confirms_and_reads_back_only_media_permission(
         action = "grant-media-read" if allowed else "deny-media-read"
         args = argparse.Namespace(devices_command=action, device_id="dev_a")
         assert cli._cmd_devices_media(ctx, args) == 0
-        assert reads == [0, 0, 1]
+        assert reads == [0, 0, 1] and len(exchanges) == 1
         assert store.media_read_decision(iid, "dev_a").allowed is allowed
         assert store.owner_controls_decision("dev_a") is None
     finally:
@@ -222,7 +246,12 @@ def test_operator_media_interruption_never_replays_or_changes_unrelated_rights(
     store.insert_user("user_a", "owner", 1)
     store.insert_device("dev_a", "user_a", "f" * 52, b"public", "phone", 1, state="ACTIVE")
     iid = "a" * 52
-    ctx = SimpleNamespace(store=store, out=io.StringIO(), now=lambda: 10)
+    ctx = SimpleNamespace(
+        store=store,
+        out=io.StringIO(),
+        now=lambda: 10,
+        custody=SimpleNamespace(anchor_dir=_owned_operator_parent() / "anchor"),
+    )
     initial = store.media_read_decision(iid, "dev_a")
     calls = []
     original_write = store.set_media_read
@@ -265,7 +294,16 @@ def test_operator_media_interruption_never_replays_or_changes_unrelated_rights(
     monkeypatch.setattr(
         cli, "_host_request_confirmation", lambda _ctx, _token: interruption != "cancel"
     )
-    monkeypatch.setattr(store, "set_media_read", write)
+
+    def exchange(_path, request):
+        written = write(request.expected, allowed=request.allowed, now=10)
+        return MediaOperatorReply("conflict" if written is None else "committed", written)
+
+    def forbidden(*_args, **_kwargs):
+        raise AssertionError("CLI must not bypass service")
+
+    monkeypatch.setattr(media_operator_client, "exchange_media_decision", exchange)
+    monkeypatch.setattr(store, "set_media_read", forbidden)
     try:
         args = argparse.Namespace(devices_command="grant-media-read", device_id="dev_a")
         with pytest.raises(cli.RefusedError) as caught:
@@ -279,6 +317,82 @@ def test_operator_media_interruption_never_replays_or_changes_unrelated_rights(
             assert len(writes) == 1 and "no decision saved" in str(caught.value)
         else:
             assert final == initial and writes == []
+        assert store.owner_controls_decision("dev_a") is None
+    finally:
+        store.close()
+
+
+@pytest.mark.parametrize(
+    "outcome",
+    ("unavailable", "unknown", "reply_unknown", "conflict", "refused", "bad_reply", "inspect"),
+)
+def test_cli_media_no_sql_fallback_or_automatic_replay(tmp_path, monkeypatch, outcome):
+    store = Store(tmp_path / "media.sqlite3")
+    store.migrate()
+    store.insert_user("user_a", "owner", 1)
+    store.insert_device("dev_a", "user_a", "f" * 52, b"public", "phone", 1, state="ACTIVE")
+    iid = "a" * 52
+    ctx = SimpleNamespace(
+        store=store,
+        out=io.StringIO(),
+        now=lambda: 10,
+        custody=SimpleNamespace(anchor_dir=_owned_operator_parent() / "anchor"),
+    )
+    initial = store.media_read_decision(iid, "dev_a")
+    exchanges, confirmations = [], []
+
+    def live(_ctx, device_id, _iid):
+        assert device_id == "dev_a" and _iid == iid
+        return {
+            "decision": initial._asdict(),
+            "nonce": "a" * 32,
+            "generation": "b" * 32,
+            "host_enabled": False,
+            "api_available": True,
+            "effective": False,
+            "expires_ms": 2**52,
+        }
+
+    def confirm(_ctx, token):
+        confirmations.append(token)
+        return token == "ALLOW MEDIA_READ dev_a"
+
+    def exchange(_path, request):
+        exchanges.append(request)
+        if outcome == "unavailable":
+            raise media_operator_client.MediaOperatorUnavailableError()
+        if outcome == "unknown":
+            raise media_operator_client.MediaOperatorOutcomeUnknownError()
+        if outcome == "bad_reply":
+            return object()
+        assert outcome != "inspect"
+        return MediaOperatorReply("unknown" if outcome == "reply_unknown" else outcome, None)
+
+    def forbidden(*_args, **_kwargs):
+        raise AssertionError("direct CLI SQL fallback forbidden")
+
+    monkeypatch.setattr(cli, "_load_identity", lambda _ctx: SimpleNamespace(iid=iid))
+    monkeypatch.setattr(cli, "_media_operator_context", live)
+    monkeypatch.setattr(cli, "_host_request_confirmation", confirm)
+    monkeypatch.setattr(media_operator_client, "exchange_media_decision", exchange)
+    monkeypatch.setattr(store, "set_media_read", forbidden)
+    try:
+        args = argparse.Namespace(
+            devices_command="media-read" if outcome == "inspect" else "grant-media-read",
+            device_id="dev_a",
+        )
+        if outcome == "inspect":
+            assert cli._cmd_devices_media(ctx, args) == 0
+            assert exchanges == [] and confirmations == []
+        else:
+            with pytest.raises(cli.RefusedError) as caught:
+                cli._cmd_devices_media(ctx, args)
+            assert len(exchanges) == 1 and confirmations == ["ALLOW MEDIA_READ dev_a"]
+            if outcome in {"unknown", "reply_unknown", "bad_reply"}:
+                assert "do not replay" in str(caught.value)
+            elif outcome == "unavailable":
+                assert "no decision submitted" in str(caught.value)
+        assert store.media_read_decision(iid, "dev_a") == initial
         assert store.owner_controls_decision("dev_a") is None
     finally:
         store.close()

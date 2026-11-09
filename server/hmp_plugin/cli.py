@@ -1956,6 +1956,12 @@ def _media_operator_context(ctx: _Context, device_id: str, iid: str) -> dict[str
 
 
 def _cmd_devices_media(ctx: _Context, args: argparse.Namespace) -> int:
+    from .media_operator_client import (
+        MEDIA_OPERATOR_SOCKET_NAME,
+        MediaOperatorUnavailableError,
+        exchange_media_decision,
+    )
+    from .media_operator_protocol import MediaOperatorReply, MediaReadMutation
     from .media_permissions import MediaReadDecision
 
     iid = _load_identity(ctx).iid
@@ -1984,14 +1990,30 @@ def _cmd_devices_media(ctx: _Context, args: argparse.Namespace) -> int:
         "decision", "nonce", "generation", "host_enabled", "api_available", "effective",
     )) or int(time.monotonic() * 1_000) >= after["expires_ms"]:
         raise RefusedError("refused: media decision context changed; inspect before retrying")
+    request = MediaReadMutation(
+        iid, after["nonce"], after["generation"], os.urandom(16).hex(),
+        args.device_id, decision, allowed,
+    )
     try:
-        written = ctx.store.set_media_read(decision, allowed=allowed, now=ctx.now())
+        reply = exchange_media_decision(
+            listener_record_path(ctx.custody.anchor_dir).parent / MEDIA_OPERATOR_SOCKET_NAME,
+            request,
+        )
+    except MediaOperatorUnavailableError:
+        raise RefusedError(
+            "refused: verified media mutation service unavailable; no decision submitted"
+        ) from None
     except BaseException:
         raise RefusedError(
             "media decision outcome unknown; inspect with devices media-read; do not replay"
         ) from None
-    if written is None:
+    if type(reply) is not MediaOperatorReply or reply.status == "unknown":
+        raise RefusedError("media decision outcome unknown; inspect; do not replay")
+    if reply.status in {"conflict", "refused"}:
         raise RefusedError("refused: device or media decision changed; no decision saved")
+    if reply.status != "committed":
+        raise RefusedError("media decision outcome unknown; inspect; do not replay")
+    written = reply.decision
     try:
         if type(written) is not MediaReadDecision:
             raise ValueError("write outcome unavailable")
