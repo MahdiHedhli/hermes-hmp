@@ -23,6 +23,7 @@ from .gate import direct_send_gate
 from .logging_policy import log_event
 from .prompts import ApprovalInserted, RowView
 from .push_config import RelayConfig
+from .push_retirement import RelayCloseOwner
 from .push_hints import HintBinding
 from .push_issuer import derive_collapse, rederive_route
 from .push_registration import _inputs, _key
@@ -136,6 +137,7 @@ class PushDispatcher:
         relay: RelayPort,
         *,
         require_gate: Gate,
+        relay_owner: RelayCloseOwner | None = None,
         monotonic: Callable[[], float] = time.monotonic,
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
         jitter: Callable[[], float] = lambda: int.from_bytes(crypto.random_bytes(2), "big") / 65535,
@@ -157,6 +159,9 @@ class PushDispatcher:
         self.half_open = False
         self.store = ctx.prompt_store
         self._origin_ctx, self._origin_relay = ctx, relay
+        self._relay_owner = relay_owner if relay_owner is not None else RelayCloseOwner(relay)
+        if self._relay_owner.relay is not relay:
+            raise ValueError("relay owner mismatch")
         self._origin_store, self._origin_hints = self.store, ctx.push_hints
         self._owned_tasks: dict[object, tuple[object, object, asyncio.Task | None]] = {}
         self._close_attempted = False
@@ -590,7 +595,8 @@ class PushDispatcher:
     def retirement_pending(self) -> bool:
         owner = self._close_owner
         return (owner is None or not owner.done() or owner.cancelled()
-                or owner.result() is not self._close_complete or bool(self._owned_tasks))
+                or owner.result() is not self._close_complete or bool(self._owned_tasks)
+                or not self._relay_owner.successful)
 
     async def wait_drained(self) -> None:
         self._retirement_scope()
@@ -607,6 +613,8 @@ class PushDispatcher:
         for _, _, task in entries:
             await asyncio.shield(asyncio.gather(task, return_exceptions=True))
             self._retirement_scope()
+        await self._relay_owner.wait_drained()
+        self._retirement_scope()
         if self.retirement_pending:
             raise RuntimeError("push cleanup unresolved")
 
@@ -642,7 +650,7 @@ class PushDispatcher:
         tasks = [*self.workers, *(s.task for s in self.slots.values() if s.task is not None)]
         for task in tasks:
             task.cancel()
-        closer = self._spawn_owned(self.relay.close())
+        closer = self._relay_owner.begin()
         tasks.append(closer)
         done, pending = await asyncio.wait(tasks, timeout=CLOSE_S)
         self._retirement_scope()
@@ -650,7 +658,8 @@ class PushDispatcher:
             _consume_result(task)
         for task in pending:
             task.add_done_callback(_consume_result)
-            task.cancel()
+            if task is not closer:
+                task.cancel()
         self.slots.clear()
         self.counters.clear()
         while not self.queue.empty():

@@ -123,6 +123,7 @@ from .logging_policy import (
 )
 from .pairing import handle_pair_complete, handle_pair_request
 from .push_dispatch import PushDispatcher, RelayPort
+from .push_retirement import RelayCloseOwner
 from .reads import require_bot_authorized
 
 # `request_ctx` is the leaf module `ServerContext`/`CTX_KEY`/`context()`/the body and bearer
@@ -1952,6 +1953,9 @@ class HmpServer:
         self._push_relay_factory = push_relay_factory
         self._push_dispatcher: PushDispatcher | None = None
         self._push_dispatcher_drained: PushDispatcher | None = None
+        self._push_start_dispatcher: PushDispatcher | None = None
+        self._push_start_relay: Any = None
+        self._push_relay_owner: RelayCloseOwner | None = None
         self._runner: web.AppRunner | None = None
         self._watch: asyncio.Task[None] | None = None
         self._push_watch: asyncio.Task[None] | None = None
@@ -2167,7 +2171,11 @@ class HmpServer:
         relay = None
         try:
             relay = self._push_relay_factory()
-            dispatcher = PushDispatcher(self.ctx, relay, require_gate=_require_approvals_gate)
+            self._push_start_relay = relay
+            self._push_relay_owner = RelayCloseOwner(relay)
+            dispatcher = PushDispatcher(self.ctx, relay, require_gate=_require_approvals_gate,
+                                        relay_owner=self._push_relay_owner)
+            self._push_start_dispatcher = dispatcher  # retain before worker publication
             dispatcher.start()
             self._push_dispatcher = dispatcher
         except Exception:
@@ -2175,10 +2183,10 @@ class HmpServer:
                 with contextlib.suppress(Exception):
                     await dispatcher.close()
             elif relay is not None:
-                # Constructor failure must not leak a just-created client.
+                # Keep the one actual close even when the bounded observer expires.
                 with contextlib.suppress(Exception):
-                    async with asyncio.timeout(1):
-                        await relay.close()
+                    if self._push_relay_owner is not None:
+                        await self._push_relay_owner.close_bounded(1)
             with contextlib.suppress(Exception):
                 log_event("push_dispatch", outcome="creation_failed")
 
@@ -2248,10 +2256,12 @@ class HmpServer:
         retirement = self._media_retirement_owner
         service = self._operator_read_drained
         push = self._push_dispatcher_drained
+        relay_owner = self._push_relay_owner
 
         def rejoin():
             if (self.ctx is not ctx or self._operator_read_drained is not service
                     or self._push_dispatcher_drained is not push
+                    or self._push_relay_owner is not relay_owner
                     or self._media_retirement is not retirement
                     or (retirement is not None and ctx.store is not self._media_store)):
                 raise RuntimeError("operator retirement scope changed; retain original Store")
@@ -2262,6 +2272,9 @@ class HmpServer:
             rejoin()
         if push is not None:
             await push.wait_drained()
+            rejoin()
+        if relay_owner is not None:
+            await relay_owner.wait_drained()
             rejoin()
         if retirement is not None:
             if self._media_retirement_error:
@@ -2338,7 +2351,8 @@ class HmpServer:
         hints, deps = ctx.push_hints, ctx.direct_send_deps
         store = getattr(ctx, "store", None)
         fields = ("_operator_read", "_at1_endpoint", "_at1_service",
-                  "_push_dispatcher", "_push_watch", "_watch", "_runner")
+                  "_push_dispatcher", "_push_start_dispatcher", "_push_start_relay",
+                  "_push_relay_owner", "_push_watch", "_watch", "_runner")
         cohort = {name: getattr(self, name) for name in fields}
 
         def rejoin():
@@ -2390,7 +2404,7 @@ class HmpServer:
         # All AT1 leases/authority reads/native owners have joined at this point.
         rejoin()
         hints.clear()
-        dispatcher = cohort["_push_dispatcher"]
+        dispatcher = cohort["_push_dispatcher"] or cohort["_push_start_dispatcher"]
         if dispatcher is not None:
             self._push_dispatcher_drained = dispatcher
             await dispatcher.close()
@@ -2398,6 +2412,14 @@ class HmpServer:
             if dispatcher.retirement_pending:
                 self.operator_worker_debt += 1
             retired("_push_dispatcher")
+        elif cohort["_push_start_relay"] is not None:
+            relay_owner = cohort["_push_relay_owner"]
+            if relay_owner is None or relay_owner.relay is not cohort["_push_start_relay"]:
+                raise RuntimeError("relay cleanup ownership unresolved")
+            await relay_owner.close_bounded(1)
+            rejoin()
+            if not relay_owner.successful:
+                self.operator_worker_debt += 1
         rejoin()
         await self._cancel_pending_sends()
         rejoin()
