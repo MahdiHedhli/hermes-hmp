@@ -11,7 +11,7 @@ allocated before scope construction, and the scope retains the actual plan.
 Original code is captured before constructors and actual returned fields/variants
 are rejoined afterward. The unwired cursor/pending/history remain zero/empty.
 Twenty-seven current-interpreter probe cases and four reader compatibility cases
-pass; the combined31-case minimum-interpreter run is pending. This plan DATA does
+pass; the combined31-case minimum-interpreter run also passes. This plan DATA does
 not admit native work, classify actual failures or authorize fallback/images.
 
 ## Complete boundary
@@ -73,7 +73,13 @@ fallback, loader, image or permission authority.
 - [x] Bind original plan DATA in scope and actual traversal inputs, preserve
       other owners' default-None scope behavior, and repair constructor-time
       original-code/field drift; bounded current tests and independent review.
-      Minimum-interpreter qualification for this source remains pending.
+      Minimum-interpreter qualification: combined31 cases PASS.
+- [x] Seal outer Scope publication against changed fields, dispatch and vacant
+      registration state (`b4173ee`); 11 current and 11 minimum cases PASS.
+- [x] Join original root probe resource to shared intent preparation (`094ddb2`);
+      independent finite source review accepted, 13 current cases PASS.
+- [ ] Qualify the minimum-interpreter and preserved pre-fix helper controls.
+      Shared native admission/diagnostic lifecycle remains closed.
 
 - [ ] Implement complete traversal and shared-engine integration, preserving
       distinct typed probe policy instead of copying a per-site dispatcher.

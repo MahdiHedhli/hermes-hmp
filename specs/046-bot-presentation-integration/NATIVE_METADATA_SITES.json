@@ -1,16 +1,17 @@
 {
   "schema": 2,
   "purpose": "Review inventory only; not runtime plan, permission, admission, operation count or deployment proof",
-  "sourceBase": "45c006c2de96cc0ed92d881a49763c7f09847f63",
-  "previousInventorySourceBase": "e12df99b3531e8b81e56537dd54f3ffcb825b417",
+  "sourceBase": "094ddb2499dc0a031046650fb887a34f051508f2",
+  "previousInventorySourceBase": "45c006c2de96cc0ed92d881a49763c7f09847f63",
   "historicalSourceBase": "8afe009f93044387a352c4f642c1162296eba789",
   "sources": {
-    "server/hmp_plugin/presentation_startup_artifacts.py": "50dbf1ea757bbe0e30acfa8337240564c8dd66bb5b6f380a7d13a9f43ecf240f",
+    "server/hmp_plugin/presentation_startup_artifacts.py": "eb34e89c5145095111a83c45978164c1bc3b273ee2da427daefe66c0d5603f98",
     "server/hmp_plugin/presentation_gateway_package.py": "f602dedee29d69ba354556bd8b7de2e4574bdb3c9c8e524938438a32b7f0a41b",
     "server/hmp_plugin/presentation_startup_cache.py": "ec6d54e0b0de476f7a2d13b8896f6c3db9650ca519452ae1b6cb3642a35b4682",
     "server/hmp_startup/entry_files.py": "bd286f8922817a41a4103637c2b7d8eecc1f58f2a7fa0794ed0cc8d4ba6d1989",
-    "server/hmp_startup/cache_probe.py": "604146616d7ab7dd5fe04af973999321a9ce9b62ebd9f36ee8fb0b4c880c8151",
-    "server/hmp_startup/probe_metadata.py": "50e8b717c301f3e5d7337bd06f70683152f3920ea75e41e63da93ab9f6f7622d"
+    "server/hmp_startup/cache_probe.py": "2e8bd9a0e60e3874e26da4ff8c6da19a274cc66ca05f8ceba5a54e8ca7a28872",
+    "server/hmp_startup/probe_metadata.py": "1628ca4cd3113dea8c909305ba18b6067b1a6c212b65466f4056c1c52e3da57d",
+    "server/hmp_plugin/presentation_native_metadata.py": "d094c15c8b19e6ed5be5ca8c8049b3f7c5e6fb054510089246525fad1f66ac50"
   },
   "qualificationLimits": [
     "39 counts syntax calls to _stat/_fstat helpers, not all native invocations or owners",
@@ -24,7 +25,7 @@
       "scope": "StartupArtifactOwner._link_path",
       "kind": "fstat",
       "siteOrdinal": 0,
-      "line": 3758,
+      "line": 3774,
       "arguments": [
         "self",
         "fd",
@@ -39,7 +40,7 @@
       "scope": "StartupArtifactOwner._link_path",
       "kind": "stat",
       "siteOrdinal": 0,
-      "line": 3766,
+      "line": 3782,
       "arguments": [
         "self",
         "name",
@@ -55,7 +56,7 @@
       "scope": "StartupArtifactOwner._link_path",
       "kind": "stat",
       "siteOrdinal": 1,
-      "line": 3785,
+      "line": 3801,
       "arguments": [
         "self",
         "name",
@@ -71,7 +72,7 @@
       "scope": "StartupArtifactOwner._link_path",
       "kind": "fstat",
       "siteOrdinal": 1,
-      "line": 3788,
+      "line": 3804,
       "arguments": [
         "self",
         "fd",
@@ -86,7 +87,7 @@
       "scope": "StartupArtifactOwner._link_path",
       "kind": "stat",
       "siteOrdinal": 2,
-      "line": 3790,
+      "line": 3806,
       "arguments": [
         "self",
         "item",
@@ -102,7 +103,7 @@
       "scope": "StartupArtifactOwner._file",
       "kind": "fstat",
       "siteOrdinal": 0,
-      "line": 3965,
+      "line": 3981,
       "arguments": [
         "self",
         "fd",
@@ -117,7 +118,7 @@
       "scope": "StartupArtifactOwner._file",
       "kind": "stat",
       "siteOrdinal": 0,
-      "line": 3986,
+      "line": 4002,
       "arguments": [
         "self",
         "name",
@@ -133,7 +134,7 @@
       "scope": "StartupArtifactOwner._file",
       "kind": "fstat",
       "siteOrdinal": 1,
-      "line": 4010,
+      "line": 4026,
       "arguments": [
         "self",
         "fd",
@@ -148,7 +149,7 @@
       "scope": "StartupArtifactOwner._file",
       "kind": "fstat",
       "siteOrdinal": 2,
-      "line": 4106,
+      "line": 4122,
       "arguments": [
         "self",
         "fd",
@@ -163,7 +164,7 @@
       "scope": "StartupArtifactOwner._file",
       "kind": "stat",
       "siteOrdinal": 1,
-      "line": 4108,
+      "line": 4124,
       "arguments": [
         "self",
         "name",
@@ -179,7 +180,7 @@
       "scope": "StartupArtifactOwner._file",
       "kind": "fstat",
       "siteOrdinal": 3,
-      "line": 4136,
+      "line": 4152,
       "arguments": [
         "self",
         "directory",
@@ -194,7 +195,7 @@
       "scope": "StartupArtifactOwner._file",
       "kind": "stat",
       "siteOrdinal": 2,
-      "line": 4138,
+      "line": 4154,
       "arguments": [
         "self",
         "name",
@@ -579,7 +580,7 @@
       "scope": "RuntimeCacheProbeOwner._observe_owned",
       "kind": "fstat",
       "siteOrdinal": 0,
-      "line": 361,
+      "line": 406,
       "arguments": [
         "self",
         "fd",
@@ -594,7 +595,7 @@
       "scope": "RuntimeCacheProbeOwner._observe_owned",
       "kind": "fstat",
       "siteOrdinal": 1,
-      "line": 367,
+      "line": 412,
       "arguments": [
         "self",
         "fd",
@@ -609,7 +610,7 @@
       "scope": "RuntimeCacheProbeOwner._observe_owned",
       "kind": "stat",
       "siteOrdinal": 0,
-      "line": 369,
+      "line": 414,
       "arguments": [
         "self",
         "name",
@@ -625,7 +626,7 @@
     {
       "path": "server/hmp_plugin/presentation_startup_artifacts.py",
       "scope": "StartupArtifactOwner._file",
-      "line": 3974,
+      "line": 3990,
       "arguments": [
         "self",
         "metadata_resource",
@@ -635,7 +636,7 @@
     {
       "path": "server/hmp_plugin/presentation_startup_artifacts.py",
       "scope": "StartupArtifactOwner._file",
-      "line": 3995,
+      "line": 4011,
       "arguments": [
         "self",
         "metadata_resource",
@@ -645,7 +646,7 @@
     {
       "path": "server/hmp_plugin/presentation_startup_artifacts.py",
       "scope": "StartupArtifactOwner._file",
-      "line": 4015,
+      "line": 4031,
       "arguments": [
         "self",
         "metadata_resource",
@@ -655,7 +656,7 @@
     {
       "path": "server/hmp_plugin/presentation_startup_artifacts.py",
       "scope": "StartupArtifactOwner._file",
-      "line": 4113,
+      "line": 4129,
       "arguments": [
         "self",
         "metadata_resource",
@@ -667,7 +668,7 @@
     {
       "path": "server/hmp_plugin/presentation_startup_artifacts.py",
       "scope": "StartupArtifactOwner._file",
-      "line": 4120,
+      "line": 4136,
       "arguments": [
         "self",
         "metadata_resource",
@@ -679,7 +680,7 @@
     {
       "path": "server/hmp_plugin/presentation_startup_artifacts.py",
       "scope": "StartupArtifactOwner._file",
-      "line": 4144,
+      "line": 4160,
       "arguments": [
         "self",
         "metadata_resource",
@@ -691,7 +692,7 @@
     {
       "path": "server/hmp_plugin/presentation_startup_artifacts.py",
       "scope": "StartupArtifactOwner._file",
-      "line": 4152,
+      "line": 4168,
       "arguments": [
         "self",
         "metadata_resource",
@@ -705,7 +706,7 @@
     {
       "path": "server/hmp_startup/cache_probe.py",
       "scope": "RuntimeCacheProbeOwner._stat_known",
-      "line": 255,
+      "line": 300,
       "kind": "direct fixed stat_call",
       "arguments": [
         "name"
