@@ -35,6 +35,8 @@ class MediaOperatorRetirement:
         self._publisher, self._failure = actor._publisher, actor._failed
         self._loop, self._thread = actor._loop, actor._thread
         self._completion = object()
+        self._failed_completion = object()
+        self._join_coro = None  # retain unknown creation; never guess that it was unqueued
         self._started = False
         self._task = None
         if not self._same():
@@ -52,6 +54,12 @@ class MediaOperatorRetirement:
             self._service._original_ctx is self._ctx
             and self._service.ctx is self._ctx
             and self._ctx.store is self._store
+            and self._ctx.identity is self._executor._identity
+            and self._ctx.bridge is self._executor._bridge
+            and self._ctx.iid == self._executor._iid
+            and self._ctx.readiness_generation == self._executor._generation
+            and self._service.nonce == self._executor._nonce
+            and self._service._loop is self._loop
             and self._ctx.read_worker_budget is self._budget
             and self._service._budget is self._budget
             and self._service._executor is self._executor
@@ -67,12 +75,17 @@ class MediaOperatorRetirement:
         )
 
     async def _join(self):
-        await self._service.stop()
-        await self._service.wait_drained()
-        await self._actor.wait_drained()
-        if not self._same() or self._operations or self._mutations:
-            raise MediaRetirementUnavailableError()
-        return self._completion
+        try:
+            await self._service.stop()
+            await self._service.wait_drained()
+            await self._actor.wait_drained()
+            if not self._same() or self._operations or self._mutations:
+                return self._failed_completion
+            return self._completion
+        except BaseException:
+            # A creation acknowledgement or error-consumer registration can be
+            # lost. Even an abandoned original Task emits no private exception.
+            return self._failed_completion
 
     async def stop(self):
         self._owner()
@@ -83,7 +96,8 @@ class MediaOperatorRetirement:
                     raise MediaRetirementUnavailableError()
                 self._service.close_admission()
                 self._actor.close()  # invalidate publication before any shutdown await
-                self._task = asyncio.create_task(self._join())
+                self._join_coro = self._join()
+                self._task = asyncio.create_task(self._join_coro)
 
                 def consume_error(task):
                     with contextlib.suppress(BaseException):

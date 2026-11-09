@@ -805,3 +805,85 @@ def test_unknown_submit_cannot_gain_retirement_proof_after_hidden_actual_complet
             store.close()
 
     asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("fault", ("before", "after", "callback"))
+def test_retirement_creation_fault_retains_original_state_without_replay_or_error_log(
+    tmp_path, monkeypatch, fault
+):
+    from hmp_plugin.media_operator_retirement import (
+        MediaOperatorRetirement,
+        MediaRetirementUnavailableError,
+    )
+
+    async def scenario():
+        actor, store, ctx, request, service = await open_service(tmp_path)
+        retirement = MediaOperatorRetirement(service, actor)
+        original_create = asyncio.create_task
+        actual, calls, errors = [], [], []
+        loop = asyncio.get_running_loop()
+        loop.set_exception_handler(lambda _loop, context: errors.append(context))
+
+        class CallbackLossTask(asyncio.Task):
+            def add_done_callback(self, callback, *, context=None):
+                result = super().add_done_callback(callback, context=context)
+                if not getattr(self, "lost_once", False):
+                    self.lost_once = True
+                    raise MemoryError("synthetic callback registration return loss")
+                return result
+
+        def create(coro, *args, **kwargs):
+            if getattr(getattr(coro, "cr_code", None), "co_name", None) != "_join":
+                return original_create(coro, *args, **kwargs)
+            calls.append(1)
+            if fault == "before":
+                raise MemoryError("synthetic known-before-creation fault")
+            task = (
+                CallbackLossTask(coro, loop=loop) if fault == "callback" else original_create(coro)
+            )
+            actual.append(task)
+            if fault == "after":
+                raise MemoryError("synthetic post-scheduling return loss")
+            return task
+
+        monkeypatch.setattr(asyncio, "create_task", create)
+        try:
+            with pytest.raises(MediaRetirementUnavailableError):
+                await retirement.stop()
+            assert len(calls) == 1 and retirement._join_coro is not None
+            if fault == "callback":
+                await retirement.stop()  # wait on the exact already-retained actual Task
+                assert retirement.drained_for(store)
+            else:
+                if actual:
+                    await actual[0]  # fixture alone possesses the unacknowledged Task
+                with pytest.raises(MediaRetirementUnavailableError):
+                    await retirement.stop()
+                assert not retirement.drained_for(store)
+            assert len(calls) == 1 and errors == []
+            assert store.media_read_decision(ctx.iid, request.device_id).revision == 0
+        finally:
+            if fault == "before":
+                # Only this fault injector proves that scheduling was never called.
+                # Production retains the coroutine with unknown creation debt.
+                retirement._join_coro.close()
+            loop.set_exception_handler(None)
+            await finish(actor, store, service)
+
+    asyncio.run(scenario())
+
+
+def test_completed_media_drain_cannot_attest_a_changed_generation(tmp_path):
+    from hmp_plugin.media_operator_retirement import MediaOperatorRetirement
+
+    async def scenario():
+        actor, store, ctx, request, service = await open_service(tmp_path)
+        retirement = MediaOperatorRetirement(service, actor)
+        await retirement.stop()
+        assert retirement.drained_for(store)
+        ctx.readiness_generation = "e" * 32
+        assert not retirement.drained_for(store)
+        assert store.media_read_decision(ctx.iid, request.device_id).revision == 0
+        await finish(actor, store, service)
+
+    asyncio.run(scenario())
