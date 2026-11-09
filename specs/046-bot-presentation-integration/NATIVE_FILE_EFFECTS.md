@@ -193,6 +193,18 @@ reviewed host-local chat-image deployment, which the owner has now authorized
 and which is installed separately as recorded below. Physical acceptance remains
 open. No character prototype is represented as installed.
 
+Source-specific leaf-before policy `4c6f33c` now preserves the actual snapshot's
+`st_mtime` conversion: exact numeric types, strict64-bit bounds and integer
+truncation toward zero, including pre-epoch fractions; nanoseconds are not used
+as a replacement. Forty focused leaf/timestamp DATA cases pass on each supported
+interpreter, unchanged source and receipt/log/XML rehashed. Independent policy
+review found no new blocker; its source-only scope is explicit, so cache or
+non-source reads do not gain a new timestamp requirement. This remains a
+prerequisite for the shared fixed-site consumer, not native admission or a
+completed walker. Fresh static inspection of installed Hermes0.23.0/0f0e96fc
+still finds the unbounded native avatar getter; no qualified safe shortcut was
+established, no getter was called and no upstream change was made.
+
 Open-registration source `1aa605d` passed all 1,434 configured startup cases on
 Python 3.14.9 with zero failures, errors or skips; its eight focused cases passed
 on both Python 3.14.9 and 3.11.15. Exact source/receipt/log/XML bindings were

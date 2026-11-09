@@ -36,3 +36,18 @@ Before integration: execute both-interpreter DATA tests, independently review
 policy parity, finish actor-preflight causal qualification, implement actual
 leaf/ancestor consumer and ACK roles, and verify the complete walker. Runtime,
 service, physical device and release qualification remain separate.
+
+## Source timestamp policy checkpoint
+
+Source `4c6f33c` adds `_declared_leaf_source_before_data`: the existing leaf
+identity policy plus same-snapshot `st_mtime` exact numeric type/range validation
+and integer truncation toward zero. This is for an actual source-digest effect
+only; cache/non-source policies must not silently inherit the extra requirement.
+Forty leaf/timestamp DATA cases pass on each supported interpreter, including
+negative fractions, unrelated nanoseconds, numeric boundaries, NaN/infinities,
+foreign coercion refusal and retained leaf permissions. Source/log/XML bindings
+were rehashed. This does not prove native provenance, consumer admission or ACK.
+
+Next integration must use the original expected row and actual same native
+return, preserve the checked timestamp through the source-digest predecessor,
+and complete every fixed leaf/ancestor role before replacing the finish guard.
