@@ -48,8 +48,10 @@ _ACTIONS = ('root_open', 'root_fstat', 'component_stat', 'component_open',
 
 def _new_policy(path, actor_uid):
     _need(type(path) is str and type(actor_uid) is int and actor_uid >= 0
-          and 1 < len(path.encode('utf-8')) <= 4096 and path.startswith('/')
-          and all(32 <= ord(char) != 127 for char in path))
+          and path.startswith('/')
+          and all(32 <= ord(char) != 127 and not 0xD800 <= ord(char) <= 0xDFFF
+                  for char in path)
+          and 1 < len(path.encode('utf-8')) <= 4096)
     parts = tuple(path[1:].split('/'))
     _need(1 <= len(parts) <= 64
           and all(part not in ('', '.', '..') for part in parts))
@@ -65,8 +67,9 @@ def _policy_tail(policy):
           and all(part not in ('', '.', '..') and '/' not in part
                   for part in policy.components[1:])
           and policy.path == '/' + '/'.join(policy.components[1:])
-          and 1 < len(policy.path.encode('utf-8')) <= 4096
-          and all(32 <= ord(char) != 127 for char in policy.path))
+          and all(32 <= ord(char) != 127 and not 0xD800 <= ord(char) <= 0xDFFF
+                  for char in policy.path)
+          and 1 < len(policy.path.encode('utf-8')) <= 4096)
     return policy
 
 

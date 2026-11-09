@@ -102,7 +102,8 @@ def test_missing_is_not_accepted_at_other_operations(kind):
 
 
 @pytest.mark.parametrize('path', ('relative', '/', '/a/../b', '/a/./b',
-                                '/a//b', '/a/', '/a\x00b', '/a\nb'))
+                                '/a//b', '/a/', '/a\x00b', '/a\nb',
+                                '/a\ud800b', '/a\udfffb'))
 def test_path_contract_rejects_noncanonical_or_control_input(path):
     with pytest.raises(ArtifactObservationError):
         policy._new_policy(path, 1000)
