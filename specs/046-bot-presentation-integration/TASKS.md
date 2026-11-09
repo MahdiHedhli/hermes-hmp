@@ -1,5 +1,16 @@
 ## November 8 — reviewed host updates deployed; character integration remains open
 
+
+Separate operator transport source `b719992` now has a single-use connection challenge,
+same-UID peer check, fixed private socket, bounded workers and actual concurrent-worker
+retirement after timeout/cancellation. Seven synthetic socket/Store/actor cases pass
+on Python 3.14.9 and 3.11.15; full Ruff passes. The initial test-module import and
+missing fixture environment failures are retained, not counted as passes. This service
+is unwired: no host starts it and no CLI human-consent path is implemented. Malformed
+frame/capacity/ambiguous-submit and full lifecycle coverage, independent service review,
+native authority publication, migration/rollback and physical display remain open.
+These tests qualify only their observed cases, not local-image delivery or release.
+
 The post-lint1,176-case minimum-Python suite now passes in a fresh capacity-qualified
 run, matching the current-Python pass. The earlier floor run failed with ENOSPC
 before final XML/receipt and remains unqualified; only completed owned synthetic
