@@ -766,6 +766,22 @@ async def _handle_readiness(request: web.Request, *, media: bool) -> web.Respons
     except Exception as exc:
         log_handler_exception(exc)
         raise HmpError(ErrorCode.READINESS_UNAVAILABLE) from None
+    if media:
+        # Final synchronous authority/readback fence after the worker await. Never await
+        # between this comparison and response construction. These authority readers can
+        # perform SQLite/native config I/O; this is not a nonblocking performance claim.
+        try:
+            current = _collect_media_readiness(
+                ctx, authorization=authorization, instance=instance, expected=who,
+                profile=profile, device_id=who.device_id, deadline=deadline,
+                generation=generation,
+            )
+            if current["media"] != payload["media"]:
+                raise readiness.ReadinessUnavailableError()
+        except HmpError:
+            raise
+        except Exception:
+            raise HmpError(ErrorCode.READINESS_UNAVAILABLE) from None
     try:
         body = wire.dump_json(payload)
     except Exception:
