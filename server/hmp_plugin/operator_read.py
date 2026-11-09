@@ -409,7 +409,8 @@ class OperatorReadService:
         fd, self._fd = self._fd, None
         if fd is not None:
             try:
-                if self._inode == (_entry(fd, name=self._socket_name).st_dev, _entry(fd, name=self._socket_name).st_ino):
+                entry = _entry(fd, name=self._socket_name)
+                if self._inode == (entry.st_dev, entry.st_ino):
                     os.unlink(self._socket_name, dir_fd=fd)
             except FileNotFoundError:
                 pass
