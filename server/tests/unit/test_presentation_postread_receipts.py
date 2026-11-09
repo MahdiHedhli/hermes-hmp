@@ -72,65 +72,62 @@ def observe_site(actual_owner,resource,predecessor=None,baseline=None,eof=None):
         assert metadata.commits[-1] is commit and captured[-1][1]() is None
         commits.append(commit)
         return commit
-    try:
-        assert len(baselines)==1 and type(eof) is a._NativeRuntimeReadCommit
-        assert baseline is baselines[0]
-        assert eof.eof is True and eof.remaining==0 and eof.count[2]==resource.variant.expected.size
-        if not eofs:eofs.append(eof)
-        assert eofs[0] is eof
-        baseline=baselines[0]
-        before=tuple(registration.native_ledger.counts)
-        if operation==4:
-            assert a._native_runtime_read_closed_tail(owner,eof,eof.step) is eof
-            if post_case=='changed_file':
-                leaf=dep_root/'__init__.py';st=os.stat(leaf,follow_symlinks=False)
-                os.utime(leaf,ns=(st.st_atime_ns,st.st_mtime_ns+1000000000))
-        if post_case=='missing_eof':eof=None
-        if post_case=='copied_eof':eof=eof._replace()
-        if post_case=='missing_baseline':baseline=None
-        if post_case=='foreign_baseline_resource':
-            baseline=baseline._replace(resource=ForeignBaseline())
-        if post_case=='foreign_baseline_variant':
-            baseline=baseline._replace(resource=baseline.resource._replace(variant=ForeignBaseline()))
-        try:commit=actual_run(owner,resource,predecessor,baseline,eof)
-        except a.ArtifactObservationError:
-            assert post_case not in ('normal','empty') and operation==4
-            entered=post_case in ('changed_file','lost_return')
-            assert native_entries.count('leaf_after_read')==int(entered)
-            assert tuple(registration.native_ledger.counts)==(before[0]+int(entered),before[1])
-            assert metadata.progress[0]==ordinal and metadata.commits[-1] is commits[-1]
+    assert len(baselines)==1 and type(eof) is a._NativeRuntimeReadCommit
+    assert baseline is baselines[0]
+    assert eof.eof is True and eof.remaining==0 and eof.count[2]==resource.variant.expected.size
+    if not eofs:eofs.append(eof)
+    assert eofs[0] is eof
+    baseline=baselines[0]
+    before=tuple(registration.native_ledger.counts)
+    if operation==4:
+        assert a._native_runtime_read_closed_tail(owner,eof,eof.step) is eof
+        if post_case=='changed_file':
+            leaf=dep_root/'__init__.py';st=os.stat(leaf,follow_symlinks=False)
+            os.utime(leaf,ns=(st.st_atime_ns,st.st_mtime_ns+1000000000))
+    if post_case=='missing_eof':eof=None
+    if post_case=='copied_eof':eof=eof._replace()
+    if post_case=='missing_baseline':baseline=None
+    if post_case=='foreign_baseline_resource':
+        baseline=baseline._replace(resource=ForeignBaseline())
+    if post_case=='foreign_baseline_variant':
+        baseline=baseline._replace(resource=baseline.resource._replace(variant=ForeignBaseline()))
+    try:commit=actual_run(owner,resource,predecessor,baseline,eof)
+    except a.ArtifactObservationError:
+        assert post_case not in ('normal','empty') and operation==4
+        entered=post_case in ('changed_file','lost_return')
+        assert native_entries.count('leaf_after_read')==int(entered)
+        assert tuple(registration.native_ledger.counts)==(before[0]+int(entered),before[1])
+        assert metadata.progress[0]==ordinal and metadata.commits[-1] is commits[-1]
+        assert eofs[0].result.acknowledged[0] is eofs[0]
+        assert eofs[0].step.eof==[True] and eofs[0].result.raw[0] is eofs[0].result.unset
+        if entered:
+            assert captured[-1][0].state==[True,True,True]
+            assert captured[-1][0].result.acknowledged==[None]
+            assert registration.native_ledger.failed==[True]
+        observed.update(refused=True,post_entries=int(entered),actual_eof_preserved=True)
+        raise
+    assert post_case in ('normal','empty')
+    assert commit.identity==baselines[0].identity==post_returns[-1][0]
+    assert commit.consumer.predecessor is commits[-1]
+    assert commit.consumer.eof is eofs[0] and commit.consumer.baseline is baselines[0]
+    assert metadata.commits[-1] is commit and captured[-1][1]() is None
+    commits.append(commit)
+    assert a._native_runtime_read_history_tail(owner,eofs[0],eofs[0].step) is eofs[0]
+    try:a._native_runtime_read_closed_tail(owner,eofs[0],eofs[0].step)
+    except a.ArtifactObservationError:pass
+    else:raise AssertionError('later metadata must not renew current read closure')
+    if operation==3:
+        assert native_entries.count('leaf_after_read')==2 and len(post_returns)==2
+        if post_case=='empty':
+            assert eofs[0].count[2]==0 and read_entries==[True]
+            assert eofs[0].eof is True and eofs[0].step.eof==[True]
+            assert eofs[0].operation.state==[True,True,False]
             assert eofs[0].result.acknowledged[0] is eofs[0]
-            assert eofs[0].step.eof==[True] and eofs[0].result.raw[0] is eofs[0].result.unset
-            if entered:
-                assert captured[-1][0].state==[True,True,True]
-                assert captured[-1][0].result.acknowledged==[None]
-                assert registration.native_ledger.failed==[True]
-            observed.update(refused=True,post_entries=int(entered),actual_eof_preserved=True)
-            raise
-        assert post_case in ('normal','empty')
-        assert commit.identity==baselines[0].identity==post_returns[-1][0]
-        assert commit.consumer.predecessor is commits[-1]
-        assert commit.consumer.eof is eofs[0] and commit.consumer.baseline is baselines[0]
-        assert metadata.commits[-1] is commit and captured[-1][1]() is None
-        commits.append(commit)
-        assert a._native_runtime_read_history_tail(owner,eofs[0],eofs[0].step) is eofs[0]
-        try:a._native_runtime_read_closed_tail(owner,eofs[0],eofs[0].step)
-        except a.ArtifactObservationError:pass
-        else:raise AssertionError('later metadata must not renew current read closure')
-        if operation==3:
-            assert native_entries.count('leaf_after_read')==2 and len(post_returns)==2
-            if post_case=='empty':
-                assert eofs[0].count[2]==0 and read_entries==[True]
-                assert eofs[0].eof is True and eofs[0].step.eof==[True]
-                assert eofs[0].operation.state==[True,True,False]
-                assert eofs[0].result.acknowledged[0] is eofs[0]
-                observed.update(empty_actual_eof=True,actual_read_calls=1)
-            observed.update(actual_post_pair_ack=True,post_entries=2,
-                            literal_eof_retained=True,current_read_closure_refused=True)
-            raise RuntimeError('synthetic boundary after actual post-read pair ACK')
-        return commit
-    finally:
-        pass
+            observed.update(empty_actual_eof=True,actual_read_calls=1)
+        observed.update(actual_post_pair_ack=True,post_entries=2,
+                        literal_eof_retained=True,current_read_closure_refused=True)
+        raise RuntimeError('synthetic boundary after actual post-read pair ACK')
+    return commit
 
 profile_before=sys.getprofile();gc_before=gc.isenabled()
 assert profile_before is None
