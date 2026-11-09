@@ -912,3 +912,99 @@ def test_actual_authorization_thread_outlives_cancelled_dispatch_and_blocks_drai
                 await drain()
 
     run(env, scenario)
+
+
+def test_failed_dispatcher_start_retains_slow_relay_until_actual_close(env, monkeypatch):
+    async def scenario(client):
+        _setup(env)
+        relay, release, calls = Relay(), asyncio.Event(), []
+
+        async def slow_close():
+            calls.append("close")
+            await release.wait()
+
+        relay.close = slow_close
+        monkeypatch.setattr(PushDispatcher, "start", lambda _: (_ for _ in ()).throw(
+            RuntimeError("synthetic failed start")))
+        srv = server.HmpServer(env.ctx, server.ListenerSettings("127.0.0.1", 0),
+                               push_relay_factory=lambda: relay)
+        try:
+            await srv.start()
+            assert srv._push_dispatcher is None and srv._push_start_dispatcher is not None
+            retained = srv._push_start_dispatcher
+            await srv.stop(notify=False)
+            assert srv._push_dispatcher_drained is retained and srv.operator_worker_debt == 1
+            release.set()
+            await srv.wait_operator_drain()
+            assert srv.operator_worker_debt == 0 and calls == ["close"]
+        finally:
+            release.set()
+            await srv.stop(notify=False)
+
+    run(env, scenario)
+
+
+def test_failed_dispatcher_constructor_retains_one_original_relay_close(env, monkeypatch):
+    async def scenario(client):
+        _setup(env)
+        relay, release, calls = Relay(), asyncio.Event(), []
+
+        async def slow_close():
+            calls.append("close")
+            await release.wait()
+
+        relay.close = slow_close
+        monkeypatch.setattr(server, "PushDispatcher", lambda *a, **k: (_ for _ in ()).throw(
+            RuntimeError("synthetic failed constructor")))
+        srv = server.HmpServer(env.ctx, server.ListenerSettings("127.0.0.1", 0),
+                               push_relay_factory=lambda: relay)
+        try:
+            await srv.start()
+            assert srv._push_start_relay is relay and srv._push_start_dispatcher is None
+            await srv.stop(notify=False)
+            assert srv.operator_worker_debt == 1 and calls == ["close"]
+            release.set()
+            await srv.wait_operator_drain()
+            assert srv.operator_worker_debt == 0 and calls == ["close"]
+        finally:
+            release.set()
+            await srv.stop(notify=False)
+
+    run(env, scenario)
+
+
+def test_failed_relay_close_cannot_certify_retirement_or_replay(env):
+    async def scenario(client):
+        _, _, _, relay, dispatcher, _, _ = await prepare(env, client)
+        calls = []
+
+        async def failed_close():
+            calls.append("close")
+            raise RuntimeError("private synthetic close error")
+
+        relay.close = failed_close
+        await dispatcher.close()
+        with pytest.raises(RuntimeError, match="relay cleanup success unconfirmed"):
+            await dispatcher.wait_drained()
+        await dispatcher.close()
+        assert dispatcher.retirement_pending and calls == ["close"]
+
+    run(env, scenario)
+
+
+def test_dispatcher_rejects_substituted_relay_cleanup_owner(env):
+    from hmp_plugin.push_retirement import RelayCloseOwner
+
+    async def scenario(client):
+        _, _, _, relay, dispatcher, _, _ = await prepare(env, client)
+        await dispatcher.close()
+        original = dispatcher._relay_owner
+        dispatcher._relay_owner = RelayCloseOwner(relay)
+        try:
+            with pytest.raises(RuntimeError, match="scope changed"):
+                await dispatcher.wait_drained()
+        finally:
+            dispatcher._relay_owner = original
+        await dispatcher.wait_drained()
+
+    run(env, scenario)
