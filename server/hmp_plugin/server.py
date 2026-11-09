@@ -77,6 +77,7 @@ from . import (
     push_registration,
     push_resolve,
     readiness,
+    media_readiness,
     wire,
 )
 from .auth import Authenticator
@@ -159,6 +160,7 @@ F1_ROUTES: tuple[tuple[str, str, str], ...] = (
     ("GET", "/ready", "PR0-1"),
     ("GET", "/readiness/capabilities", "AR1"),
     ("GET", "/bots/{p}/readiness", "AR1"),
+    ("GET", "/bots/{p}/media-readiness", "LM-ENT1"),
     ("POST", "/pair/request", "PR2"),
     ("POST", "/pair/complete", "PR4"),
     ("POST", "/auth/token", "PR5"),
@@ -655,7 +657,44 @@ def _collect_readiness(
     }
 
 
+def _collect_media_readiness(ctx: ServerContext, **scope: Any) -> dict[str, object]:
+    # Reuse AR1's authorization/deadline fence, never its jobs/model entitlement.
+    authority = {key: scope[key] for key in (
+        "authorization", "instance", "expected", "profile", "generation", "deadline",
+    )}
+    def checkpoint() -> None:
+        _readiness_authority_check(ctx, **authority)
+    checkpoint()
+    decision = ctx.store.media_read_decision(ctx.iid, scope["device_id"])
+    if decision is None:
+        raise readiness.ReadinessUnavailableError()
+    permission = ctx.media_read_permission(scope["device_id"])
+    entitlement = "granted" if permission is not None else "missing"
+    if ctx.readiness_settings is None:
+        raise readiness.ReadinessUnavailableError()
+    setting = media_readiness.host_setting(ctx.readiness_settings())
+    api = "available" if ctx.media_snapshot() is not None else "unavailable"
+    checkpoint()
+    # Refuse superseded per-device rights and host settings, including changes during callbacks.
+    if (ctx.store.media_read_decision(ctx.iid, scope["device_id"]) != decision
+            or ctx.media_read_permission(scope["device_id"]) != permission
+            or media_readiness.host_setting(ctx.readiness_settings()) != setting):
+        raise readiness.ReadinessUnavailableError()
+    payload = media_readiness.project(entitlement=entitlement, host=setting, api=api)
+    checkpoint()
+    return {"protocol": 1, "checked_at": _readiness_now(ctx),
+            "generation": scope["generation"], "media": payload}
+
+
+async def handle_media_readiness(request: web.Request) -> web.Response:
+    return await _handle_readiness(request, media=True)
+
+
 async def handle_readiness(request: web.Request) -> web.Response:
+    return await _handle_readiness(request, media=False)
+
+
+async def _handle_readiness(request: web.Request, *, media: bool) -> web.Response:
     _readiness_empty_get(request)
     try:
         ctx = context(request)
@@ -684,7 +723,7 @@ async def handle_readiness(request: web.Request) -> web.Response:
     deadline = time.monotonic() + _READINESS_DEADLINE_S
     try:
         work = asyncio.create_task(asyncio.to_thread(
-            _collect_readiness,
+            _collect_media_readiness if media else _collect_readiness,
             ctx,
             authorization=authorization,
             instance=instance,
@@ -1597,6 +1636,7 @@ def build_app(ctx: ServerContext) -> web.Application:
         "/ready": handle_ready,
         "/readiness/capabilities": handle_readiness_capabilities,
         "/bots/{p}/readiness": handle_readiness,
+        "/bots/{p}/media-readiness": handle_media_readiness,
         "/push/registration": push_registration.handle_push_get,
         "/push/hints/resolve": partial(
             push_resolve.handle_push_resolve, require_gate=_require_approvals_gate
