@@ -74,5 +74,6 @@ descriptor causals remain unqualified. PS1-FP-NATIVE stays open.
 The separate common-producer worktree has a canonical known-raised outcome and
 one stat/fstat producer. Its initial broad classification handler failed two
 causal controls; `c4b7930` isolates the literal native stat call and preserves
-actual returned history on bookkeeping loss. Runtime12 is running, unqualified.
+actual returned history on bookkeeping loss. Initial runtime12:11PASS/1retirementFAIL; d117656 restores final branch
+lifetime closure outside classification. Corrected12 is running, unqualified.
 Do not infer this source's qualification from the c981 parent compatibility.
