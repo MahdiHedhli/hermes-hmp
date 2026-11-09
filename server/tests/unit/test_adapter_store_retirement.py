@@ -331,3 +331,40 @@ def partial_real_listener(adapter_module, monkeypatch, *, fail_close=False, bloc
     monkeypatch.setattr(adapter_module, "open_components", lambda _adapter: listener.ctx)
     monkeypatch.setattr(adapter_module.server, "HmpServer", lambda *_args, **_kwargs: listener)
     return adapter, listener, store, events, entered, release
+
+
+@pytest.mark.parametrize("phase", ("migration", "identity", "configuration"))
+@pytest.mark.parametrize("close_fails", (False, True))
+def test_component_builder_failure_retains_store_and_attempts_close_once(
+    adapter_module, monkeypatch, tmp_path, phase, close_fails
+):
+    from hmp_plugin.compat import CompatResult, CompatStatus
+
+    store = FakeStore(fail=close_fails)
+
+    def fail():
+        raise ValueError("synthetic component failure")
+
+    store.migrate = fail if phase == "migration" else lambda: None
+    monkeypatch.setattr(adapter_module.compat, "default_gate", lambda: SimpleNamespace(
+        evaluate=lambda: CompatResult(CompatStatus.UNSUPPORTED)))
+    monkeypatch.setattr(adapter_module.identity, "resolve_custody",
+                        lambda: SimpleNamespace(anchor_dir=tmp_path))
+    monkeypatch.setattr(adapter_module, "Store", lambda _path: store)
+    monkeypatch.setattr(adapter_module.identity, "load_or_create",
+                        lambda _store: fail() if phase == "identity" else object())
+
+    class ConfigurationFailure:
+        @property
+        def extra(self):
+            return fail()
+
+    adapter = SimpleNamespace(config=ConfigurationFailure())
+    with pytest.raises((ValueError, OSError)):
+        adapter_module.open_components(adapter)
+    owner = adapter._component_store_owner
+    assert owner.store is store and owner.attempted is True
+    assert owner.closed is (not close_fails) and store.closes == 1
+    with pytest.raises(RuntimeError, match="outcome unresolved"):
+        owner.close_once()
+    assert store.closes == 1
