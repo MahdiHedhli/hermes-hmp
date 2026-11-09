@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import concurrent.futures
 import contextlib
+import contextvars
 
 
 class BootstrapUnresolvedError(RuntimeError):
@@ -17,6 +18,7 @@ class BootstrapOpening:
         self.function, self.adapter = function, adapter
         self.ctx = self.store = self.close = self.server = None
         self.future = None
+        self._context = None
         self.started = False
         self.close_attempted = False
         self.closed = False
@@ -32,9 +34,11 @@ class BootstrapOpening:
     def start(self):
         if self.started:
             raise BootstrapUnresolvedError()
+        execution_context = contextvars.copy_context()
+        self._context = execution_context
         self.started = True  # lost enqueue acknowledgement is never automatically replayed
         try:
-            self.future = self.pool.submit(self._run)
+            self.future = self.pool.submit(execution_context.run, self._run)
         except BaseException:
             raise BootstrapUnresolvedError() from None
 
