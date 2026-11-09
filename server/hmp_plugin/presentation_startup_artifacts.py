@@ -396,6 +396,7 @@ class _Scope(NamedTuple):
     native_registration_slot: object = None
     material_origin: object = None
     native_probe_plan: object = None
+    native_probe_origin: object = None
 
     def __repr__(self):
         return "<StartupArtifactScope redacted>"
@@ -1128,6 +1129,21 @@ def _native_metadata_component_tail(owner, registration, walk, descriptor, index
         current = parent
     _require(current is None)
     return descriptor
+
+
+class _NativeProbeMetadataResource(NamedTuple):
+    """Probe input DATA of a canonical shared type; no native authority."""
+    owner: object
+    registration: object
+    metadata: object
+    variant: object
+    site: tuple
+    ordinal: int
+    descriptor: object
+    arguments: tuple
+
+    def __repr__(self):
+        return '<FreshProbeResource original DATA no-admission>'
 
 
 class _NativeMetadataResource(NamedTuple):

@@ -7,7 +7,8 @@ from .test_presentation_gateway_approval import operator_composed_script
 
 @pytest.mark.parametrize('case', ('normal', 'copied_registration', 'copied_plan',
                                  'wrong_arguments', 'foreign_resource', 'other_site',
-                                 'foreign_ordinal'))
+                                 'foreign_ordinal', 'fake_module_fake_type',
+                                 'fake_module_actual_type', 'helper_export', 'helper_code'))
 def test_fresh_probe_shared_intent(tmp_path, monkeypatch, case):
     script, mutation = operator_composed_script('links')
     script = script.replace('GatewayPackageOwner.verify_recipe(recipe)',
@@ -57,7 +58,36 @@ def exercise(frame):
             candidate=resource._replace(ordinal=1,site=plan.definitions[1],variant=plan.variants[1])
         elif resource_case=='foreign_ordinal':candidate=resource._replace(ordinal=Foreign())
         else:candidate=resource
-        if resource_case=='normal':
+        substitutions=('fake_module_fake_type','fake_module_actual_type','helper_export','helper_code')
+        if resource_case in substitutions:
+            from types import ModuleType
+            owner._fixture_resource_calls=0
+            def foreign_helper(owner,resource):
+                vars(owner)['_fixture_resource_calls']+=1
+                return resource
+            original_module=sys.modules['hmp_startup.probe_metadata']
+            original_helper=pm._fresh_probe_resource_tail
+            original_code=original_helper.__code__
+            if resource_case.startswith('fake_module'):
+                fake=ModuleType('hmp_startup.probe_metadata')
+                kind=type('FakeProbeResource',(),{}) if resource_case.endswith('fake_type') else type(resource)
+                fake._ProbeObservationResource=kind
+                fake._fresh_probe_resource_tail=foreign_helper
+                candidate=kind() if resource_case.endswith('fake_type') else resource
+                sys.modules['hmp_startup.probe_metadata']=fake
+            elif resource_case=='helper_export':pm._fresh_probe_resource_tail=foreign_helper
+            else:original_helper.__code__=foreign_helper.__code__
+            refused=False
+            try:
+                try:m._resource_tail(owner,candidate)
+                except (pm.ProbePlanError,a.ArtifactObservationError):refused=True
+            finally:
+                sys.modules['hmp_startup.probe_metadata']=original_module
+                pm._fresh_probe_resource_tail=original_helper
+                original_helper.__code__=original_code
+            facts.update(substitution_refused=refused,foreign_helper_calls=owner._fixture_resource_calls)
+            assert refused and owner._fixture_resource_calls==0
+        elif resource_case=='normal':
             operation,marker,payload=m._prepare_metadata_operation_with_custody(owner,candidate)
             reference=weakref.ref(payload)
             assert type(operation) is m._MetadataOperation and operation.resource is resource

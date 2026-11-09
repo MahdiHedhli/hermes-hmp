@@ -218,11 +218,6 @@ class _ModuleScanner(ast.NodeVisitor):
         # HMP-owned sibling package, not an upstream Hermes API. Keep the
         # circular entry/IO join lazy and closed to its exact required types.
         if root == "hmp_startup":
-            if (self.name == "presentation_native_metadata.py"
-                    and self._function_depth > 0
-                    and module == "hmp_startup.probe_metadata" and names
-                    and set(names) <= {"_ProbeObservationResource", "_fresh_probe_resource_tail"}):
-                return
             local_types = {
                 "hmp_startup.gateway_entry": {
                     "GatewayEntryOwner", "_NativeFileLineage", "_NativeFileLedger",

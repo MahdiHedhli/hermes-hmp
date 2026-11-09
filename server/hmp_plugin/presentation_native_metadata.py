@@ -30,6 +30,8 @@ from .presentation_startup_artifacts import (
     _NativeActorMismatchError,
     _NativeDeclaredMetadataPlan,
     _NativeMetadataResource,
+    _NativeProbeMetadataResource,
+    _native_work_registration_tail,
     _NativeMetadataSnapshot,
     _NativeScopeRegistration,
     _NativeDeclaredMetadataSite,
@@ -128,21 +130,29 @@ class _MetadataOperation(NamedTuple):
 def _resource_tail(owner, resource):
     """Rejoin the held actual resource; never adopt a current replacement."""
     if type(resource) is not _NativeMetadataResource:
-        # A retained probe has already loaded this HMP-owned module. Unknown
-        # inputs and ordinary reader owners must refuse without a cold import.
-        _require(type(sys.modules) is dict)
-        probe_module = sys.modules.get('hmp_startup.probe_metadata')
-        owner_module = sys.modules.get('hmp_startup.cache_probe')
-        _require(type(probe_module) is ModuleType and type(owner_module) is ModuleType)
-        probe_kind = vars(probe_module).get('_ProbeObservationResource')
-        owner_kind = vars(owner_module).get('RuntimeCacheProbeOwner')
-        _require(type(probe_kind) is type and type(resource) is probe_kind
-                 and type(owner_kind) is type and type(owner) is owner_kind)
-        from hmp_startup.probe_metadata import (
-            _ProbeObservationResource, _fresh_probe_resource_tail,
-        )
-        _require(_ProbeObservationResource is probe_kind)
-        return _fresh_probe_resource_tail(owner, resource)
+        # Type and registration are checked before touching startup namespaces.
+        # Current exports can only rejoin originals captured before constructors;
+        # they cannot nominate a replacement helper or resource type.
+        _require(type(resource) is _NativeProbeMetadataResource
+                 and resource.owner is owner
+                 and type(resource.registration) is _NativeScopeRegistration)
+        registration = resource.registration
+        _native_work_registration_tail(owner, registration)
+        origin = registration.scope.native_probe_origin
+        _require(type(origin) is tuple and len(origin) == 6
+                 and origin[0] is _NativeProbeMetadataResource
+                 and type(origin[1]) is type and type(owner) is origin[1]
+                 and type(origin[2]) is ModuleType and type(origin[3]) is ModuleType
+                 and type(origin[4]) is FunctionType
+                 and origin[4].__code__ is origin[5]
+                 and origin[4].__globals__ is vars(origin[3])
+                 and type(sys.modules) is dict
+                 and sys.modules.get('hmp_startup.cache_probe') is origin[2]
+                 and sys.modules.get('hmp_startup.probe_metadata') is origin[3]
+                 and vars(origin[2]).get('RuntimeCacheProbeOwner') is origin[1]
+                 and vars(origin[3]).get('_ProbeObservationResource') is origin[0]
+                 and vars(origin[3]).get('_fresh_probe_resource_tail') is origin[4])
+        return origin[4](owner, resource)
     _require(type(resource) is _NativeMetadataResource and resource.owner is owner
              and type(resource.site) is tuple and len(resource.site) == 3
              and type(resource.site[0]) is int and resource.site[0] in (3, 4)

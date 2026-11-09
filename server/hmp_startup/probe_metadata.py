@@ -12,7 +12,8 @@ from typing import NamedTuple
 
 from hmp_plugin.presentation_startup_artifacts import _Scope
 from hmp_plugin.presentation_startup_artifacts import (
-    _NativeScopeRegistration, _capture_native_scope, _native_work_origin_tail,
+    _NativeScopeRegistration, _NativeProbeMetadataResource,
+    _capture_native_scope, _native_work_origin_tail,
 )
 
 from .cache_probe import RuntimeCacheProbeOwner
@@ -64,6 +65,7 @@ class _FreshProbePlan(NamedTuple):
     progress: list
     commits: list
     ancestors: list
+    resource_origin: tuple
 
     def __repr__(self):
         return '<FreshProbePlan original DATA no-admission>'
@@ -117,6 +119,14 @@ def _new_fresh_probe_plan(owner, root, selected, context):
     partial = names['_ROOT']
     owner_names = vars(owner)
     owner_entries = tuple(owner_names.items())
+    helper = _fresh_probe_resource_tail
+    helper_module = sys.modules.get(__name__)
+    _need(type(helper) is FunctionType and type(helper_module) is ModuleType
+          and helper.__globals__ is vars(helper_module)
+          and vars(helper_module).get('_fresh_probe_resource_tail') is helper
+          and _ProbeObservationResource is _NativeProbeMetadataResource)
+    resource_origin = (_NativeProbeMetadataResource, owner_kind, module,
+                       helper_module, helper, helper.__code__)
     site_kind, plan_kind = _ProbeSite, _FreshProbePlan
     site_fields, plan_fields = site_kind._fields, plan_kind._fields
     site_members = tuple(vars(site_kind).get(field) for field in site_fields)
@@ -135,7 +145,7 @@ def _new_fresh_probe_plan(owner, root, selected, context):
     values = (owner, root, selected, row, location, path, components,
               proof, context, owner_kind, module,
               pure, pure_code, observe, observe_code,
-              definitions, variants, [0, None], [], [])
+              definitions, variants, [0, None], [], [], resource_origin)
     result = plan_kind(*values)
     if need.__code__ is not need_code:
         raise error_type from None
@@ -148,6 +158,10 @@ def _new_fresh_probe_plan(owner, root, selected, context):
                  for field, member in zip(site_fields, site_members, strict=True))
          and all(vars(plan_kind).get(field) is member
                  for field, member in zip(plan_fields, plan_members, strict=True)))
+    need(helper.__code__ is resource_origin[5]
+         and sys.modules.get(__name__) is helper_module
+         and vars(helper_module).get('_fresh_probe_resource_tail') is helper
+         and _ProbeObservationResource is resource_origin[0])
     need(pure.__code__ is pure_code and observe.__code__ is observe_code
          and pure.__globals__ is names and observe.__globals__ is names
          and type(sys.modules) is dict
@@ -184,6 +198,7 @@ def _fresh_probe_plan_tail(owner, scope, original):
           and original.owner is owner and type(original.owner_type) is type
           and type(owner) is original.owner_type
           and scope.native_probe_plan is original
+          and scope.native_probe_origin is original.resource_origin
           and type(scope.parent) is tuple and len(scope.parent) == 2
           and scope.parent[0] is original.root and scope.parent[1] is original.selected
           and type(original.root) is tuple and len(original.root) == 3
@@ -253,19 +268,7 @@ def _fresh_probe_plan_tail(owner, scope, original):
     return original
 
 
-class _ProbeObservationResource(NamedTuple):
-    """Fixed original probe input DATA, never an operation or returned receipt."""
-    owner: object
-    registration: object
-    metadata: _FreshProbePlan
-    variant: _ProbeSite
-    site: tuple
-    ordinal: int
-    descriptor: object
-    arguments: tuple
-
-    def __repr__(self):
-        return '<FreshProbeResource original DATA no-admission>'
+_ProbeObservationResource = _NativeProbeMetadataResource
 
 
 def _fresh_probe_resource_tail(owner, resource):
