@@ -1,3 +1,11 @@
+## November 9 — native startup caller connected; final validation still failing
+
+The experimental startup driver now connects the actual native cache observer to the shared metadata pipeline and carries literal finishes into effect/pass publication. This is source implementation, not deployed image availability. Candidate `4f5818b` retains full parent-state validation before native effects. A proposed shallow parent witness in `70cbf24` was rejected because it missed mutable nested scan/descriptor state; `e028eb8` removes that optimization. No host deployment used the rejected change.
+
+Focused cleanup verification on exact `4f5818b` finished **2 passes / 1 failure**. Both lost-close-ACK controls pass, including completed traversal before cleanup and no close retry. The normal path closes all seven held descriptors but final validation refuses the result. It remains unqualified; diagnostic work is ongoing without relaxing production checks or the 60-second test deadline. Earlier connected-driver timeouts and the rejected candidate's normal-path failure remain failed evidence.
+
+The predecessor policy/shared-pipeline regression on exact `34f1966` finished **100 passes on Python 3.14.9 and 100 on Python 3.11.15**, with matching case sets and independently checked log/XML hashes. These results do not cover the newly connected native driver. Mobile device-local sections/static icons retain the separately recorded 51-case source result; desktop character images and host-local image delivery are still incomplete and are not claimed available on a phone. No host or device changes occurred in this checkpoint.
+
 ## November 9 — shared pipeline corrected; startup ordering implemented, native wiring pending
 
 Source `1898b64` connects the actual fresh-cache observe caller to the shared metadata engine and literal typed finish, preserving the existing ten-field fact. The same twenty actual probe/completion cases pass on Python 3.14.9 and 3.11.15; XML case sets, identical source footprints and log/XML hashes were checked. Source `e66d56a` removes the unused alternative stat helper and passes thirty-six current-interpreter registration, scope, argument, actor and diagnostic cases. These are bounded source results, not complete image or runtime qualification.
