@@ -22,9 +22,10 @@ from pathlib import Path
 from . import crypto
 from .contract import LIMITER_TABLE_MAX, ErrorCode, HmpError
 from .logging_policy import log_event
+from .media_permissions import MediaReadDecision, validate_media_scope
 from .push_issuer import RouteInputs, derive_route, rederive_route, route_text
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 # PN-BND, spec 014. Delivery/configuration checks belong to the future listener caller;
 # these storage operations grant no approval, bearer or provider authority.
@@ -356,7 +357,7 @@ def _migrate_request_schema(conn: sqlite3.Connection) -> None:
     version = row["schema_version"]
     if version > SCHEMA_VERSION:
         return  # Do not downgrade an unknown future store or touch its request schema.
-    if version == SCHEMA_VERSION:
+    if version >= 3:
         return
     conn.execute("BEGIN IMMEDIATE")
     try:
@@ -380,7 +381,8 @@ def _migrate_request_schema(conn: sqlite3.Connection) -> None:
 
 def _request_schema_valid(conn: sqlite3.Connection) -> bool:
     row = conn.execute("SELECT schema_version FROM meta WHERE id = 1").fetchone()
-    if row is None or type(row["schema_version"]) is not int or row["schema_version"] != 3:
+    if (row is None or type(row["schema_version"]) is not int
+            or row["schema_version"] != SCHEMA_VERSION):
         return False
     expected = {sql.split()[2]: sql for sql in _REQUEST_SCHEMA}
     for name, sql in expected.items():
@@ -415,6 +417,116 @@ def _request_schema_valid(conn: sqlite3.Connection) -> bool:
         "device_owner_controls_revision AS r ON r.device_id = c.device_id "
         "WHERE r.revision IS NULL OR r.revision < 1 LIMIT 1"
     ).fetchone() is None
+
+
+_MEDIA_SCHEMA = (
+    "CREATE TABLE device_media_read (iid TEXT NOT NULL CHECK (length(iid) = 52), "
+    "device_id TEXT NOT NULL REFERENCES devices(device_id), "
+    "allowed INTEGER NOT NULL CHECK (allowed IN (0,1)), "
+    "decided_at INTEGER NOT NULL CHECK (decided_at >= 0), PRIMARY KEY (iid,device_id))",
+    "CREATE TABLE device_media_read_revision (iid TEXT NOT NULL CHECK (length(iid) = 52), "
+    "device_id TEXT NOT NULL REFERENCES devices(device_id), "
+    "revision INTEGER NOT NULL CHECK (revision >= 1), PRIMARY KEY (iid,device_id))",
+)
+_MEDIA_REVISION_STEP = (
+    "INSERT INTO device_media_read_revision (iid,device_id,revision) "
+    "VALUES (NEW.iid,NEW.device_id,1) ON CONFLICT(iid,device_id) DO UPDATE SET revision = "
+    "CASE WHEN revision = 9223372036854775807 THEN RAISE(ABORT,'media revision overflow') "
+    "ELSE revision + 1 END"
+)
+_MEDIA_TRIGGERS = {
+    "media_read_insert": "CREATE TRIGGER media_read_insert AFTER INSERT ON device_media_read "
+        "BEGIN " + _MEDIA_REVISION_STEP + "; END",
+    "media_read_update": "CREATE TRIGGER media_read_update AFTER UPDATE ON device_media_read "
+        "BEGIN " + _MEDIA_REVISION_STEP + "; END",
+    "media_read_delete": "CREATE TRIGGER media_read_delete AFTER DELETE ON device_media_read "
+        "BEGIN " + _MEDIA_REVISION_STEP.replace("NEW.", "OLD.") + "; END",
+    "media_read_identity": "CREATE TRIGGER media_read_identity BEFORE UPDATE OF iid,device_id "
+        "ON device_media_read WHEN NEW.iid != OLD.iid OR NEW.device_id != OLD.device_id "
+        "BEGIN SELECT RAISE(ABORT,'media decision identity is immutable'); END",
+}
+
+
+def _migrate_media_schema(conn: sqlite3.Connection) -> None:
+    version = conn.execute("SELECT schema_version FROM meta WHERE id = 1").fetchone()
+    if version is None or type(version["schema_version"]) is not int:
+        raise RuntimeError("store schema version unavailable")
+    if version["schema_version"] == SCHEMA_VERSION:
+        return
+    if version["schema_version"] != 3:
+        raise RuntimeError("media migration requires schema 3")
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        for sql in (*_MEDIA_SCHEMA, *_MEDIA_TRIGGERS.values()):
+            conn.execute(sql)
+        # No device receives a new allow or deny during migration.
+        conn.execute("UPDATE meta SET schema_version = 4 WHERE id = 1 AND schema_version = 3")
+    except BaseException:
+        conn.execute("ROLLBACK")
+        raise
+    else:
+        conn.execute("COMMIT")
+
+
+def _media_schema_valid(conn: sqlite3.Connection) -> bool:
+    row = conn.execute("SELECT schema_version FROM meta WHERE id = 1").fetchone()
+    if row is None or type(row["schema_version"]) is not int or row["schema_version"] != 4:
+        return False
+    expected = {sql.split()[2]: sql for sql in (*_MEDIA_SCHEMA, *_MEDIA_TRIGGERS.values())}
+    actual = {
+        row["name"]: row["sql"] for row in conn.execute(
+            "SELECT name,sql FROM sqlite_master WHERE "
+            "tbl_name IN ('device_media_read','device_media_read_revision')"
+            " AND sql IS NOT NULL"
+        )
+    }
+    return actual == expected and conn.execute("PRAGMA foreign_key_check").fetchone() is None
+
+
+def _media_decision(conn: sqlite3.Connection, iid: str, device_id: str) -> MediaReadDecision | None:
+    if not _media_schema_valid(conn):
+        raise RuntimeError("media decision schema unavailable")
+    row = conn.execute(
+        "SELECT m.schema_version,m.instance_epoch,m.store_revocation_epoch,d.user_id,d.state,"
+        "p.allowed,r.revision,c.allowed AS controls_allowed,cr.revision AS controls_revision "
+        "FROM meta AS m CROSS JOIN devices AS d "
+        "LEFT JOIN device_media_read AS p ON p.iid=? AND p.device_id=d.device_id "
+        "LEFT JOIN device_media_read_revision AS r ON r.iid=? AND r.device_id=d.device_id "
+        "LEFT JOIN device_owner_controls AS c ON c.device_id=d.device_id "
+        "LEFT JOIN device_owner_controls_revision AS cr ON cr.device_id=d.device_id "
+        "WHERE m.id=1 AND d.device_id=?", (iid, iid, device_id),
+    ).fetchone()
+    if row is None or row["state"] != "ACTIVE":
+        return None
+    allowed, revision = row["allowed"], row["revision"]
+    if allowed is not None and (type(allowed) is not int or allowed not in (0, 1)):
+        raise RuntimeError("invalid media decision")
+    if revision is None:
+        if allowed is not None:
+            raise RuntimeError("missing media decision revision")
+        revision = 0
+    if type(revision) is not int or not 0 <= revision <= 2 ** 63 - 1:
+        raise RuntimeError("invalid media revision")
+    epochs = (row["instance_epoch"], row["store_revocation_epoch"])
+    if (row["schema_version"] != SCHEMA_VERSION
+            or any(type(value) is not int or not 0 <= value <= 2 ** 63 - 1 for value in epochs)
+            or type(row["user_id"]) is not str):
+        raise RuntimeError("invalid media authority")
+    controls, controls_revision = None, None
+    if allowed is None:
+        controls, controls_revision = row["controls_allowed"], row["controls_revision"]
+        if controls is not None and (type(controls) is not int or controls not in (0, 1)):
+            raise RuntimeError("invalid fallback controls")
+        if controls_revision is None:
+            if controls is not None:
+                raise RuntimeError("missing fallback revision")
+            controls_revision = 0
+        if type(controls_revision) is not int or not 0 <= controls_revision <= 2 ** 63 - 1:
+            raise RuntimeError("invalid fallback revision")
+    return MediaReadDecision(iid, device_id, row["user_id"],
+                             None if allowed is None else bool(allowed), revision,
+                             *epochs, None if controls is None else bool(controls),
+                             controls_revision)
 
 
 def _widen_cmid_status(conn: sqlite3.Connection) -> None:
@@ -541,6 +653,7 @@ class Store:
                     "UPDATE meta SET schema_version = 2 WHERE id = 1 AND schema_version < 2"
                 )
                 _migrate_request_schema(conn)
+                _migrate_media_schema(conn)
             except BaseException:
                 # A failed migration is never retried on this Store object. In particular,
                 # a failure on the already-shared connection may leave its SQL state unknown.
@@ -819,6 +932,32 @@ class Store:
                 "SELECT allowed FROM device_owner_controls WHERE device_id = ?", (device_id,)
             ).fetchone()
         return bool(row["allowed"]) if row is not None else None
+
+    def media_read_decision(self, iid: str, device_id: str) -> MediaReadDecision | None:
+        """One atomic authority snapshot; None means no active device, not a legacy allow."""
+        validate_media_scope(iid, device_id)
+        with self._authority_reader() as conn:
+            return _media_decision(conn, iid, device_id)
+
+    def set_media_read(
+        self, expected: MediaReadDecision, *, allowed: bool, now: int,
+    ) -> MediaReadDecision | None:
+        """Operator-only CAS primitive. No remote grant route or automatic retry."""
+        if (type(expected) is not MediaReadDecision or type(allowed) is not bool
+                or type(now) is not int or not 0 <= now <= 2 ** 63 - 1):
+            raise ValueError("invalid media decision write")
+        validate_media_scope(expected.iid, expected.device_id)
+        with self._serialized_writer() as conn:
+            current = _media_decision(conn, expected.iid, expected.device_id)
+            if current is None or current != expected:
+                return None
+            conn.execute(
+                "INSERT INTO device_media_read(iid,device_id,allowed,decided_at) VALUES(?,?,?,?) "
+                "ON CONFLICT(iid,device_id) DO UPDATE SET "
+                "allowed=excluded.allowed,decided_at=excluded.decided_at",
+                (expected.iid, expected.device_id, int(allowed), now),
+            )
+            return _media_decision(conn, expected.iid, expected.device_id)
 
     def readiness_owner_controls_value(self, device_id: str) -> int | None:
         """Strict readiness-only read; unlike the operational helper, never coerces bad data."""
