@@ -6,6 +6,7 @@ listener, repeat the read after confirmation, and use Store's final origin/CAS g
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 import contextlib
 import ctypes
 import json
@@ -320,7 +321,11 @@ class OperatorReadService:
         self._stopping = False
         self._active = 0
         self._drained = asyncio.Event()
-        self._outstanding = 0
+        self._read_origin_ctx = ctx
+        self._read_budget = getattr(ctx, "read_worker_budget", None)
+        self._read_loop = None
+        self._read_operations: dict[object, concurrent.futures.Future | None] = {}
+        self._read_pool = concurrent.futures.ThreadPoolExecutor(max_workers=2)
 
     async def start(self) -> None:
         if _NONCE.fullmatch(self.nonce) is None or len(os.fsencode(self.path)) >= 104:
@@ -385,6 +390,10 @@ class OperatorReadService:
             os.close(fd)
             raise
 
+    def _operator_debt(self) -> int:
+        """Actual retained work; mutation subclasses use their original-intent ledger."""
+        return len(self._read_operations)
+
     async def stop(self) -> int:
         self._stopping = True
         listener, self._server = self._server, None
@@ -405,45 +414,87 @@ class OperatorReadService:
                 pass
             finally:
                 os.close(fd)
-        debt = self._outstanding
+        debt = self._operator_debt()
         if debt == 0:
             self._drained.set()
+        self._read_pool.shutdown(wait=False, cancel_futures=False)
         return debt
 
     async def wait_drained(self) -> None:
         """A timed-out synchronous callback retains its Store until it actually returns."""
         await self._drained.wait()
 
+    def _retire_read(self, intent, original) -> None:
+        if self._read_operations.get(intent) is not original:
+            return
+        del self._read_operations[intent]
+        self._read_budget.release(operator=True)
+        if self._stopping and not self._read_operations:
+            self._drained.set()
+
     async def _context(self, request_id: str, challenge: str,
                        *, media: bool = False) -> dict[str, object]:
         ctx = self.ctx
-        if self._stopping or not ctx.read_worker_budget.reserve(operator=True):
-            raise OperatorUnavailableError("operator capacity unavailable")
-        self._outstanding += 1
+        loop = asyncio.get_running_loop()
+        if self._read_loop is None:
+            self._read_loop = loop
+        if (self._stopping or self._read_pool is None or self._read_loop is not loop
+                or ctx is not self._read_origin_ctx or self._read_budget is None
+                or ctx.read_worker_budget is not self._read_budget):
+            raise OperatorUnavailableError("operator context unavailable")
         generation = ctx.readiness_generation
         deadline = time.monotonic() + DEADLINE_S
+        intent = object()  # preconditions/allocations precede capacity acquisition
         try:
-            work = asyncio.create_task(asyncio.to_thread(
+            self._read_operations[intent] = None
+        except BaseException:
+            self._read_operations.pop(intent, None)  # acquisition was never called
+            raise OperatorUnavailableError("operator context unavailable") from None
+        try:
+            reserved = self._read_budget.reserve(operator=True)
+        except BaseException:
+            self._read_budget.poisoned = True
+            self._stopping = True
+            raise OperatorUnavailableError("operator context unavailable") from None
+        if reserved is False:
+            self._read_operations.pop(intent)
+            raise OperatorUnavailableError("operator capacity unavailable")
+        if reserved is not True:
+            self._read_budget.poisoned = True
+            self._stopping = True
+            raise OperatorUnavailableError("operator context unavailable")
+        try:
+            original = self._read_pool.submit(
                 _collect_media if media else _collect,
                 ctx, request_id, challenge, self.nonce, generation, deadline,
-            ))
-        except BaseException:
-            ctx.read_worker_budget.release(operator=True)
-            self._outstanding -= 1
-            raise
-        def release(done: asyncio.Task[Any]) -> None:
-            with contextlib.suppress(BaseException):
-                done.exception()
-            ctx.read_worker_budget.release(operator=True)
-            self._outstanding -= 1
-            if self._stopping and self._outstanding == 0:
-                self._drained.set()
-        work.add_done_callback(release)
-        try:
-            return await asyncio.wait_for(asyncio.shield(work), DEADLINE_S)
-        except (TimeoutError, asyncio.CancelledError):
-            raise OperatorUnavailableError("operator context unavailable") from None
+            )
+            self._read_operations[intent] = original
 
+            def release(future):
+                with contextlib.suppress(RuntimeError):
+                    loop.call_soon_threadsafe(self._retire_read, intent, future)
+
+            original.add_done_callback(release)
+        except BaseException:
+            self._stopping = True  # possibly queued; never refund an unknown submit
+            raise OperatorUnavailableError("operator context unavailable") from None
+        try:
+            wrapped = asyncio.wrap_future(original)
+
+            def consume_late_error(future):
+                with contextlib.suppress(BaseException):
+                    future.exception()  # no debt retirement authority
+
+            wrapped.add_done_callback(consume_late_error)
+            result = await asyncio.wait_for(asyncio.shield(wrapped),
+                                            max(0, deadline - time.monotonic()))
+            if (self._stopping or self.ctx is not ctx
+                    or ctx.read_worker_budget is not self._read_budget
+                    or ctx.readiness_generation != generation or time.monotonic() >= deadline):
+                raise OperatorUnavailableError("operator context unavailable")
+            return result
+        except BaseException:
+            raise OperatorUnavailableError("operator context unavailable") from None
     async def _handle(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         task = asyncio.current_task()
         assert task is not None

@@ -1,4 +1,5 @@
 """Synthetic-only source tests for the host read boundary and TTY CAS handoff."""
+
 from __future__ import annotations
 
 import argparse
@@ -29,6 +30,8 @@ from hmp_plugin.controls_requests import (
 )
 from hmp_plugin.request_ctx import ReadWorkerBudget
 
+from .test_adapter import adapter_module as adapter_module
+
 RID = "a" * 32
 IID = "a" * 52
 NONCE = "b" * 32
@@ -38,9 +41,14 @@ GEN = "c" * 32
 def _checked_operator_test_parent(value: str) -> tuple[Path, int, tuple[int, ...]]:
     """Physical current-UID0700 parent; never normalize a supplied socket literal."""
     parent = Path(value)
-    if (not value or not parent.is_absolute() or value != os.path.normpath(value)
-            or ".." in parent.parts or len(parent.parts) > 32
-            or len(os.fsencode(parent / operator_read.SOCKET_NAME)) >= 104):
+    if (
+        not value
+        or not parent.is_absolute()
+        or value != os.path.normpath(value)
+        or ".." in parent.parts
+        or len(parent.parts) > 32
+        or len(os.fsencode(parent / operator_read.SOCKET_NAME)) >= 104
+    ):
         raise ValueError("invalid operator test parent")
     fd = os.open("/", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
     try:
@@ -82,8 +90,11 @@ def _operator_test_parent_fixture():
     supplied = os.environ.get("HOST_OPERATOR_TEST_PARENT")
     owned = supplied is None
     # Canonicalize only the standard temporary base, never a supplied literal.
-    value = (tempfile.mkdtemp(prefix="hmp-op-", dir=os.path.realpath(tempfile.gettempdir()))
-             if owned else supplied)
+    value = (
+        tempfile.mkdtemp(prefix="hmp-op-", dir=os.path.realpath(tempfile.gettempdir()))
+        if owned
+        else supplied
+    )
     assert value is not None
     parent, fd, binding = _checked_operator_test_parent(value)
     try:
@@ -99,8 +110,13 @@ def _operator_test_parent_fixture():
                 try:
                     held = os.fstat(fd)
                     assert current == parent and named_binding == binding
-                    assert (held.st_dev, held.st_ino, held.st_uid,
-                            held.st_gid, held.st_mode) == binding
+                    assert (
+                        held.st_dev,
+                        held.st_ino,
+                        held.st_uid,
+                        held.st_gid,
+                        held.st_mode,
+                    ) == binding
                     _operator_test_socket_absent(fd)
                     if owned:
                         # Empty-only removal, through its physical retained temporary parent.
@@ -110,12 +126,18 @@ def _operator_test_parent_fixture():
                                 "operator fixture has unexpected leftover"
                             )
                         base_fd = os.open(
-                            parent.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+                            parent.parent,
+                            os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
                         )
                         try:
                             leaf = os.stat(parent.name, dir_fd=base_fd, follow_symlinks=False)
-                            assert (leaf.st_dev, leaf.st_ino, leaf.st_uid,
-                                    leaf.st_gid, leaf.st_mode) == binding
+                            assert (
+                                leaf.st_dev,
+                                leaf.st_ino,
+                                leaf.st_uid,
+                                leaf.st_gid,
+                                leaf.st_mode,
+                            ) == binding
                             os.rmdir(parent.name, dir_fd=base_fd)
                         finally:
                             os.close(base_fd)
@@ -127,16 +149,29 @@ def _operator_test_parent_fixture():
 
 def record() -> RequestRecordView:
     return RequestRecordView(
-        RID, "11111111-1111-4111-8111-111111111111",
+        RID,
+        "11111111-1111-4111-8111-111111111111",
         RequestOrigin("d" * 32, "hmpu_" + "e" * 32, "f" * 32, IID, 1, 1),
-        "primary", "jobs", "PENDING", 100, 700, 0, False, None,
-        None, 0, None, True, True,
+        "primary",
+        "jobs",
+        "PENDING",
+        100,
+        700,
+        0,
+        False,
+        None,
+        None,
+        0,
+        None,
+        True,
+        True,
     )
 
 
 def sources() -> dict[str, object]:
     return {
-        "served_profiles": ["primary"], "authorized_profiles": ["primary"],
+        "served_profiles": ["primary"],
+        "authorized_profiles": ["primary"],
         "profile_api": {"primary": "configured"},
         "host_settings": {"jobs": "enabled", "model": "enabled"},
         "eligibility": {"jobs": ["available", None], "model": ["available", None]},
@@ -146,11 +181,17 @@ def sources() -> dict[str, object]:
 
 def test_closed_wire_rejects_duplicates_unknown_and_unsafe_integer() -> None:
     body = {
-        "protocol": 1, "operation": "host_controls_decision_context", "request_id": RID,
-        "iid": IID, "nonce": NONCE, "challenge": "0" * 32,
+        "protocol": 1,
+        "operation": "host_controls_decision_context",
+        "request_id": RID,
+        "iid": IID,
+        "nonce": NONCE,
+        "challenge": "0" * 32,
     }
     assert operator_read._request(
-        json.dumps(body).encode(), iid=IID, nonce=NONCE,
+        json.dumps(body).encode(),
+        iid=IID,
+        nonce=NONCE,
     ) == (RID, "0" * 32)
     with pytest.raises(operator_read.OperatorUnavailableError):
         operator_read._request(b'{"protocol":1,"protocol":1}', iid=IID, nonce=NONCE)
@@ -162,19 +203,26 @@ def test_closed_wire_rejects_duplicates_unknown_and_unsafe_integer() -> None:
 def test_linux_peer_credentials_use_uid_never_pid(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(operator_read.sys, "platform", "linux")
     monkeypatch.setattr(operator_read.socket, "SO_PEERCRED", 17, raising=False)
+
     class Peer:
         def fileno(self) -> int:
             return 12
+
         def getsockopt(self, _level: int, _option: int, _size: int) -> bytes:
             return struct.pack("=iII", -1, 501, 20)
+
     assert operator_read._peer_uid(Peer()) == 501  # PID never confers authority
+
     class HighUid(Peer):
         def getsockopt(self, _level: int, _option: int, _size: int) -> bytes:
             return struct.pack("=iII", -1, 0xF0000001, 20)
+
     assert operator_read._peer_uid(HighUid()) == 0xF0000001
+
     class Short(Peer):
         def getsockopt(self, _level: int, _option: int, _size: int) -> bytes:
             return b"short"
+
     with pytest.raises(operator_read.OperatorUnavailableError):
         operator_read._peer_uid(Short())  # type: ignore[arg-type]
 
@@ -210,6 +258,7 @@ def test_bind_parent_substitution_refuses_and_removes_only_own_socket(
     service = operator_read.OperatorReadService(SimpleNamespace(), private / "anchor", NONCE)
     original = operator_read.os.lstat
     seen = 0
+
     def swapped(path: object, *args: object, **kwargs: object) -> object:
         nonlocal seen
         row = original(path, *args, **kwargs)
@@ -218,6 +267,7 @@ def test_bind_parent_substitution_refuses_and_removes_only_own_socket(
             if seen >= 2:
                 return SimpleNamespace(st_dev=row.st_dev, st_ino=row.st_ino + 1)
         return row
+
     monkeypatch.setattr(operator_read.os, "lstat", swapped)
     with pytest.raises(operator_read.OperatorUnavailableError):
         asyncio.run(service.start())
@@ -228,15 +278,18 @@ def test_worker_timeout_keeps_both_slots_charged_until_actual_return(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     entered, release = threading.Event(), threading.Event()
+
     def blocked(*_args: object) -> dict[str, object]:
         entered.set()
         release.wait(1.0)
         return {"late": True}
+
     monkeypatch.setattr(operator_read, "_collect", blocked)
     monkeypatch.setattr(operator_read, "DEADLINE_S", 0.01)
     budget = ReadWorkerBudget()
     ctx = SimpleNamespace(read_worker_budget=budget, readiness_generation=GEN)
     service = operator_read.OperatorReadService(ctx, "/private/tmp/synthetic", NONCE)
+
     async def scenario() -> None:
         with pytest.raises(operator_read.OperatorUnavailableError):
             await service._context(RID, "0" * 32)
@@ -255,6 +308,7 @@ def test_worker_timeout_keeps_both_slots_charged_until_actual_return(
         await asyncio.wait_for(service.wait_drained(), 1.0)
         assert (budget.active, budget.operator) == (0, 0)
         assert await fresh._context(RID, "1" * 32) == {"late": True}
+
     asyncio.run(scenario())
 
 
@@ -262,49 +316,73 @@ def test_collect_uses_only_host_record_and_rejects_changed_bot_inventory(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from hmp_plugin import server
+
     first = record()
     calls: list[str] = []
+
     class Requests:
         def __init__(self, _store: object) -> None:
             pass
+
         def host_record(self, *_args: object, **_kwargs: object) -> RequestRecordResult:
             calls.append("host_record")
             return RequestRecordResult("ok", first)
+
         def decide(self, *_args: object, **_kwargs: object) -> None:
             pytest.fail("read endpoint must never grant Controls")
+
     class Bridge:
         changed = False
+
         def served_profiles(self) -> list[str]:
             return ["primary", "second"] if self.changed else ["primary"]
+
         def authz_state(self, _user: str, _profile: str) -> AuthzState:
             return AuthzState.AUTHORIZED
+
         def readiness_profile_api_state(self, _profile: str, *, checkpoint: object) -> str:
             checkpoint()  # type: ignore[operator]
             return "configured"
+
     bridge = Bridge()
     ctx = SimpleNamespace(
         identity=SimpleNamespace(still_current=lambda: True),
-        readiness_generation=GEN, bridge=bridge, store=object(),
-        now=lambda: 100, iid=IID,
+        readiness_generation=GEN,
+        bridge=bridge,
+        store=object(),
+        now=lambda: 100,
+        iid=IID,
         readiness_owner_device_ids=lambda: frozenset({first.origin.device_id}),
     )
     monkeypatch.setattr(operator_read, "ControlsRequestStore", Requests)
-    monkeypatch.setattr(server, "_readiness_feature_statuses", lambda _ctx: {
-        "jobs": ("available", None), "model": ("available", None),
-    })
-    monkeypatch.setattr(server, "_readiness_host_settings", lambda _ctx: {
-        "jobs": "enabled", "model": "enabled",
-    })
+    monkeypatch.setattr(
+        server,
+        "_readiness_feature_statuses",
+        lambda _ctx: {
+            "jobs": ("available", None),
+            "model": ("available", None),
+        },
+    )
+    monkeypatch.setattr(
+        server,
+        "_readiness_host_settings",
+        lambda _ctx: {
+            "jobs": "enabled",
+            "model": "enabled",
+        },
+    )
     good = operator_read._collect(ctx, RID, "0" * 32, NONCE, GEN, time.monotonic() + 2)
     assert good["sources"] == sources()
     assert calls == ["host_record", "host_record"]
     original = bridge.served_profiles
     count = 0
+
     def drifting() -> list[str]:
         nonlocal count
         count += 1
         bridge.changed = count >= 2
         return original()
+
     bridge.served_profiles = drifting  # type: ignore[method-assign]
     with pytest.raises(operator_read.OperatorUnavailableError):
         operator_read._collect(ctx, RID, "1" * 32, NONCE, GEN, time.monotonic() + 2)
@@ -315,20 +393,29 @@ def test_allow_uses_two_distinct_contexts_one_cas_and_committed_readback(
 ) -> None:
     first = record()
     granted = replace(
-        first, state="GRANTED", decision_revision=1,
-        current_controls_revision=1, current_controls_allowed=1,
+        first,
+        state="GRANTED",
+        decision_revision=1,
+        current_controls_revision=1,
+        current_controls_allowed=1,
     )
+
     class Requests:
         def __init__(self) -> None:
             self.calls: list[tuple[bool, bool]] = []
+
         def host_record(self, *_args: object, **_kwargs: object) -> RequestRecordResult:
             return RequestRecordResult("ok", first)
-        def decide(self, *_args: object, allow: bool, precommit_external_verified: bool,
-                   **_kwargs: object) -> RequestStoreResult:
+
+        def decide(
+            self, *_args: object, allow: bool, precommit_external_verified: bool, **_kwargs: object
+        ) -> RequestStoreResult:
             self.calls.append((allow, precommit_external_verified))
             return RequestStoreResult("committed_needs_effective_readback", RID, "GRANTED", 700, 1)
+
         def host_decision_readback(self, *_args: object, **_kwargs: object) -> RequestRecordResult:
             return RequestRecordResult("committed", granted)
+
     requests = Requests()
     responses = [
         {"record": asdict(first), "sources": sources(), "generation": GEN},
@@ -339,24 +426,34 @@ def test_allow_uses_two_distinct_contexts_one_cas_and_committed_readback(
     monkeypatch.setattr(cli, "_host_operator_context", lambda *_a: responses.pop(0))
     monkeypatch.setattr(cli, "_host_request_confirmation", lambda *_a: True)
     ctx = SimpleNamespace(out=io.StringIO(), now=lambda: 100, env=SimpleNamespace())
-    assert cli._cmd_controls_requests(
-        ctx, argparse.Namespace(controls_requests_command="allow", request_id=RID),
-    ) == cli.EXIT_OK
+    assert (
+        cli._cmd_controls_requests(
+            ctx,
+            argparse.Namespace(controls_requests_command="allow", request_id=RID),
+        )
+        == cli.EXIT_OK
+    )
     assert requests.calls == [(True, True)]
     assert responses == []
 
 
 def test_allow_changed_bot_set_refuses_before_store_write(monkeypatch: pytest.MonkeyPatch) -> None:
     first = record()
+
     class Requests:
         def host_record(self, *_args: object, **_kwargs: object) -> RequestRecordResult:
             return RequestRecordResult("ok", first)
+
         def decide(self, *_args: object, **_kwargs: object) -> None:
             pytest.fail("grant after a changed live bot set")
+
     responses = [
         {"record": asdict(first), "sources": sources(), "generation": GEN},
-        {"record": asdict(first), "sources": sources() | {"served_profiles": ["other", "primary"]},
-         "generation": GEN},
+        {
+            "record": asdict(first),
+            "sources": sources() | {"served_profiles": ["other", "primary"]},
+            "generation": GEN,
+        },
     ]
     monkeypatch.setattr(cli, "_host_request_current", lambda *_a: (Requests(), first, IID))
     monkeypatch.setattr(cli, "_host_operator_context", lambda *_a: responses.pop(0))
@@ -364,24 +461,30 @@ def test_allow_changed_bot_set_refuses_before_store_write(monkeypatch: pytest.Mo
     ctx = SimpleNamespace(out=io.StringIO(), now=lambda: 100, env=SimpleNamespace())
     with pytest.raises(cli.RefusedError):
         cli._cmd_controls_requests(
-            ctx, argparse.Namespace(controls_requests_command="allow", request_id=RID),
+            ctx,
+            argparse.Namespace(controls_requests_command="allow", request_id=RID),
         )
 
 
 def test_darwin_peer_uid_is_required_and_failure_refuses(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(operator_read.sys, "platform", "darwin")
+
     class Call:
         argtypes: object = None
         restype: object = None
         result = 0
         peer_uid = 501
+
         def __call__(self, _fd: int, uid: object, gid: object) -> int:
             uid._obj.value = self.peer_uid  # type: ignore[attr-defined]
             gid._obj.value = 20  # type: ignore[attr-defined]
             return self.result
+
     call = Call()
     monkeypatch.setattr(
-        operator_read.ctypes, "CDLL", lambda *_a, **_k: SimpleNamespace(getpeereid=call),
+        operator_read.ctypes,
+        "CDLL",
+        lambda *_a, **_k: SimpleNamespace(getpeereid=call),
     )
     peer = SimpleNamespace(fileno=lambda: 9)
     assert operator_read._peer_uid(peer) == 501  # type: ignore[arg-type]
@@ -392,8 +495,8 @@ def test_darwin_peer_uid_is_required_and_failure_refuses(monkeypatch: pytest.Mon
         operator_read._peer_uid(peer)  # type: ignore[arg-type]
 
 
-def test_budget_operator_subcap_and_old_store_close_waits_for_actual_drain() -> None:
-    from hmp_plugin import adapter
+def test_budget_operator_subcap_and_old_store_close_waits_for_actual_drain(adapter_module) -> None:
+    adapter = adapter_module
     budget = ReadWorkerBudget()
     assert budget.reserve(operator=True)
     assert budget.reserve(operator=True)
@@ -408,6 +511,7 @@ def test_budget_operator_subcap_and_old_store_close_waits_for_actual_drain() -> 
     store = SimpleNamespace(close=lambda: closed.append("store"))
     srv = SimpleNamespace(ctx=SimpleNamespace(store=store), wait_operator_drain=event.wait)
     self = SimpleNamespace(_close_generation=lambda _ctx: closed.append("generation"))
+
     async def scenario() -> None:
         task = asyncio.create_task(adapter.HmpAdapter._close_after_operator_drain(self, srv))
         await asyncio.sleep(0)
@@ -415,17 +519,21 @@ def test_budget_operator_subcap_and_old_store_close_waits_for_actual_drain() -> 
         event.set()
         await task
         assert closed == ["generation", "store"]
+
     asyncio.run(scenario())
 
 
 def test_bounded_closed_response_refuses_extra_keys_duplicate_and_oversize() -> None:
     keys = frozenset({"protocol", "record"})
     assert operator_read._closed_json(b'{"protocol":1,"record":null}', keys) == {
-        "protocol": 1, "record": None,
+        "protocol": 1,
+        "record": None,
     }
-    for raw in (b'{"protocol":1,"protocol":1,"record":null}',
-                b'{"protocol":1,"record":null,"grant":true}',
-                b'{"protocol":NaN,"record":null}'):
+    for raw in (
+        b'{"protocol":1,"protocol":1,"record":null}',
+        b'{"protocol":1,"record":null,"grant":true}',
+        b'{"protocol":NaN,"record":null}',
+    ):
         with pytest.raises(operator_read.OperatorUnavailableError):
             operator_read._closed_json(raw, keys)
     assert not operator_read._safe_ijson({"rows": [None] * 65})
@@ -444,15 +552,20 @@ def test_deny_only_changes_request_and_keeps_controls(monkeypatch: pytest.Monkey
     first = record()
     denied = replace(first, state="DENIED")
     calls: list[tuple[bool, bool]] = []
+
     class Requests:
         reads = 0
+
         def host_record(self, *_a: object, **_k: object) -> RequestRecordResult:
             self.reads += 1
             return RequestRecordResult("ok", denied if self.reads == 2 else first)
-        def decide(self, *_a: object, allow: bool, precommit_external_verified: bool,
-                   **_k: object) -> RequestStoreResult:
+
+        def decide(
+            self, *_a: object, allow: bool, precommit_external_verified: bool, **_k: object
+        ) -> RequestStoreResult:
             calls.append((allow, precommit_external_verified))
             return RequestStoreResult("denied", RID, "DENIED", 700, None)
+
     requests = Requests()
     monkeypatch.setattr(cli, "_host_request_current", lambda *_a: (requests, first, IID))
     monkeypatch.setattr(cli, "_host_request_confirmation", lambda *_a: True)
@@ -465,12 +578,16 @@ def test_deny_only_changes_request_and_keeps_controls(monkeypatch: pytest.Monkey
 @pytest.mark.parametrize("state", ["EXPIRED", "REVOKED", "CONFLICT", "GRANTED", "DENIED"])
 def test_terminal_request_cannot_be_decided(monkeypatch: pytest.MonkeyPatch, state: str) -> None:
     first = replace(record(), state=state)
+
     class Requests:
         def decide(self, *_a: object, **_k: object) -> None:
             pytest.fail("terminal request must never cause another decision")
+
     monkeypatch.setattr(cli, "_host_request_current", lambda *_a: (Requests(), first, IID))
     monkeypatch.setattr(
-        cli, "_host_request_confirmation", lambda *_a: pytest.fail("prompted terminal request"),
+        cli,
+        "_host_request_confirmation",
+        lambda *_a: pytest.fail("prompted terminal request"),
     )
     for action in ("allow", "deny"):
         with pytest.raises(cli.RefusedError):
@@ -480,13 +597,21 @@ def test_terminal_request_cannot_be_decided(monkeypatch: pytest.MonkeyPatch, sta
 @pytest.mark.parametrize("action", ["allow", "deny"])
 def test_cancelled_confirmation_never_decides(monkeypatch: pytest.MonkeyPatch, action: str) -> None:
     first = record()
+
     class Requests:
         def decide(self, *_a: object, **_k: object) -> None:
             pytest.fail("cancelled decision must not commit")
+
     monkeypatch.setattr(cli, "_host_request_current", lambda *_a: (Requests(), first, IID))
-    monkeypatch.setattr(cli, "_host_operator_context", lambda *_a: {
-        "record": asdict(first), "sources": sources(), "generation": GEN,
-    })
+    monkeypatch.setattr(
+        cli,
+        "_host_operator_context",
+        lambda *_a: {
+            "record": asdict(first),
+            "sources": sources(),
+            "generation": GEN,
+        },
+    )
     monkeypatch.setattr(cli, "_host_request_confirmation", lambda *_a: False)
     with pytest.raises(cli.RefusedError):
         cli._cmd_controls_requests(_tty_ctx(), _request_args(action))
@@ -494,7 +619,8 @@ def test_cancelled_confirmation_never_decides(monkeypatch: pytest.MonkeyPatch, a
 
 @pytest.mark.parametrize("drift", ["epoch", "device", "controls", "expiry", "revoke"])
 def test_allow_current_store_drift_refuses_before_cas(
-    monkeypatch: pytest.MonkeyPatch, drift: str,
+    monkeypatch: pytest.MonkeyPatch,
+    drift: str,
 ) -> None:
     first = record()
     changes = {
@@ -504,11 +630,14 @@ def test_allow_current_store_drift_refuses_before_cas(
         "expiry": replace(first, state="EXPIRED"),
         "revoke": replace(first, state="REVOKED"),
     }
+
     class Requests:
         def host_record(self, *_a: object, **_k: object) -> RequestRecordResult:
             return RequestRecordResult("ok", changes[drift])
+
         def decide(self, *_a: object, **_k: object) -> None:
             pytest.fail("stale request must never commit")
+
     responses = [
         {"record": asdict(first), "sources": sources(), "generation": GEN},
         {"record": asdict(first), "sources": sources(), "generation": GEN},
@@ -523,14 +652,18 @@ def test_allow_current_store_drift_refuses_before_cas(
 
 @pytest.mark.parametrize("change", ["generation", "profile", "api", "flags"])
 def test_allow_live_source_drift_refuses_before_cas(
-    monkeypatch: pytest.MonkeyPatch, change: str,
+    monkeypatch: pytest.MonkeyPatch,
+    change: str,
 ) -> None:
     first = record()
+
     class Requests:
         def host_record(self, *_a: object, **_k: object) -> RequestRecordResult:
             return RequestRecordResult("ok", first)
+
         def decide(self, *_a: object, **_k: object) -> None:
             pytest.fail("changed live source must never commit")
+
     changed_sources = sources()
     if change == "profile":
         changed_sources["authorized_profiles"] = ["other"]
@@ -540,8 +673,11 @@ def test_allow_live_source_drift_refuses_before_cas(
         changed_sources["host_settings"] = {"jobs": "disabled", "model": "enabled"}
     responses = [
         {"record": asdict(first), "sources": sources(), "generation": GEN},
-        {"record": asdict(first), "sources": changed_sources,
-         "generation": "d" * 32 if change == "generation" else GEN},
+        {
+            "record": asdict(first),
+            "sources": changed_sources,
+            "generation": "d" * 32 if change == "generation" else GEN,
+        },
     ]
     monkeypatch.setattr(cli, "_host_request_current", lambda *_a: (Requests(), first, IID))
     monkeypatch.setattr(cli, "_host_operator_context", lambda *_a: responses.pop(0))
@@ -554,14 +690,18 @@ def test_allow_live_source_drift_refuses_before_cas(
 def test_unknown_postcommit_outcome_never_retries(monkeypatch: pytest.MonkeyPatch) -> None:
     first = record()
     calls: list[str] = []
+
     class Requests:
         def host_record(self, *_a: object, **_k: object) -> RequestRecordResult:
             return RequestRecordResult("ok", first)
+
         def decide(self, *_a: object, **_k: object) -> RequestStoreResult:
             calls.append("decide")
             return RequestStoreResult("unknown_commit", RID, "PENDING", 700, None)
+
         def host_decision_readback(self, *_a: object, **_k: object) -> None:
             pytest.fail("unknown commit is not a positive readback")
+
     responses = [
         {"record": asdict(first), "sources": sources(), "generation": GEN},
         {"record": asdict(first), "sources": sources(), "generation": GEN},
@@ -583,10 +723,17 @@ def _owned_operator_parent() -> Path:
 def _fixed_reply(request_id: str, challenge: str, nonce: str) -> dict[str, object]:
     now = int(time.monotonic() * 1_000)
     return {
-        "protocol": 1, "operation": "host_controls_decision_context",
-        "request_id": request_id, "challenge": challenge, "iid": IID,
-        "nonce": nonce, "generation": GEN, "record": asdict(record()),
-        "sources": sources(), "sample_ms": now, "expires_ms": now + 1_500,
+        "protocol": 1,
+        "operation": "host_controls_decision_context",
+        "request_id": request_id,
+        "challenge": challenge,
+        "iid": IID,
+        "nonce": nonce,
+        "generation": GEN,
+        "record": asdict(record()),
+        "sources": sources(),
+        "sample_ms": now,
+        "expires_ms": now + 1_500,
     }
 
 
@@ -595,19 +742,31 @@ def test_owned_unix_service_client_roundtrip_is_read_only(
 ) -> None:
     parent = _owned_operator_parent()
     calls: list[str] = []
-    def collect(_ctx: object, request_id: str, challenge: str, nonce: str,
-                _generation: str, _deadline: float) -> dict[str, object]:
+
+    def collect(
+        _ctx: object,
+        request_id: str,
+        challenge: str,
+        nonce: str,
+        _generation: str,
+        _deadline: float,
+    ) -> dict[str, object]:
         calls.append(request_id)
         return _fixed_reply(request_id, challenge, nonce)
+
     monkeypatch.setattr(operator_read, "_collect", collect)
     ctx = SimpleNamespace(read_worker_budget=ReadWorkerBudget(), readiness_generation=GEN, iid=IID)
     service = operator_read.OperatorReadService(ctx, parent / "anchor", NONCE)
+
     async def scenario() -> None:
         await service.start()
         try:
             answer = await asyncio.to_thread(
-                operator_read.read_context, service.path,
-                iid=IID, nonce=NONCE, request_id=RID,
+                operator_read.read_context,
+                service.path,
+                iid=IID,
+                nonce=NONCE,
+                request_id=RID,
             )
             assert answer["record"] == asdict(record())
             assert answer["sources"] == sources()
@@ -616,6 +775,7 @@ def test_owned_unix_service_client_roundtrip_is_read_only(
             assert await service.stop() == 0
         assert not service.path.exists()
         assert (ctx.read_worker_budget.active, ctx.read_worker_budget.operator) == (0, 0)
+
     asyncio.run(scenario())
 
 
@@ -627,6 +787,7 @@ def test_owned_unix_wrong_peer_and_oversize_request_never_call_bridge(
     monkeypatch.setattr(operator_read, "_collect", lambda *_a: calls.append("collect"))
     ctx = SimpleNamespace(read_worker_budget=ReadWorkerBudget(), readiness_generation=GEN, iid=IID)
     service = operator_read.OperatorReadService(ctx, parent / "anchor", NONCE)
+
     def probe(raw: bytes) -> bytes:
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
             client.settimeout(0.5)
@@ -639,15 +800,25 @@ def test_owned_unix_wrong_peer_and_oversize_request_never_call_bridge(
                 # Only this negative probe accepts that empty transport refusal.
                 assert exc.errno == errno.ECONNRESET
                 return b""
+
     async def scenario() -> None:
         await service.start()
         real_peer = operator_read._peer_uid
         try:
             monkeypatch.setattr(operator_read, "_peer_uid", lambda _sock: os.getuid() + 1)
-            request = json.dumps({
-                "protocol": 1, "operation": "host_controls_decision_context",
-                "request_id": RID, "iid": IID, "nonce": NONCE, "challenge": "0" * 32,
-            }).encode() + b"\n"
+            request = (
+                json.dumps(
+                    {
+                        "protocol": 1,
+                        "operation": "host_controls_decision_context",
+                        "request_id": RID,
+                        "iid": IID,
+                        "nonce": NONCE,
+                        "challenge": "0" * 32,
+                    }
+                ).encode()
+                + b"\n"
+            )
             assert await asyncio.to_thread(probe, request) == b""
             assert calls == []
             monkeypatch.setattr(operator_read, "_peer_uid", real_peer)
@@ -658,6 +829,7 @@ def test_owned_unix_wrong_peer_and_oversize_request_never_call_bridge(
             assert await service.stop() == 0
         assert not service.path.exists()
         assert (ctx.read_worker_budget.active, ctx.read_worker_budget.operator) == (0, 0)
+
     asyncio.run(scenario())
 
 
@@ -666,29 +838,43 @@ def test_owned_unix_timeout_retains_debt_until_callback_returns(
 ) -> None:
     parent = _owned_operator_parent()
     entered, release, returned = threading.Event(), threading.Event(), threading.Event()
-    def blocked(_ctx: object, request_id: str, challenge: str, nonce: str,
-                _generation: str, _deadline: float) -> dict[str, object]:
+
+    def blocked(
+        _ctx: object,
+        request_id: str,
+        challenge: str,
+        nonce: str,
+        _generation: str,
+        _deadline: float,
+    ) -> dict[str, object]:
         entered.set()
         try:
             assert release.wait(10.0), "fixture callback release was not observed"
         finally:
             returned.set()
         return _fixed_reply(request_id, challenge, nonce)
+
     monkeypatch.setattr(operator_read, "_collect", blocked)
     monkeypatch.setattr(operator_read, "DEADLINE_S", 0.2)
     budget = ReadWorkerBudget()
     ctx = SimpleNamespace(read_worker_budget=budget, readiness_generation=GEN, iid=IID)
     service = operator_read.OperatorReadService(ctx, parent / "anchor", NONCE)
+
     async def scenario() -> None:
         started = False
         client: asyncio.Task[dict[str, object]] | None = None
         try:
             await service.start()
             started = True
-            client = asyncio.create_task(asyncio.to_thread(
-                operator_read.read_context, service.path,
-                iid=IID, nonce=NONCE, request_id=RID,
-            ))
+            client = asyncio.create_task(
+                asyncio.to_thread(
+                    operator_read.read_context,
+                    service.path,
+                    iid=IID,
+                    nonce=NONCE,
+                    request_id=RID,
+                )
+            )
             # Wait for the actual synchronous callback to enter before examining
             # timeout debt. A scheduler delay alone is not evidence of a live read.
             assert await asyncio.wait_for(asyncio.to_thread(entered.wait, 0.6), 0.8)
@@ -712,7 +898,8 @@ def test_owned_unix_timeout_retains_debt_until_callback_returns(
             if client is not None:
                 try:
                     await asyncio.wait_for(
-                        asyncio.shield(asyncio.gather(client, return_exceptions=True)), 3.0,
+                        asyncio.shield(asyncio.gather(client, return_exceptions=True)),
+                        3.0,
                     )
                 except Exception as exc:
                     cleanup_errors.append(exc)
@@ -725,4 +912,132 @@ def test_owned_unix_timeout_retains_debt_until_callback_returns(
             assert returned.is_set()
             assert not service.path.exists()
             assert cleanup_errors == []
+
+    asyncio.run(scenario())
+
+
+def test_cancelling_all_async_waiters_does_not_retire_actual_read_worker(monkeypatch):
+    entered, release = threading.Event(), threading.Event()
+
+    def blocked(*_args):
+        entered.set()
+        assert release.wait(3)
+        return {"synthetic": True}
+
+    monkeypatch.setattr(operator_read, "_collect", blocked)
+    budget = ReadWorkerBudget()
+    ctx = SimpleNamespace(read_worker_budget=budget, readiness_generation=GEN)
+    service = operator_read.OperatorReadService(ctx, "/private/tmp/synthetic", NONCE)
+
+    async def scenario():
+        caller = asyncio.create_task(service._context(RID, "0" * 32))
+        try:
+            assert await asyncio.to_thread(entered.wait, 1)
+            # Model framework cancellation of all async waiters in this isolated
+            # loop; a synchronous worker borrow cannot end merely with its waiter.
+            current = asyncio.current_task()
+            waiters = [task for task in asyncio.all_tasks() if task is not current]
+            for task in waiters:
+                task.cancel()
+            await asyncio.gather(*waiters, return_exceptions=True)
+            assert caller.done()
+            assert (budget.active, budget.operator) == (1, 1)
+            assert await service.stop() == 1
+            assert not service._drained.is_set()
+        finally:
+            release.set()
+            await service.stop()
+            await asyncio.wait_for(service.wait_drained(), 1)
+        assert (budget.active, budget.operator) == (0, 0)
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("acquired", (False, True))
+def test_read_budget_return_loss_retains_unknown_intent_without_submit(monkeypatch, acquired):
+    budget = ReadWorkerBudget()
+    reserve = budget.reserve
+    ctx = SimpleNamespace(read_worker_budget=budget, readiness_generation=GEN)
+    service = operator_read.OperatorReadService(ctx, "/private/tmp/synthetic", NONCE)
+    calls = []
+
+    def lost_return(*, operator):
+        if acquired:
+            assert reserve(operator=operator)
+        raise MemoryError("synthetic acquisition acknowledgement loss")
+
+    def forbidden(*_args, **_kwargs):
+        calls.append(1)
+        raise AssertionError("unknown capacity submitted work")
+
+    monkeypatch.setattr(budget, "reserve", lost_return)
+    monkeypatch.setattr(service._read_pool, "submit", forbidden)
+
+    async def scenario():
+        with pytest.raises(operator_read.OperatorUnavailableError):
+            await service._context(RID, "0" * 32)
+        assert not calls and service._operator_debt() == 1
+        assert budget.poisoned and budget.operator == int(acquired)
+        assert await service.stop() == 1 and not service._drained.is_set()
+
+    asyncio.run(scenario())
+
+
+def test_read_submit_ack_loss_never_fabricates_drain_after_separately_observed_completion(
+    monkeypatch,
+):
+    monkeypatch.setattr(operator_read, "_collect", lambda *_args: {"synthetic": True})
+    budget = ReadWorkerBudget()
+    ctx = SimpleNamespace(read_worker_budget=budget, readiness_generation=GEN)
+    service = operator_read.OperatorReadService(ctx, "/private/tmp/synthetic", NONCE)
+    submit = service._read_pool.submit
+    actual = []
+
+    def lost_ack(*args, **kwargs):
+        actual.append(submit(*args, **kwargs))
+        raise MemoryError("synthetic post-submit acknowledgement loss")
+
+    monkeypatch.setattr(service._read_pool, "submit", lost_ack)
+
+    async def scenario():
+        with pytest.raises(operator_read.OperatorUnavailableError):
+            await service._context(RID, "0" * 32)
+        assert await asyncio.wrap_future(actual[0]) == {"synthetic": True}
+        assert service._operator_debt() == 1 and budget.operator == 1
+        assert await service.stop() == 1 and not service._drained.is_set()
+        # Only the fixture retained the actual Future. Service has no completion
+        # evidence and must not turn the separately observed end into a refund.
+
+    asyncio.run(scenario())
+
+
+def test_read_completion_releases_original_budget_after_context_budget_replacement(monkeypatch):
+    entered, release = threading.Event(), threading.Event()
+    original_budget, replacement_budget = ReadWorkerBudget(), ReadWorkerBudget()
+    ctx = SimpleNamespace(read_worker_budget=original_budget, readiness_generation=GEN)
+    service = operator_read.OperatorReadService(ctx, "/private/tmp/synthetic", NONCE)
+
+    def blocked(*_args):
+        entered.set()
+        assert release.wait(3)
+        return {"synthetic": True}
+
+    monkeypatch.setattr(operator_read, "_collect", blocked)
+
+    async def scenario():
+        caller = asyncio.create_task(service._context(RID, "0" * 32))
+        try:
+            assert await asyncio.to_thread(entered.wait, 1)
+            ctx.read_worker_budget = replacement_budget
+            release.set()
+            with pytest.raises(operator_read.OperatorUnavailableError):
+                await caller
+            assert await service.stop() == 0
+            assert (original_budget.active, original_budget.operator) == (0, 0)
+            assert (replacement_budget.active, replacement_budget.operator) == (0, 0)
+        finally:
+            release.set()
+            await service.stop()
+            await service.wait_drained()
+
     asyncio.run(scenario())
