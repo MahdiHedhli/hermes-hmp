@@ -1,9 +1,18 @@
 # Fresh cache-probe metadata integration
 
-November 9, 2026. Source contract checked against HMP `e12df99` and independently
-reviewed read-only. **Planned, not implemented or qualified.** The completed
+November 9, 2026. Contract checked against `e12df99`; original-plan binding is
+implemented in uninstalled `45c006c` and independently reviewed. **The complete
+native/diagnostic traversal remains planned and unqualified.** The inherited
 runtime-source/declared-cache `_file` sequence does not cover this traversal.
 This is local HMP work, not an upstream Hermes capability blocker.
+
+The original owner/root/selection/path/proof/context and fixed possible sites are
+allocated before scope construction, and the scope retains the actual plan.
+Original code is captured before constructors and actual returned fields/variants
+are rejoined afterward. The unwired cursor/pending/history remain zero/empty.
+Twenty-seven current-interpreter probe cases and four reader compatibility cases
+pass; the combined31-case minimum-interpreter run is pending. This plan DATA does
+not admit native work, classify actual failures or authorize fallback/images.
 
 ## Complete boundary
 
@@ -60,6 +69,11 @@ cursor cannot nominate a completion receipt. The result remains DATA with no
 fallback, loader, image or permission authority.
 
 ## Acceptance
+
+- [x] Bind original plan DATA in scope and actual traversal inputs, preserve
+      other owners' default-None scope behavior, and repair constructor-time
+      original-code/field drift; bounded current tests and independent review.
+      Minimum-interpreter qualification for this source remains pending.
 
 - [ ] Implement complete traversal and shared-engine integration, preserving
       distinct typed probe policy instead of copying a per-site dispatcher.
