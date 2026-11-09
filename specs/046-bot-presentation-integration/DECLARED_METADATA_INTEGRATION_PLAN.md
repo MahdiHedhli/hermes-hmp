@@ -1,3 +1,11 @@
+## November 9 — full native startup completion passes on both Python versions
+
+Exact source `58d9c35` passes the same uninstrumented full native Entry/cache-fact completion case on Python 3.14.9 (42.607 seconds) and minimum 3.11.15 (42.87 seconds), within the existing 60-second deadline. The test verifies both absence passes, completed literal native finishes, no unknown effects, published entry/cache facts and a cleared active execution slot, with trace/profile absent before and after. Exact source remained unchanged; matching XML case identity and log/XML hashes were independently checked. This is native startup completion, not complete desktop-image delivery, installed host behavior, device or release qualification.
+
+The synthetic globally traced cleanup-normal case still times out and remains failed evidence; these uninstrumented passes do not convert that result into a pass. Test-only source `61cb346` uses local code LINE monitoring on supported Python versions while retaining the actual C-close observer, precise lost-ACK injection, full completion/accounting assertions and the same deadline. Minimum Python retains the focused-trace fallback. Independent source review found no fidelity regression; the three-case execution is in progress and no result is assumed. Two late-parent mutation controls already pass as recorded below.
+
+No hosts, phones, grants, provider settings or releases changed. Device-local sections/static icons retain their separate source status; actual desktop character images and host-local images remain incomplete at runtime.
+
 ## November 9 — retained-token correction and guarded consumer validation
 
 The normal-path refusal was traced to historical validation incorrectly requiring all three native preparation cells to be empty. Original open/metadata admission intentionally retains those inputs after IDLE. Source `951ce22` removes that incorrect requirement while preserving exact cell shape, healthy idle state, and identity/value rejoin across observations; independent review accepted the lifecycle correction. Subsequent full normal checks still timed out at the unchanged 60-second deadline and remain failures, not qualification.
