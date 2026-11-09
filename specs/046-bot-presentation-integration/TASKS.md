@@ -1,6 +1,19 @@
 ## November 8 — reviewed host updates deployed; character integration remains open
 
 
+Read-service prerequisite source `aaa29aa` fixes a demonstrated lifetime flaw: a
+cancelled asyncio.to_thread Task could retire capacity while its actual read thread
+remained blocked. Corrected979fbe0 control reproduced0 instead of1 retained borrow;
+the first control's cleanup timeout is separately retained. New actual concurrent-
+Future/intent tracking passes191 combined cases on each supported runtime plus
+Ruff; independent finite review found no additional blocker after setup reads moved
+before capacity acquisition. AST readback confirms31 prior test definitions unchanged
+by formatting. OPEN RSWORK1: the same pattern exists in deployed5e247a6 source; no live
+incident observed. The fix is source-only until a minimal independently reviewed
+backport is tested/deployed. This does not activate schema4/media service or qualify
+all native/HTTP shutdown; physical image display remains pending.
+
+
 CLI source `8b15a7a` now routes confirmed image-access decisions through the verified
 one-exchange service, preserving exact typed consent and fresh context/readback.
 The direct CLI Store write and any unavailable-service SQL fallback are removed.
