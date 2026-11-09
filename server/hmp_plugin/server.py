@@ -1960,6 +1960,7 @@ class HmpServer:
         self._operator_start_attempted = False
         self._operator_start_owner: asyncio.Task[Any] | None = None
         self._operator_start_coro: Any = None
+        self._operator_start_service: Any = None
         self._operator_start_complete, self._operator_start_failed = object(), object()
         self.operator_worker_debt = 0
         self._stop_owner: asyncio.Task[Any] | None = None
@@ -2062,6 +2063,7 @@ class HmpServer:
         self._operator_start_attempted = True
         try:
             service = OperatorReadService(self._operator_origin_ctx, anchor_dir, nonce)
+            self._operator_start_service = service
             self._operator_read = service  # retain before any startup effect/await
             self._operator_start_coro = self._start_operator_owned(service)
             self._operator_start_owner = asyncio.get_running_loop().create_task(
@@ -2319,7 +2321,8 @@ class HmpServer:
             if operator_owner is None:
                 raise RuntimeError("operator read startup ownership unresolved")
             await asyncio.shield(operator_owner)
-            if self._operator_start_owner is not operator_owner:
+            if (self._operator_start_owner is not operator_owner
+                    or self._operator_read is not self._operator_start_service):
                 raise RuntimeError("operator read startup ownership unresolved")
         ctx = self._operator_origin_ctx
         hints, deps = ctx.push_hints, ctx.direct_send_deps

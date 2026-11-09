@@ -360,3 +360,33 @@ def test_unknown_operator_start_owner_cannot_retry_or_certify_stop(
             await runner.cleanup()  # fixture cleanup is not production drain evidence
 
     asyncio.run(scenario())
+
+
+def test_operator_start_replacement_never_closes_foreign_service(monkeypatch, tmp_path):
+    async def scenario():
+        listener, runner, events, entered, release = operator_rig(monkeypatch)
+        await listener.start()
+        caller = asyncio.create_task(listener.start_operator_read(tmp_path, "a" * 32))
+        await entered.wait()
+        original = listener._operator_read
+        foreign_calls = []
+
+        async def foreign_stop():
+            foreign_calls.append("stop")
+            return 0
+
+        listener._operator_read = SimpleNamespace(stop=foreign_stop)
+        release.set()
+        with pytest.raises(RuntimeError, match="startup incomplete"):
+            await caller
+        with pytest.raises(RuntimeError, match="startup ownership unresolved"):
+            await listener.stop()
+        assert listener._operator_start_service is original
+        assert not foreign_calls and "read-stop" not in events and "cleanup" not in events
+        assert not listener.closed.is_set()
+        for task in (listener._watch, listener._push_watch):
+            task.cancel()
+        await asyncio.gather(listener._watch, listener._push_watch, return_exceptions=True)
+        await runner.cleanup()  # fixture-only cleanup; production must retain/refuse
+
+    asyncio.run(scenario())
