@@ -1,4 +1,5 @@
 """Synthetic SDK files only: declaration checks are not effective runtime qualification."""
+import ast
 from pathlib import Path
 
 import pytest
@@ -34,7 +35,8 @@ def test_local_sdk_class_is_found(tmp_path):
 
 @pytest.mark.parametrize("damage", ("cycle", "ambiguous", "assignment", "namespace", "escape",
                                     "symlink", "oversized", "function", "import", "augmented",
-                                    "tuple", "delete", "conditional", "computed"))
+                                    "tuple", "delete", "conditional", "computed")
+                         + (("type_alias",) if hasattr(ast, "TypeAlias") else ()))
 def test_unknown_or_unsafe_export_is_refused(tmp_path, damage):
     entry = write(tmp_path, "hermes_cli.plugins", "from .owner import PluginContext\n")
     target = write(tmp_path, "hermes_cli.owner", "class PluginContext:\n    pass\n")
@@ -49,7 +51,7 @@ def test_unknown_or_unsafe_export_is_refused(tmp_path, damage):
     elif damage == "escape":
         entry.write_text("from ..outside import PluginContext\n")
     elif damage in {"function", "import", "augmented", "tuple", "delete", "conditional",
-                    "computed"}:
+                    "computed", "type_alias"}:
         changes = {
             "function": "def PluginContext():\n    pass\n",
             "import": "import elsewhere as PluginContext\n",
@@ -58,6 +60,7 @@ def test_unknown_or_unsafe_export_is_refused(tmp_path, damage):
             "delete": "del PluginContext\n",
             "conditional": "if uncertain:\n    from .other import PluginContext\n",
             "computed": "PluginContext = getattr(object(), 'missing', None)\n",
+            "type_alias": "type PluginContext = object\n",
         }
         entry.write_text(entry.read_text() + changes[damage])
     elif damage == "symlink":

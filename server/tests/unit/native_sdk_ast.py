@@ -43,6 +43,8 @@ def _other_binding(node, symbol, permitted):
         elif isinstance(node, (ast.AnnAssign, ast.AugAssign, ast.NamedExpr,
                                ast.For, ast.AsyncFor)):
             targets = [node.target]
+        elif isinstance(node, getattr(ast, "TypeAlias", ())):
+            targets = [node.name]
         elif isinstance(node, ast.withitem) and node.optional_vars is not None:
             targets = [node.optional_vars]
         if any(symbol in _target_names(t) for t in targets):
