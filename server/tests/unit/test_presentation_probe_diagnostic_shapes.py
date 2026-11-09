@@ -35,8 +35,9 @@ class MissingSubclass(FileNotFoundError):
     def errno(self):hooks.append('errno');raise AssertionError('subclass errno')
     @property
     def filename(self):hooks.append('filename');raise AssertionError('subclass filename')
-def observed(frame):
-    if faults and frame.f_locals.get('owner') is owner:after_native.append(True)
+def observed(_frame):
+    # This isolated script has one active probe. Observe every later metadata C call.
+    if faults:after_native.append(True)
 reg=owner._origin.native_registration_slot[0]
 for call in reg.native_origin.operations[3:5]:
     observe_synthetic_native(call,metadata._produce_directory_metadata.__code__,observed)
@@ -45,11 +46,18 @@ def profile(frame,event,arg):
     if prior is not None:prior(frame,event,arg)
     if event=='call' and frame.f_code is constructor_code:diagnostics.append(True)
 sys.setprofile(profile)
-def inject(frame):
-    if frame.f_locals.get('owner') is not owner or faults:return
-    name=frame.f_locals['arguments'][0]
+def inject(_frame):
+    # Do not materialize producer f_locals: older CPython can retain that debugger
+    # snapshot in an exception cycle even after the real fast locals are cleared.
+    execution=owner._probe_execution
+    if execution is None or faults:return
+    consumer=execution.pending[0]
+    assert type(consumer) is metadata._ProbeConsumer and consumer.execution is execution
+    operation=consumer.operation
+    assert type(operation) is metadata._MetadataOperation and operation.owner is owner
+    assert operation.registration is reg and reg.native_ledger.inflight[0] is operation
+    name=operation.arguments[0]
     if name!='__pycache__':return
-    operation=frame.f_locals['operation']
     faults.append(True);held.extend(owner._origin.records)
     snapshots.append((operation,tuple(reg.native_ledger.counts),len(reg.native_ledger.attempts)))
     references.append(operation.result.custody_slot[0].reference)
