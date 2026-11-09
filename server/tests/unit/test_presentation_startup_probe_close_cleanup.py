@@ -191,3 +191,13 @@ print(json.dumps({'mutation':mutation,'runtime_admitted':False}))
         stdout_fd=os.open(stdout_path,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
         with os.fdopen(stdout_fd,'wb') as stream:stream.write((error.stdout or b'')[:8192])
         raise
+    finally:
+        # Retain only bounded synthetic timing labels outside pytest's success
+        # fixture cleanup. No native result, frame locals or source data copied.
+        timing=tmp_path/'observer-timing.jsonl'
+        if timing.exists():
+            raw=timing.read_bytes()
+            assert len(raw)<=8192
+            destination=tmp_path.parent.parent/('startup-observer-'+case+'-timing.jsonl')
+            fd=os.open(destination,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
+            with os.fdopen(fd,'wb') as stream:stream.write(raw)
