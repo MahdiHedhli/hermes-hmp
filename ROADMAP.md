@@ -1,5 +1,12 @@
 ## November 8 — reviewed host updates deployed; character integration remains open
 
+Media readiness source `701783e` now adds an authenticated, per-bot read-only
+`GET /bots/{p}/media-readiness` route with separate rights/host/API axes and
+no image-existence probe. Both 77-case readiness suites pass (Python 3.14.9
+and 3.11.15; zero failures/errors/skips, unchanged source). Mobile wiring,
+capability negotiation, independent review, broader route-contract coverage
+and physical acceptance remain pending. No remote self-grant or live deployment.
+
 Independent media-read entitlement backend is implemented on focused source
 `1f39122` (not deployed). Store schema 4 adds explicit per-device allow/deny
 with revision-fenced issuance/fetch and operator-only typed confirmation;

@@ -89,7 +89,8 @@ fence and rereads rights/settings before disclosure. Unknown authority is refuse
 not represented as missing rights. No file/reference lookup or mutation occurs.
 
 The 77-case current-Python readiness suite passes with zero failures/errors/skips;
-floor run and broader route-surface/contract coverage are pending at this checkpoint.
+the same 77 cases pass on Python 3.11.15. Broader route-surface/contract coverage
+remains pending.
 Mobile decoding/display and capability negotiation, causal revocation/lost-await
 route coverage, independent review and runtime/physical qualification remain open.
 The legacy owner-fallback revocation-generation limitation remains open. Nothing
