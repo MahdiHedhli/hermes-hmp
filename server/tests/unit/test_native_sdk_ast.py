@@ -6,7 +6,7 @@ import pytest
 from .native_sdk_ast import MAX_SOURCE_BYTES, public_class_tree
 
 
-def write(root, module, text):
+def write(root: Path, module: str, text: str) -> Path:
     path = root.joinpath(*module.split(".")).with_suffix(".py")
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(text.encode())
@@ -33,7 +33,8 @@ def test_local_sdk_class_is_found(tmp_path):
 
 
 @pytest.mark.parametrize("damage", ("cycle", "ambiguous", "assignment", "namespace", "escape",
-                                    "symlink", "oversized"))
+                                    "symlink", "oversized", "function", "import", "augmented",
+                                    "tuple", "delete", "conditional", "computed"))
 def test_unknown_or_unsafe_export_is_refused(tmp_path, damage):
     entry = write(tmp_path, "hermes_cli.plugins", "from .owner import PluginContext\n")
     target = write(tmp_path, "hermes_cli.owner", "class PluginContext:\n    pass\n")
@@ -47,6 +48,18 @@ def test_unknown_or_unsafe_export_is_refused(tmp_path, damage):
         entry.write_text("from external.owner import PluginContext\n")
     elif damage == "escape":
         entry.write_text("from ..outside import PluginContext\n")
+    elif damage in {"function", "import", "augmented", "tuple", "delete", "conditional",
+                    "computed"}:
+        changes = {
+            "function": "def PluginContext():\n    pass\n",
+            "import": "import elsewhere as PluginContext\n",
+            "augmented": "PluginContext += 1\n",
+            "tuple": "PluginContext, other = object(), object()\n",
+            "delete": "del PluginContext\n",
+            "conditional": "if uncertain:\n    from .other import PluginContext\n",
+            "computed": "PluginContext = getattr(object(), 'missing', None)\n",
+        }
+        entry.write_text(entry.read_text() + changes[damage])
     elif damage == "symlink":
         target.unlink()
         target.symlink_to(entry)
@@ -54,3 +67,24 @@ def test_unknown_or_unsafe_export_is_refused(tmp_path, damage):
         target.write_bytes(b"#" * (MAX_SOURCE_BYTES + 1))
     with pytest.raises(AssertionError):
         public_class_tree(tmp_path, "hermes_cli.plugins", "PluginContext")
+
+
+def test_reader_bounds_actual_read_even_if_source_grows(tmp_path, monkeypatch):
+    write(tmp_path, "hermes_cli.plugins", "class PluginContext:\n    pass\n")
+    requests = []
+
+    class GrowingSource:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self, size=-1):
+            requests.append(size)
+            return b"#" * (MAX_SOURCE_BYTES + 1)
+
+    monkeypatch.setattr(Path, "open", lambda *_args, **_kwargs: GrowingSource())
+    with pytest.raises(AssertionError, match="source too large"):
+        public_class_tree(tmp_path, "hermes_cli.plugins", "PluginContext")
+    assert requests == [MAX_SOURCE_BYTES + 1]
