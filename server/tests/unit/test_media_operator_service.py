@@ -1008,3 +1008,67 @@ def test_listener_rejects_foreign_context_retirement_before_taking_ownership(tmp
             await finish(actor, store, service)
 
     asyncio.run(scenario())
+
+
+def test_listener_drain_refuses_premature_call_without_stopping_media(tmp_path):
+    from hmp_plugin.media_operator_retirement import MediaOperatorRetirement
+
+    async def scenario():
+        actor, store, ctx, _request, service = await open_service(tmp_path)
+        retirement = MediaOperatorRetirement(service, actor)
+        listener = attach_synthetic_listener(ctx, retirement, [])
+        try:
+            with pytest.raises(RuntimeError, match="teardown unresolved"):
+                await listener.wait_operator_drain()
+            assert not retirement._started and not service._stopping
+            await listener.stop()
+            await listener.wait_operator_drain()
+            assert retirement.drained_for(store)
+        finally:
+            await finish(actor, store, service)
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("drift", ("context", "owner"))
+def test_listener_rejoins_context_and_owner_after_pending_media_await(tmp_path, monkeypatch, drift):
+    from hmp_plugin.media_operator_retirement import MediaOperatorRetirement
+
+    async def scenario():
+        actor, store, ctx, request, service = await open_service(tmp_path)
+        entered, release = threading.Event(), threading.Event()
+
+        def blocked(*_args, **_kwargs):
+            entered.set()
+            assert release.wait(3)
+            return SimpleNamespace(status="refused", decision=None)
+
+        monkeypatch.setattr(service._executor, "decide", blocked)
+        retirement = MediaOperatorRetirement(service, actor)
+        listener = attach_synthetic_listener(ctx, retirement, [])
+        mutation = asyncio.create_task(service._decide(request, time.monotonic() + 1))
+        try:
+            assert await asyncio.to_thread(entered.wait, 1)
+            await listener.stop()
+            waiter = asyncio.create_task(listener.wait_operator_drain())
+            await asyncio.sleep(0)
+            assert not waiter.done()
+            if drift == "context":
+                listener.ctx = SimpleNamespace(store=store)
+            else:
+                listener._media_retirement = MediaOperatorRetirement(service, actor)
+            release.set()
+            assert decode_reply(await mutation, request=request).status == "unknown"
+            with pytest.raises(RuntimeError, match="scope changed"):
+                await waiter
+            assert listener.operator_worker_debt == 1
+            assert store.media_read_decision(ctx.iid, request.device_id).revision == 0
+        finally:
+            release.set()
+            await mutation
+            listener.ctx = ctx
+            listener._media_retirement = retirement
+            await listener.wait_operator_drain()
+            await finish(actor, store, service)
+
+    asyncio.run(scenario())

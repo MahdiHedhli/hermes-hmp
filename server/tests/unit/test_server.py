@@ -653,7 +653,11 @@ def test_route_table_matches_declared_routes(tmp_path: Path) -> None:
         )
     )
     assert routes == expected
-    assert len(expected) == 37
+    diagnostics = {("GET", server.full_path(path)) for path in (
+        "/bots/{p}/media-readiness", "/media-readiness/capabilities",
+    )}
+    assert diagnostics <= set(routes)
+    assert len(expected) == 37 + len(diagnostics)
     assert len(expected) == len(set(expected))
 
 
@@ -681,7 +685,11 @@ def test_a1_session_routes_are_not_registered_when_the_kill_switch_is_off(
         )
     )
     assert routes == expected
-    assert len(expected) == 34
+    diagnostics = {("GET", server.full_path(path)) for path in (
+        "/bots/{p}/media-readiness", "/media-readiness/capabilities",
+    )}
+    assert diagnostics <= set(routes)
+    assert len(expected) == 34 + len(diagnostics)
     assert len(expected) == len(set(expected))
 
 

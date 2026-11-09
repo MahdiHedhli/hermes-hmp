@@ -1932,7 +1932,9 @@ class HmpServer:
         media_retirement: Any = None,
     ) -> None:
         self.ctx = ctx
+        self._operator_origin_ctx = ctx
         self._media_retirement = media_retirement
+        self._media_retirement_owner = media_retirement
         self._media_store = None
         self._media_retirement_error = False
         if media_retirement is not None:
@@ -2158,16 +2160,30 @@ class HmpServer:
             self._stopping = asyncio.get_running_loop().create_task(self.stop())
 
     async def wait_operator_drain(self) -> None:
+        if self._stop_owner is None or not self.closed.is_set():
+            raise RuntimeError("listener teardown unresolved; retain original Store")
+        ctx = self._operator_origin_ctx
+        retirement = self._media_retirement_owner
         service = self._operator_read_drained
+
+        def rejoin():
+            if (self.ctx is not ctx or self._operator_read_drained is not service
+                    or self._media_retirement is not retirement
+                    or (retirement is not None and ctx.store is not self._media_store)):
+                raise RuntimeError("operator retirement scope changed; retain original Store")
+
+        rejoin()
         if service is not None:
             await service.wait_drained()
-        retirement = self._media_retirement
+            rejoin()
         if retirement is not None:
-            if self._media_retirement_error or self.ctx.store is not self._media_store:
+            if self._media_retirement_error:
                 raise RuntimeError("media retirement unresolved; retain original Store")
             await retirement.stop()
+            rejoin()
             if not retirement.drained_for(self._media_store):
                 raise RuntimeError("media retirement unresolved; retain original Store")
+        rejoin()
         self.operator_worker_debt = 0
 
     async def _cancel_pending_sends(self) -> None:
@@ -2190,12 +2206,14 @@ class HmpServer:
         await asyncio.shield(self._stop_owner)
 
     async def _stop_joined(self) -> None:
-        retirement = self._media_retirement
+        retirement = self._media_retirement_owner
         if retirement is not None:
             # A sentinel forces the adapter through combined drain before Store close.
             # Network cleanup proceeds even when media retirement cannot be proved.
             self.operator_worker_debt = 1
             try:
+                if self._media_retirement is not retirement or self.ctx is not self._operator_origin_ctx:
+                    raise RuntimeError("media retirement owner changed")
                 retirement.begin()  # close admission/publication BEFORE any shutdown await
             except BaseException:
                 self._media_retirement_error = True
