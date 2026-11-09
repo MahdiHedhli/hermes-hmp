@@ -395,6 +395,10 @@ class OperatorReadService:
             os.close(fd)
             raise
 
+    def _operator_debt(self) -> int:
+        """Actual retained work; mutation subclasses use their original-intent ledger."""
+        return self._outstanding
+
     async def stop(self) -> int:
         self._stopping = True
         listener, self._server = self._server, None
@@ -416,7 +420,7 @@ class OperatorReadService:
                 pass
             finally:
                 os.close(fd)
-        debt = self._outstanding
+        debt = self._operator_debt()
         if debt == 0:
             self._drained.set()
         return debt

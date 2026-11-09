@@ -153,14 +153,14 @@ def test_timeout_or_cancel_and_stop_retain_actual_worker_debt(tmp_path, monkeypa
                 task.cancel()
             raw = await task
             assert decode_reply(raw, request=request).status == "unknown"
-            assert service._outstanding == 1 and ctx.read_worker_budget.operator == 1
+            assert service._operator_debt() == 1 and ctx.read_worker_budget.operator == 1
             assert await service.stop() == 1
             waiter = asyncio.create_task(service.wait_drained())
             await asyncio.sleep(0)
             assert not waiter.done()
             release.set()
             await asyncio.wait_for(waiter, 1)
-            assert service._outstanding == 0 and ctx.read_worker_budget.operator == 0
+            assert service._operator_debt() == 0 and ctx.read_worker_budget.operator == 0
             assert store.media_read_decision(ctx.iid, request.device_id).revision == 0
         finally:
             release.set()
@@ -203,7 +203,7 @@ def test_malformed_frame_never_dispatches_mutation(tmp_path, monkeypatch, malfor
             writer.write(raw + b"\n")
             await writer.drain()
             assert await asyncio.wait_for(reader.readline(), 1) == b""
-            assert not dispatched and service._outstanding == 0
+            assert not dispatched and service._operator_debt() == 0
             assert store.media_read_decision(ctx.iid, request.device_id).revision == 0
         finally:
             writer.close()
@@ -226,7 +226,7 @@ def test_two_waiting_clients_bound_admission_without_worker_reservations(tmp_pat
             connections.append((reader, writer))
             assert await reader.readline() == b""
             assert len(service._clients) == 2
-            assert ctx.read_worker_budget.operator == 0 and service._outstanding == 0
+            assert ctx.read_worker_budget.operator == 0 and service._operator_debt() == 0
         finally:
             for _reader, writer in connections:
                 writer.close()
@@ -271,7 +271,7 @@ def test_cohort_replaced_after_challenge_never_dispatches(tmp_path):
             )
             await writer.drain()
             assert await reader.readline() == b""
-            assert service._outstanding == 0
+            assert service._operator_debt() == 0
             assert store.media_read_decision(ctx.iid, request.device_id).revision == 0
         finally:
             writer.close()
@@ -300,7 +300,7 @@ def test_lost_submit_ack_retains_unknown_debt_even_after_actual_commit(tmp_path,
             result = await asyncio.wrap_future(actual[0])
             assert result.status == "committed"
             assert store.media_read_decision(ctx.iid, request.device_id).revision == 1
-            assert service._outstanding == 1 and ctx.read_worker_budget.operator == 1
+            assert service._operator_debt() == 1 and ctx.read_worker_budget.operator == 1
             assert await service.stop() == 1
             waiter = asyncio.create_task(service.wait_drained())
             await asyncio.sleep(0)
@@ -341,7 +341,7 @@ def test_late_worker_exception_is_consumed_without_async_log_or_early_retirement
         try:
             raw = await service._decide(request, time.monotonic() + 0.05)
             assert entered.is_set() and decode_reply(raw, request=request).status == "unknown"
-            assert service._outstanding == 1
+            assert service._operator_debt() == 1
             assert await service.stop() == 1
             release.set()
             await asyncio.wait_for(service.wait_drained(), 1)
@@ -353,5 +353,59 @@ def test_late_worker_exception_is_consumed_without_async_log_or_early_retirement
             release.set()
             await finish(actor, store, service)
             loop.set_exception_handler(None)
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("after_insert", (False, True))
+def test_registration_fault_before_submit_releases_only_unsubmitted_reservation(
+    tmp_path, monkeypatch, after_insert
+):
+    class FailedRegistration(dict):
+        def __setitem__(self, key, value):
+            if after_insert:
+                super().__setitem__(key, value)
+            raise MemoryError("synthetic registration interruption")
+
+    async def scenario():
+        actor, store, ctx, request, service = await open_service(tmp_path)
+        submitted = []
+
+        def forbidden(*_args, **_kwargs):
+            submitted.append(True)
+            raise AssertionError("unregistered operation submitted")
+
+        service._operations = FailedRegistration()
+        monkeypatch.setattr(service._pool, "submit", forbidden)
+        try:
+            raw = await service._decide(request, time.monotonic() + 1)
+            assert decode_reply(raw, request=request).status == "refused"
+            assert not submitted and service._operator_debt() == 0
+            assert (ctx.read_worker_budget.active, ctx.read_worker_budget.operator) == (0, 0)
+            assert await service.stop() == 0
+            assert store.media_read_decision(ctx.iid, request.device_id).revision == 0
+        finally:
+            await finish(actor, store, service)
+
+    asyncio.run(scenario())
+
+
+def test_intent_allocation_failure_occurs_before_budget_reservation(tmp_path, monkeypatch):
+    async def scenario():
+        actor, store, ctx, request, service = await open_service(tmp_path)
+
+        def fail_allocation():
+            raise MemoryError("synthetic intent allocation interruption")
+
+        monkeypatch.setattr(module, "object", fail_allocation, raising=False)
+        try:
+            with pytest.raises(MemoryError):
+                await service._decide(request, time.monotonic() + 1)
+            assert service._operator_debt() == 0
+            assert (ctx.read_worker_budget.active, ctx.read_worker_budget.operator) == (0, 0)
+            assert await service.stop() == 0
+            assert store.media_read_decision(ctx.iid, request.device_id).revision == 0
+        finally:
+            await finish(actor, store, service)
 
     asyncio.run(scenario())

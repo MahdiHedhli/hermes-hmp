@@ -54,21 +54,30 @@ class MediaOperatorMutationService(OperatorReadService):
             and self._fd is not None
         )
 
+    def _operator_debt(self) -> int:
+        return len(self._operations)
+
     def _retire(self, intent, original) -> None:
         if self._operations.get(intent) is not original:
             return  # unknown/foreign completion cannot retire another operation
         del self._operations[intent]
         self._budget.release(operator=True)
-        self._outstanding -= 1
-        if self._stopping and self._outstanding == 0:
+        if self._stopping and not self._operations:
             self._drained.set()
 
     async def _decide(self, request, deadline):
+        intent = object()  # allocation cannot leak a reservation: reserve only afterward
         if not self._current() or not self._budget.reserve(operator=True):
             return encode_reply(request, "refused")
-        intent = object()
-        self._operations[intent] = None  # retain debt before possibly ambiguous submit
-        self._outstanding += 1
+        try:
+            self._operations[intent] = None
+        except BaseException:
+            # Submission has not been called. Even a mapping failure after insertion
+            # is proven unsubmitted: remove that intent and release only its budget.
+            self._operations.pop(intent, None)
+            self._budget.release(operator=True)
+            return encode_reply(request, "refused")
+        # Debt is derived from this ledger, never a separately allocated int count.
         try:
             original = self._pool.submit(self._executor.decide, request, deadline=deadline)
             self._operations[intent] = original
