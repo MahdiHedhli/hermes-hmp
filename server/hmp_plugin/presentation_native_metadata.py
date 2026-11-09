@@ -1283,7 +1283,23 @@ def _probe_current_lifetime_tail(owner, consumer):
     _require(type(function) is FunctionType and function.__code__ is code
              and function.__globals__ is vars(origin[0])
              and vars(origin[0]).get('_lifecycle_tail') is function)
-    return function(owner, registration.scope, registration, registration.scope.native_probe_plan)
+    resource = consumer.operation.resource
+    if type(resource) is _NativeStartupProbeMetadataResource:
+        # The registered startup resource owns its actual plan; do not nominate
+        # it through the fresh-only Scope plan slot or a current lookup.
+        _require(_resource_tail(owner, resource) is resource
+                 and type(origin[1]) is tuple and len(origin[1]) == 7
+                 and type(origin[1][0]) is tuple and len(origin[1][0]) == 5
+                 and type(origin[1][0][0]) is type)
+        execution = tuple.__getitem__(resource, 2)
+        _require(type(execution) is origin[1][0][0]
+                 and tuple.__getitem__(execution, 0) is owner
+                 and tuple.__getitem__(execution, 2) is registration
+                 and vars(owner).get('_startup_probe_execution') is execution)
+        plan = tuple.__getitem__(execution, 1)
+    else:
+        plan = registration.scope.native_probe_plan
+    return function(owner, registration.scope, registration, plan)
 
 
 def _reported_missing_operation_tail(owner, consumer, actual):

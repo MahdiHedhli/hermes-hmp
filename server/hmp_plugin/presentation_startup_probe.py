@@ -13,6 +13,7 @@ from types import FunctionType, ModuleType
 from typing import NamedTuple
 
 from . import presentation_startup_probe_policy as policy
+from . import presentation_gateway_activation as activation_module
 
 from . import presentation_native_metadata as metadata
 from .presentation_metadata_custody import (
@@ -96,7 +97,7 @@ def _new_probe_engine_origin():
         '_prepare_shared_consumer', '_latch_shared_consumer', '_produce_shared',
         '_consume_shared', '_ack_shared', '_retired_shared', '_history_mirrors_tail', '_attached_shared',
         '_make_shared_commit', '_commit_shared_tail', '_acked_shared_history', '_publish_shared_ack',
-        '_finished_state_tail', '_opened_chain_tail', '_new_startup_probe_origin', '_blueprint_tail', '_new_startup_plan', '_startup_plan_tail', '_cursor_ordinal', '_historical_finish_tail', '_path_rows', '_policy_pins_tail', '_historical_finish_mirrors'))
+        '_finished_state_tail', '_opened_chain_tail', '_new_startup_probe_origin', '_blueprint_tail', '_new_startup_plan', '_startup_plan_tail', '_cursor_ordinal', '_historical_finish_tail', '_path_rows', '_policy_pins_tail', '_historical_finish_mirrors', '_historical_cohort'))
     return (module, types, functions, OSError.__dict__['errno'],
             OSError.__dict__['filename'], errno.ENOENT,
             (metadata, tuple((name, vars(metadata).get(name), vars(metadata).get(name).__code__)
@@ -111,7 +112,7 @@ def _engine_origin_tail(origin):
              and sys.modules.get(__name__) is origin[0]
              and vars(origin[0]) is globals()
              and type(origin[1]) is tuple and len(origin[1]) == 7
-             and type(origin[2]) is tuple and len(origin[2]) == 35
+             and type(origin[2]) is tuple and len(origin[2]) == 36
              and origin[3] is OSError.__dict__['errno']
              and origin[4] is OSError.__dict__['filename']
              and type(origin[5]) is int and origin[5] == errno.ENOENT)
@@ -951,7 +952,8 @@ def _historical_finish_tail(actual):
     _blueprint_tail(plan.blueprint)
     _require(execution.owner is plan.owner is plan.blueprint[0] and reg.owner is plan.owner)
     _native_work_registration_tail(execution.owner, reg)
-    mirrors(actual, scope)
+    cohort = _historical_cohort(actual, scope)
+    mirrors(actual, scope, cohort)
     _require(reg.scope.native_startup_probe_origin[6] is plan.blueprint
              and type(execution.finished) is list and len(execution.finished) == 1
              and execution.finished[0] is True
@@ -1006,9 +1008,9 @@ def _historical_finish_tail(actual):
     if (globals().get('_historical_finish_mirrors') is not mirrors
             or mirrors.__code__ is not mirrors_code):
         raise metadata.ArtifactObservationError from None
-    return mirrors(actual, scope)
+    return mirrors(actual, scope, cohort)
 
-def _historical_finish_mirrors(actual, scope):
+def _historical_finish_mirrors(actual, scope, cohort):
     """Full pure reseal after all weak-reference observations; no new admission."""
     _require(type(actual) is _ProbeFinish and type(actual.execution) is _ProbeExecution)
     execution = actual.execution
@@ -1021,6 +1023,39 @@ def _historical_finish_mirrors(actual, scope):
              and reg.scope is scope and reg.owner is execution.owner is plan.owner
              and type(plan.owner) is StartupArtifactOwner)
     _policy_pins_tail(plan.blueprint)
+    _require(type(cohort) is tuple and len(cohort) == 5)
+    dictionaries, cells, attempts, attempt_count, activation_cell = cohort
+    _require(type(dictionaries) is tuple and type(cells) is tuple)
+    for object_, dictionary, entries in dictionaries:
+        _require(vars(object_) is dictionary and type(dictionary) is dict
+                 and len(dictionary) == len(entries)
+                 and all(type(key) is str for key in dictionary)
+                 and all(key in dictionary and dictionary[key] is value for key, value in entries))
+    for cell, entries in cells:
+        _require(type(cell) is list and len(cell) == len(entries)
+                 and all(value is original for value, original in zip(cell, entries, strict=True)))
+    active = scope.activation
+    _require(type(active) is activation_module.GatewayActivationOwner
+             and sys.modules.get('hmp_plugin.presentation_gateway_activation') is activation_module
+             and vars(activation_module).get('_ENTRY_OWNER') is active
+             and vars(activation_module).get('_ENTRY_CELL') is activation_cell
+             and type(activation_cell) is tuple and len(activation_cell) == 2
+             and activation_cell[0] is active and activation_cell[1] is scope.activation_scope)
+    active_names = vars(active)
+    _require(active_names.get('_scope') is scope.activation_scope
+             and active_names.get('_ready') is True and active_names.get('_retired') is False
+             and active_names.get('_uncertain') is False and active_names.get('_capturing') is False
+             and active_names.get('_artifact_owner') is plan.owner
+             and active_names.get('_artifact_cell') is reg.root
+             and active_names.get('_artifact_attempt_cell') is vars(plan.owner).get('_attempt_cell')
+             and type(reg.lineage) is reg.type_pins[0]
+             and type(reg.native_origin) is reg.type_pins[2]
+             and reg.lineage.ledger is reg.native_ledger and reg.lineage.native is reg.native_origin
+             and reg.native_ledger.phase is reg.native_phase
+             and type(reg.phase_type) is type and type(reg.native_phase) is reg.phase_type
+             and type(reg.entry_module) is ModuleType
+             and sys.modules.get('hmp_startup.gateway_entry') is reg.entry_module
+             and reg.native_ledger.attempts is attempts and len(attempts) == attempt_count)
     names = vars(plan.owner)
     _require(names.get('_origin') is scope and names.get('_scope') is scope
              and names.get('_cell') is reg.cell and names.get('_root_cell') is reg.root
@@ -1133,3 +1168,24 @@ def _historical_finish_mirrors(actual, scope):
                  and scope.records[len(plan.base_records)+index] is row
                  and _descriptor_closed_in_scope(row, scope))
     return actual
+
+
+def _historical_cohort(actual, scope):
+    """Hold current original mirrors across observations, never persist them."""
+    execution = actual.execution
+    plan, registration = execution.plan, execution.registration
+    _require(type(scope) is _Scope and registration.scope is scope
+             and type(scope.activation) is activation_module.GatewayActivationOwner)
+    objects = (plan.owner, scope.activation, plan.source.entry, plan.source.context_fact[0])
+    dictionaries = []
+    for object_ in objects:
+        dictionary = vars(object_)
+        _require(type(dictionary) is dict and len(dictionary) <= 512
+                 and all(type(key) is str for key in dictionary))
+        dictionaries.append((object_, dictionary, tuple(dictionary.items())))
+    ledger, phase = registration.native_ledger, registration.native_phase
+    cells = (ledger.counts, ledger.inflight, ledger.failed, ledger.failure, ledger.preparation,
+             phase.current, phase.result)
+    _require(all(type(cell) is list and len(cell) <= 2 for cell in cells))
+    return (tuple(dictionaries), tuple((cell, tuple(cell)) for cell in cells),
+            ledger.attempts, len(ledger.attempts), vars(activation_module).get('_ENTRY_CELL'))
