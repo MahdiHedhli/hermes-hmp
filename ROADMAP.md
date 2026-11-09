@@ -1,5 +1,13 @@
 ## November 8 — reviewed host updates deployed; character integration remains open
 
+Measured open blocker LM-ENT1-P1: an isolated synthetic150ms delay in a final
+main-thread media settings callback causes151.5ms event-loop heartbeat latency
+(baseline5.7ms) on exact f7f5084; source unchanged. This confirms the documented
+responsiveness risk, not a live-host benchmark or access bypass. New diagnostics
+remain undeployed. A bounded publication/authority design review is active; the
+repair must preserve current authorization, deadline refusal and actual worker
+permit lifetime rather than substituting stale cached permission.
+
 Paired media source qualification: backend `f7f5084` passes both 1,063-case
 combined suites (Python 3.14.9 and 3.11.15), zero failures/errors/skips and unchanged
 source. Mobile `5ca14a9` pinned to that backend passes 66 client and 73 app/chat/
