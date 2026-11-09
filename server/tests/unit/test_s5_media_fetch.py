@@ -852,6 +852,7 @@ def test_a_ref_forced_into_the_registry_for_an_image_outside_the_cache_is_a_404(
                 tip=fx.rig.tip,
                 tool_row_id=6,
                 raw_digest=digest,
+                permission_generation=fx.ctx.media_read_permission(dev.device_id).generation,
             )
         )
         await fx.refused(client, ref)
