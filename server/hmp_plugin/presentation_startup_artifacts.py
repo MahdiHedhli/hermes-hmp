@@ -399,6 +399,7 @@ class _Scope(NamedTuple):
     native_probe_origin: object = None
     native_probe_engine_origin: object = None
     native_startup_probe_origin: object = None
+    native_link_blueprint: object = None
 
     def __repr__(self):
         return "<StartupArtifactScope redacted>"
@@ -3075,6 +3076,11 @@ class StartupArtifactOwner:
 
     @classmethod
     def _retain(cls, activation, expected, source, runtime=None, cache=None):
+        error_type = ArtifactObservationError
+        link_raw_type, link_raw_vars, link_raw_tuple, link_raw_len = type, vars, tuple, len
+        link_raw_function, link_raw_module = FunctionType, ModuleType
+        link_raw_staticmethod, link_raw_any, link_raw_zip = staticmethod, any, zip
+        link_raw_dict, link_raw_str = dict, str
         _require(cls is StartupArtifactOwner and type(activation) is GatewayActivationOwner
                  and activation._artifact_owner is None and activation._artifact_cell is None
                  and activation._artifact_attempt_cell is None
@@ -3123,7 +3129,7 @@ class StartupArtifactOwner:
                 from .presentation_startup_probe import _new_startup_probe_origin
                 startup_origin = _new_startup_probe_origin(owner, cache, context, expected)
             if _require is not need or need.__code__ is not need_code:
-                raise ArtifactObservationError(owner) from None
+                raise error_type(owner) from None
             before_constructor = vars(kind).get('__new__')
             if type(before_constructor) is staticmethod:
                 before_constructor = before_constructor.__func__
@@ -3134,12 +3140,138 @@ class StartupArtifactOwner:
                          for key, value in owner_entries)
                  and activation._artifact_owner is owner
                  and activation._artifact_cell is activation_cell)
+            link_blueprint = None
+            link_origin = None
+            link_tail = link_tail_code = None
+            link_cohort = None
+            if runtime is not None and native_files is not None:
+                # The ACTUAL already-validated SourceDigestContext retains the
+                # original invocation/started/EntryOrigin objects. No late import
+                # or current getter is allowed to nominate a replacement origin.
+                _source_current(source)
+                need(type(runtime) is _RuntimeSource and type(digest_context.binding) is tuple
+                     and len(digest_context.binding) == 3)
+                digest_binding = digest_context.binding
+                invocation, started = digest_binding[0], digest_binding[2]
+                need(type(started) is tuple and len(started) == 7
+                     and started[0] is digest_context.entry)
+                entry_origin = tuple.__getitem__(started, 5)
+                need(tuple.__len__(entry_origin) == 11
+                     and tuple.__len__(native_files) == 5
+                     and tuple.__len__(invocation) == 11)
+                link_origin = tuple.__getitem__(entry_origin, 10)
+                need(tuple.__getitem__(invocation, 9) is native_files
+                     and tuple.__getitem__(native_files, 0) is digest_context.entry
+                     and tuple.__getitem__(native_files, 4) is link_origin
+                     and type(link_origin) is tuple and len(link_origin) == 5)
+                # Raw pointer joins above derive the actual origin. Its fixed
+                # early current row is independently code/default pinned below.
+                current_row = link_origin[2][3]
+                blueprint_row = link_origin[2][5]
+                factory_row = link_origin[3][15]
+                tail_row = link_origin[3][14]
+                cohort_row = link_origin[3][13]
+                owner_kind = cls
+                owner_namespace = globals()
+                origin_entry_names = tuple.__getitem__(entry_origin, 2)
+                need(type(origin_entry_names) is dict
+                     and all(type(k) is str for k in origin_entry_names))
+                runtime_guard, runtime_code = runtime.guard, runtime.code
+                need(type(runtime_guard) is FunctionType and runtime_guard.__code__ is runtime_code
+                     and runtime.entry_type._pure_current is runtime_guard)
+                runtime_guard(runtime.entry, runtime.inputs, runtime.cell)
+                link_tail, link_tail_code = tail_row[1], tail_row[2]
+                source_check, source_check_code = _source_current, _source_current.__code__
+
+                def function_row_current(row):
+                    if (type(row) is not tuple or len(row) != 7 or type(row[0]) is not str
+                            or type(row[1]) is not FunctionType or type(row[3]) is not dict
+                            or any(type(k) is not str for k in row[3])
+                            or row[3].get(row[0]) is not row[1]
+                            or row[1].__code__ is not row[2] or row[1].__globals__ is not row[3]
+                            or row[1].__defaults__ is not row[4]
+                            or row[1].__kwdefaults__ is not row[5]
+                            or (row[5] is not None and (type(row[5]) is not dict
+                                or any(type(k) is not str for k in row[5])
+                                or len(row[5]) != len(row[6])
+                                or any(k not in row[5] or row[5][k] is not value
+                                       for k, value in row[6])))):
+                        raise error_type(owner) from None
+
+                def link_rejoin():
+                    if (_require is not need or need.__code__ is not need_code
+                            or _source_current is not source_check
+                            or source_check.__code__ is not source_check_code
+                            or owner_namespace.get('StartupArtifactOwner') is not owner_kind
+                            or type(owner) is not owner_kind):
+                        raise error_type(owner) from None
+                    need(digest_context.binding is digest_binding
+                         and digest_binding[0] is invocation and digest_binding[2] is started
+                         and tuple.__getitem__(started, 5) is entry_origin
+                         and tuple.__getitem__(invocation, 9) is native_files
+                         and tuple.__getitem__(native_files, 4) is link_origin
+                         and tuple.__getitem__(entry_origin, 10) is link_origin
+                         and origin_entry_names.get('_ENTRY_ORIGIN') is entry_origin
+                         and origin_entry_names.get('GatewayEntryOwner') is tuple.__getitem__(entry_origin, 7)
+                         and runtime.guard is runtime_guard and runtime_guard.__code__ is runtime_code
+                         and runtime.entry_type._pure_current is runtime_guard)
+                    function_row_current(current_row)
+                    need(current_row[1](link_origin) is link_origin)
+                    for row in (current_row, blueprint_row, factory_row, tail_row, cohort_row):
+                        function_row_current(row)
+
+                # Check raw publication cohorts after EACH child helper return.
+                # Factory reads these snapshots, never owner getters or grants.
+                classes = []
+                for selected in (owner_kind, runtime.entry_type, type(activation),
+                                 tuple.__getitem__(entry_origin, 7)):
+                    namespace = vars(selected)
+                    need(type(selected) is type and all(type(k) is str for k in namespace))
+                    functions = []
+                    for value in namespace.values():
+                        if type(value) in (classmethod, staticmethod):
+                            value = value.__func__
+                        if type(value) is FunctionType:
+                            kw = value.__kwdefaults__
+                            need(kw is None or (type(kw) is dict and all(type(k) is str for k in kw)))
+                            functions.append((value, value.__code__, value.__defaults__, kw,
+                                              () if kw is None else tuple(kw.items())))
+                    classes.append((selected, tuple(namespace.items()), tuple(functions)))
+                io_slot = runtime.inputs.io_slot
+                need(type(io_slot) is list and len(io_slot) == 1 and io_slot[0] is None
+                     and type(runtime.reads) is list and len(runtime.reads) == 0
+                     and all(type(values) is list and len(values) == 1 and values[0] is None
+                             for values in (runtime.before, runtime.after, runtime.count)))
+                link_cohort = (((owner_dict, tuple(owner_dict.items())),
+                                (vars(activation), tuple(vars(activation).items())),
+                                (vars(source.owner), tuple(vars(source.owner).items())),
+                                (vars(runtime.entry), tuple(vars(runtime.entry).items())),
+                                (vars(digest_context.entry), tuple(vars(digest_context.entry).items()))),
+                               tuple((values, tuple(values)) for values in (
+                                   runtime.reads, runtime.before, runtime.after,
+                                   runtime.count, io_slot)), tuple(classes))
+                link_rejoin()
+                held_factory = blueprint_row[1](link_origin)
+                link_rejoin()
+                need(held_factory is factory_row[1])
+                link_blueprint = held_factory(owner, runtime, context, native_files,
+                                              link_origin, link_cohort)
+                link_rejoin()
+                need(cohort_row[1](link_cohort) is link_cohort)
+                link_rejoin()
+                need(link_tail(link_blueprint) is link_blueprint)
+                link_rejoin()
+                need(tuple.__getitem__(link_blueprint, 0) is owner
+                     and tuple.__getitem__(link_blueprint, 1) is runtime
+                     and tuple.__getitem__(link_blueprint, 2) is context
+                     and tuple.__getitem__(link_blueprint, 3) is native_files
+                     and tuple.__getitem__(link_blueprint, 4) is link_origin)
             values = (activation, activation._scope, expected, context, records,
                       source, runtime, reads, cache, digest_context, native_files,
-                      slot, None, None, None, None, startup_origin)
+                      slot, None, None, None, None, startup_origin, link_blueprint)
             s = constructor(kind, *values)
             if _require is not need or need.__code__ is not need_code:
-                raise ArtifactObservationError(owner) from None
+                raise error_type(owner) from None
             current_constructor = vars(kind).get('__new__')
             if type(current_constructor) is staticmethod:
                 current_constructor = current_constructor.__func__
@@ -3163,6 +3295,106 @@ class StartupArtifactOwner:
                  and (reads is None or type(reads) is list and len(reads) == 0)
                  and (slot is None or type(slot) is list
                       and len(slot) == 1 and slot[0] is None))
+            if link_blueprint is not None:
+                link_rejoin()
+                need(cohort_row[1](link_cohort) is link_cohort)
+                link_rejoin()
+                need(item(s, 17) is link_blueprint
+                     and link_tail(link_blueprint) is link_blueprint)
+                link_rejoin()
+                # A helper return is not permission to publish changed vacancy.
+                need(cohort_row[1](link_cohort) is link_cohort)
+                link_rejoin()
+                # Rejoin actual source/entry pointer identities without calling
+                # a current getter after the last callback-bearing origin seal.
+                if (tuple.__getitem__(digest_context, 1) is not digest_binding
+                        or tuple.__getitem__(digest_context, 5) is not native_files
+                        or tuple.__getitem__(invocation, 9) is not native_files
+                        or tuple.__getitem__(started, 5) is not entry_origin
+                        or tuple.__getitem__(native_files, 4) is not link_origin
+                        or tuple.__getitem__(entry_origin, 10) is not link_origin
+                        or origin_entry_names.get('_ENTRY_ORIGIN') is not entry_origin
+                        or origin_entry_names.get('_STARTED') is not started
+                        or origin_entry_names.get('_OWNER') is not tuple.__getitem__(digest_context, 0)
+                        or origin_entry_names.get('_CELL') is not digest_binding[1]):
+                    raise error_type(owner) from None
+                # Complete original policy/module/function/type seal, inline so
+                # a helper return cannot invalidate it before publication.
+                if link_raw_type(link_origin) is not link_raw_tuple or link_raw_len(link_origin) != 5:
+                    raise error_type(owner) from None
+                link_pin_environment, link_pin_modules, link_pin_own_functions, link_pin_policy_functions, link_pin_types = link_origin
+                if link_raw_type(link_pin_environment) is not link_raw_tuple or link_raw_len(link_pin_environment) != 3 or link_raw_type(link_pin_environment[0]) is not link_raw_module or (link_raw_type(link_pin_environment[1]) is not link_raw_dict) or (link_raw_vars(link_pin_environment[0]) is not link_pin_environment[1]) or link_raw_any((link_raw_type(link_pin_k) is not link_raw_str for link_pin_k in link_pin_environment[1])) or (link_raw_type(link_pin_environment[2]) is not link_raw_dict) or link_raw_any((link_raw_type(link_pin_k) is not link_raw_str for link_pin_k in link_pin_environment[2])) or (link_pin_environment[1].get('modules') is not link_pin_environment[2]) or (link_raw_type(link_pin_modules) is not link_raw_tuple) or (link_raw_len(link_pin_modules) != 4) or (link_raw_type(link_pin_own_functions) is not link_raw_tuple) or (link_raw_type(link_pin_policy_functions) is not link_raw_tuple) or (link_raw_type(link_pin_types) is not link_raw_tuple) or (link_raw_len(link_pin_types) != 9):
+                    raise error_type(owner) from None
+                link_pin_names = ('hmp_startup.link_factory_origin', 'hmp_plugin.presentation_link_path_policy', 'hmp_plugin.presentation_startup_artifacts', 'hmp_startup.runtime_files')
+                for link_pin_row, link_pin_name in link_raw_zip(link_pin_modules, link_pin_names, strict=True):
+                    if link_raw_type(link_pin_row) is not link_raw_tuple or link_raw_len(link_pin_row) != 3 or link_raw_type(link_pin_row[0]) is not link_raw_str or (link_pin_row[0] != link_pin_name) or (link_raw_type(link_pin_row[1]) is not link_raw_module) or (link_raw_type(link_pin_row[2]) is not link_raw_dict) or link_raw_any((link_raw_type(link_pin_k) is not link_raw_str for link_pin_k in link_pin_row[2])) or (link_pin_environment[2].get(link_pin_name) is not link_pin_row[1]) or (link_raw_vars(link_pin_row[1]) is not link_pin_row[2]):
+                        raise error_type(owner) from None
+                if link_pin_modules[0][2].get('_CAPTURE_STARTED') is not True:
+                    raise error_type(owner) from None
+                link_pin_own_names = ('_pin_function', '_pin_type', 'capture', 'current', 'factory', 'blueprint_factory')
+                link_pin_policy_names = ('_need', '_parts', '_policy_tail', '_new_policy', '_sites', '_directory', '_leaf', '_cursor_tail', '_start', '_action', '_advance', '_outcome', '_scope_blueprint_guard', '_scope_blueprint_cohort', '_scope_blueprint_tail', '_new_scope_blueprint')
+                for link_pin_rows, link_pin_expected, link_pin_namespace in ((link_pin_own_functions, link_pin_own_names, link_pin_modules[0][2]), (link_pin_policy_functions, link_pin_policy_names, link_pin_modules[1][2])):
+                    if link_raw_len(link_pin_rows) != link_raw_len(link_pin_expected):
+                        raise error_type(owner) from None
+                    for link_pin_row, link_pin_name in link_raw_zip(link_pin_rows, link_pin_expected, strict=True):
+                        if link_raw_type(link_pin_row) is not link_raw_tuple or link_raw_len(link_pin_row) != 7 or link_raw_type(link_pin_row[0]) is not link_raw_str or (link_pin_row[0] != link_pin_name) or (link_raw_type(link_pin_row[1]) is not link_raw_function) or (link_pin_row[3] is not link_pin_namespace) or (link_pin_namespace.get(link_pin_name) is not link_pin_row[1]) or (link_pin_row[1].__code__ is not link_pin_row[2]) or (link_pin_row[1].__globals__ is not link_pin_namespace) or (link_pin_row[1].__defaults__ is not link_pin_row[4]) or (link_pin_row[1].__closure__ is not None) or (link_raw_type(link_pin_row[6]) is not link_raw_tuple):
+                            raise error_type(owner) from None
+                        link_pin_kw = link_pin_row[1].__kwdefaults__
+                        if link_pin_kw is not link_pin_row[5]:
+                            raise error_type(owner) from None
+                        if link_pin_kw is None:
+                            if link_pin_row[6] != ():
+                                raise error_type(owner) from None
+                        elif link_raw_type(link_pin_kw) is not link_raw_dict or link_raw_any((link_raw_type(link_pin_k) is not link_raw_str for link_pin_k in link_pin_kw)) or link_raw_len(link_pin_kw) != link_raw_len(link_pin_row[6]) or link_raw_any((link_raw_type(link_pin_pair) is not link_raw_tuple or link_raw_len(link_pin_pair) != 2 or link_raw_type(link_pin_pair[0]) is not link_raw_str or (link_pin_pair[0] not in link_pin_kw) or (link_pin_kw[link_pin_pair[0]] is not link_pin_pair[1]) for link_pin_pair in link_pin_row[6])):
+                            raise error_type(owner) from None
+                link_pin_exports = ((1, '_LinkPathPolicy'), (1, '_LinkPathCursor'), (2, 'ExpectedArtifact'), (3, 'RuntimeFilePlan'), (3, 'ExecutableLinkPlan'), (3, 'LinkHop'), (1, '_LinkScopeBlueprint'), (2, '_RuntimeSource'), (2, '_Scope'))
+                for link_pin_pin, (link_pin_module_index, link_pin_name) in link_raw_zip(link_pin_types, link_pin_exports, strict=True):
+                    if link_raw_type(link_pin_pin) is not link_raw_tuple or link_raw_len(link_pin_pin) != 9 or link_raw_type(link_pin_pin[0]) is not link_raw_type or (link_pin_modules[link_pin_module_index][2].get(link_pin_name) is not link_pin_pin[0]) or (link_raw_type(link_pin_pin[1]) is not link_raw_tuple) or link_raw_any((link_raw_type(link_pin_n) is not link_raw_str for link_pin_n in link_pin_pin[1])) or (link_raw_type(link_pin_pin[2]) is not link_raw_tuple) or (link_raw_len(link_pin_pin[2]) != link_raw_len(link_pin_pin[1])) or (link_raw_type(link_pin_pin[3]) is not link_raw_function) or (link_raw_type(link_pin_pin[5]) is not link_raw_dict) or link_raw_any((link_raw_type(link_pin_k) is not link_raw_str for link_pin_k in link_pin_pin[5])) or (link_raw_type(link_pin_pin[8]) is not link_raw_tuple):
+                        raise error_type(owner) from None
+                    link_pin_kind, link_pin_fields, link_pin_members, link_pin_constructor, link_pin_code, link_pin_globals_, link_pin_defaults, link_pin_bases, link_pin_dispatch = link_pin_pin
+                    link_pin_namespace = link_raw_vars(link_pin_kind)
+                    link_pin_actual = link_pin_namespace.get('__new__')
+                    if link_raw_type(link_pin_actual) is link_raw_staticmethod:
+                        link_pin_actual = link_pin_actual.__func__
+                    if link_pin_namespace.get('_fields') is not link_pin_fields or link_pin_actual is not link_pin_constructor or link_pin_constructor.__code__ is not link_pin_code or (link_pin_constructor.__globals__ is not link_pin_globals_) or (link_pin_constructor.__defaults__ is not link_pin_defaults) or (link_pin_kind.__bases__ is not link_pin_bases) or (link_pin_globals_.get('_tuple_new') is not link_raw_tuple.__new__) or link_raw_any((link_pin_namespace.get(link_pin_n) is not link_pin_member for link_pin_n, link_pin_member in link_raw_zip(link_pin_fields, link_pin_members, strict=True))) or link_raw_any((link_raw_type(link_pin_row) is not link_raw_tuple or link_raw_len(link_pin_row) != 2 or link_raw_type(link_pin_row[0]) is not link_raw_str or (link_pin_namespace.get(link_pin_row[0]) is not link_pin_row[1]) for link_pin_row in link_pin_dispatch)):
+                        raise error_type(owner) from None
+                # LAST pure publication seal: no origin/tail/cohort helper
+                # is called after this block before assigning actual scope slots.
+                if (_Scope is not kind or type(s) is not kind
+                        or vars(kind).get('_fields') is not fields
+                        or any(vars(kind).get(name) is not member
+                               for name, member in zip(fields, members, strict=True))
+                        or any(vars(kind).get(name) is not member
+                               for name, member in zip(dispatch_names, dispatch, strict=True))
+                        or constructor.__code__ is not constructor_code
+                        or tuple.__len__(s) != len(values)
+                        or any(tuple.__getitem__(s, i) is not value
+                               for i, value in enumerate(values))
+                        or vars(owner) is not owner_dict
+                        or type(records) is not list or len(records) != 0
+                        or type(reads) is not list or len(reads) != 0
+                        or type(slot) is not list or len(slot) != 1 or slot[0] is not None):
+                    raise error_type(owner) from None
+                for names, entries in link_cohort[0]:
+                    if (any(type(k) is not str for k in names) or len(names) != len(entries)
+                            or any(k not in names or names[k] is not value for k, value in entries)):
+                        raise error_type(owner) from None
+                for cells, entries in link_cohort[1]:
+                    if (len(cells) != len(entries)
+                            or any(cells[i] is not value for i, value in enumerate(entries))):
+                        raise error_type(owner) from None
+                for selected, entries, functions in link_cohort[2]:
+                    names = vars(selected)
+                    if (any(type(k) is not str for k in names) or len(names) != len(entries)
+                            or any(k not in names or names[k] is not value for k, value in entries)):
+                        raise error_type(owner) from None
+                    for function, code, defaults, kw, pairs in functions:
+                        if (function.__code__ is not code or function.__defaults__ is not defaults
+                                or function.__kwdefaults__ is not kw
+                                or (kw is not None and (any(type(k) is not str for k in kw)
+                                    or len(kw) != len(pairs)
+                                    or any(k not in kw or kw[k] is not value for k, value in pairs)))):
+                            raise error_type(owner) from None
             owner._scope = owner._origin = s
             owner._cell = (owner, s)
             owner._root_cell = (activation, owner, s)
@@ -3193,6 +3425,92 @@ class StartupArtifactOwner:
                 _source_current(source)
                 _expected(source.expected + expected)
             StartupArtifactOwner._guard(owner)
+            if link_blueprint is not None:
+                link_rejoin()
+                need(link_tail(link_blueprint) is link_blueprint)
+                link_rejoin()
+                need(item(s, 17) is link_blueprint
+                     and owner_dict.get('_scope') is s and owner_dict.get('_origin') is s
+                     and owner_dict.get('_cell') is scope_cell
+                     and owner_dict.get('_root_cell') is scope_root
+                     and vars(activation).get('_artifact_cell') is scope_root)
+                # Rejoin actual source/entry pointer identities without calling
+                # a current getter after the last callback-bearing origin seal.
+                if (tuple.__getitem__(digest_context, 1) is not digest_binding
+                        or tuple.__getitem__(digest_context, 5) is not native_files
+                        or tuple.__getitem__(invocation, 9) is not native_files
+                        or tuple.__getitem__(started, 5) is not entry_origin
+                        or tuple.__getitem__(native_files, 4) is not link_origin
+                        or tuple.__getitem__(entry_origin, 10) is not link_origin
+                        or origin_entry_names.get('_ENTRY_ORIGIN') is not entry_origin
+                        or origin_entry_names.get('_STARTED') is not started
+                        or origin_entry_names.get('_OWNER') is not tuple.__getitem__(digest_context, 0)
+                        or origin_entry_names.get('_CELL') is not digest_binding[1]):
+                    raise error_type(owner) from None
+                if link_raw_type(link_origin) is not link_raw_tuple or link_raw_len(link_origin) != 5:
+                    raise error_type(owner) from None
+                link_pin_environment, link_pin_modules, link_pin_own_functions, link_pin_policy_functions, link_pin_types = link_origin
+                if link_raw_type(link_pin_environment) is not link_raw_tuple or link_raw_len(link_pin_environment) != 3 or link_raw_type(link_pin_environment[0]) is not link_raw_module or (link_raw_type(link_pin_environment[1]) is not link_raw_dict) or (link_raw_vars(link_pin_environment[0]) is not link_pin_environment[1]) or link_raw_any((link_raw_type(link_pin_k) is not link_raw_str for link_pin_k in link_pin_environment[1])) or (link_raw_type(link_pin_environment[2]) is not link_raw_dict) or link_raw_any((link_raw_type(link_pin_k) is not link_raw_str for link_pin_k in link_pin_environment[2])) or (link_pin_environment[1].get('modules') is not link_pin_environment[2]) or (link_raw_type(link_pin_modules) is not link_raw_tuple) or (link_raw_len(link_pin_modules) != 4) or (link_raw_type(link_pin_own_functions) is not link_raw_tuple) or (link_raw_type(link_pin_policy_functions) is not link_raw_tuple) or (link_raw_type(link_pin_types) is not link_raw_tuple) or (link_raw_len(link_pin_types) != 9):
+                    raise error_type(owner) from None
+                link_pin_names = ('hmp_startup.link_factory_origin', 'hmp_plugin.presentation_link_path_policy', 'hmp_plugin.presentation_startup_artifacts', 'hmp_startup.runtime_files')
+                for link_pin_row, link_pin_name in link_raw_zip(link_pin_modules, link_pin_names, strict=True):
+                    if link_raw_type(link_pin_row) is not link_raw_tuple or link_raw_len(link_pin_row) != 3 or link_raw_type(link_pin_row[0]) is not link_raw_str or (link_pin_row[0] != link_pin_name) or (link_raw_type(link_pin_row[1]) is not link_raw_module) or (link_raw_type(link_pin_row[2]) is not link_raw_dict) or link_raw_any((link_raw_type(link_pin_k) is not link_raw_str for link_pin_k in link_pin_row[2])) or (link_pin_environment[2].get(link_pin_name) is not link_pin_row[1]) or (link_raw_vars(link_pin_row[1]) is not link_pin_row[2]):
+                        raise error_type(owner) from None
+                if link_pin_modules[0][2].get('_CAPTURE_STARTED') is not True:
+                    raise error_type(owner) from None
+                link_pin_own_names = ('_pin_function', '_pin_type', 'capture', 'current', 'factory', 'blueprint_factory')
+                link_pin_policy_names = ('_need', '_parts', '_policy_tail', '_new_policy', '_sites', '_directory', '_leaf', '_cursor_tail', '_start', '_action', '_advance', '_outcome', '_scope_blueprint_guard', '_scope_blueprint_cohort', '_scope_blueprint_tail', '_new_scope_blueprint')
+                for link_pin_rows, link_pin_expected, link_pin_namespace in ((link_pin_own_functions, link_pin_own_names, link_pin_modules[0][2]), (link_pin_policy_functions, link_pin_policy_names, link_pin_modules[1][2])):
+                    if link_raw_len(link_pin_rows) != link_raw_len(link_pin_expected):
+                        raise error_type(owner) from None
+                    for link_pin_row, link_pin_name in link_raw_zip(link_pin_rows, link_pin_expected, strict=True):
+                        if link_raw_type(link_pin_row) is not link_raw_tuple or link_raw_len(link_pin_row) != 7 or link_raw_type(link_pin_row[0]) is not link_raw_str or (link_pin_row[0] != link_pin_name) or (link_raw_type(link_pin_row[1]) is not link_raw_function) or (link_pin_row[3] is not link_pin_namespace) or (link_pin_namespace.get(link_pin_name) is not link_pin_row[1]) or (link_pin_row[1].__code__ is not link_pin_row[2]) or (link_pin_row[1].__globals__ is not link_pin_namespace) or (link_pin_row[1].__defaults__ is not link_pin_row[4]) or (link_pin_row[1].__closure__ is not None) or (link_raw_type(link_pin_row[6]) is not link_raw_tuple):
+                            raise error_type(owner) from None
+                        link_pin_kw = link_pin_row[1].__kwdefaults__
+                        if link_pin_kw is not link_pin_row[5]:
+                            raise error_type(owner) from None
+                        if link_pin_kw is None:
+                            if link_pin_row[6] != ():
+                                raise error_type(owner) from None
+                        elif link_raw_type(link_pin_kw) is not link_raw_dict or link_raw_any((link_raw_type(link_pin_k) is not link_raw_str for link_pin_k in link_pin_kw)) or link_raw_len(link_pin_kw) != link_raw_len(link_pin_row[6]) or link_raw_any((link_raw_type(link_pin_pair) is not link_raw_tuple or link_raw_len(link_pin_pair) != 2 or link_raw_type(link_pin_pair[0]) is not link_raw_str or (link_pin_pair[0] not in link_pin_kw) or (link_pin_kw[link_pin_pair[0]] is not link_pin_pair[1]) for link_pin_pair in link_pin_row[6])):
+                            raise error_type(owner) from None
+                link_pin_exports = ((1, '_LinkPathPolicy'), (1, '_LinkPathCursor'), (2, 'ExpectedArtifact'), (3, 'RuntimeFilePlan'), (3, 'ExecutableLinkPlan'), (3, 'LinkHop'), (1, '_LinkScopeBlueprint'), (2, '_RuntimeSource'), (2, '_Scope'))
+                for link_pin_pin, (link_pin_module_index, link_pin_name) in link_raw_zip(link_pin_types, link_pin_exports, strict=True):
+                    if link_raw_type(link_pin_pin) is not link_raw_tuple or link_raw_len(link_pin_pin) != 9 or link_raw_type(link_pin_pin[0]) is not link_raw_type or (link_pin_modules[link_pin_module_index][2].get(link_pin_name) is not link_pin_pin[0]) or (link_raw_type(link_pin_pin[1]) is not link_raw_tuple) or link_raw_any((link_raw_type(link_pin_n) is not link_raw_str for link_pin_n in link_pin_pin[1])) or (link_raw_type(link_pin_pin[2]) is not link_raw_tuple) or (link_raw_len(link_pin_pin[2]) != link_raw_len(link_pin_pin[1])) or (link_raw_type(link_pin_pin[3]) is not link_raw_function) or (link_raw_type(link_pin_pin[5]) is not link_raw_dict) or link_raw_any((link_raw_type(link_pin_k) is not link_raw_str for link_pin_k in link_pin_pin[5])) or (link_raw_type(link_pin_pin[8]) is not link_raw_tuple):
+                        raise error_type(owner) from None
+                    link_pin_kind, link_pin_fields, link_pin_members, link_pin_constructor, link_pin_code, link_pin_globals_, link_pin_defaults, link_pin_bases, link_pin_dispatch = link_pin_pin
+                    link_pin_namespace = link_raw_vars(link_pin_kind)
+                    link_pin_actual = link_pin_namespace.get('__new__')
+                    if link_raw_type(link_pin_actual) is link_raw_staticmethod:
+                        link_pin_actual = link_pin_actual.__func__
+                    if link_pin_namespace.get('_fields') is not link_pin_fields or link_pin_actual is not link_pin_constructor or link_pin_constructor.__code__ is not link_pin_code or (link_pin_constructor.__globals__ is not link_pin_globals_) or (link_pin_constructor.__defaults__ is not link_pin_defaults) or (link_pin_kind.__bases__ is not link_pin_bases) or (link_pin_globals_.get('_tuple_new') is not link_raw_tuple.__new__) or link_raw_any((link_pin_namespace.get(link_pin_n) is not link_pin_member for link_pin_n, link_pin_member in link_raw_zip(link_pin_fields, link_pin_members, strict=True))) or link_raw_any((link_raw_type(link_pin_row) is not link_raw_tuple or link_raw_len(link_pin_row) != 2 or link_raw_type(link_pin_row[0]) is not link_raw_str or (link_pin_namespace.get(link_pin_row[0]) is not link_pin_row[1]) for link_pin_row in link_pin_dispatch)):
+                        raise error_type(owner) from None
+                if (owner_namespace.get('StartupArtifactOwner') is not owner_kind
+                        or type(owner) is not owner_kind or _Scope is not kind or type(s) is not kind
+                        or tuple.__getitem__(s, 17) is not link_blueprint
+                        or owner_dict.get('_scope') is not s or owner_dict.get('_origin') is not s
+                        or owner_dict.get('_cell') is not scope_cell
+                        or owner_dict.get('_root_cell') is not scope_root
+                        or vars(activation).get('_artifact_cell') is not scope_root
+                        or vars(activation).get('_artifact_owner') is not owner
+                        or constructor.__code__ is not constructor_code
+                        or any(vars(kind).get(name) is not member
+                               for name, member in zip(fields, members, strict=True))
+                        or any(vars(kind).get(name) is not member
+                               for name, member in zip(dispatch_names, dispatch, strict=True))):
+                    raise error_type(owner) from None
+                for selected, entries, functions in link_cohort[2]:
+                    names = vars(selected)
+                    if (any(type(k) is not str for k in names) or len(names) != len(entries)
+                            or any(k not in names or names[k] is not value for k, value in entries)):
+                        raise error_type(owner) from None
+                    for function, code, defaults, kw, pairs in functions:
+                        if (function.__code__ is not code or function.__defaults__ is not defaults
+                                or function.__kwdefaults__ is not kw
+                                or (kw is not None and (any(type(k) is not str for k in kw)
+                                    or len(kw) != len(pairs)
+                                    or any(k not in kw or kw[k] is not value for k, value in pairs)))):
+                            raise error_type(owner) from None
             _register_native_scope(owner, s, scope_cell, scope_root)
             _require(owner._origin is s and owner._scope is s
                      and owner._cell is scope_cell and owner._root_cell is scope_root
@@ -3200,7 +3518,7 @@ class StartupArtifactOwner:
             return owner
         except BaseException:
             owner._failed = True
-            raise ArtifactObservationError(owner) from None
+            raise error_type(owner) from None
 
     @classmethod
     def complete(cls, owner):

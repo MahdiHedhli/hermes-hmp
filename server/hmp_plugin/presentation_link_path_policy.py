@@ -12,7 +12,9 @@ import sys
 from types import FunctionType, ModuleType
 from typing import NamedTuple
 
-from .presentation_startup_artifacts import ArtifactObservationError, ExpectedArtifact
+from .presentation_startup_artifacts import (
+    ArtifactObservationError, ExpectedArtifact, _RuntimeSource,
+)
 
 
 def _need(value):
@@ -297,3 +299,202 @@ def _outcome(cursor):
     _need(_action(cursor) is None)
     return cursor.leaf, tuple(zip(cursor.policy.components[:-1], cursor.directories,
                                   strict=True)), cursor.link_length
+
+
+class _LinkScopeBlueprint(NamedTuple):
+    owner: object
+    runtime: object
+    context: tuple
+    lineage: object
+    origin: tuple
+    plan: object
+    link: object
+    rows: tuple
+
+    def __repr__(self):
+        return '<ExecutableLinkScopeBlueprint DATA not-native-admission redacted>'
+
+
+def _scope_blueprint_guard(origin):
+    # The independently anchored caller supplies the ACTUAL original origin.
+    # This shape checker cannot establish independent ownership of copied DATA.
+    if type(origin) is not tuple or len(origin) != 5:
+        raise ArtifactObservationError from None
+    own = tuple.__getitem__(origin, 2)
+    if type(own) is not tuple or len(own) != 6:
+        raise ArtifactObservationError from None
+    row = tuple.__getitem__(own, 3)
+    if (type(row) is not tuple or len(row) != 7 or type(row[0]) is not str or row[0] != 'current'
+            or type(row[1]) is not FunctionType or type(row[3]) is not dict
+            or any(type(k) is not str for k in row[3])
+            or row[3].get('current') is not row[1]
+            or row[1].__code__ is not row[2] or row[1].__globals__ is not row[3]
+            or row[1].__defaults__ is not row[4] or row[1].__kwdefaults__ is not row[5]
+            or type(row[5]) is not dict or type(row[6]) is not tuple
+            or any(type(k) is not str for k in row[5])
+            or len(row[5]) != len(row[6])
+            or any(type(pair) is not tuple or len(pair) != 2 or type(pair[0]) is not str
+                   or pair[0] not in row[5] or row[5][pair[0]] is not pair[1]
+                   for pair in row[6])):
+        raise ArtifactObservationError from None
+    result = row[1](origin)
+    if result is not origin:
+        raise ArtifactObservationError from None
+    return origin
+
+
+def _scope_blueprint_cohort(cohort):
+    # Raw snapshots supplied/retained by the actual publication caller. No
+    # owner/class/Scope getter and no authority is inferred from these values.
+    _need(type(cohort) is tuple and len(cohort) == 3
+          and type(cohort[0]) is tuple and len(cohort[0]) == 5
+          and type(cohort[1]) is tuple and len(cohort[1]) == 5)
+    for row in cohort[0]:
+        _need(type(row) is tuple and len(row) == 2)
+        names, entries = row
+        _need(type(names) is dict and type(entries) is tuple
+              and all(type(k) is str for k in names) and len(names) == len(entries)
+              and all(type(row) is tuple and len(row) == 2 and type(row[0]) is str
+                      and row[0] in names and names[row[0]] is row[1] for row in entries))
+    for row in cohort[1]:
+        _need(type(row) is tuple and len(row) == 2)
+        values, entries = row
+        _need(type(values) is list and type(entries) is tuple
+              and len(values) == len(entries)
+              and all(values[i] is entry for i, entry in enumerate(entries)))
+    _need(type(cohort[2]) is tuple and len(cohort[2]) == 4)
+    for row in cohort[2]:
+        _need(type(row) is tuple and len(row) == 3 and type(row[0]) is type
+              and type(row[1]) is tuple and type(row[2]) is tuple)
+        kind, entries, functions = row
+        names = vars(kind)
+        _need(all(type(k) is str for k in names) and len(names) == len(entries)
+              and all(type(pair) is tuple and len(pair) == 2 and type(pair[0]) is str
+                      and pair[0] in names and names[pair[0]] is pair[1] for pair in entries))
+        for function, code, defaults, kw, pairs in functions:
+            _need(type(function) is FunctionType and function.__code__ is code
+                  and function.__defaults__ is defaults and function.__kwdefaults__ is kw)
+            if kw is not None:
+                _need(type(kw) is dict and all(type(k) is str for k in kw)
+                      and len(kw) == len(pairs)
+                      and all(k in kw and kw[k] is value for k, value in pairs))
+    return cohort
+
+
+def _scope_blueprint_tail(blueprint):
+    error = ArtifactObservationError
+    need, need_code = _need, _need.__code__
+    guard, guard_code = _scope_blueprint_guard, _scope_blueprint_guard.__code__
+    kind = _LinkScopeBlueprint
+    if type(blueprint) is not kind:
+        raise error from None
+    origin = tuple.__getitem__(blueprint, 4)
+
+    def rejoin():
+        if (_need is not need or need.__code__ is not need_code
+                or _scope_blueprint_guard is not guard or guard.__code__ is not guard_code):
+            raise error from None
+        guard(origin)
+        if (_need is not need or need.__code__ is not need_code
+                or _scope_blueprint_guard is not guard or guard.__code__ is not guard_code):
+            raise error from None
+
+    rejoin()
+    runtime = blueprint.runtime
+    plan_kind, link_kind = origin[4][3][0], origin[4][4][0]
+    need(type(runtime) is _RuntimeSource and type(runtime.plan) is plan_kind
+         and type(runtime.link) is link_kind
+         and type(runtime.link.hops) is tuple and 1 <= len(runtime.link.hops) <= 8)
+    need(blueprint.plan is runtime.plan
+         and blueprint.link is runtime.link and blueprint.plan.executable_link is blueprint.link
+         and type(blueprint.context) is tuple and len(blueprint.context) == 3
+         and all(type(v) is int for v in blueprint.context)
+         and type(blueprint.rows) is tuple
+         and len(blueprint.rows) == 3 * (len(blueprint.link.hops) + 1))
+    tail, tail_code = _policy_tail, _policy_tail.__code__
+    ordinal = 0
+    for phase in ('before', 'after', 'recheck'):
+        for index in range(len(blueprint.link.hops) + 1):
+            rejoin()
+            if _policy_tail is not tail or tail.__code__ is not tail_code:
+                raise error from None
+            row = blueprint.rows[ordinal]
+            need(type(row) is _LinkPathPolicy)
+            hop = (None if index == len(blueprint.link.hops)
+                   else blueprint.link.hops[index])
+            need(type(row.index) is int and type(row.phase) is str
+                 and type(row.actor_uid) is int and type(row.bound) is int
+                 and row.plan is blueprint.link and row.hop is hop and row.index == index
+                 and row.phase == phase and row.actor_uid is blueprint.context[1]
+                 and row.bound is runtime.bound)
+            actual = tail(row)
+            rejoin()
+            need(actual is row)
+            ordinal += 1
+    rejoin()
+    return blueprint
+
+
+def _new_scope_blueprint(owner, runtime, context, lineage, origin, cohort):
+    # This function treats owner/lineage as opaque original-pointer DATA. Actual
+    # entry/lineage/source authority and class seals belong to _retain, not here.
+    error = ArtifactObservationError
+    need, need_code = _need, _need.__code__
+    guard, guard_code = _scope_blueprint_guard, _scope_blueprint_guard.__code__
+    check, check_code = _scope_blueprint_cohort, _scope_blueprint_cohort.__code__
+    factory, factory_code = _new_policy, _new_policy.__code__
+    tail, tail_code = _scope_blueprint_tail, _scope_blueprint_tail.__code__
+    kind = _LinkScopeBlueprint
+
+    def rejoin():
+        if (_need is not need or need.__code__ is not need_code
+                or _scope_blueprint_guard is not guard or guard.__code__ is not guard_code
+                or _scope_blueprint_cohort is not check or check.__code__ is not check_code
+                or _new_policy is not factory or factory.__code__ is not factory_code
+                or _scope_blueprint_tail is not tail or tail.__code__ is not tail_code):
+            raise error from None
+        guard(origin)
+        if (_need is not need or need.__code__ is not need_code
+                or _scope_blueprint_guard is not guard or guard.__code__ is not guard_code
+                or _scope_blueprint_cohort is not check or check.__code__ is not check_code):
+            raise error from None
+        actual = check(cohort)
+        if (actual is not cohort or _need is not need or need.__code__ is not need_code
+                or _scope_blueprint_guard is not guard or guard.__code__ is not guard_code
+                or _scope_blueprint_cohort is not check or check.__code__ is not check_code
+                or _new_policy is not factory or factory.__code__ is not factory_code
+                or _scope_blueprint_tail is not tail or tail.__code__ is not tail_code):
+            raise error from None
+
+    rejoin()
+    plan_kind, link_kind = origin[4][3][0], origin[4][4][0]
+    need(type(runtime) is _RuntimeSource and type(runtime.plan) is plan_kind
+         and type(runtime.link) is link_kind
+         and type(runtime.link.hops) is tuple and 1 <= len(runtime.link.hops) <= 8
+         and type(context) is tuple and len(context) == 3
+         and all(type(v) is int for v in context)
+         and runtime.plan.executable_link is runtime.link)
+    rows = []
+    for phase in ('before', 'after', 'recheck'):
+        for index in range(len(runtime.link.hops) + 1):
+            rejoin()
+            hop = None if index == len(runtime.link.hops) else runtime.link.hops[index]
+            row = factory(runtime.link, hop, index, phase, context[1], runtime.bound)
+            rejoin()
+            need(type(row) is _LinkPathPolicy and row.plan is runtime.link
+                 and row.hop is hop and row.index == index and row.phase == phase
+                 and row.actor_uid is context[1] and row.bound is runtime.bound)
+            rows.append(row)
+    rejoin()
+    values = (owner, runtime, context, lineage, origin, runtime.plan, runtime.link, tuple(rows))
+    constructor = vars(kind)['__new__']
+    if type(constructor) is staticmethod:
+        constructor = constructor.__func__
+    result = constructor(kind, *values)
+    rejoin()
+    need(type(result) is kind and tuple.__len__(result) == len(values)
+         and all(tuple.__getitem__(result, i) is value for i, value in enumerate(values)))
+    actual = tail(result)
+    rejoin()
+    need(actual is result)
+    return result

@@ -67,7 +67,7 @@ def current(origin, *, _type=type, _vars=vars, _tuple=tuple, _len=len,
             or environment[1].get('modules') is not environment[2]
             or _type(modules) is not _tuple or _len(modules) != 4
             or _type(own_functions) is not _tuple or _type(policy_functions) is not _tuple
-            or _type(types) is not _tuple or _len(types) != 6):
+            or _type(types) is not _tuple or _len(types) != 9):
         raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
     names = ('hmp_startup.link_factory_origin',
              'hmp_plugin.presentation_link_path_policy',
@@ -82,10 +82,11 @@ def current(origin, *, _type=type, _vars=vars, _tuple=tuple, _len=len,
             raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
     if modules[0][2].get('_CAPTURE_STARTED') is not True:
         raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
-    own_names = ('_pin_function', '_pin_type', 'capture', 'current', 'factory')
+    own_names = ('_pin_function', '_pin_type', 'capture', 'current', 'factory', 'blueprint_factory')
     policy_names = ('_need', '_parts', '_policy_tail', '_new_policy', '_sites',
                     '_directory', '_leaf', '_cursor_tail', '_start', '_action',
-                    '_advance', '_outcome')
+                    '_advance', '_outcome', '_scope_blueprint_guard',
+                    '_scope_blueprint_cohort', '_scope_blueprint_tail', '_new_scope_blueprint')
     for rows, expected, namespace in ((own_functions, own_names, modules[0][2]),
                                       (policy_functions, policy_names, modules[1][2])):
         if _len(rows) != _len(expected):
@@ -114,7 +115,8 @@ def current(origin, *, _type=type, _vars=vars, _tuple=tuple, _len=len,
                 raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
     exports = ((1, '_LinkPathPolicy'), (1, '_LinkPathCursor'),
                (2, 'ExpectedArtifact'), (3, 'RuntimeFilePlan'),
-               (3, 'ExecutableLinkPlan'), (3, 'LinkHop'))
+               (3, 'ExecutableLinkPlan'), (3, 'LinkHop'),
+               (1, '_LinkScopeBlueprint'), (2, '_RuntimeSource'), (2, '_Scope'))
     for pin, (module_index, name) in _zip(types, exports, strict=True):
         if (_type(pin) is not _tuple or _len(pin) != 9 or _type(pin[0]) is not _type
                 or modules[module_index][2].get(name) is not pin[0]
@@ -165,7 +167,7 @@ def capture(*, _type=type, _vars=vars, _tuple=tuple, _function=FunctionType,
     if _any(_type(k) is not str for k in namespace):
         raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
     pin_function, pin_type, check = _pin_function, _pin_type, current
-    own_names = ('_pin_function', '_pin_type', 'capture', 'current', 'factory')
+    own_names = ('_pin_function', '_pin_type', 'capture', 'current', 'factory', 'blueprint_factory')
     own_functions = _tuple(pin_function(name, namespace.get(name), namespace) for name in own_names)
     from hmp_plugin import presentation_link_path_policy as policy
     from hmp_plugin import presentation_startup_artifacts as artifacts
@@ -196,12 +198,14 @@ def capture(*, _type=type, _vars=vars, _tuple=tuple, _function=FunctionType,
     policy_namespace = modules[1][2]
     policy_names = ('_need', '_parts', '_policy_tail', '_new_policy', '_sites',
                     '_directory', '_leaf', '_cursor_tail', '_start', '_action',
-                    '_advance', '_outcome')
+                    '_advance', '_outcome', '_scope_blueprint_guard',
+                    '_scope_blueprint_cohort', '_scope_blueprint_tail', '_new_scope_blueprint')
     functions = _tuple(pin_function(name, policy_namespace.get(name), policy_namespace)
                        for name in policy_names)
     kinds = _tuple(pin_type(modules[index][2].get(name)) for index, name in (
         (1, '_LinkPathPolicy'), (1, '_LinkPathCursor'), (2, 'ExpectedArtifact'),
-        (3, 'RuntimeFilePlan'), (3, 'ExecutableLinkPlan'), (3, 'LinkHop')))
+        (3, 'RuntimeFilePlan'), (3, 'ExecutableLinkPlan'), (3, 'LinkHop'),
+               (1, '_LinkScopeBlueprint'), (2, '_RuntimeSource'), (2, '_Scope')))
     result = ((_sys, _vars(_sys), registry), modules, own_functions, functions, kinds)
     return check(result)
 
@@ -214,7 +218,7 @@ def factory(origin, *, _type=type, _tuple=tuple, _len=len, _any=any,
     original entry/lineage. This DATA helper cannot establish that ownership.
     """
     if (_type(origin) is not _tuple or _len(origin) != 5
-            or _type(origin[2]) is not _tuple or _len(origin[2]) != 5):
+            or _type(origin[2]) is not _tuple or _len(origin[2]) != 6):
         raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
     row = origin[2][3]
     if (_type(row) is not _tuple or _len(row) != 7
@@ -233,3 +237,30 @@ def factory(origin, *, _type=type, _tuple=tuple, _len=len, _any=any,
         raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
     row[1](origin)  # actual held validator, never a current export selection
     return origin[3][3][1]
+
+
+def blueprint_factory(origin, *, _type=type, _tuple=tuple, _len=len, _error=RuntimeError):
+    """One fixed held blueprint entry point; no caller-selected helper name."""
+    # Own fixed row4 is factory, row3 is current; both are early captured. The
+    # caller must seal this helper itself before invoking it, as for factory().
+    if _type(origin) is not _tuple or _len(origin) != 5:
+        raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+    rows = origin[2]
+    if _type(rows) is not _tuple or _len(rows) != 6:
+        raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+    row = rows[4]
+    if (_type(row) is not _tuple or _len(row) != 7 or _type(row[0]) is not str
+            or row[0] != 'factory' or _type(row[1]) is not FunctionType
+            or _type(row[3]) is not dict or any(_type(k) is not str for k in row[3])
+            or row[3].get('factory') is not row[1]
+            or row[1].__code__ is not row[2] or row[1].__globals__ is not row[3]
+            or row[1].__defaults__ is not row[4] or row[1].__kwdefaults__ is not row[5]
+            or _type(row[5]) is not dict or _type(row[6]) is not _tuple
+            or any(_type(k) is not str for k in row[5])
+            or _len(row[5]) != _len(row[6])
+            or any(_type(pair) is not _tuple or _len(pair) != 2 or _type(pair[0]) is not str
+                   or pair[0] not in row[5] or row[5][pair[0]] is not pair[1]
+                   for pair in row[6])):
+        raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+    row[1](origin)
+    return origin[3][15][1]
