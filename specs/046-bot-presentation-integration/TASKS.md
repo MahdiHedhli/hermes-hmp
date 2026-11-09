@@ -1,6 +1,20 @@
 ## November 8 — reviewed host updates deployed; character integration remains open
 
 
+Media-lane retirement source `1f8fd9a` now closes admission/publication before
+awaiting original service workers and actor SQL settlement. It retains one owner
+through waiter cancellation, unknown scheduling/submit outcomes and changed scope;
+it neither closes Store nor claims HTTP/read/native borrowers are finished.
+Both199-case combined suites pass unchanged on3.14.9/3.11.15 plus Ruff; independent
+finite source/delta reviews found no further concrete blocker. Eight new cases
+cover actual Store rollback, cancelled waiter, uncertain submission, creation/
+callback acknowledgement loss and changed-generation refusal. Unknown creation
+must stay owned by the future adapter and cannot justify dropping the Store.
+This coordinator and media service remain unwired/uninstalled. Whole-listener
+integration, migration/rollback, native/config publication and physical/release
+qualification remain open; live hosts retain only the reviewed c7482f1 safety backport.
+
+
 Minimal read-worker backport `c7482f131a5414c6b0d63ed5cb8ffb61b61fbfdc` is now
 installed on ColPanicM2 and LLY520. Both51-case read/FD and592-case listener/adapter/
 CLI/access/ownership suites pass on3.14.9/3.11.15; independent review, Ruff and

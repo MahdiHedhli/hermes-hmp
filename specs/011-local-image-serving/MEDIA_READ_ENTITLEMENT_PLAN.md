@@ -300,3 +300,24 @@ Lucas/Serenity (health exit1, not all-bots success). RSWORK1 is repaired in this
 verified deployment; no live incident or production fault injection claimed. This
 backport adds no media/schema4/CLI features and changes no grants or host flags.
 Physical tests and separate image-service/native-authority integration remain open.
+
+
+## MR-LIFE1: original media-lane retirement source reviewed
+
+Media-lane retirement source `1f8fd9a` now closes admission/publication before
+awaiting original service workers and actor SQL settlement. It retains one owner
+through waiter cancellation, unknown scheduling/submit outcomes and changed scope;
+it neither closes Store nor claims HTTP/read/native borrowers are finished.
+Both199-case combined suites pass unchanged on3.14.9/3.11.15 plus Ruff; independent
+finite source/delta reviews found no further concrete blocker. Eight new cases
+cover actual Store rollback, cancelled waiter, uncertain submission, creation/
+callback acknowledgement loss and changed-generation refusal. Unknown creation
+must stay owned by the future adapter and cannot justify dropping the Store.
+This coordinator and media service remain unwired/uninstalled. Whole-listener
+integration, migration/rollback, native/config publication and physical/release
+qualification remain open; live hosts retain only the reviewed c7482f1 safety backport.
+
+- MR-LIFE1: helper implemented/reviewed/tested; no whole-listener close authority.
+- MR-LIFE2: integrate the retained media coordinator with original HmpServer/adapter teardown and other borrower drains without default activation.
+- MR-LIFE3: qualify quiesced schema4 migration, cross-process writer coordination and rollback.
+- MR-LIFE4: native-owned final authority publication remains a separate inspected contract gap; no cached boolean substitute.
