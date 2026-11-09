@@ -237,6 +237,10 @@ def test_adapter_disconnect_retains_record_store_and_pointer_until_real_join(
                 entered.set()
                 await release.wait()
                 events.append("joined")
+            async def wait_operator_drain(self):
+                # This port models adapter ordering only. Actual listener/worker
+                # ownership is exercised separately with real HmpServer owners.
+                assert events.count("joined") == 1 and release.is_set()
         srv = Listener()
         adapter._server = srv
         adapter._record = tmp_path / "synthetic-listener.json"
