@@ -1,35 +1,43 @@
 {
-  "schema": 1,
-  "purpose": "review inventory only; not runtime plan, permission or admission",
-  "sourceBase": "872e0fb66a8c84b13f01b4c433b85ad56aa5072e",
+  "schema": 2,
+  "purpose": "Review inventory only; not runtime plan, permission, admission, operation count or deployment proof",
+  "sourceBase": "e12df99b3531e8b81e56537dd54f3ffcb825b417",
+  "historicalSourceBase": "8afe009f93044387a352c4f642c1162296eba789",
   "sources": {
-    "server/hmp_plugin/presentation_startup_artifacts.py": "0c4d1a78a0b8ac3f641a50e2b30f8e89346f49274c876349d37ed417e38f8359",
+    "server/hmp_plugin/presentation_startup_artifacts.py": "89e7eb520e84d45b5e696d3fb3ee17068afeab1cbcdbda5788fd4ab5c84750c3",
     "server/hmp_plugin/presentation_gateway_package.py": "f602dedee29d69ba354556bd8b7de2e4574bdb3c9c8e524938438a32b7f0a41b",
     "server/hmp_plugin/presentation_startup_cache.py": "ec6d54e0b0de476f7a2d13b8896f6c3db9650ca519452ae1b6cb3642a35b4682",
     "server/hmp_startup/entry_files.py": "bd286f8922817a41a4103637c2b7d8eecc1f58f2a7fa0794ed0cc8d4ba6d1989",
     "server/hmp_startup/cache_probe.py": "1a300f89f7df85f4484c4326c94c3a046b9874b348e71b73d98cb6a643562f67"
   },
+  "qualificationLimits": [
+    "39 counts syntax calls to _stat/_fstat helpers, not all native invocations or owners",
+    "_file helper calls are retained in legacy/non-reader branches;7 new shared-engine syntax sites serve runtime-source/declared-cache owners",
+    "Direct fresh-probe stat_call is separately inventoried; its ENOENT diagnostics require a distinct reviewed lifecycle",
+    "No complete all-policy/six-operation/native-service/device/release acceptance or installed runtime binding is implied"
+  ],
   "sites": [
     {
       "path": "server/hmp_plugin/presentation_startup_artifacts.py",
       "scope": "StartupArtifactOwner._link_path",
       "kind": "fstat",
       "siteOrdinal": 0,
-      "line": 3583,
+      "line": 3757,
       "arguments": [
         "self",
         "fd",
         "s",
         "native_registration"
       ],
-      "keywords": {}
+      "keywords": {},
+      "integrationStatus": "Shared metadata claim/consumer/ACK/retirement migration not complete; source inventory alone proves no runtime acceptance."
     },
     {
       "path": "server/hmp_plugin/presentation_startup_artifacts.py",
       "scope": "StartupArtifactOwner._link_path",
       "kind": "stat",
       "siteOrdinal": 0,
-      "line": 3591,
+      "line": 3765,
       "arguments": [
         "self",
         "name",
@@ -37,14 +45,15 @@
         "s",
         "native_registration"
       ],
-      "keywords": {}
+      "keywords": {},
+      "integrationStatus": "Shared metadata claim/consumer/ACK/retirement migration not complete; source inventory alone proves no runtime acceptance."
     },
     {
       "path": "server/hmp_plugin/presentation_startup_artifacts.py",
       "scope": "StartupArtifactOwner._link_path",
       "kind": "stat",
       "siteOrdinal": 1,
-      "line": 3610,
+      "line": 3784,
       "arguments": [
         "self",
         "name",
@@ -52,28 +61,30 @@
         "s",
         "native_registration"
       ],
-      "keywords": {}
+      "keywords": {},
+      "integrationStatus": "Shared metadata claim/consumer/ACK/retirement migration not complete; source inventory alone proves no runtime acceptance."
     },
     {
       "path": "server/hmp_plugin/presentation_startup_artifacts.py",
       "scope": "StartupArtifactOwner._link_path",
       "kind": "fstat",
       "siteOrdinal": 1,
-      "line": 3613,
+      "line": 3787,
       "arguments": [
         "self",
         "fd",
         "s",
         "native_registration"
       ],
-      "keywords": {}
+      "keywords": {},
+      "integrationStatus": "Shared metadata claim/consumer/ACK/retirement migration not complete; source inventory alone proves no runtime acceptance."
     },
     {
       "path": "server/hmp_plugin/presentation_startup_artifacts.py",
       "scope": "StartupArtifactOwner._link_path",
       "kind": "stat",
       "siteOrdinal": 2,
-      "line": 3615,
+      "line": 3789,
       "arguments": [
         "self",
         "item",
@@ -81,28 +92,30 @@
         "s",
         "native_registration"
       ],
-      "keywords": {}
+      "keywords": {},
+      "integrationStatus": "Shared metadata claim/consumer/ACK/retirement migration not complete; source inventory alone proves no runtime acceptance."
     },
     {
       "path": "server/hmp_plugin/presentation_startup_artifacts.py",
       "scope": "StartupArtifactOwner._file",
       "kind": "fstat",
       "siteOrdinal": 0,
-      "line": 3784,
+      "line": 3964,
       "arguments": [
         "self",
         "fd",
         "s",
         "native_registration"
       ],
-      "keywords": {}
+      "keywords": {},
+      "integrationStatus": "Legacy/non-reader helper branch remains; runtime-source and declared-cache owners use the distinct fixed shared-engine branch. Bounded complete-file/current-floor tests do not qualify other owners."
     },
     {
       "path": "server/hmp_plugin/presentation_startup_artifacts.py",
       "scope": "StartupArtifactOwner._file",
       "kind": "stat",
       "siteOrdinal": 0,
-      "line": 3795,
+      "line": 3985,
       "arguments": [
         "self",
         "name",
@@ -110,42 +123,45 @@
         "s",
         "native_registration"
       ],
-      "keywords": {}
+      "keywords": {},
+      "integrationStatus": "Legacy/non-reader helper branch remains; runtime-source and declared-cache owners use the distinct fixed shared-engine branch. Bounded complete-file/current-floor tests do not qualify other owners."
     },
     {
       "path": "server/hmp_plugin/presentation_startup_artifacts.py",
       "scope": "StartupArtifactOwner._file",
       "kind": "fstat",
       "siteOrdinal": 1,
-      "line": 3809,
+      "line": 4009,
       "arguments": [
         "self",
         "fd",
         "s",
         "native_registration"
       ],
-      "keywords": {}
+      "keywords": {},
+      "integrationStatus": "Legacy/non-reader helper branch remains; runtime-source and declared-cache owners use the distinct fixed shared-engine branch. Bounded complete-file/current-floor tests do not qualify other owners."
     },
     {
       "path": "server/hmp_plugin/presentation_startup_artifacts.py",
       "scope": "StartupArtifactOwner._file",
       "kind": "fstat",
       "siteOrdinal": 2,
-      "line": 3894,
+      "line": 4105,
       "arguments": [
         "self",
         "fd",
         "s",
         "native_registration"
       ],
-      "keywords": {}
+      "keywords": {},
+      "integrationStatus": "Legacy/non-reader helper branch remains; runtime-source and declared-cache owners use the distinct fixed shared-engine branch. Bounded complete-file/current-floor tests do not qualify other owners."
     },
     {
       "path": "server/hmp_plugin/presentation_startup_artifacts.py",
       "scope": "StartupArtifactOwner._file",
       "kind": "stat",
       "siteOrdinal": 1,
-      "line": 3896,
+      "line": 4107,
       "arguments": [
         "self",
         "name",
@@ -153,28 +169,30 @@
         "s",
         "native_registration"
       ],
-      "keywords": {}
+      "keywords": {},
+      "integrationStatus": "Legacy/non-reader helper branch remains; runtime-source and declared-cache owners use the distinct fixed shared-engine branch. Bounded complete-file/current-floor tests do not qualify other owners."
     },
     {
       "path": "server/hmp_plugin/presentation_startup_artifacts.py",
       "scope": "StartupArtifactOwner._file",
       "kind": "fstat",
       "siteOrdinal": 3,
-      "line": 3908,
+      "line": 4135,
       "arguments": [
         "self",
         "directory",
         "s",
         "native_registration"
       ],
-      "keywords": {}
+      "keywords": {},
+      "integrationStatus": "Legacy/non-reader helper branch remains; runtime-source and declared-cache owners use the distinct fixed shared-engine branch. Bounded complete-file/current-floor tests do not qualify other owners."
     },
     {
       "path": "server/hmp_plugin/presentation_startup_artifacts.py",
       "scope": "StartupArtifactOwner._file",
       "kind": "stat",
       "siteOrdinal": 2,
-      "line": 3910,
+      "line": 4137,
       "arguments": [
         "self",
         "name",
@@ -182,7 +200,8 @@
         "s",
         "native_registration"
       ],
-      "keywords": {}
+      "keywords": {},
+      "integrationStatus": "Legacy/non-reader helper branch remains; runtime-source and declared-cache owners use the distinct fixed shared-engine branch. Bounded complete-file/current-floor tests do not qualify other owners."
     },
     {
       "path": "server/hmp_plugin/presentation_gateway_package.py",
@@ -196,7 +215,8 @@
         "s",
         "native_registration"
       ],
-      "keywords": {}
+      "keywords": {},
+      "integrationStatus": "Shared metadata claim/consumer/ACK/retirement migration not complete; source inventory alone proves no runtime acceptance."
     },
     {
       "path": "server/hmp_plugin/presentation_gateway_package.py",
@@ -210,7 +230,8 @@
         "s",
         "native_registration"
       ],
-      "keywords": {}
+      "keywords": {},
+      "integrationStatus": "Shared metadata claim/consumer/ACK/retirement migration not complete; source inventory alone proves no runtime acceptance."
     },
     {
       "path": "server/hmp_plugin/presentation_gateway_package.py",
@@ -225,7 +246,8 @@
         "s",
         "native_registration"
       ],
-      "keywords": {}
+      "keywords": {},
+      "integrationStatus": "Shared metadata claim/consumer/ACK/retirement migration not complete; source inventory alone proves no runtime acceptance."
     },
     {
       "path": "server/hmp_plugin/presentation_gateway_package.py",
@@ -239,7 +261,8 @@
         "s",
         "native_registration"
       ],
-      "keywords": {}
+      "keywords": {},
+      "integrationStatus": "Shared metadata claim/consumer/ACK/retirement migration not complete; source inventory alone proves no runtime acceptance."
     },
     {
       "path": "server/hmp_plugin/presentation_gateway_package.py",
@@ -254,7 +277,8 @@
         "s",
         "native_registration"
       ],
-      "keywords": {}
+      "keywords": {},
+      "integrationStatus": "Shared metadata claim/consumer/ACK/retirement migration not complete; source inventory alone proves no runtime acceptance."
     },
     {
       "path": "server/hmp_plugin/presentation_gateway_package.py",
@@ -268,7 +292,8 @@
         "s",
         "native_registration"
       ],
-      "keywords": {}
+      "keywords": {},
+      "integrationStatus": "Shared metadata claim/consumer/ACK/retirement migration not complete; source inventory alone proves no runtime acceptance."
     },
     {
       "path": "server/hmp_plugin/presentation_gateway_package.py",
@@ -283,7 +308,8 @@
         "s",
         "native_registration"
       ],
-      "keywords": {}
+      "keywords": {},
+      "integrationStatus": "Shared metadata claim/consumer/ACK/retirement migration not complete; source inventory alone proves no runtime acceptance."
     },
     {
       "path": "server/hmp_plugin/presentation_gateway_package.py",
@@ -297,7 +323,8 @@
         "s",
         "native_registration"
       ],
-      "keywords": {}
+      "keywords": {},
+      "integrationStatus": "Shared metadata claim/consumer/ACK/retirement migration not complete; source inventory alone proves no runtime acceptance."
     },
     {
       "path": "server/hmp_plugin/presentation_startup_cache.py",
@@ -312,7 +339,8 @@
         "scope",
         "native_registration"
       ],
-      "keywords": {}
+      "keywords": {},
+      "integrationStatus": "Shared metadata claim/consumer/ACK/retirement migration not complete; source inventory alone proves no runtime acceptance."
     },
     {
       "path": "server/hmp_plugin/presentation_startup_cache.py",
@@ -326,7 +354,8 @@
         "scope",
         "native_registration"
       ],
-      "keywords": {}
+      "keywords": {},
+      "integrationStatus": "Shared metadata claim/consumer/ACK/retirement migration not complete; source inventory alone proves no runtime acceptance."
     },
     {
       "path": "server/hmp_plugin/presentation_startup_cache.py",
@@ -341,7 +370,8 @@
         "scope",
         "native_registration"
       ],
-      "keywords": {}
+      "keywords": {},
+      "integrationStatus": "Shared metadata claim/consumer/ACK/retirement migration not complete; source inventory alone proves no runtime acceptance."
     },
     {
       "path": "server/hmp_plugin/presentation_startup_cache.py",
@@ -355,7 +385,8 @@
         "scope",
         "native_registration"
       ],
-      "keywords": {}
+      "keywords": {},
+      "integrationStatus": "Shared metadata claim/consumer/ACK/retirement migration not complete; source inventory alone proves no runtime acceptance."
     },
     {
       "path": "server/hmp_plugin/presentation_startup_cache.py",
@@ -369,7 +400,8 @@
         "scope",
         "native_registration"
       ],
-      "keywords": {}
+      "keywords": {},
+      "integrationStatus": "Shared metadata claim/consumer/ACK/retirement migration not complete; source inventory alone proves no runtime acceptance."
     },
     {
       "path": "server/hmp_startup/entry_files.py",
@@ -383,7 +415,8 @@
         "s",
         "native_registration"
       ],
-      "keywords": {}
+      "keywords": {},
+      "integrationStatus": "Shared metadata claim/consumer/ACK/retirement migration not complete; source inventory alone proves no runtime acceptance."
     },
     {
       "path": "server/hmp_startup/entry_files.py",
@@ -397,7 +430,8 @@
         "s",
         "native_registration"
       ],
-      "keywords": {}
+      "keywords": {},
+      "integrationStatus": "Shared metadata claim/consumer/ACK/retirement migration not complete; source inventory alone proves no runtime acceptance."
     },
     {
       "path": "server/hmp_startup/entry_files.py",
@@ -412,7 +446,8 @@
         "s",
         "native_registration"
       ],
-      "keywords": {}
+      "keywords": {},
+      "integrationStatus": "Shared metadata claim/consumer/ACK/retirement migration not complete; source inventory alone proves no runtime acceptance."
     },
     {
       "path": "server/hmp_startup/entry_files.py",
@@ -426,7 +461,8 @@
         "s",
         "native_registration"
       ],
-      "keywords": {}
+      "keywords": {},
+      "integrationStatus": "Shared metadata claim/consumer/ACK/retirement migration not complete; source inventory alone proves no runtime acceptance."
     },
     {
       "path": "server/hmp_startup/entry_files.py",
@@ -441,7 +477,8 @@
         "s",
         "native_registration"
       ],
-      "keywords": {}
+      "keywords": {},
+      "integrationStatus": "Shared metadata claim/consumer/ACK/retirement migration not complete; source inventory alone proves no runtime acceptance."
     },
     {
       "path": "server/hmp_startup/entry_files.py",
@@ -455,7 +492,8 @@
         "s",
         "native_registration"
       ],
-      "keywords": {}
+      "keywords": {},
+      "integrationStatus": "Shared metadata claim/consumer/ACK/retirement migration not complete; source inventory alone proves no runtime acceptance."
     },
     {
       "path": "server/hmp_startup/entry_files.py",
@@ -470,7 +508,8 @@
         "s",
         "native_registration"
       ],
-      "keywords": {}
+      "keywords": {},
+      "integrationStatus": "Shared metadata claim/consumer/ACK/retirement migration not complete; source inventory alone proves no runtime acceptance."
     },
     {
       "path": "server/hmp_startup/entry_files.py",
@@ -484,7 +523,8 @@
         "s",
         "native_registration"
       ],
-      "keywords": {}
+      "keywords": {},
+      "integrationStatus": "Shared metadata claim/consumer/ACK/retirement migration not complete; source inventory alone proves no runtime acceptance."
     },
     {
       "path": "server/hmp_startup/entry_files.py",
@@ -499,7 +539,8 @@
         "s",
         "native_registration"
       ],
-      "keywords": {}
+      "keywords": {},
+      "integrationStatus": "Shared metadata claim/consumer/ACK/retirement migration not complete; source inventory alone proves no runtime acceptance."
     },
     {
       "path": "server/hmp_startup/entry_files.py",
@@ -513,7 +554,8 @@
         "s",
         "native_registration"
       ],
-      "keywords": {}
+      "keywords": {},
+      "integrationStatus": "Shared metadata claim/consumer/ACK/retirement migration not complete; source inventory alone proves no runtime acceptance."
     },
     {
       "path": "server/hmp_startup/entry_files.py",
@@ -527,7 +569,8 @@
         "s",
         "native_registration"
       ],
-      "keywords": {}
+      "keywords": {},
+      "integrationStatus": "Shared metadata claim/consumer/ACK/retirement migration not complete; source inventory alone proves no runtime acceptance."
     },
     {
       "path": "server/hmp_startup/cache_probe.py",
@@ -541,7 +584,8 @@
         "s",
         "native_registration"
       ],
-      "keywords": {}
+      "keywords": {},
+      "integrationStatus": "Shared metadata claim/consumer/ACK/retirement migration not complete; source inventory alone proves no runtime acceptance."
     },
     {
       "path": "server/hmp_startup/cache_probe.py",
@@ -555,7 +599,8 @@
         "s",
         "native_registration"
       ],
-      "keywords": {}
+      "keywords": {},
+      "integrationStatus": "Shared metadata claim/consumer/ACK/retirement migration not complete; source inventory alone proves no runtime acceptance."
     },
     {
       "path": "server/hmp_startup/cache_probe.py",
@@ -570,17 +615,104 @@
         "s",
         "native_registration"
       ],
-      "keywords": {}
+      "keywords": {},
+      "integrationStatus": "Shared metadata claim/consumer/ACK/retirement migration not complete; source inventory alone proves no runtime acceptance."
     }
   ],
-  "diagnosticBoundaries": [
-    "hmp_plugin.presentation_startup_cache._is_missing",
-    "hmp_startup.cache_probe.RuntimeCacheProbeOwner._stat_known"
+  "runtimeCacheEngineSyntaxSites": [
+    {
+      "path": "server/hmp_plugin/presentation_startup_artifacts.py",
+      "scope": "StartupArtifactOwner._file",
+      "line": 3973,
+      "arguments": [
+        "self",
+        "metadata_resource",
+        "metadata_last"
+      ]
+    },
+    {
+      "path": "server/hmp_plugin/presentation_startup_artifacts.py",
+      "scope": "StartupArtifactOwner._file",
+      "line": 3994,
+      "arguments": [
+        "self",
+        "metadata_resource",
+        "metadata_last"
+      ]
+    },
+    {
+      "path": "server/hmp_plugin/presentation_startup_artifacts.py",
+      "scope": "StartupArtifactOwner._file",
+      "line": 4014,
+      "arguments": [
+        "self",
+        "metadata_resource",
+        "metadata_last"
+      ]
+    },
+    {
+      "path": "server/hmp_plugin/presentation_startup_artifacts.py",
+      "scope": "StartupArtifactOwner._file",
+      "line": 4112,
+      "arguments": [
+        "self",
+        "metadata_resource",
+        "metadata_last",
+        "metadata_before",
+        "metadata_eof"
+      ]
+    },
+    {
+      "path": "server/hmp_plugin/presentation_startup_artifacts.py",
+      "scope": "StartupArtifactOwner._file",
+      "line": 4119,
+      "arguments": [
+        "self",
+        "metadata_resource",
+        "metadata_last",
+        "metadata_before",
+        "metadata_eof"
+      ]
+    },
+    {
+      "path": "server/hmp_plugin/presentation_startup_artifacts.py",
+      "scope": "StartupArtifactOwner._file",
+      "line": 4143,
+      "arguments": [
+        "self",
+        "metadata_resource",
+        "metadata_last",
+        "baseline",
+        "metadata_eof"
+      ]
+    },
+    {
+      "path": "server/hmp_plugin/presentation_startup_artifacts.py",
+      "scope": "StartupArtifactOwner._file",
+      "line": 4151,
+      "arguments": [
+        "self",
+        "metadata_resource",
+        "metadata_last",
+        "baseline",
+        "metadata_eof"
+      ]
+    }
   ],
-  "remaining": [
-    "directory caller actor-preflight causal qualification",
-    "fixed leaf and final-ancestor consumer policies",
-    "actual walker metadata ACK cursor integration; never skip zero cursor guard",
-    "remaining operation and enumeration integration with original lifetime/resource bounds"
+  "additionalNativeSyntaxSites": [
+    {
+      "path": "server/hmp_startup/cache_probe.py",
+      "scope": "RuntimeCacheProbeOwner._stat_known",
+      "line": 242,
+      "kind": "direct fixed stat_call",
+      "arguments": [
+        "name"
+      ],
+      "keywords": {
+        "dir_fd": "parent",
+        "follow_symlinks": "False"
+      },
+      "integrationStatus": "Fresh probe returned-success/reported-missing diagnostic lifecycle remains to migrate; not included in the39 helper-call count."
+    }
   ]
 }
