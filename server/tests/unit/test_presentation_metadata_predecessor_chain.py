@@ -11,7 +11,7 @@ def test_original_predecessor_chain_before_second_native_call(tmp_path, monkeypa
     script = script.replace('GatewayPackageOwner.verify_recipe(recipe)',
                             'GatewayPackageOwner.verify_recipe_source_hashes(recipe,entry)')
     script = script[:script.rfind('print(json.dumps')]
-    script += '\nmutation=' + repr(mutation) + '\n'
+    script += '\nhistory_case=' + repr(mutation) + '\n'
     script += r'''
 import gc, os, weakref
 from hmp_startup.gateway_continuation import GatewayContinuationOwner
@@ -56,11 +56,11 @@ def at_original_fstat(actual_owner,fd,scope,registration=None):
             before=tuple(registration.native_ledger.counts)
             if ordinal==1:
                 assert metadata.commits[0] is commits[0]
-                if mutation=='copied_predecessor':metadata.commits[0]=commits[0]._replace()
-                if mutation=='missing_predecessor':metadata.commits.clear()
+                if history_case=='copied_predecessor':metadata.commits[0]=commits[0]._replace()
+                if history_case=='missing_predecessor':metadata.commits.clear()
             try:commit=m._run_directory_observation(owner,resource)
             except a.ArtifactObservationError:
-                assert ordinal==1 and mutation!='normal' and len(native_entries)==1
+                assert ordinal==1 and history_case!='normal' and len(native_entries)==1
                 assert tuple(registration.native_ledger.counts)==before
                 assert captured[-1][0].state[:2]==[False,False]
                 assert captured[-1][0].result.acknowledged==[None]
@@ -68,7 +68,7 @@ def at_original_fstat(actual_owner,fd,scope,registration=None):
                                 original_ack=(commits[0].operation.result.acknowledged[0]
                                               is commits[0]),
                                 foreign_history_preserved=(len(metadata.commits)==0
-                                    if mutation=='missing_predecessor'
+                                    if history_case=='missing_predecessor'
                                     else metadata.commits[0] is not commits[0]),
                                 cursor=metadata.progress[0])
                 raise
@@ -79,7 +79,7 @@ def at_original_fstat(actual_owner,fd,scope,registration=None):
             assert captured[-1][1]() is None and not gc.isenabled()
             commits.append(commit)
             if ordinal==1:
-                assert mutation=='normal' and metadata.progress==[2,None]
+                assert history_case=='normal' and metadata.progress==[2,None]
                 observed.update(second_ack=True,cursor=2,
                                 original_chain=commit.consumer.predecessor is metadata.commits[0])
                 # Stop this disposable old-walker fixture without manufacturing
@@ -99,13 +99,13 @@ try:
     else:raise AssertionError('incomplete metadata walker must remain refused')
     assert owner._failed and not owner._ready and owner._original_buffer==bytearray()
     assert len(captured)==2 and all(reference() is None for _,reference in captured)
-    if mutation=='normal':
+    if history_case=='normal':
         assert observed['second_ack'] and observed['original_chain'] and len(native_entries)==2
     else:
         assert observed['second_refused'] and observed['second_uncharged']
         assert observed['original_ack'] and observed['foreign_history_preserved']
         assert observed['cursor']==1 and len(native_entries)==1
-    observed.update(mutation=mutation,engine_native_entries=len(native_entries),
+    observed.update(history_case=history_case,engine_native_entries=len(native_entries),
                     payloads_reclaimed=True,gc_disabled=not gc.isenabled(),walker_refused=True)
     diagnostic=Path(sys.argv[1])/'metadata-predecessor-chain-stage.json'
     diagnostic_fd=os.open(diagnostic,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
