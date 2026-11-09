@@ -1,8 +1,9 @@
 # LM-ENT1: independent host-local media read permission
 
-Status: proposed implementation contract, no live grant or API/CLI implemented
-by this document. It extends the existing local-image feature; it does not
-authorize changing device permissions. The current R3 remains owner-only.
+Status: implemented on isolated backend source `fb82aef` and mobile source
+`463c6bf`, pending independent review and integration/runtime/device qualification.
+No live schema migration, grant or opt-in has been performed. Installed R3 remains
+owner-only; source implementation must not be confused with deployed behavior.
 
 ## Observed need
 
@@ -33,9 +34,10 @@ No such change was made. Software installation is separate from access.
   reviewed conflict rule and readback; a lost acknowledgement is not a retry.
 - Use a separately reviewed local operator command, provisionally
   `hermes hmp devices grant-media-read <verified-device-id>` and its deny/readback
-  counterparts. These are proposed syntax, not available commands. Require
+  counterparts. These commands exist on the isolated source branch only. Require
   current verified active pairing identity and authoritative stored/effective
-  readback. Mobile can request access; it cannot grant itself permission.
+  readback. A future media access-request transport remains required; the current
+  mobile UI offers operator guidance only and cannot grant itself permission.
 - Do not alter approval-owner configuration or job/model controls. An explicit
   media allow remains independent of those decisions. Preserve their own deny
   rules and never reframe a media-only grant as approval authority.
@@ -95,3 +97,20 @@ Mobile decoding/display and capability negotiation, causal revocation/lost-await
 route coverage, independent review and runtime/physical qualification remain open.
 The legacy owner-fallback revocation-generation limitation remains open. Nothing
 from this schema-4 branch is installed on a live host.
+
+
+## Integration review checkpoint
+
+The source path now includes schema-4 store decisions, CLI grant/deny/status,
+revision-bound descriptor issuance/fetch, authenticated diagnostics/discovery,
+and mobile decode/API/context/chat guidance. This does not complete the feature.
+Backend source `fb82aef` is under a combined 1,059-case integration run and focused
+independent review. Mobile source `463c6bf` has 67 UI/chat plus six large-text
+regressions passing; earlier domain/API/context evidence is retained separately.
+
+Open release blockers include independent review findings, final synchronous
+native/config/SQLite read latency, legacy fallback policy revision limitations,
+safe old-process drain before schema migration, real packaging/runtime/device
+qualification, and explicit host/device opt-in decisions. No automatic rollback
+from schema 4, mobile self-grant, approval privilege expansion, or new permission
+is authorized by this implementation document.
