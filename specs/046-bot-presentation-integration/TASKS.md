@@ -1,5 +1,13 @@
 ## November 8 — reviewed host updates deployed; character integration remains open
 
+Paired media source qualification: backend `f7f5084` passes both 1,063-case
+combined suites (Python 3.14.9 and 3.11.15), zero failures/errors/skips and unchanged
+source. Mobile `5ca14a9` pinned to that backend passes 66 client and 73 app/chat/
+accessibility tests; whole client/app analysis is clean. Private scan has no new
+findings, retaining its existing 170 baseline exclusions. These are scoped source
+checks, not full release review, rendered/device acceptance or live serving.
+Performance/contention, legacy fallback and safe migration remain open. No install.
+
 The repaired media backend `f7f5084` now passes its combined 1,063-case current
 Python suite with zero failures/errors/skips and unchanged source. The matching
 floor run is active. Focused backend branch `feat/media-read-entitlement-20261108`

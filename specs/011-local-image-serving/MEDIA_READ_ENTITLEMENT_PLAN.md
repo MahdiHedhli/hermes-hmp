@@ -146,3 +146,7 @@ Causal negative controls restore matching pre-repair server implementations in a
 isolated worktree and reproduce stale200 responses at the reviewed failure sites.
 The mismatched callback-count control is excluded, with corrected control retained.
 A fresh combined1,063-case f7f5084 suite is running; floor not launched yet.
+
+Both fresh f7f5084 combined suites now pass1,063 cases each. Paired mobile5ca14a9
+passes66 client plus73 app/chat/accessibility cases after pinning. Full analysis
+is clean; runtime/performance/migration/legacy fallback and physical gates remain.
