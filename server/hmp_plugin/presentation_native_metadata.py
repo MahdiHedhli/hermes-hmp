@@ -31,6 +31,7 @@ from .presentation_startup_artifacts import (
     _NativeDeclaredMetadataPlan,
     _NativeMetadataResource,
     _NativeProbeMetadataResource,
+    _NativeStartupProbeMetadataResource,
     _native_work_registration_tail,
     _NativeMetadataSnapshot,
     _NativeScopeRegistration,
@@ -127,8 +128,46 @@ class _MetadataOperation(NamedTuple):
         return '<MetadataOperation unqualified original intent redacted>'
 
 
+def _startup_probe_origin_tail(owner, resource):
+    """Only an original registered startup scope may select its fixed policy."""
+    _require(type(resource) is _NativeStartupProbeMetadataResource
+             and type(owner) is StartupArtifactOwner and resource.owner is owner
+             and type(resource.registration) is _NativeScopeRegistration)
+    registration = resource.registration
+    _native_work_registration_tail(owner, registration)
+    scope = registration.scope
+    origin = scope.native_startup_probe_origin
+    _require(scope.cache is not None and type(origin) is tuple and len(origin) == 7
+             and origin[0] is _NativeStartupProbeMetadataResource
+             and origin[1] is StartupArtifactOwner and type(origin[2]) is ModuleType
+             and type(origin[3]) is FunctionType and origin[3].__code__ is origin[4]
+             and origin[3].__globals__ is vars(origin[2])
+             and type(sys.modules) is dict
+             and sys.modules.get('hmp_plugin.presentation_startup_probe') is origin[2]
+             and vars(origin[2]).get('_resource_tail') is origin[3]
+             and type(origin[5]) is tuple and len(origin[5]) == 7
+             and origin[5][0] is origin[2])
+    return origin
+
+
+def _closed_probe_engine_origin(owner, resource):
+    """Fixed internal cohorts only; no client policy selector or callback."""
+    if type(resource) is _NativeStartupProbeMetadataResource:
+        return _startup_probe_origin_tail(owner, resource)[5]
+    _require(type(resource) is _NativeProbeMetadataResource and resource.owner is owner
+             and type(resource.registration) is _NativeScopeRegistration)
+    _native_work_registration_tail(owner, resource.registration)
+    origin = resource.registration.scope.native_probe_engine_origin
+    _require(type(origin) is tuple and len(origin) == 7
+             and type(origin[0]) is ModuleType and type(origin[2]) is tuple)
+    return origin
+
+
 def _resource_tail(owner, resource):
     """Rejoin the held actual resource; never adopt a current replacement."""
+    if type(resource) is _NativeStartupProbeMetadataResource:
+        origin = _startup_probe_origin_tail(owner, resource)
+        return origin[3](owner, resource)
     if type(resource) is not _NativeMetadataResource:
         # Type and registration are checked before touching startup namespaces.
         # Current exports can only rejoin originals captured before constructors;
@@ -298,13 +337,7 @@ class _ProbeConsumer(NamedTuple):
 
 def _probe_stage_functions(owner, resource):
     """Actual registered origin selects fixed internal stages, never a caller."""
-    _require(type(resource) is _NativeProbeMetadataResource
-             and type(resource.registration) is _NativeScopeRegistration)
-    _native_work_registration_tail(owner, resource.registration)
-    scope = resource.registration.scope
-    origin = scope.native_probe_engine_origin
-    _require(type(origin) is tuple and len(origin) == 7
-             and type(origin[0]) is ModuleType and type(origin[2]) is tuple)
+    origin = _closed_probe_engine_origin(owner, resource)
     wanted = ('_prepare_shared_consumer', '_latch_shared_consumer',
               '_produce_shared', '_consume_shared', '_ack_shared', '_attached_shared', '_retired_shared')
     stages = []
@@ -323,13 +356,11 @@ def _probe_stage_functions(owner, resource):
 
 def _rejoin_probe_stages(owner, resource, origin, stages):
     """Rejoin retained originals after preceding stage callbacks; no nomination."""
-    _require(type(resource) is _NativeProbeMetadataResource
-             and type(resource.registration) is _NativeScopeRegistration
+    _require(type(resource) in (_NativeProbeMetadataResource, _NativeStartupProbeMetadataResource)
              and type(stages) is tuple and len(stages) == 7)
-    _native_work_registration_tail(owner, resource.registration)
-    _require(resource.registration.scope.native_probe_engine_origin is origin)
+    _require(_closed_probe_engine_origin(owner, resource) is origin)
     actual = _probe_stage_functions(owner, resource)
-    _require(resource.registration.scope.native_probe_engine_origin is origin
+    _require(_closed_probe_engine_origin(owner, resource) is origin
              and all(current is held for current, held in zip(actual, stages, strict=True)))
 
 
@@ -340,9 +371,8 @@ def _probe_policy_helper(owner, consumer, name):
                           '_acked_shared_history', '_publish_shared_ack'))
     operation = tuple.__getitem__(consumer, 1)
     _require(type(operation) is _MetadataOperation
-             and type(operation.resource) is _NativeProbeMetadataResource)
-    _native_work_registration_tail(owner, operation.registration)
-    origin = operation.registration.scope.native_probe_engine_origin
+             and type(operation.resource) in (_NativeProbeMetadataResource, _NativeStartupProbeMetadataResource))
+    origin = _closed_probe_engine_origin(owner, operation.resource)
     _require(type(origin) is tuple and len(origin) == 7 and type(origin[0]) is ModuleType
              and type(origin[2]) is tuple)
     rows = tuple(row for row in origin[2] if type(row) is tuple and len(row) == 3
@@ -359,7 +389,7 @@ def _probe_latched_resource_tail(owner, consumer):
     _require(type(consumer) is _ProbeConsumer)
     operation = tuple.__getitem__(consumer, 1)
     _require(type(operation) is _MetadataOperation
-             and type(operation.resource) is _NativeProbeMetadataResource)
+             and type(operation.resource) in (_NativeProbeMetadataResource, _NativeStartupProbeMetadataResource))
     stages = _probe_stage_functions(owner, operation.resource)
     _require(stages[1](owner, consumer, rejoin=True) is consumer)
     return operation.resource
@@ -458,7 +488,8 @@ def _undebited_directory_cells_tail(owner, operation):
              and type(operation.result) is _MetadataResult
              and type(operation.operation) is int and operation.operation in (3, 4))
     resource, result = operation.resource, operation.result
-    _require(type(resource) in (_NativeMetadataResource, _NativeProbeMetadataResource)
+    _require(type(resource) in (_NativeMetadataResource, _NativeProbeMetadataResource,
+                                        _NativeStartupProbeMetadataResource)
              and type(resource.registration) is _NativeScopeRegistration)
     registration = resource.registration
     ledger, phase = registration.native_ledger, registration.native_phase
@@ -1120,10 +1151,9 @@ class _ReportedMissingMetadataReturn(NamedTuple):
 
 def _probe_current_lifetime_tail(owner, consumer):
     _require(type(consumer) is _ProbeConsumer and type(consumer.operation) is _MetadataOperation
-             and type(consumer.operation.resource) is _NativeProbeMetadataResource)
+             and type(consumer.operation.resource) in (_NativeProbeMetadataResource, _NativeStartupProbeMetadataResource))
     registration = consumer.operation.registration
-    _native_work_registration_tail(owner, registration)
-    origin = registration.scope.native_probe_engine_origin
+    origin = _closed_probe_engine_origin(owner, consumer.operation.resource)
     _require(type(origin) is tuple and len(origin) == 7 and type(origin[2]) is tuple)
     rows = tuple(row for row in origin[2] if type(row) is tuple and len(row) == 3
                  and type(row[0]) is str and row[0] == '_lifecycle_tail')
@@ -1234,7 +1264,7 @@ def _produce_directory_metadata(owner, consumer):
              and error_number.__objclass__ is native.errors[0]
              and error_filename.__objclass__ is native.errors[0])
     missing = number = filename = None
-    enoent = (consumer.operation.registration.scope.native_probe_engine_origin[5]
+    enoent = (_closed_probe_engine_origin(owner, operation.resource)[5]
               if probe else None)
     _require(not probe or type(enoent) is int)
     origin = marker = payload = cells = joined_cells = None
@@ -2196,10 +2226,10 @@ def _run_directory_observation(owner, resource, predecessor=None, baseline=None,
         _prepare_directory_consumer, _latch_directory_consumer,
         _produce_directory_metadata, _consume_directory_policy, _ack_directory_policy,
         _acked_directory_commit_tail, _retired_directory_commit_tail)
-    if type(resource) is _NativeProbeMetadataResource:
+    if type(resource) in (_NativeProbeMetadataResource, _NativeStartupProbeMetadataResource):
         _require(baseline is None and eof is None)
         probe_stages = _probe_stage_functions(owner, resource)
-        probe_origin = resource.registration.scope.native_probe_engine_origin
+        probe_origin = _closed_probe_engine_origin(owner, resource)
         prepare, latch, produce, consume, acknowledge, attached_tail, retired_tail = probe_stages
     try:
         # Reject a foreign actor before allocating/latching caller-owned custody.

@@ -398,6 +398,7 @@ class _Scope(NamedTuple):
     native_probe_plan: object = None
     native_probe_origin: object = None
     native_probe_engine_origin: object = None
+    native_startup_probe_origin: object = None
 
     def __repr__(self):
         return "<StartupArtifactScope redacted>"
@@ -1145,6 +1146,21 @@ class _NativeProbeMetadataResource(NamedTuple):
 
     def __repr__(self):
         return '<FreshProbeResource original DATA no-admission>'
+
+
+class _NativeStartupProbeMetadataResource(NamedTuple):
+    """Closed startup-absence policy DATA; no operation or admission authority."""
+    owner: object
+    registration: object
+    metadata: object
+    variant: object
+    site: tuple
+    ordinal: int
+    descriptor: object
+    arguments: tuple
+
+    def __repr__(self):
+        return '<StartupProbeResource DATA no-admission>'
 
 
 class _NativeMetadataResource(NamedTuple):
