@@ -1,5 +1,11 @@
 ## November 8 — reviewed host updates deployed; character integration remains open
 
+Mobile media independence repair `463c6bf` keeps image inspection available when
+the separate jobs/model diagnostic fails, preserving scope/generation checks.
+All 67 combined UI/chat tests and six large-text accessibility regressions pass;
+focused analysis is clean. Independent review, backend final-check latency,
+rendered/device acceptance and schema/deployment gates remain open. No new install.
+
 Mobile media UI source `6485c25` adds independent image-access guidance to the
 chat overview readiness panel, with no grant/Fix action. It distinguishes missing
 image rights, disabled host opt-in and unavailable API; existing scope/refresh
