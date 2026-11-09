@@ -226,3 +226,10 @@ throughpublicationclose, and provides exactcleanup-only retirement with separate
 capacity.291cases pass eachPython and finite independent review reports no new
 blocker. Unknown debt neverforceclears; endedSQL relies on fixedStorefinally, not
 receipt possession alone. No actuallistener/native/operator integration yet.
+
+LM-ENT1-N1 native contract census is source-pinned at0f0e96fc and independently
+reviewed; exact inspected HMP path lacks a revision/lease/finalclaim return.
+This is a bounded path finding, not allSDKabsence or runtimebyte proof. See
+docs/research/media-publication-native-contract-20261108.md at23437de. Continue
+HMP Store/operator/lifecycle work; do not substitute cachedBoolean or private
+profile-scope shortcut. Existing deployed features and minimum-version policy stay.

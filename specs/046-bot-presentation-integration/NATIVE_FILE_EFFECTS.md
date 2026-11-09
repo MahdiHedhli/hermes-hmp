@@ -1,5 +1,14 @@
 ## November 8 — reviewed host updates deployed; character integration remains open
 
+LM-ENT1-N1 now has exact native source evidence: checkout0f0e96fc's inspected
+HMP authorization/routing path returns live Booleans and may enter profile scope;
+it supplies no revision/read lease/pure publication claim in those exported calls.
+Independent review confirmed this bounded gap, not whole-SDK absence or fresh
+runtime-byte qualification. [Pinned contract census](https://github.com/MahdiHedhli/hermes-hmp/blob/23437de/docs/research/media-publication-native-contract-20261108.md)
+describes the required native writer coordination. HMP Store/operator/lifecycle
+work can continue independently; cached grants, polling and private scope shortcuts
+are not substitutes. No native code, private settings, permissions or hosts changed.
+
 Shutdown preparation `07a02c5` separates publication close from original Store
 mutation retirement. Debt is reserved before begin and survives missing receipts,
 close and drain timeouts; exact-receipt cleanup has independent bounded capacity
