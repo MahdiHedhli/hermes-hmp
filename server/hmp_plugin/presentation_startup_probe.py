@@ -1250,7 +1250,10 @@ def _historical_finish_mirrors(actual, scope, cohort):
 
 def _historical_cohort(actual, scope):
     """Hold current original mirrors across observations, never persist them."""
+    _require(type(actual) is _ProbeFinish and type(actual.execution) is _ProbeExecution)
     execution = actual.execution
+    _require(type(execution.plan) is _StartupPlan
+             and type(execution.registration) is _NativeScopeRegistration)
     plan, registration = execution.plan, execution.registration
     _require(type(scope) is _Scope and registration.scope is scope
              and type(scope.activation) is activation_module.GatewayActivationOwner)
@@ -1269,9 +1272,15 @@ def _historical_cohort(actual, scope):
     widths = (2, 1, 1, 1, 3, 1, 1)
     _require(all(type(cell) is list and len(cell) == width
                  for cell, width in zip(cells, widths, strict=True))
-             and ledger.inflight[0] is None and ledger.failed[0] is False
-             and ledger.failure[0] is None
-             and phase.current[0] is phase.idle and phase.result[0] is None)
+             and ledger.failed[0] is False and ledger.failure[0] is None
+             # An old finish can be revalidated by a later legitimate operation.
+             # Snapshot its healthy shared phase; this never admits new work.
+             and ((phase.current[0] is phase.idle
+                   and ledger.inflight[0] is None and phase.result[0] is None)
+                  or (phase.current[0] is phase.active
+                      and ledger.inflight[0] is not None and phase.result[0] is not None)
+                  or (phase.current[0] is phase.pending
+                      and ledger.inflight[0] is None and phase.result[0] is not None)))
     return (tuple(dictionaries), tuple((cell, tuple(cell)) for cell in cells),
             ledger.attempts, len(ledger.attempts), vars(activation_module).get('_ENTRY_CELL'))
 
