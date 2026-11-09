@@ -20,7 +20,8 @@ inputs=retained._inputs
 row=next(row for row in inputs.cache_context_slot[0][3] if row.state=='needs_owned_absence')
 cache_path=Path(row.location.path)
 cache_path.parent.mkdir(mode=0o700)
-held=[];attempted=[];faults=[];target=[];budgets=[];active_effects=[]
+held=[];attempted=[];faults=[];target=[];budgets=[];active_effects=[];restored=[]
+prior_trace,prior_profile=sys.gettrace(),sys.getprofile()
 def current(frame):
     cursor=frame
     while cursor is not None:
@@ -65,9 +66,20 @@ def lose_ack(frame):
     raise OSError('SYNTHETIC_STARTUP_CLOSE_ACK_LOSS_ONLY')
 trace_synthetic_boundary(a._close_native_file_known.__code__,
                          'close.result[0] = (close, fd, value)',lose_ack)
+def scope_ended(frame):
+    if not active_effects or frame.f_locals.get('effect') is not active_effects[0]:return
+    restored.append(True)
+    sys.setprofile(prior_profile);sys.settrace(prior_trace)
+    path=Path(sys.argv[1])/'startup-probe-observer-scope-stage.json'
+    fd=os.open(path,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
+    with os.fdopen(fd,'w') as stream:json.dump({'scope_ended':True,'known':len(held),'close_calls':len(attempted)},stream)
+trace_synthetic_boundary(cache_module._probe.__code__,'return result, effect',scope_ended)
 refused=False
-try:checked=EntryFileSnapshotOwner.complete(retained)
-except EntryFilesError:refused=True
+try:
+    try:checked=EntryFileSnapshotOwner.complete(retained)
+    except EntryFilesError:refused=True
+finally:
+    sys.setprofile(prior_profile);sys.settrace(prior_trace)
 io=inputs.io_slot[0]
 facts={'case':cleanup_case,'refused':refused,'faults':len(faults),
        'known':len(held),'close_calls':len(attempted),
@@ -81,11 +93,11 @@ assert held and len(active_effects)==1
 assert len(attempted)==len(held) and len({id(row) for row,fd in attempted})==len(held)
 assert all(any(row is original for original in held) and row.fd is fd for row,fd in attempted)
 if cleanup_case=='normal':
-    assert not refused and faults==[] and io._ready and io._cache_fact is not None
+    assert not refused and faults==[] and restored==[True] and io._ready and io._cache_fact is not None
     assert all(row.closed and row.close_attempted and not row.unknown for row in held)
     assert active_effects[0].returned and not active_effects[0].unknown
 else:
-    assert refused and faults==[True] and io._failed and io._unknown and not io._ready
+    assert refused and faults==[True] and restored==[] and io._failed and io._unknown and not io._ready
     assert io._cache_fact is None and io._fact_cell is None and entry._activation._artifact_fact_cell is None
     assert active_effects[0].unknown and not active_effects[0].returned
     unknown=[row for row in held if row.unknown]
