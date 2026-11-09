@@ -18,6 +18,7 @@ import sqlite3
 import threading
 from collections.abc import Iterator, Sequence
 from pathlib import Path
+from typing import Protocol
 
 from . import crypto
 from .contract import LIMITER_TABLE_MAX, ErrorCode, HmpError
@@ -581,8 +582,19 @@ def _owned_write(method):
     return wrapped
 
 
+class StoreMutationObserver(Protocol):
+    """Trusted construction-time currency coordinator, never authorization.
+
+    The actual listener actor/IPC contract is not implemented by this protocol.
+    Startup migrate/close and other connections remain outside its coverage.
+    """
+    def begin(self) -> object: ...
+    def settle(self, receipt: object, *, certain: bool) -> None: ...
+
+
 class Store:
-    def __init__(self, path: Path) -> None:
+    def __init__(self, path: Path, *, mutation_observer: StoreMutationObserver | None = None) -> None:
+        self._mutation_observer = mutation_observer
         self._path = path
         self._conn: sqlite3.Connection | None = None
         # One connection, `check_same_thread=False`, used from `asyncio.to_thread`.
@@ -693,6 +705,32 @@ class Store:
 
     @contextlib.contextmanager
     def transaction(self) -> Iterator[sqlite3.Connection]:
+        # Nested refusal precedes observer acquisition. Unobserved stores retain
+        # existing behavior and MUST NOT claim publisher writer coverage.
+        if self._transaction_owner == threading.get_ident():
+            raise RuntimeError("nested Store.transaction() is not allowed")
+        observer = self._mutation_observer
+        if observer is None:
+            with self._transaction_sql() as conn:
+                yield conn
+            return
+        # Retain this exact observer's methods and original receipt across SQL.
+        begin, settle = observer.begin, observer.settle
+        receipt = begin()  # failure/lost return never starts SQL; never replay
+        outcome = [False]
+        try:
+            with self._transaction_sql(outcome) as conn:
+                yield conn
+        finally:
+            try:
+                settle(receipt, certain=outcome[0])
+            except BaseException:
+                # SQL may already be committed. Do not roll it back, replay it,
+                # or describe a missing observer acknowledgement as no write.
+                raise RuntimeError("Store publication settlement outcome unavailable") from None
+
+    @contextlib.contextmanager
+    def _transaction_sql(self, outcome: list[bool] | None = None) -> Iterator[sqlite3.Connection]:
         """One atomic unit of work over the raw connection (research R7: `BEGIN IMMEDIATE`).
         Commits on a clean exit; on any exception, rolls back and re-raises, so nothing the block
         did is visible afterward."""
@@ -731,6 +769,8 @@ class Store:
             finally:
                 if settled:
                     self._transaction_owner = None
+                    if outcome is not None:
+                        outcome[0] = True  # still inside the original write lock
 
     @contextlib.contextmanager
     def _serialized_writer(self) -> Iterator[sqlite3.Connection]:
