@@ -39,6 +39,7 @@ CONTRACT_MODULES = {
     "push_hints.py",
     "push_resolve.py",
     "push_dispatch.py",
+    "bootstrap_opening.py",  # original component Future/context ownership
     "push_retirement.py",  # single retained relay-close owner; no media/schema activation
     "push_relay.py",
     "auth.py",

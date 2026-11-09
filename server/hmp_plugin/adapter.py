@@ -72,6 +72,7 @@ from typing import Any
 from gateway.config import Platform
 from gateway.platforms.base import BasePlatformAdapter, SendResult
 
+from .bootstrap_opening import BootstrapOpening
 from . import cli, compat, direct_send, identity, prompts, reads, server
 from .authorize import Authorize
 from .cli import listener_record_path
@@ -651,6 +652,8 @@ class HmpAdapter(BasePlatformAdapter):
         self._retirement_setup_unknown = False
         self._lifecycle_lock = asyncio.Lock()
         self._disconnect_unresolved = False
+        self._startup_unresolved = False
+        self._opening = None
 
     @staticmethod
     def _health_snapshot(
@@ -694,9 +697,13 @@ class HmpAdapter(BasePlatformAdapter):
 
     async def connect(self, *, is_reconnect: bool = False) -> bool:
         async with self._lifecycle_lock:
-            if self._disconnect_unresolved or not self._retired_stores_ready():
+            if self._startup_unresolved or self._disconnect_unresolved or not self._retired_stores_ready():
                 return False
-            return await self._connect_serial(is_reconnect=is_reconnect)
+            try:
+                return await self._connect_serial(is_reconnect=is_reconnect)
+            except BaseException:
+                self._startup_unresolved = True
+                raise
 
     async def _connect_serial(self, *, is_reconnect: bool = False) -> bool:
         """Run the compat gate, then start the TLS listener (server-modules.md "Startup order")."""
@@ -707,9 +714,15 @@ class HmpAdapter(BasePlatformAdapter):
         except server.ListenerConfigError:
             log_event("adapter_connect", outcome="bad_config")
             return False
+        if self._opening is not None:
+            return False
+        opening = BootstrapOpening(open_components, self)
+        self._opening = opening
         try:
-            ctx = await asyncio.to_thread(open_components, self)
+            opening.start()
+            ctx = await opening.wait()
         except identity.IdentityError:
+            self._opening = None
             log_event("adapter_connect", outcome="identity_error")
             return False
         srv = server.HmpServer(
@@ -719,11 +732,10 @@ class HmpAdapter(BasePlatformAdapter):
             push_relay_factory=lambda: RelayClient(ctx.identity),
             approval_test_owners=(_AT1_PLUGIN_MODULE, _AT1_ADAPTER_MODULE),
         )
+        opening.server = srv
         try:
             await srv.start()
         except Exception as exc:
-            self._close_generation(ctx)
-            ctx.store.close()
             log_event("adapter_connect", outcome="listener_failed")
             raise ConnectionError("HMP listener did not start") from exc
         self._server = srv
@@ -782,6 +794,7 @@ class HmpAdapter(BasePlatformAdapter):
                 self._profile_refresh_task = asyncio.get_running_loop().create_task(
                     self._periodic_profile_refresh()
                 )
+        self._opening = None
         self._mark_connected()
         return True
 
@@ -975,6 +988,18 @@ class HmpAdapter(BasePlatformAdapter):
 
     async def _disconnect_serial(self) -> None:
         await self._cancel_profile_refresh()
+        opening = self._opening
+        if opening is not None and self._server is None:
+            if opening.server is not None:
+                # Partial native listener startup needs its own actual start/stop owner.
+                # Retain it rather than infer shutdown from an interrupted await.
+                raise RuntimeError("partial listener startup cleanup unresolved")
+            await opening.wait()
+            opening.close_unpublished(self)
+            if self._opening is not opening or not opening.closed:
+                raise RuntimeError("bootstrap cleanup unresolved")
+            self._opening = None
+            self._startup_unresolved = False
         srv = self._server
         if srv is not None:
             await srv.stop(notify=False)
