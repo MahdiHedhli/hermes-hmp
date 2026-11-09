@@ -912,4 +912,3 @@ def test_actual_authorization_thread_outlives_cancelled_dispatch_and_blocks_drai
                 await drain()
 
     run(env, scenario)
-
