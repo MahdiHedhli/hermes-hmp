@@ -1,3 +1,11 @@
+## November 9 — Android and signed iOS test candidates prepared
+
+Mobile `5107b29` / HMP `6796bfbb` has both test artifacts for build **2026110901**: developer-signed iOS release-mode app and signed Android development-debug APK. Signatures, package/build metadata, preserved artifacts and unchanged tracked source were verified. Android APK SHA-256: `ededac0280af94d42c872c99e3b3f7e8a89597f3fa8b124b20ce4629a20ba844`. Neither is installed or physically/release qualified; Android debug is not a Play release candidate. Android initially exhausted local storage; only stale generated Gradle intermediates were removed before the successful retry, preserving source, final artifacts, evidence and user data.
+
+Device-local bot sections/static icons and permission/media readiness guidance are present in candidate source. Desktop character images and host-local chat image delivery remain incomplete at runtime. No host, grant, flag, provider/model, job, device-install or release change is claimed.
+
+Test/document-only correction `5445a48` adds four existing experimental modules to the explicit inventory without relaxing import/security gates or deriving permitted names from a directory. The same **461 checks pass on Python 3.14.9 and 3.11.15**; exact case sets, unchanged source and saved log/XML hashes were verified. Production bytes remain identical to the entry integration covered below. Complete Scope blueprint/native link lifecycle, remaining enumeration, service admission and device qualification remain open.
+
 ## November 9 — signed iOS test build ready; entry integration under combined verification
 
 Mobile source `5107b29` / HMP pin `6796bfbb` now produces a **developer-signed iOS release-mode test build 2026110901** through the sanctioned wrapper. Its signature and the preserved private 74-file artifact were independently verified, with tracked source unchanged. It is not installed, physically qualified or released. The build contains device-local bot sections/static icons and readiness guidance; desktop character and host-local image delivery remain unfinished. Device installation and physical acceptance remain pending.
