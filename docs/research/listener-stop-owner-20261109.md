@@ -23,3 +23,13 @@ Source `3eee7d2` retains the read-service handle before its stop await and only 
 - `/private/tmp/hermes-qa-listener-stop-scope-floor-welex3kr/receipt.json`
 
 No deployment. The isolated test interpreters do not contain Ruff; no new lint pass is claimed for this follow-up.
+
+## Operator-read auxiliary startup ownership
+
+Source `c5222b6`: retain the original service before startup, run startup under one shielded retained Task, and join the exact Task before teardown. Unknown Task creation acknowledgement prevents retry and prevents cleanup certification. A substituted service cannot be closed in place of the retained original. Caller cancellation does not cancel the actual startup task.
+
+Five synthetic cases cover cancellation during startup, definite startup failure, pre/post-enqueue task creation acknowledgement loss and service replacement. 380 selected cases pass unchanged on Python 3.14.9 and 3.11.15, with zero failures/errors/skips:
+- `/private/tmp/hermes-qa-operator-start-ownership-current-a39isqrg/receipt.json`
+- `/private/tmp/hermes-qa-operator-start-ownership-floor-s_t336y0/receipt.json`
+
+The earlier 379-case run at `32fcecc` predates the original-service replacement guard and is not evidence for that final guard. Independent review, approval/push auxiliary publication, partial adapter recovery, full borrower/native authority/migration and physical qualification remain open. No runtime deployment or media activation occurred. Current plugin extension guidance was rechecked at https://hermes-agent.nousresearch.com/docs/developer-guide/plugins; exact pinned source remains the authority for these internal HMP lifecycle methods.
