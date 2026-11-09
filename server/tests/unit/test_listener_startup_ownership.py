@@ -380,7 +380,7 @@ def test_operator_start_replacement_never_closes_foreign_service(monkeypatch, tm
         release.set()
         with pytest.raises(RuntimeError, match="startup incomplete"):
             await caller
-        with pytest.raises(RuntimeError, match="startup ownership unresolved"):
+        with pytest.raises(RuntimeError, match="startup scope changed"):
             await listener.stop()
         assert listener._operator_start_service is original
         assert not foreign_calls and "read-stop" not in events and "cleanup" not in events
