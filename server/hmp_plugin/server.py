@@ -1957,6 +1957,10 @@ class HmpServer:
         self._stopping: asyncio.Task[None] | None = None
         self._operator_read: Any = None
         self._operator_read_drained: Any = None
+        self._operator_start_attempted = False
+        self._operator_start_owner: asyncio.Task[Any] | None = None
+        self._operator_start_coro: Any = None
+        self._operator_start_complete, self._operator_start_failed = object(), object()
         self.operator_worker_debt = 0
         self._stop_owner: asyncio.Task[Any] | None = None
         self._stop_attempted = False
@@ -2051,11 +2055,35 @@ class HmpServer:
     async def start_operator_read(self, anchor_dir: Path, nonce: str) -> None:
         from .operator_read import OperatorReadService
 
-        if self._operator_read is not None or self._runner is None:
+        if (self._operator_start_attempted or self._start_fenced
+                or self._operator_read is not None or self._runner is None
+                or self.ctx is not self._operator_origin_ctx):
             raise RuntimeError("operator read listener unavailable")
-        service = OperatorReadService(self.ctx, anchor_dir, nonce)
-        await service.start()
-        self._operator_read = service
+        self._operator_start_attempted = True
+        try:
+            service = OperatorReadService(self._operator_origin_ctx, anchor_dir, nonce)
+            self._operator_read = service  # retain before any startup effect/await
+            self._operator_start_coro = self._start_operator_owned(service)
+            self._operator_start_owner = asyncio.get_running_loop().create_task(
+                self._operator_start_coro
+            )
+        except BaseException:
+            raise RuntimeError("operator read startup ownership unresolved") from None
+        owner = self._operator_start_owner
+        result = await asyncio.shield(owner)
+        if (self._operator_start_owner is not owner
+                or result is not self._operator_start_complete or self._start_fenced):
+            raise RuntimeError("operator read startup incomplete")
+
+    async def _start_operator_owned(self, service):
+        try:
+            await service.start()
+            if (self.ctx is not self._operator_origin_ctx
+                    or self._operator_read is not service or self._start_fenced):
+                return self._operator_start_failed
+            return self._operator_start_complete
+        except BaseException:
+            return self._operator_start_failed
     async def start_approval_test(self, record: Path, nonce: str) -> None:
         """One optional service after the owner wrote this listener's same-nonce record.
 
@@ -2286,6 +2314,13 @@ class HmpServer:
             await asyncio.shield(owner)
             if self._start_owner is not owner:
                 raise RuntimeError("listener startup owner changed; retain original resources")
+        if self._operator_start_attempted:
+            operator_owner = self._operator_start_owner
+            if operator_owner is None:
+                raise RuntimeError("operator read startup ownership unresolved")
+            await asyncio.shield(operator_owner)
+            if self._operator_start_owner is not operator_owner:
+                raise RuntimeError("operator read startup ownership unresolved")
         ctx = self._operator_origin_ctx
         hints, deps = ctx.push_hints, ctx.direct_send_deps
         store = getattr(ctx, "store", None)
