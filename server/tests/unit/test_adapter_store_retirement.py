@@ -205,3 +205,119 @@ def test_concurrent_component_opens_never_overlap(adapter_module, monkeypatch):
         assert counts["peak"] == 1
 
     asyncio.run(scenario())
+
+
+def test_concurrent_successful_connects_open_one_actual_listener(
+    adapter_module, tmp_path, monkeypatch
+):
+    import threading
+
+    from .hmp_kit import Env
+    from .test_adapter import _free_port
+
+    async def scenario():
+        env = Env(tmp_path)
+        entered, release = threading.Event(), threading.Event()
+        calls = []
+
+        def components(_adapter):
+            calls.append(1)
+            entered.set()
+            assert release.wait(3)
+            return env.ctx
+
+        monkeypatch.setattr(adapter_module, "open_components", components)
+        adapter = adapter_module.HmpAdapter(
+            SimpleNamespace(extra={"bind": "127.0.0.1", "port": _free_port()})
+        )
+        first = asyncio.create_task(adapter.connect())
+        second = None
+        try:
+            assert await asyncio.to_thread(entered.wait, 1)
+            second = asyncio.create_task(adapter.connect())
+            await asyncio.sleep(0)
+            assert not second.done()
+            release.set()
+            assert await asyncio.gather(first, second) == [True, True]
+            assert calls == [1] and adapter._server is not None
+            assert adapter._server.bound is not None
+        finally:
+            release.set()
+            await asyncio.gather(
+                first, *([second] if second is not None else []), return_exceptions=True
+            )
+            await adapter.disconnect()
+
+    asyncio.run(scenario())
+
+
+def test_disconnect_waits_for_in_progress_component_startup(adapter_module, monkeypatch):
+    import threading
+
+    async def scenario():
+        adapter = adapter_module.HmpAdapter(SimpleNamespace(extra={"port": 12345}))
+        entered, release = threading.Event(), threading.Event()
+
+        def components(_adapter):
+            entered.set()
+            assert release.wait(3)
+            raise adapter_module.identity.IdentityError("synthetic startup refusal")
+
+        monkeypatch.setattr(adapter_module, "open_components", components)
+        first = asyncio.create_task(adapter.connect())
+        stop = None
+        try:
+            assert await asyncio.to_thread(entered.wait, 1)
+            stop = asyncio.create_task(adapter.disconnect())
+            await asyncio.sleep(0)
+            assert not stop.done()
+            release.set()
+            assert await first is False
+            await stop
+            assert adapter.states[-1] == "disconnected"
+        finally:
+            release.set()
+            await asyncio.gather(
+                first, *([stop] if stop is not None else []), return_exceptions=True
+            )
+
+    asyncio.run(scenario())
+
+
+def test_cancelled_bootstrap_waiter_cannot_allow_overlapping_retry(adapter_module, monkeypatch):
+    import threading
+
+    async def scenario():
+        adapter = adapter_module.HmpAdapter(SimpleNamespace(extra={"port": 12345}))
+        entered, release, finished = threading.Event(), threading.Event(), threading.Event()
+        calls = []
+
+        def components(_adapter):
+            calls.append(1)
+            entered.set()
+            try:
+                assert release.wait(3)
+                raise adapter_module.identity.IdentityError("synthetic startup refusal")
+            finally:
+                finished.set()
+
+        monkeypatch.setattr(adapter_module, "open_components", components)
+        first = asyncio.create_task(adapter.connect())
+        try:
+            assert await asyncio.to_thread(entered.wait, 1)
+            first.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await first
+            assert adapter._startup_unresolved and not finished.is_set()
+            assert await adapter.connect() is False and calls == [1]
+            release.set()
+            assert await asyncio.to_thread(finished.wait, 1)
+            # This source slice cannot infer bootstrap resource cleanup from its
+            # waiter; even fixture-observed worker end does not reset the latch.
+            assert await adapter.connect() is False and calls == [1]
+        finally:
+            release.set()
+            await asyncio.gather(first, return_exceptions=True)
+            assert await asyncio.to_thread(finished.wait, 1)
+
+    asyncio.run(scenario())

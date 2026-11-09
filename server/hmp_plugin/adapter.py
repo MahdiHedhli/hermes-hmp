@@ -648,6 +648,8 @@ class HmpAdapter(BasePlatformAdapter):
         self._read_worker_budget = server.ReadWorkerBudget()
         self._retiring_stores: dict[int, _RetiringStore] = {}
         self._retirement_setup_unknown = False
+        self._lifecycle_lock = asyncio.Lock()
+        self._startup_unresolved = False
 
     @staticmethod
     def _health_snapshot(
@@ -690,7 +692,20 @@ class HmpAdapter(BasePlatformAdapter):
         return tuple(rows)
 
     async def connect(self, *, is_reconnect: bool = False) -> bool:
-        """Run the compat gate, then start the TLS listener (server-modules.md "Startup order")."""
+        async with self._lifecycle_lock:
+            if self._startup_unresolved:
+                log_event("adapter_connect", outcome="startup_unresolved")
+                return False
+            try:
+                return await self._connect_serial(is_reconnect=is_reconnect)
+            except asyncio.CancelledError:
+                # A cancelled async waiter is not proof that bootstrap/native work
+                # ended. Block replacement until an actual owner can reconcile it.
+                self._startup_unresolved = True
+                raise
+
+    async def _connect_serial(self, *, is_reconnect: bool = False) -> bool:
+        """Run the compat gate, then start the TLS listener under the lifecycle lock."""
         if not self._retired_stores_ready():
             log_event("adapter_connect", outcome="store_retirement_pending")
             return False
@@ -957,6 +972,10 @@ class HmpAdapter(BasePlatformAdapter):
         self._set_fatal_error(IDENTITY_CHANGED_CODE, IDENTITY_CHANGED_MESSAGE, retryable=False)
 
     async def disconnect(self) -> None:
+        async with self._lifecycle_lock:
+            await self._disconnect_serial()
+
+    async def _disconnect_serial(self) -> None:
         await self._cancel_profile_refresh()
         srv = self._server
         if srv is not None:
