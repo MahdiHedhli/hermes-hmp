@@ -23,7 +23,7 @@ from .presentation_startup_artifacts import (
     _NativeScopeRegistration, _capture_native_scope, _descriptor_closed_in_scope,
     _descriptor_refused, _native_actor_context, _native_metadata_snapshot,
     _native_post_actor_state, _native_pre_actor_state, _native_work_origin_tail,
-    _native_descriptor_opened, _native_work_registration_tail, _require,
+    _native_descriptor_opened, _native_work_registration_tail, _Scope, _require,
 )
 
 
@@ -96,7 +96,7 @@ def _new_probe_engine_origin():
         '_prepare_shared_consumer', '_latch_shared_consumer', '_produce_shared',
         '_consume_shared', '_ack_shared', '_retired_shared', '_history_mirrors_tail', '_attached_shared',
         '_make_shared_commit', '_commit_shared_tail', '_acked_shared_history', '_publish_shared_ack',
-        '_finished_state_tail', '_opened_chain_tail', '_new_startup_probe_origin', '_blueprint_tail', '_new_startup_plan', '_startup_plan_tail', '_cursor_ordinal', '_historical_finish_tail', '_path_rows', '_policy_pins_tail'))
+        '_finished_state_tail', '_opened_chain_tail', '_new_startup_probe_origin', '_blueprint_tail', '_new_startup_plan', '_startup_plan_tail', '_cursor_ordinal', '_historical_finish_tail', '_path_rows', '_policy_pins_tail', '_historical_finish_mirrors'))
     return (module, types, functions, OSError.__dict__['errno'],
             OSError.__dict__['filename'], errno.ENOENT,
             (metadata, tuple((name, vars(metadata).get(name), vars(metadata).get(name).__code__)
@@ -111,7 +111,7 @@ def _engine_origin_tail(origin):
              and sys.modules.get(__name__) is origin[0]
              and vars(origin[0]) is globals()
              and type(origin[1]) is tuple and len(origin[1]) == 7
-             and type(origin[2]) is tuple and len(origin[2]) == 34
+             and type(origin[2]) is tuple and len(origin[2]) == 35
              and origin[3] is OSError.__dict__['errno']
              and origin[4] is OSError.__dict__['filename']
              and type(origin[5]) is int and origin[5] == errno.ENOENT)
@@ -123,7 +123,11 @@ def _engine_origin_tail(origin):
         _require(type(name) is str and type(function) is FunctionType
                  and vars(metadata).get(name) is function and function.__code__ is code
                  and function.__globals__ is vars(metadata))
-    for kind, fields, members, constructor, constructor_code in origin[1]:
+    names = ('_ProbeExecution', '_ProbeConsumer', '_ProbeReturn', '_ProbeCommit',
+             None, '_ProbeFinish', None)
+    for index, (kind, fields, members, constructor, constructor_code) in enumerate(origin[1]):
+        if names[index] is not None:
+            _require(globals().get(names[index]) is kind)
         _require(type(kind) is type and vars(kind).get('_fields') is fields
                  and type(constructor) is FunctionType
                  and kind.__new__ is constructor and constructor.__code__ is constructor_code
@@ -338,7 +342,7 @@ def _policy_values(execution, actual, predecessor):
              and operation.state == ([True, False, False] if actual.category == 'reported_missing'
                                        else [True, True, False]))
     identity = (None if actual.category == 'reported_missing' else
-                metadata._directory_identity(actual.snapshot, execution.plan.context[1]))
+                metadata._directory_identity(actual.snapshot, execution.plan.blueprint[2][1]))
     return operation.resource.ordinal, actual.category, identity, execution.cursor[0]
 
 
@@ -437,18 +441,29 @@ def _finished_state_tail(execution, predecessor, held):
 
 
 def _run_startup_probe(owner, scope, registration, plan):
-    _require(type(owner) is StartupArtifactOwner
-             and vars(owner).get('_startup_probe_execution') is None)
+    _require(type(owner) is StartupArtifactOwner and type(plan) is _StartupPlan
+             and type(registration) is _NativeScopeRegistration
+             and registration.scope is scope and registration.owner is owner
+             and plan.owner is owner and vars(owner).get('_startup_probe_execution') is None)
     _startup_plan_tail(plan, registration)
     origin = _engine_origin_tail(plan.engine_origin)
     _native_work_origin_tail(owner, registration, registration.native_origin)
+    actor_arguments = (scope, registration, plan, origin)
+    actor_state = _native_pre_actor_state(owner, actor_arguments)
+    native = registration.native_origin
+    _native_actor_context(native.actor_calls, (native.native, native.thread_native),
+                          registration.context)
+    _native_post_actor_state(owner, actor_state, actor_arguments)
+    _startup_plan_tail(plan, registration)
+    _require(registration.scope is scope and vars(owner).get('_startup_probe_execution') is None)
     ledger = registration.native_ledger
     budget = (ledger.counts, ledger.counts[0], ledger.counts[1], ledger.attempts, len(ledger.attempts))
     cursor = policy._start(plan.policy)
     _policy_pins_tail(plan.blueprint)
     values = (owner, plan, registration, origin, plan.count, [0], [None], [], [],
               [None], [False], [False], budget, [cursor])
-    execution = _ProbeExecution(*values)
+    kind, fields, members, constructor, code = origin[1][0]
+    execution = constructor(kind, *values)
     _engine_origin_tail(origin)
     _startup_plan_tail(plan, registration)
     _require(vars(owner).get('_startup_probe_execution') is None
@@ -524,7 +539,8 @@ def _prepare_shared_consumer(owner, operation, predecessor, baseline, eof, custo
     _history_tail(execution, predecessor)
     _require(execution.pending[0] is None and operation.result.consumer == [None])
     values = (execution, operation, predecessor, [None], custody)
-    consumer = _ProbeConsumer(*values)
+    kind, fields, members, constructor, code = execution.origin[1][1]
+    consumer = constructor(kind, *values)
     _engine_origin_tail(execution.origin)
     _require(type(consumer) is _ProbeConsumer
              and all(tuple.__getitem__(consumer, i) is value for i, value in enumerate(values))
@@ -616,6 +632,11 @@ def _commit_shared_tail(owner, consumer, actual, commit):
     site, category, identity, before = _policy_values(execution, actual, consumer.predecessor)
     _policy_pins_tail(execution.plan.blueprint)
     policy._validate_advance(before, category, identity, commit.cursor)
+    _require(type(commit.sequence) is int and type(commit.site) is int
+             and type(commit.next_site) is int and type(commit.category) is str
+             and commit.category in ('returned', 'reported_missing')
+             and (commit.identity is None or type(commit.identity) is tuple
+                  and len(commit.identity) == 5 and all(type(value) is int for value in commit.identity)))
     _require(type(commit.sequence) is int and commit.sequence == len(execution.history)
              and type(commit.site) is int and commit.site == site
              and type(commit.next_site) is int
@@ -746,6 +767,10 @@ def _policy_pins_tail(blueprint):
         _require(type(name) is str and type(function) is FunctionType
                  and vars(module).get(name) is function and function.__code__ is code
                  and function.__globals__ is vars(module))
+    _require(vars(policy).get('_StartupPathPolicy') is kinds[0][0]
+             and vars(policy).get('_StartupCursor') is kinds[1][0]
+             and globals().get('_StartupPlan') is blueprint[8][0][0]
+             and globals().get('_StartupSite') is blueprint[8][1][0])
     for kind, fields, members, constructor, code, bases, dispatch in (*kinds, *blueprint[8]):
         _require(type(kind) is type and kind.__bases__ is bases
                  and type(constructor) is FunctionType and constructor.__code__ is code
@@ -866,12 +891,14 @@ def _new_startup_plan(source, owner, phase, index, effect, previous, registratio
     _blueprint_tail(blueprint)
     _require(selected is original_policy and type(keys) is tuple and type(definitions) is tuple
              and len(keys) == len(definitions) <= 8321)
-    variants = tuple(_StartupSite(owner, source, phase, index, site, ordinal)
+    site_kind, _, _, site_constructor, _, _, _ = blueprint[8][1]
+    variants = tuple(site_constructor(site_kind, owner, source, phase, index, site, ordinal)
                      for ordinal, site in enumerate(definitions))
     values = (owner, source, phase, index, selected, selected.components, definitions,
               variants, keys, origin[5], blueprint, owner._count_cell, owner._root_cell,
               owner._cell, tuple(scope.records), effect, vars(effect), tuple(source.effects), previous)
-    plan = _StartupPlan(*values)
+    plan_kind, _, _, plan_constructor, _, _, _ = blueprint[8][0]
+    plan = plan_constructor(plan_kind, *values)
     _blueprint_tail(blueprint)
     _require(type(plan) is _StartupPlan and tuple.__len__(plan) == len(values)
              and all(tuple.__getitem__(plan, i) is value for i, value in enumerate(values)))
@@ -917,11 +944,14 @@ def _historical_finish_tail(actual):
     _require(type(actual) is _ProbeFinish and type(actual.execution) is _ProbeExecution)
     execution = actual.execution
     _engine_origin_tail(execution.origin)
+    mirrors, mirrors_code = _historical_finish_mirrors, _historical_finish_mirrors.__code__
     plan, reg = execution.plan, execution.registration
     _require(type(plan) is _StartupPlan and type(reg) is _NativeScopeRegistration)
+    scope = reg.scope
     _blueprint_tail(plan.blueprint)
     _require(execution.owner is plan.owner is plan.blueprint[0] and reg.owner is plan.owner)
     _native_work_registration_tail(execution.owner, reg)
+    mirrors(actual, scope)
     _require(reg.scope.native_startup_probe_origin[6] is plan.blueprint
              and type(execution.finished) is list and len(execution.finished) == 1
              and execution.finished[0] is True
@@ -973,4 +1003,133 @@ def _historical_finish_tail(actual):
         _require(type(entry) is tuple and len(entry) == 7 and row is entry[3] and fd is entry[4]
                  and reg.scope.records[len(plan.base_records)+index] is row
                  and _descriptor_closed_in_scope(row, reg.scope))
+    if (globals().get('_historical_finish_mirrors') is not mirrors
+            or mirrors.__code__ is not mirrors_code):
+        raise metadata.ArtifactObservationError from None
+    return mirrors(actual, scope)
+
+def _historical_finish_mirrors(actual, scope):
+    """Full pure reseal after all weak-reference observations; no new admission."""
+    _require(type(actual) is _ProbeFinish and type(actual.execution) is _ProbeExecution)
+    execution = actual.execution
+    _engine_origin_tail(execution.origin)
+    plan, reg = execution.plan, execution.registration
+    _require(type(plan) is _StartupPlan and type(reg) is _NativeScopeRegistration
+             and type(scope) is _Scope
+             and type(reg.type_pins) is tuple and len(reg.type_pins) == 3
+             and all(type(kind) is type for kind in reg.type_pins)
+             and reg.scope is scope and reg.owner is execution.owner is plan.owner
+             and type(plan.owner) is StartupArtifactOwner)
+    _policy_pins_tail(plan.blueprint)
+    names = vars(plan.owner)
+    _require(names.get('_origin') is scope and names.get('_scope') is scope
+             and names.get('_cell') is reg.cell and names.get('_root_cell') is reg.root
+             and names.get('_native_scope_registration') is reg
+             and names.get('_failed') is False and names.get('_unknown') is False
+             and scope.native_startup_probe_origin[5] is execution.origin
+             and scope.native_startup_probe_origin[6] is plan.blueprint
+             and scope.cache is plan.source and plan.source.paths is plan.blueprint[4]
+             and scope.context is plan.blueprint[2] and scope.expected is plan.blueprint[3]
+             and type(execution.finished) is list and len(execution.finished) == 1
+             and execution.finished[0] is True
+             and type(execution.failed) is list and len(execution.failed) == 1
+             and execution.failed[0] is False
+             and type(execution.pending) is list and len(execution.pending) == 1
+             and execution.pending[0] is None
+             and type(execution.history) is list and len(execution.history) > 0
+             and type(actual.predecessor) is _ProbeCommit
+             and type(actual.predecessor.sequence) is int
+             and actual.predecessor.sequence == len(execution.history)-1
+             and type(execution.cursor) is list and len(execution.cursor) == 1
+             and execution.cursor[0] is actual.predecessor.cursor)
+    cursor = execution.cursor[0]
+    policy._cursor_tail(cursor)
+    _require(cursor.policy is plan.policy and cursor.action == 'finished'
+             and type(execution.outcome) is list and len(execution.outcome) == 1
+             and execution.outcome[0] is actual.outcome is actual.predecessor.outcome
+             and type(actual.outcome) is tuple and len(actual.outcome) == 3
+             and actual.outcome[0] is plan.policy.path
+             and type(actual.outcome[1]) is int and actual.outcome[1] == cursor.missing-1
+             and type(actual.outcome[2]) is tuple
+             and len(actual.outcome[2]) == len(cursor.identities) == len(execution.opened)
+             and type(actual.resources) is tuple and len(actual.resources) == len(execution.opened)
+             and type(actual.closure) is tuple and len(actual.closure) == 6
+             and type(execution.budget) is tuple and len(execution.budget) == 5)
+    closure, budget, ledger = actual.closure, execution.budget, reg.native_ledger
+    _require(type(ledger) is reg.type_pins[1]
+             and type(ledger.counts) is list and len(ledger.counts) == 2
+             and all(type(value) is int for value in ledger.counts)
+             and type(ledger.attempts) is list
+             and closure[0] is ledger.counts is budget[0]
+             and closure[3] is ledger.attempts is budget[3]
+             and all(type(value) is int for value in closure[1:3])
+             and type(closure[4]) is int and closure[5] is execution.count
+             and type(budget[1]) is type(budget[2]) is type(budget[4]) is int
+             and closure[1] == budget[1]+len(execution.history)+2*len(actual.resources)
+             and closure[2] == budget[2]
+             and closure[4] == budget[4]+len(execution.history)+len(actual.resources)
+             and ledger.counts[0] >= closure[1] and len(ledger.attempts) >= closure[4]
+             and type(ledger.scopes) is list and type(reg.index) is int
+             and 0 <= reg.index < len(ledger.scopes) and ledger.scopes[reg.index] is reg)
+    predecessor = actual.predecessor
+    for sequence in range(len(execution.history)-1, -1, -1):
+        _require(type(predecessor) is _ProbeCommit
+                 and type(predecessor.sequence) is int and predecessor.sequence == sequence
+                 and execution.history[sequence] is predecessor
+                 and type(predecessor.category) is str
+                 and predecessor.category in ('returned', 'reported_missing')
+                 and type(predecessor.consumer) is _ProbeConsumer
+                 and predecessor.consumer.execution is execution)
+        consumer = predecessor.consumer
+        operation = consumer.operation
+        _require(type(operation) is metadata._MetadataOperation
+                 and operation.owner is plan.owner and operation.registration is reg
+                 and type(operation.index) is int and 0 <= operation.index < closure[4]
+                 and ledger.attempts[operation.index] is operation
+                 and type(operation.result) is metadata._MetadataResult
+                 and type(operation.state) is list and len(operation.state) == 3
+                 and all(type(value) is bool for value in operation.state)
+                 and operation.state == ([True, True, False] if predecessor.category == 'returned'
+                                         else [True, False, False])
+                 and type(operation.ended) is list and len(operation.ended) == 1
+                 and operation.ended[0] is True
+                 and type(consumer.commit) is list and len(consumer.commit) == 1
+                 and consumer.commit[0] is predecessor)
+        result = operation.result
+        _require(type(result.acknowledged) is list and len(result.acknowledged) == 1
+                 and result.acknowledged[0] is predecessor
+                 and type(result.consumer) is list and len(result.consumer) == 1
+                 and result.consumer[0] is consumer
+                 and type(consumer.custody) is tuple and len(consumer.custody) == 6)
+        origin, marker, link, slot, state, reference = consumer.custody
+        _require(type(origin) is metadata._PayloadOrigin and type(marker) is origin.marker_type
+                 and marker.owner is plan.owner and marker.operation is operation
+                 and marker.origin is origin and marker.owner_link is link
+                 and marker.marker_slot is slot and marker.state is state
+                 and marker.reference is reference
+                 and result.custody_origin is origin and result.custody_link is link
+                 and result.custody_slot is slot
+                 and type(link) is list and len(link) == 1 and link[0] is None
+                 and type(slot) is list and len(slot) == 1 and slot[0] is marker
+                 and type(state) is list and len(state) == 3
+                 and state[0] is True and state[1] is True and state[2] is False)
+        predecessor = consumer.predecessor
+    _require(predecessor is None and type(scope.records) is list
+             and len(scope.records) >= len(plan.base_records)+len(actual.resources)
+             and all(scope.records[index] is row for index, row in enumerate(plan.base_records)))
+    for index, pair in enumerate(actual.resources):
+        _require(type(pair) is tuple and len(pair) == 2)
+        row, fd = pair
+        entry, outcome = execution.opened[index], actual.outcome[2][index]
+        _require(type(entry) is tuple and len(entry) == 7
+                 and type(row) is _NativeOpenedDescriptor and type(fd) is int
+                 and row is entry[3] and fd is entry[4]
+                 and entry[1] is plan.components[index]
+                 and type(entry[5]) is tuple and len(entry[5]) == 5
+                 and all(type(value) is int for value in entry[5])
+                 and type(outcome) is tuple and len(outcome) == 2
+                 and outcome[0] is plan.components[index]
+                 and outcome[1] is cursor.identities[index] and outcome[1] == entry[5]
+                 and scope.records[len(plan.base_records)+index] is row
+                 and _descriptor_closed_in_scope(row, scope))
     return actual
