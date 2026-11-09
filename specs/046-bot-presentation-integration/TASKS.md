@@ -1,5 +1,7 @@
 ## November 9 — full unit failures cleared; device launch checks advance
 
+Shutdown backport advances through retained adapter cleanup and bootstrap cancellation (`8304fb3`):258focused checks pass on each supported current/floor Python, source unchanged, zero skips/errors/failures. Original store/close/Future ownership survives cancelled observers; reconnect remains blocked for unresolved outcomes. Partial listener startup recovery and allocation-before-builder-return failures remain open, as do independent composition and physical qualification. No new host/app deployment.
+
 Schema-three push shutdown source repair `49c2a5f` now retains actual authorization/key/gate borrowers and relay-close ownership through server drain. The isolated regression and232push/listener/adapter/server checks pass with source unchanged. This is not deployed: independent ownership review, floor parity and lifecycle composition remain open; failed-builder ownership remains separate. Installed hosts remain `5ecd2ba`. No new build, grants, media opt-in or release submission.
 
 Full reconciled unit reruns at `889a31b` report zero failures/errors with unchanged
