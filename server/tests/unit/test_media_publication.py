@@ -67,3 +67,39 @@ def test_expiry_close_and_foreign_thread_fail_closed(monkeypatch):
     assert not owner.claim_once(ticket, SCOPE, cohort)
     owner.close()
     with pytest.raises(m.PublicationUnavailable): owner.candidate(SCOPE, cohort)
+
+
+def test_capacity_and_epoch_overflow_are_bounded_and_refuse():
+    owner = m.MediaPublication(); cohort = (object(), object(), object())
+    for _ in range(32): owner.candidate(SCOPE, cohort)
+    with pytest.raises(m.PublicationUnavailable): owner.candidate(SCOPE, cohort)
+    mutation = owner.begin_mutation()  # also clears every retained candidate
+    owner.settle_mutation(mutation, certain=True)
+    owner._epoch = m._MAX_EPOCH
+    with pytest.raises(m.PublicationUnavailable): owner.begin_mutation()
+    with pytest.raises(m.PublicationUnavailable): owner.candidate(SCOPE, cohort)
+
+
+def test_foreign_scope_fields_do_not_dispatch_equality_or_length_hooks():
+    class Foreign:
+        def __eq__(self, other): raise AssertionError('foreign equality')
+        def __len__(self): raise AssertionError('foreign length')
+    owner = m.MediaPublication(); cohort = (object(), object(), object())
+    for field in range(4):
+        bad = list(SCOPE); bad[field] = Foreign()
+        with pytest.raises(m.PublicationUnavailable): owner.candidate(tuple(bad), cohort)
+
+
+def test_invalidation_releases_retained_dependency_cohort():
+    import gc
+    import weakref
+    class Dependency: pass
+    owner = m.MediaPublication()
+    dependency = Dependency(); ref = weakref.ref(dependency)
+    ticket = owner.candidate(SCOPE, (dependency, object(), object()))
+    del dependency
+    gc.collect(); assert ref() is not None
+    mutation = owner.begin_mutation()
+    gc.collect(); assert ref() is None
+    assert not owner.claim_once(ticket, SCOPE, (object(), object(), object()))
+    owner.settle_mutation(mutation, certain=True)
