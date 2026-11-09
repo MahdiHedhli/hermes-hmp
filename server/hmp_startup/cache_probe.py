@@ -268,51 +268,6 @@ class RuntimeCacheProbeOwner:
                  and GatewayContinuationOwner._seal(parent[0]) is parent[2])
         return s
 
-    def _stat_known(self, name, parent, s, native_registration=None):
-        native = _capture_native_work_origin(self, native_registration)
-        stat_call = None if native is None else native.operations[3]
-        result_type = None if native is None else native.result_type
-        missing_type = FileNotFoundError if native is None else native.errors[1]
-        # Only exact ENOENT becomes sampled missing data. No read/permission or
-        # structural error is relabeled as a cache miss here.
-        result = None
-        missing = False
-        _require(_native_walk_scope(self, native_registration) is s)
-        root, cell = self._root_cell, self._cell
-        registry = (None if native_registration is None
-                    else native_registration.lineage.ledger.scopes)
-        _native_registration_tail(self, s, cell, root, native_registration, registry)
-        _native_relative_arguments(s, name, parent)
-        try:
-            _native_work_origin_tail(self, native_registration, native)
-            _require(native is None or (stat_call is native.operations[3]
-                     and result_type is native.result_type and missing_type is native.errors[1]))
-            if native is None:
-                stat_call = os.stat
-            if native is not None:
-                held_state = _native_pre_actor_state(self, (name, parent, stat_call, result_type,
-                                                           missing_type))
-                _native_actor_context(native.actor_calls, (native.native, native.thread_native),
-                                      native_registration.context)
-                _native_post_actor_state(self, held_state,
-                                         (name, parent, stat_call, result_type, missing_type))
-                _native_registration_tail(self, s, cell, root, native_registration, registry)
-                _native_work_origin_tail(self, native_registration, native)
-                _require(stat_call is native.operations[3] and result_type is native.result_type
-                         and missing_type is native.errors[1] and _ROOT is root and _CELL is cell)
-            result = stat_call(name, dir_fd=parent, follow_symlinks=False)
-        except missing_type as exc:
-            _require(type(exc) is missing_type
-                     and type(exc.errno) is int
-                     and exc.errno == errno.ENOENT and type(exc.filename) is str
-                     and exc.filename == name)
-            missing = True
-        _require(_native_walk_scope(self, native_registration) is s)
-        _require(missing or type(result) is (os.stat_result if native is None else result_type))
-        _native_registration_tail(self, s, cell, root, native_registration, registry)
-        _native_work_origin_tail(self, native_registration, native)
-        return result
-
     def _start(self):
         s = RuntimeCacheProbeOwner._pure(self)
         _require(self._started is False and self._retaining is False and self._ready is False

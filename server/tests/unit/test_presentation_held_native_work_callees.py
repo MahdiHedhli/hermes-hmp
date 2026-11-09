@@ -134,7 +134,8 @@ def test_fresh_probe_stat_arguments_before_native_coercion(
     actual_run = runner.test_actual_entry_and_wrapper_files
     marker = '\ntry:owner.observe()\n'
     injected = r'''
-actual_stat=pm.RuntimeCacheProbeOwner._stat_known
+from hmp_startup import probe_native as engine
+from hmp_plugin import presentation_native_metadata as metadata
 native_calls=[];foreign_calls=[];calls=[];refusals=[];violations=[]
 class Foreign:
     def __fspath__(self):foreign_calls.append('path');raise AssertionError('foreign path')
@@ -142,27 +143,33 @@ class Foreign:
     def __eq__(self,other):foreign_calls.append('eq');raise AssertionError('foreign equality')
     def __bool__(self):foreign_calls.append('bool');raise AssertionError('foreign bool')
 def native_observed(frame):
-    if frame.f_locals.get('self') is owner:native_calls.append(True)
-observe_synthetic_native(pm.os.stat,actual_stat.__code__,native_observed)
-def checked_stat(target,name,parent,s,native_registration=None):
+    if frame.f_locals.get('owner') is owner:native_calls.append(True)
+observe_synthetic_native(pm.os.stat,metadata._produce_directory_metadata.__code__,native_observed)
+def checked_arguments(frame):
+    execution=frame.f_locals['execution']
+    if execution.owner is not owner:return
+    resource=frame.f_locals['resource']
+    if len(resource.arguments)!=2:return
     calls.append(True)
-    args=[name,parent,s,native_registration]
+    args=list(resource.arguments)
     if CHANGE=='foreign':args[POSITION]=Foreign()
-    before=len(native_calls);count=target._count_cell;records=len(target._origin.records)
-    try:return actual_stat(target,*args)
-    except BaseException:
+    supplied=resource if CHANGE=='normal' else resource._replace(arguments=tuple(args))
+    before=(tuple(execution.registration.native_ledger.counts),len(execution.registration.native_ledger.attempts))
+    records=len(owner._origin.records)
+    try:actual=engine._resource_tail(owner,supplied)
+    except BaseException as error:
         if CHANGE=='foreign':
-            refusals.append(True)
-            if len(native_calls)!=before or target._count_cell is not count:
-                violations.append('native effect or progress before argument refusal')
-            if len(target._origin.records)!=records:violations.append('descriptor before refusal')
-        raise
-pm.RuntimeCacheProbeOwner._stat_known=checked_stat
+            refusals.append(type(error) is metadata.ArtifactObservationError)
+            if before!=(tuple(execution.registration.native_ledger.counts),len(execution.registration.native_ledger.attempts)):
+                violations.append('debit before argument refusal')
+            if len(owner._origin.records)!=records:violations.append('descriptor before refusal')
+        raise RuntimeError('SYNTHETIC_TYPED_ARGUMENT_REFUSAL_ONLY')
+    else:assert CHANGE=='normal' and actual is resource
+trace_synthetic_boundary(engine._resource.__code__,'return _resource_tail(execution.owner, resource)',checked_arguments)
 try:owner.observe()
 except CacheProbeError:
-    assert CHANGE=='foreign' and calls and refusals
+    assert CHANGE=='foreign' and calls and refusals==[True]
 else:assert CHANGE=='normal' and calls and native_calls and owner._ready
-finally:pm.RuntimeCacheProbeOwner._stat_known=actual_stat
 assert foreign_calls==[] and violations==[]
 if CHANGE=='foreign':assert not native_calls and owner._bytes_read==0
 assert all(row.close_attempted and row.closed for row in owner._origin.records)

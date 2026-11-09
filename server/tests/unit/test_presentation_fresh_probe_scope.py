@@ -20,6 +20,7 @@ from hmp_startup.cache_selection import selected_cache_input_attempts
 from hmp_startup.cache_probe import RuntimeCacheProbeOwner,CacheProbeError
 from hmp_startup import cache_probe as cm
 from hmp_startup import probe_metadata as pm
+from hmp_plugin import presentation_native_metadata as metadata
 continuation=GatewayContinuationOwner.retain(entry,approval,recipe,checked)
 rows=selected_cache_input_attempts(continuation)
 index=next(i for i,row in enumerate(rows) if row.plan_row.source.path==str(dep_root/'__init__.py'))
@@ -31,7 +32,8 @@ lineage=continuation._source.entry_binding[0].native_files;ledger=lineage.ledger
 prior=sys.getprofile();assert prior is None
 def observe_native(frame,event,arg):
     if event=='c_call' and any(arg is lineage.native.operations[i] for i in (0,1,3,4,5)):
-        if frame.f_code is RuntimeCacheProbeOwner._stat_known.__code__:calls.append(True)
+        if (frame.f_code is metadata._produce_directory_metadata.__code__
+                and held and frame.f_locals.get('owner') is held[0][0]):calls.append(True)
         else:other_calls.append(arg.__name__)
 def construct(cls,*values,**keywords):
     result=actual_new(cls,*values,**keywords)
