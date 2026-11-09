@@ -37,6 +37,10 @@ from .presentation_startup_artifacts import (
     _NativeCacheReadCommit,
     _native_runtime_read_history_tail,
     _native_cache_read_history_tail,
+    _native_runtime_read_receipt_state_tail,
+    _native_cache_read_receipt_state_tail,
+    _NativeOpenedDescriptor,
+    _native_descriptor_closed,
     _prepare_native_metadata_resource,
     _require,
     _Scope,
@@ -216,6 +220,7 @@ class _DirectoryConsumer(NamedTuple):
     predecessor: object
     baseline: object = None
     eof: object = None
+    custody: object = None
 
     @property
     def consumption(self):
@@ -284,7 +289,7 @@ def _fixed_metadata_role(resource):
     _require((operation == 4 and role == 'directory')
              or (operation == 3 and role == 'leaf_before')
              or (operation == 4 and role == 'leaf_opened')
-             or (operation in (3, 4) and role == 'leaf_after_read'))
+             or (operation in (3, 4) and role in ('leaf_after_read', 'directory_after_hash')))
     return role
 
 
@@ -304,12 +309,12 @@ def _fixed_metadata_resource_tail(owner, resource):
         _require(type(resource.arguments[0]) is str
                  and type(walk.components[component]) is str
                  and resource.arguments[0] == walk.components[component]
-                 and resource.arguments[1] is resource.descriptor.fd)
+                 and resource.arguments[1] is (None if resource.descriptor is None else resource.descriptor.fd))
     return resource
 
 
 def _fixed_metadata_identity_size(resource):
-    return 5 if _fixed_metadata_role(resource) == 'directory' else 9
+    return 5 if _fixed_metadata_role(resource) in ('directory', 'directory_after_hash') else 9
 
 
 def _undebited_directory_cells_tail(owner, operation):
@@ -388,7 +393,8 @@ def _unused_directory_intent_tail(owner, operation):
     return result
 
 
-def _prepare_directory_consumer(owner, operation, predecessor=None, baseline=None, eof=None):
+def _prepare_directory_consumer(owner, operation, predecessor=None, baseline=None, eof=None,
+                                custody=None):
     """Bind one actual unused intent to a fixed runtime/cache metadata policy.
 
     Other owner/configuration/tree policies need their own reviewed consumers.
@@ -399,7 +405,7 @@ def _prepare_directory_consumer(owner, operation, predecessor=None, baseline=Non
              and type(operation.result) is _MetadataResult)
     resource, result = operation.resource, operation.result
     _resource_tail(owner, resource)
-    _require(_fixed_metadata_role(resource) in ('directory', 'leaf_before', 'leaf_opened', 'leaf_after_read')
+    _require(_fixed_metadata_role(resource) in ('directory', 'leaf_before', 'leaf_opened', 'leaf_after_read', 'directory_after_hash')
              and operation.registration is resource.registration
              and type(operation.state) is list and len(operation.state) == 3
              and all(type(value) is bool and value is False for value in operation.state)
@@ -458,7 +464,7 @@ def _prepare_directory_consumer(owner, operation, predecessor=None, baseline=Non
     consumer = _DirectoryConsumer(owner, operation, resource, parents, kind,
                                    class_name, module_name, origin[0], origin[1], module,
                                    origin[4], origin[5], file_module, StartupArtifactOwner,
-                                   [None], history, predecessor, baseline, eof)
+                                   [None], history, predecessor, baseline, eof, custody)
     _require(_resource_tail(owner, resource) is resource
              and operation.result is result and result.consumer[0] is None
              and result.attempt[0] is operation and result.raw[0] is result.unset)
@@ -467,17 +473,19 @@ def _prepare_directory_consumer(owner, operation, predecessor=None, baseline=Non
              and _directory_material_tail(owner, consumer) is consumer)
     _directory_predecessors_tail(owner, consumer)
     _require(consumer.predecessor is predecessor
-             and consumer.baseline is baseline and consumer.eof is eof)
+             and consumer.baseline is baseline and consumer.eof is eof
+             and consumer.custody is custody)
     result.consumer[0] = consumer
     _require(_directory_material_tail(owner, consumer) is consumer
              and result.consumer[0] is consumer)
     _directory_predecessors_tail(owner, consumer)
     _require(consumer.predecessor is predecessor
-             and consumer.baseline is baseline and consumer.eof is eof)
+             and consumer.baseline is baseline and consumer.eof is eof
+             and consumer.custody is custody)
     return consumer
 
 
-def _directory_predecessors_tail(owner, consumer):
+def _metadata_predecessor_chain_tail(owner, consumer):
     """Held raw-free original ACK prefix, never a cursor or native-work credit."""
     _require(type(consumer) is _DirectoryConsumer and consumer.owner is owner
              and type(consumer.resource) is _NativeMetadataResource)
@@ -527,6 +535,12 @@ def _directory_predecessors_tail(owner, consumer):
                  and commit.consumer.history is consumer.history)
         commit = commit.consumer.predecessor
     _require(commit is None)
+    return consumer
+
+
+def _directory_predecessors_tail(owner, consumer):
+    _metadata_predecessor_chain_tail(owner, consumer)
+    resource = consumer.resource
     if _fixed_metadata_role(resource) == 'leaf_opened':
         predecessor = consumer.predecessor
         _require(type(predecessor) is _DirectoryPolicyCommit
@@ -536,7 +550,7 @@ def _directory_predecessors_tail(owner, consumer):
                  and predecessor.resource.variant.expected is resource.variant.expected
                  and type(predecessor.identity) is tuple and len(predecessor.identity) == 9
                  and all(type(value) is int for value in predecessor.identity))
-    if _fixed_metadata_role(resource) == 'leaf_after_read':
+    if _fixed_metadata_role(resource) in ('leaf_after_read', 'directory_after_hash'):
         _postread_receipts_tail(owner, consumer)
     else:
         _require(consumer.baseline is None and consumer.eof is None)
@@ -552,6 +566,7 @@ def _postread_receipts_tail(owner, consumer):
     """
     resource, operation = consumer.resource, consumer.operation
     baseline, eof = consumer.baseline, consumer.eof
+    directory = _fixed_metadata_role(resource) == 'directory_after_hash'
     _require(type(baseline) is _DirectoryPolicyCommit
              and baseline.owner is owner
              and type(baseline.resource) is _NativeMetadataResource
@@ -559,9 +574,11 @@ def _postread_receipts_tail(owner, consumer):
              and baseline.resource.held_walk is resource.held_walk
              and baseline.resource.variant.expected is resource.variant.expected
              and type(baseline.site) is tuple and len(baseline.site) == 3
-             and type(baseline.site[0]) is int and baseline.site[0] == 3
-             and type(baseline.site[1]) is str and baseline.site[1] == 'leaf_before'
-             and type(baseline.identity) is tuple and len(baseline.identity) == 9
+             and type(baseline.site[0]) is int and baseline.site[0] == (4 if directory else 3)
+             and type(baseline.site[1]) is str
+             and baseline.site[1] == ('directory' if directory else 'leaf_before')
+             and type(baseline.identity) is tuple
+             and len(baseline.identity) == (5 if directory else 9)
              and all(type(value) is int for value in baseline.identity)
              and type(baseline.ordinal) is int
              and 0 <= baseline.ordinal < resource.ordinal
@@ -579,14 +596,26 @@ def _postread_receipts_tail(owner, consumer):
              and step.walk is walk and step.expected is resource.variant.expected
              and step.registration is resource.registration
              and eof.eof is True and type(eof.remaining) is int and eof.remaining == 0
-             and type(eof.count[2]) is int and eof.count[2] == step.expected.size
-             and (resource.descriptor is step.descriptor if resource.site[0] == 4 else
-                  resource.descriptor is step.descriptor.allocation.parent))
-    # The two original post-read rows are adjacent. No open/close/read or other
-    # unaccounted operation may be inserted between actual EOF and these rows.
-    offset = resource.ordinal - (len(walk.components) + 1)
-    _require(type(offset) is int and offset in (0, 1)
-             and resource.site[0] == (4 if offset == 0 else 3)
+             and type(eof.count[2]) is int and eof.count[2] == step.expected.size)
+    if directory:
+        descriptor = baseline.resource.descriptor
+        _require(type(descriptor) is _NativeOpenedDescriptor
+                 and type(baseline.site[2]) is int and baseline.site[2] == resource.site[2])
+        _native_metadata_component_tail(owner, resource.registration, walk, descriptor,
+                                        resource.site[2])
+        _require(resource.descriptor is (descriptor if resource.site[0] == 4 else
+                                        descriptor.allocation.parent))
+    else:
+        _require(resource.descriptor is (step.descriptor if resource.site[0] == 4 else
+                                        step.descriptor.allocation.parent))
+    # Every original metadata row after EOF has exactly one accounted debit.
+    # No open/close/read or unrelated attempt can be inserted into this sequence.
+    first = len(walk.components) + 1
+    offset = resource.ordinal - first
+    _require(type(offset) is int and 0 <= offset < len(resource.metadata.definitions) - first
+             and (offset >= 2 if directory else offset < 2)
+             and (not directory or resource.site[2] == (offset - 2) // 2)
+             and resource.site[0] == (4 if offset % 2 == 0 else 3)
              and type(operation.state) is list and len(operation.state) == 3
              and type(operation.state[0]) is bool
              and type(read.index) is int and type(read.budget[3]) is int
@@ -597,13 +626,16 @@ def _postread_receipts_tail(owner, consumer):
     predecessor = consumer.predecessor
     _require(type(predecessor) is _DirectoryPolicyCommit
              and predecessor.resource.held_walk is resource.held_walk
-             and predecessor.site[1] == ('leaf_opened' if offset == 0 else 'leaf_after_read')
-             and predecessor.site[0] == 4)
-    if offset:
-        _require(predecessor.operation.index == read.index + 1
-                 and predecessor.operation.budget[3] == read.budget[3] + 1
-                 and predecessor.consumer.baseline is baseline
-                 and predecessor.consumer.eof is eof)
+             and predecessor.site is resource.metadata.definitions[resource.ordinal - 1])
+    for earlier in range(offset):
+        actual = consumer.history[first + earlier]
+        _require(type(actual) is _DirectoryPolicyCommit
+                 and actual.operation.index == read.index + 1 + earlier
+                 and actual.operation.budget[1] == read.budget[3] + earlier
+                 and actual.operation.budget[3] == read.budget[3] + earlier + 1
+                 and actual.consumer.eof is eof)
+    if offset % 2:
+        _require(predecessor.consumer.baseline is baseline)
     return consumer
 
 
@@ -683,7 +715,7 @@ def _latched_directory_resource_tail(owner, consumer):
              and metadata.variants[resource.ordinal] is resource.variant
              and type(resource.site) is tuple and len(resource.site) == 3
              and type(resource.site[0]) is int and resource.site[0] in (3, 4)
-             and _fixed_metadata_role(resource) in ('directory', 'leaf_before', 'leaf_opened', 'leaf_after_read')
+             and _fixed_metadata_role(resource) in ('directory', 'leaf_before', 'leaf_opened', 'leaf_after_read', 'directory_after_hash')
              and type(resource.site[2]) is int
              and operation.owner is owner and operation.registration is registration
              and operation.ledger is registration.native_ledger
@@ -1108,7 +1140,7 @@ def _directory_commit_cohort_tail(owner, consumer, actual, commit):
              and commit.ordinal is consumer.resource.ordinal
              and type(commit.next_ordinal) is int
              and commit.next_ordinal == commit.ordinal + 1
-             and commit.next_ordinal < len(consumer.resource.metadata.definitions)
+             and commit.next_ordinal <= len(consumer.resource.metadata.definitions)
              and type(commit.identity) is tuple
              and len(commit.identity) == _fixed_metadata_identity_size(consumer.resource)
              and all(type(value) is int for value in commit.identity)
@@ -1118,7 +1150,7 @@ def _directory_commit_cohort_tail(owner, consumer, actual, commit):
              and all(commit.identity[index] == actual.snapshot.identity[index]
                      for index in range(_fixed_metadata_identity_size(consumer.resource)))
              and consumer.consumption[0] is actual and consumer.commit[0] is commit)
-    _require((commit.mtime is None if _fixed_metadata_role(consumer.resource) == 'directory'
+    _require((commit.mtime is None if _fixed_metadata_role(consumer.resource) in ('directory', 'directory_after_hash')
               else type(commit.mtime) in (int, float)
               and commit.mtime is actual.snapshot.mtime))
     return commit
@@ -1159,9 +1191,11 @@ def _consume_directory_policy(owner, consumer, actual):
         _native_post_actor_state(owner, actor_state, actor_arguments)
         _consuming_directory_return_tail(owner, consumer, actual)
         resource = consumer.resource
-        if _fixed_metadata_role(resource) == 'directory':
+        if _fixed_metadata_role(resource) in ('directory', 'directory_after_hash'):
             identity = _directory_identity(actual.snapshot, operation.context[1])
             mtime = None
+            if _fixed_metadata_role(resource) == 'directory_after_hash':
+                _require(identity == consumer.baseline.identity)
         else:
             identity = _declared_leaf_identity(actual.snapshot, operation.context[1],
                                                 resource.variant.expected.size)
@@ -1261,7 +1295,7 @@ def _acked_directory_history_tail(owner, consumer, commit):
              and len(operation.arguments) == (1 if operation.operation == 4 else 2)
              and type(resource.site) is tuple and len(resource.site) == 3
              and type(resource.site[0]) is int and resource.site[0] in (3, 4)
-             and _fixed_metadata_role(resource) in ('directory', 'leaf_before', 'leaf_opened', 'leaf_after_read')
+             and _fixed_metadata_role(resource) in ('directory', 'leaf_before', 'leaf_opened', 'leaf_after_read', 'directory_after_hash')
              and type(resource.site[2]) is int)
     metadata = _native_declared_metadata_cohort_tail(owner, registration, resource.held_walk)
     _directory_predecessors_tail(owner, consumer)
@@ -1282,7 +1316,7 @@ def _acked_directory_history_tail(owner, consumer, commit):
              and type(commit.identity) is tuple
              and len(commit.identity) == _fixed_metadata_identity_size(consumer.resource)
              and all(type(value) is int for value in commit.identity)
-             and (commit.mtime is None if _fixed_metadata_role(resource) == 'directory'
+             and (commit.mtime is None if _fixed_metadata_role(resource) in ('directory', 'directory_after_hash')
                   else type(commit.mtime) in (int, float))
              and type(result) is _MetadataResult
              and type(result.attempt) is list and len(result.attempt) == 1
@@ -1636,6 +1670,126 @@ def _abandon_known_directory_return(owner, consumer, actual, commit=None):
 
 
 
+
+def _finished_capsule_tail(owner, commit):
+    """Confirm the before-effect custody pinned in this actual returned commit."""
+    _require(type(commit) is _DirectoryPolicyCommit
+             and type(commit.consumer) is _DirectoryConsumer
+             and commit.consumer.owner is owner
+             and type(commit.operation) is _MetadataOperation
+             and type(commit.operation.result) is _MetadataResult
+             and type(commit.consumer.custody) is tuple and len(commit.consumer.custody) == 6)
+    origin, marker, link, slot, state, reference = commit.consumer.custody
+    _origin_tail(origin)
+    result = commit.operation.result
+    _require(type(marker) is origin.marker_type and marker.owner is owner
+             and marker.operation is commit.operation and marker.origin is origin
+             and marker.consumer is None and result.custody_origin is origin
+             and type(link) is list and len(link) == 1 and link[0] is None
+             and result.custody_link is marker.owner_link is link
+             and type(slot) is list and len(slot) == 1 and slot[0] is marker
+             and result.custody_slot is marker.marker_slot is slot
+             and marker.state is state and type(state) is list and len(state) == 3
+             and state[0] is True and state[1] is True and state[2] is False
+             and marker.reference is reference and type(reference) is origin.reference_type
+             and origin.reference_callback.__get__(reference, origin.reference_type) is None
+             and origin.reference_call(reference) is None)
+    return commit
+
+
+def _finished_declared_file_tail(owner, registration, held, last):
+    """Literal final pre-close return, complete history, and actual owned closes.
+
+    The fixed file caller holds the last observation's actual return across all
+    cleanup. Current mirrors only confirm it; none nominates a finish receipt.
+    This is not a replacement baseline, a current FD-open check or new work.
+    """
+    _require(type(last) is _DirectoryPolicyCommit and last.owner is owner
+             and type(last.consumer) is _DirectoryConsumer
+             and type(last.operation) is _MetadataOperation
+             and type(last.resource) is _NativeMetadataResource
+             and last.resource.registration is registration
+             and last.resource.held_walk is held)
+    resource, consumer = last.resource, last.consumer
+    metadata = _native_declared_metadata_cohort_tail(owner, registration, held)
+    _require(resource.metadata is metadata and consumer.resource is resource
+             and consumer.operation is last.operation
+             and consumer.history is metadata.commits
+             and type(metadata.definitions) is tuple and len(metadata.definitions) > 0
+             and metadata.progress[0] == len(metadata.definitions)
+             and metadata.progress[1] is None
+             and len(metadata.commits) == len(metadata.definitions)
+             and last.ordinal == len(metadata.definitions) - 1
+             and last.next_ordinal == len(metadata.definitions)
+             and metadata.commits[-1] is last
+             and last.site is metadata.definitions[-1]
+             and last.site[0] == 3 and last.site[1] == 'directory_after_hash')
+    _metadata_predecessor_chain_tail(owner, consumer)
+    for ordinal, actual in enumerate(metadata.commits):
+        _require(type(actual) is _DirectoryPolicyCommit and actual.owner is owner
+                 and type(actual.resource) is _NativeMetadataResource
+                 and type(actual.operation) is _MetadataOperation
+                 and type(actual.operation.result) is _MetadataResult
+                 and type(actual.consumer) is _DirectoryConsumer
+                 and type(actual.ordinal) is int and type(actual.next_ordinal) is int
+                 and actual.ordinal == ordinal and actual.next_ordinal == ordinal + 1
+                 and actual.site is metadata.definitions[ordinal]
+                 and actual.resource.metadata is metadata
+                 and actual.resource.held_walk is held
+                 and actual.operation.owner is owner
+                 and actual.operation.resource is actual.resource
+                 and actual.consumer.operation is actual.operation
+                 and actual.consumer.resource is actual.resource
+                 and type(actual.consumer.commit) is list and len(actual.consumer.commit) == 1
+                 and actual.consumer.commit[0] is actual
+                 and type(actual.operation.result.acknowledged) is list
+                 and len(actual.operation.result.acknowledged) == 1
+                 and actual.operation.result.acknowledged[0] is actual
+                 and type(actual.operation.ended) is list and len(actual.operation.ended) == 1
+                 and actual.operation.ended[0] is True
+                 and type(actual.operation.state) is list and len(actual.operation.state) == 3
+                 and all(type(value) is bool for value in actual.operation.state)
+                 and actual.operation.state == [True, True, False])
+        _finished_capsule_tail(owner, actual)
+    eof = consumer.eof
+    if consumer.class_name == 'RuntimeSourceReadOwner':
+        _require(type(eof) is _NativeRuntimeReadCommit)
+        _require(_native_runtime_read_receipt_state_tail(owner, eof, eof.step) is eof)
+    else:
+        _require(consumer.class_name == 'DeclaredCacheReadOwner'
+                 and type(eof) is _NativeCacheReadCommit)
+        _require(_native_cache_read_receipt_state_tail(owner, eof, eof.step) is eof)
+    _require(eof.eof is True and eof.remaining == 0 and eof.step.walk is held[0]
+             and eof.step.expected is metadata.expected)
+    descriptor = eof.step.descriptor
+    for _ in held[0].components:
+        _require(type(descriptor) is _NativeOpenedDescriptor)
+        _require(_native_descriptor_closed(descriptor, registration.native_ledger))
+        descriptor = descriptor.allocation.parent
+    _require(descriptor is None)
+    ledger, phase = registration.native_ledger, registration.native_phase
+    _require(last.operation.ledger is ledger
+             and ledger.attempts[last.operation.index] is last.operation
+             and len(ledger.attempts) == last.operation.index + 1
+             and ledger.counts[0] == last.operation.budget[3] + len(held[0].components)
+             and ledger.counts[1] == last.operation.budget[2] - len(held[0].components)
+             and ledger.failed[0] is False and ledger.failure[0] is None
+             and ledger.inflight[0] is None and phase.current[0] is phase.idle
+             and phase.result[0] is None)
+    _require(_directory_material_tail(owner, consumer) is consumer)
+    _native_read_lifecycle_tail(owner, registration, consumer.parents)
+    _native_work_origin_tail(owner, registration, registration.native_origin)
+    # Rejoin literal finish and complete cursor after callback-bearing closure.
+    _require(resource.held_walk is held and resource.metadata is metadata
+             and metadata.commits[-1] is last and consumer.eof is eof
+             and metadata.progress[0] == len(metadata.definitions)
+             and metadata.progress[1] is None
+             and ledger.counts[0] == last.operation.budget[3] + len(held[0].components)
+             and ledger.counts[1] == last.operation.budget[2] - len(held[0].components)
+             and ledger.failed[0] is False and ledger.inflight[0] is None)
+    return last
+
+
 def _run_directory_observation(owner, resource, predecessor=None, baseline=None, eof=None):
     """Unwired shared declared-site caller with pre-effect independent memory custody.
 
@@ -1677,12 +1831,15 @@ def _run_directory_observation(owner, resource, predecessor=None, baseline=None,
                  and result.custody_slot is marker.marker_slot)
         held_link, held_slot = marker.owner_link, marker.marker_slot
         held_state, held_reference = marker.state, marker.reference
-        consumer = _prepare_directory_consumer(owner, operation, predecessor, baseline, eof)
+        custody = (origin, marker, held_link, held_slot, held_state, held_reference)
+        consumer = _prepare_directory_consumer(owner, operation, predecessor, baseline, eof, custody)
         _require(consumer.predecessor is predecessor
-             and consumer.baseline is baseline and consumer.eof is eof)
+             and consumer.baseline is baseline and consumer.eof is eof
+             and consumer.custody is custody)
         _require(_latch_directory_consumer(owner, consumer) is consumer
                  and consumer.predecessor is predecessor
-                 and consumer.baseline is baseline and consumer.eof is eof)
+                 and consumer.baseline is baseline and consumer.eof is eof
+             and consumer.custody is custody)
         producer_started = True
         try:
             actual = produce(owner, consumer)

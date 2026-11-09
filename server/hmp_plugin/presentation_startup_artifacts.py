@@ -1073,8 +1073,12 @@ def _native_declared_metadata_cohort_tail(owner, registration, held):
              and len(metadata.commits) <= len(metadata.definitions)
              and type(metadata.progress) is list and len(metadata.progress) == 2
              and type(metadata.progress[0]) is int
-             and 0 <= metadata.progress[0] < len(metadata.definitions))
-    _native_declared_metadata_site_tail(owner, metadata, metadata.progress[0])
+             and 0 <= metadata.progress[0] <= len(metadata.definitions))
+    if metadata.progress[0] < len(metadata.definitions):
+        _native_declared_metadata_site_tail(owner, metadata, metadata.progress[0])
+    else:
+        _require(metadata.progress[1] is None
+                 and len(metadata.commits) == len(metadata.definitions))
     return metadata
 
 
@@ -1082,7 +1086,8 @@ def _native_declared_metadata_cohort_tail(owner, registration, held):
 def _native_declared_metadata_plan_tail(owner, registration, held):
     """Original unclaimed admission input; a latched consumer is not renewable."""
     metadata = _native_declared_metadata_cohort_tail(owner, registration, held)
-    _require(metadata.progress[1] is None)
+    _require(metadata.progress[1] is None
+             and metadata.progress[0] < len(metadata.definitions))
     _native_work_registration_tail(owner, registration)
     return metadata
 
@@ -1197,7 +1202,7 @@ def _begin_native_declared_walk(owner, registration, expected):
     return plan, walks, progress, index, state, metadata
 
 
-def _finish_native_declared_walk(owner, registration, held):
+def _finish_native_declared_walk(owner, registration, held, finish=None):
     _require(type(registration) is _NativeScopeRegistration
              and type(held) is tuple and len(held) == 6)
     plan, walks, progress, index, state, metadata = held
@@ -1216,9 +1221,14 @@ def _finish_native_declared_walk(owner, registration, held):
              and type(plan.metadata_slot) is list and len(plan.metadata_slot) == 1
              and plan.metadata_slot[0] is metadata
              and type(metadata.progress) is list and len(metadata.progress) == 2
-             and type(metadata.progress[0]) is int and metadata.progress[0] == 0
-             and metadata.progress[1] is None
-             and type(metadata.commits) is list and len(metadata.commits) == 0)
+             and type(metadata.progress[0]) is int
+             and metadata.progress[1] is None and type(metadata.commits) is list)
+    if finish is None:
+        # Every still-unwired policy retains its original strict zero-site guard.
+        _require(metadata.progress[0] == 0 and len(metadata.commits) == 0)
+    else:
+        from .presentation_native_metadata import _finished_declared_file_tail
+        _require(_finished_declared_file_tail(owner, registration, held, finish) is finish)
     state[0] = 2
     progress[0] = index + 1
 
@@ -2723,7 +2733,7 @@ def _native_runtime_read_commit_tail(owner, envelope, commit, source_buffer, tok
     return scope
 
 
-def _native_runtime_read_history_tail(owner, commit, step):
+def _native_runtime_read_receipt_state_tail(owner, commit, step):
     """Held raw-free read receipt, not current-work or EOF admission authority."""
     _require(type(commit) is _NativeRuntimeReadCommit and type(step) is _NativeReadFileStep
              and commit.step is step and step.owner is owner
@@ -2762,14 +2772,12 @@ def _native_runtime_read_history_tail(owner, commit, step):
              and ledger.counts is operation.budget[0]
              and type(ledger.counts) is list and len(ledger.counts) == 2
              and all(type(value) is int for value in ledger.counts)
-             and type(operation.budget[3]) is int
-             and ledger.counts[0] >= operation.budget[3]
-             and ledger.counts[1] is operation.budget[2])
+             and type(operation.budget[3]) is int)
     _native_read_accumulator_tail(owner, step, commit.count)
     return commit
 
 
-def _native_cache_read_history_tail(owner, commit, step):
+def _native_cache_read_receipt_state_tail(owner, commit, step):
     """Held raw-free cache receipt; no journal prefixes or new work authority."""
     _require(type(commit) is _NativeCacheReadCommit and type(step) is _NativeReadFileStep
              and commit.step is step and step.owner is owner
@@ -2808,9 +2816,7 @@ def _native_cache_read_history_tail(owner, commit, step):
              and ledger.counts is operation.budget[0]
              and type(ledger.counts) is list and len(ledger.counts) == 2
              and all(type(value) is int for value in ledger.counts)
-             and type(operation.budget[3]) is int
-             and ledger.counts[0] >= operation.budget[3]
-             and ledger.counts[1] is operation.budget[2])
+             and type(operation.budget[3]) is int)
     _native_read_accumulator_tail(owner, step, commit.count)
     namespace, own = vars(step.material_module), vars(owner)
     _require(type(namespace) is dict and len(namespace) <= 4096
@@ -2841,6 +2847,25 @@ def _native_cache_read_history_tail(owner, commit, step):
              and commit.header == step.buffer[:16])
     return commit
 
+
+
+
+def _native_runtime_read_history_tail(owner, commit, step):
+    """Actual held receipt during metadata; original close reserves stay held."""
+    _require(_native_runtime_read_receipt_state_tail(owner, commit, step) is commit)
+    operation = commit.operation
+    _require(operation.ledger.counts[0] >= operation.budget[3]
+             and operation.ledger.counts[1] is operation.budget[2])
+    return commit
+
+
+def _native_cache_read_history_tail(owner, commit, step):
+    """Actual cache receipt during metadata, with the same held reservations."""
+    _require(_native_cache_read_receipt_state_tail(owner, commit, step) is commit)
+    operation = commit.operation
+    _require(operation.ledger.counts[0] >= operation.budget[3]
+             and operation.ledger.counts[1] is operation.budget[2])
+    return commit
 
 
 def _native_runtime_read_closed_tail(owner, commit, step):
@@ -3852,6 +3877,11 @@ class StartupArtifactOwner:
                             _require(expected is s.expected[0] and self._started is True
                                      and self._ready is False)
                             declared_reader = DeclaredCacheReadOwner
+        metadata = None
+        metadata_last = metadata_before = metadata_eof = None
+        directory_baselines = []
+        if native_registration is not None and (runtime_source or declared_reader is not None):
+            from . import presentation_native_metadata as metadata
         root_cell, owner_cell = self._root_cell, self._cell
         native_registry = (None if native_registration is None
                            else native_registration.lineage.ledger.scopes)
@@ -3874,33 +3904,62 @@ class StartupArtifactOwner:
             for name in ("/", *expected.path[1:].split("/")[:-1]):
                 row, fd = StartupArtifactOwner._open(self, name, parent, True, native_registration)
                 held.append((row, fd))
-                info = StartupArtifactOwner._fstat(self, fd, s, native_registration)
-                signature = _identity(info, True)
-                mode = stat.S_IMODE(info.st_mode)
-                _require(stat.S_ISDIR(info.st_mode) and info.st_uid in (0, s.context[1])
-                         and not mode & (stat.S_ISUID | stat.S_ISGID)
-                         and (not mode & 0o022 or (info.st_uid == 0 and bool(mode & stat.S_ISVTX))))
+                if metadata is None:
+                    info = StartupArtifactOwner._fstat(self, fd, s, native_registration)
+                    signature = _identity(info, True)
+                    mode = stat.S_IMODE(info.st_mode)
+                    _require(stat.S_ISDIR(info.st_mode) and info.st_uid in (0, s.context[1])
+                             and not mode & (stat.S_ISUID | stat.S_ISGID)
+                             and (not mode & 0o022 or (info.st_uid == 0 and bool(mode & stat.S_ISVTX))))
+                else:
+                    metadata_resource = _prepare_native_metadata_resource(
+                        self, native_registration, native_walk, row)
+                    metadata_last = metadata._run_directory_observation(
+                        self, metadata_resource, metadata_last)
+                    _require(type(metadata_last) is metadata._DirectoryPolicyCommit
+                             and metadata_last.resource is metadata_resource)
+                    directory_baselines.append(metadata_last)
+                    signature = metadata_last.identity
                 directories.append((name, parent, fd, signature))
                 parent = fd
             if _configuration(self):
                 _require(info.st_uid == s.context[1] and stat.S_IMODE(info.st_mode) == 0o700)
             name = expected.path.rsplit("/", 1)[1]
-            before = StartupArtifactOwner._stat(self, name, parent, s, native_registration)
-            original = _identity(before)
-            _require(stat.S_ISREG(before.st_mode) and before.st_uid in (0, s.context[1])
-                     and before.st_nlink == 1
-                     and (0 < before.st_size <= 4096 if anchor else before.st_size == expected.size)
-                     and not before.st_mode & (0o022 | stat.S_ISUID | stat.S_ISGID))
+            if metadata is None:
+                before = StartupArtifactOwner._stat(self, name, parent, s, native_registration)
+                original = _identity(before)
+                _require(stat.S_ISREG(before.st_mode) and before.st_uid in (0, s.context[1])
+                         and before.st_nlink == 1
+                         and (0 < before.st_size <= 4096 if anchor else before.st_size == expected.size)
+                         and not before.st_mode & (0o022 | stat.S_ISUID | stat.S_ISGID))
+            else:
+                metadata_resource = _prepare_native_metadata_resource(
+                    self, native_registration, native_walk, held[-1][0], name)
+                metadata_before = metadata._run_directory_observation(
+                    self, metadata_resource, metadata_last)
+                _require(type(metadata_before) is metadata._DirectoryPolicyCommit
+                         and metadata_before.resource is metadata_resource)
+                metadata_last = metadata_before
+                original = metadata_before.identity
             if _configuration(self):
                 _require(before.st_uid == s.context[1] and stat.S_IMODE(before.st_mode) == 0o600)
             if source_effect is not None:
-                timestamp = before.st_mtime
+                timestamp = before.st_mtime if metadata is None else metadata_before.mtime
                 _require(type(timestamp) in (int, float) and -2 ** 64 < timestamp < 2 ** 64)
                 source_mtime = int(timestamp)  # exact CPython path_stats conversion, not ns floor
             row, fd = StartupArtifactOwner._open(self, name, parent, False, native_registration)
             held.append((row, fd))
-            _require(_identity(StartupArtifactOwner._fstat(
-                self, fd, s, native_registration)) == original)
+            if metadata is None:
+                _require(_identity(StartupArtifactOwner._fstat(
+                    self, fd, s, native_registration)) == original)
+            else:
+                metadata_resource = _prepare_native_metadata_resource(
+                    self, native_registration, native_walk, row)
+                metadata_last = metadata._run_directory_observation(
+                    self, metadata_resource, metadata_last)
+                _require(type(metadata_last) is metadata._DirectoryPolicyCommit
+                         and metadata_last.resource is metadata_resource
+                         and metadata_last.identity == original)
             digest = hashlib.sha256()
             header = b""
             capture_header = (not anchor and not _configuration(self)
@@ -3973,6 +4032,7 @@ class StartupArtifactOwner:
                     if capture_header:
                         header = native_commit.header
                 _require(native_commit.eof is True and native_commit.remaining == 0)
+                metadata_eof = native_commit
                 native_envelope = None
                 data = b''  # actual empty return already consumed/ACKed above
             else:
@@ -3984,10 +4044,27 @@ class StartupArtifactOwner:
             if anchor:
                 read_effects.append(s.reads[-1])
             count_cell, counted = self._count_cell, self._bytes_read
-            _require(data == b"" and _identity(StartupArtifactOwner._fstat(
-                self, fd, s, native_registration)) == original
-                     and _identity(StartupArtifactOwner._stat(
-                         self, name, parent, s, native_registration)) == original)
+            _require(data == b"")
+            if metadata is None:
+                _require(_identity(StartupArtifactOwner._fstat(
+                    self, fd, s, native_registration)) == original
+                         and _identity(StartupArtifactOwner._stat(
+                             self, name, parent, s, native_registration)) == original)
+            else:
+                metadata_resource = _prepare_native_metadata_resource(
+                    self, native_registration, native_walk, row)
+                metadata_last = metadata._run_directory_observation(
+                    self, metadata_resource, metadata_last, metadata_before, metadata_eof)
+                _require(type(metadata_last) is metadata._DirectoryPolicyCommit
+                         and metadata_last.resource is metadata_resource
+                         and metadata_last.identity == original)
+                metadata_resource = _prepare_native_metadata_resource(
+                    self, native_registration, native_walk, held[-2][0], name)
+                metadata_last = metadata._run_directory_observation(
+                    self, metadata_resource, metadata_last, metadata_before, metadata_eof)
+                _require(type(metadata_last) is metadata._DirectoryPolicyCommit
+                         and metadata_last.resource is metadata_resource
+                         and metadata_last.identity == original)
             _require(_native_walk_scope(self, native_registration) is s)
             actual_hash = digest.hexdigest()
             _require(_native_walk_scope(self, native_registration) is s
@@ -3996,14 +4073,30 @@ class StartupArtifactOwner:
             if source_effect is not None:
                 source_hash = source_digest.finish(source_root, source_buffer, count_cell,
                                                    source_observations)
-            for name, parent, directory, signature in directories:
-                _require(
-                    _identity(StartupArtifactOwner._fstat(
-                        self, directory, s, native_registration), True) == signature
-                    and _identity(StartupArtifactOwner._stat(
-                        self, name, parent, s, native_registration), True)
-                    == signature
-                )
+            for component, (name, parent, directory, signature) in enumerate(directories):
+                if metadata is None:
+                    _require(
+                        _identity(StartupArtifactOwner._fstat(
+                            self, directory, s, native_registration), True) == signature
+                        and _identity(StartupArtifactOwner._stat(
+                            self, name, parent, s, native_registration), True) == signature)
+                else:
+                    baseline = directory_baselines[component]
+                    metadata_resource = _prepare_native_metadata_resource(
+                        self, native_registration, native_walk, held[component][0])
+                    metadata_last = metadata._run_directory_observation(
+                        self, metadata_resource, metadata_last, baseline, metadata_eof)
+                    _require(type(metadata_last) is metadata._DirectoryPolicyCommit
+                             and metadata_last.resource is metadata_resource
+                             and metadata_last.identity == signature)
+                    metadata_resource = _prepare_native_metadata_resource(
+                        self, native_registration, native_walk,
+                        None if component == 0 else held[component - 1][0], name)
+                    metadata_last = metadata._run_directory_observation(
+                        self, metadata_resource, metadata_last, baseline, metadata_eof)
+                    _require(type(metadata_last) is metadata._DirectoryPolicyCommit
+                             and metadata_last.resource is metadata_resource
+                             and metadata_last.identity == signature)
             _require(_native_walk_scope(self, native_registration) is s)
             result = expected
             if anchor:
@@ -4072,5 +4165,8 @@ class StartupArtifactOwner:
                                   native_registration, native_registry)
         _require(self._count_cell is count_cell and self._bytes_read is counted)
         if native_walk is not None:
-            _finish_native_declared_walk(self, native_registration, native_walk)
+            if metadata is None:
+                _finish_native_declared_walk(self, native_registration, native_walk)
+            else:
+                _finish_native_declared_walk(self, native_registration, native_walk, metadata_last)
         return result
