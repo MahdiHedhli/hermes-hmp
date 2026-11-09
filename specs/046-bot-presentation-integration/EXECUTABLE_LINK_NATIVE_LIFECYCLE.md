@@ -110,3 +110,23 @@ must be reported as DATA coverage, separately from actual native-effect tests.
 No live host, configuration, phone, permission, provider, model, job or release
 action is part of this source task. Full desktop character and host-local image
 delivery remain incomplete.
+
+## Scope binding progress
+
+The actual Scope-binding portion of LP2 is implemented in `7042dcc` and covered
+by 170 current / 169 selected minimum checks, with the common case set and hashes
+verified. See EARLY_LINK_FACTORY_ORIGIN.md for precise scope and the copied-plan
+regression. LP2's distinct resource/consumer and the complete LP3 native traversal
+are still open; this does not enable character or host-local image delivery.
+
+LP3 must connect metadata operations 3/4 and a distinct typed readlink operation5
+through real result custody, fixed consumption, raw retirement and one-use ACK.
+Readlink must not impersonate source-read EOF/digest or absence. Pin the actual
+filesystem encoder and dependencies early; retain its literal bytes return and
+parent descriptor. Drive all original before/after/recheck path sites and reverse
+reserved cleanup, retaining literal finishes across snapshot/fact publication.
+Recheck is ready-state metadata only, with no readlink/byte debit. Retire actual
+returned bytes separately from the original declared target. Keep full current
+parent/actor audits, real count/debit deltas, sticky uncertainty and no replay.
+Remaining package/entry enumeration, other typed owners and full factory/service
+admission remain separate requirements after this path is connected.

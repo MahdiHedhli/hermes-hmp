@@ -15,6 +15,33 @@ run at that checkpoint. Its same combined 86 policy/origin cases subsequently
 pass on both supported interpreters in predecessor `2830810`; that result does
 not qualify the entry wiring added below.
 
+## Actual Scope binding checkpoint
+
+Source `7042dcc5152e8f28fa3e5ca35b9167f480ab4415` implements the
+Scope-binding portion of LP2b. The actual early origin is obtained from original
+SourceDigestContext/entry objects; a fixed held factory constructs all hop/target
+rows for before, after and recheck. The actual return is retained across Scope
+construction, with original helper/module/code/default/type and mutable
+publication cohorts rejoined before publication and registration. Legacy callers
+retain a trailing None. This is DATA preparation, not native link permission.
+
+Two actual RuntimeSource constructor controls proved that copied plans, including
+a coherent copied link, previously reached Scope construction. The repair binds
+entry/inputs/cell and the actual input plan/link before the factory, and repeats
+raw pointer joins after callbacks. Input-class descriptor/code pins are included.
+The same controls now require refusal before any Scope construction, unchanged
+native accounting/registry, retained original inputs and no replay.
+
+Exact repaired source passes 170 current and 169 selected minimum-Python checks.
+All 169 common XML cases and source footprints match; current also observes normal
+cleanup. Log/XML hashes and unchanged source were verified. Independent review
+accepted the bounded source and causal controls. Earlier failed runs remain
+failed history; trace observer fixes do not weaken the 60-second deadline.
+
+The wider LP2 resource/consumer task and LP3–5 remain open. No full native link
+result/consume/ACK/finish/cleanup, service, runtime, device or release qualification
+is implied. The older design/checkpoint language below is historical context.
+
 ## Entry and lineage source integration
 
 This branch now stores the actual early capture in an appended `_EntryOrigin`
@@ -43,8 +70,8 @@ These are original-pointer and startup preparation bindings, not cached
 permission. The original-file lineage getter does not repeatedly execute link
 helpers for unrelated file work. Actual link-policy use must still rejoin the
 held function/code/defaults/type pins immediately before invocation and after
-callbacks. Scope blueprint publication, native link resource/result/consume/ACK
-and full link finish/cleanup/service qualification remain unimplemented. No
+callbacks. The Scope-binding portion is implemented as recorded above; native link
+resource/result/consume/ACK and full finish/cleanup/service remain unimplemented. No
 host or device uses this source yet.
 
 The DATA seal intentionally does not reject a copied tuple as independent
