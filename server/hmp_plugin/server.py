@@ -1843,6 +1843,10 @@ class HmpServer:
         self._stopping: asyncio.Task[None] | None = None
         self._operator_read: Any = None
         self._operator_read_drained: Any = None
+        self._operator_start_attempted = False
+        self._operator_start_owner = self._operator_start_coro = None
+        self._operator_start_service = None
+        self._operator_start_complete, self._operator_start_failed = object(), object()
         self.operator_worker_debt = 0
         self._stop_owner: asyncio.Task[None] | None = None
         self._operator_origin_ctx = ctx
@@ -1934,11 +1938,36 @@ class HmpServer:
     async def start_operator_read(self, anchor_dir: Path, nonce: str) -> None:
         from .operator_read import OperatorReadService
 
-        if self._operator_read is not None or self._runner is None:
+        if (self._operator_start_attempted or self._start_fenced
+                or self._operator_read is not None or self._runner is None
+                or self.ctx is not self._operator_origin_ctx):
             raise RuntimeError("operator read listener unavailable")
-        service = OperatorReadService(self.ctx, anchor_dir, nonce)
-        await service.start()
-        self._operator_read = service
+        self._operator_start_attempted = True
+        try:
+            service = OperatorReadService(self._operator_origin_ctx, anchor_dir, nonce)
+            self._operator_start_service = service
+            self._operator_read = service  # retain before any startup effect/await
+            self._operator_start_coro = self._start_operator_owned(service)
+            self._operator_start_owner = asyncio.get_running_loop().create_task(
+                self._operator_start_coro
+            )
+        except BaseException:
+            raise RuntimeError("operator read startup ownership unresolved") from None
+        owner = self._operator_start_owner
+        result = await asyncio.shield(owner)
+        if (self._operator_start_owner is not owner
+                or result is not self._operator_start_complete or self._start_fenced):
+            raise RuntimeError("operator read startup incomplete")
+
+    async def _start_operator_owned(self, service):
+        try:
+            await service.start()
+            if (self.ctx is not self._operator_origin_ctx
+                    or self._operator_read is not service or self._start_fenced):
+                return self._operator_start_failed
+            return self._operator_start_complete
+        except BaseException:
+            return self._operator_start_failed
     async def start_approval_test(self, record: Path, nonce: str) -> None:
         """One optional service after the owner wrote this listener's same-nonce record.
 
@@ -2175,22 +2204,54 @@ class HmpServer:
                 raise RuntimeError("listener startup scope changed")
         if self._startup_publication_unknown or self.ctx is not self._operator_origin_ctx:
             raise RuntimeError("listener startup ownership unresolved")
-        service, self._operator_read = self._operator_read, None
+        if self._operator_start_attempted:
+            owner = self._operator_start_owner
+            if owner is None:
+                raise RuntimeError("operator read startup ownership unresolved")
+            await asyncio.shield(owner)
+            if (self._operator_start_owner is not owner
+                    or self._operator_read is not self._operator_start_service):
+                raise RuntimeError("operator read startup scope changed")
+        ctx = self.ctx
+        hints, deps = ctx.push_hints, ctx.direct_send_deps
+        store = getattr(ctx, "store", None)
+        names = ("_operator_read", "_at1_endpoint", "_at1_service", "_push_dispatcher",
+                 "_push_start_dispatcher", "_push_relay_owner", "_push_watch", "_watch", "_runner")
+        cohort = {name: getattr(self, name) for name in names}
+
+        def rejoin():
+            if (self.ctx is not ctx or ctx.push_hints is not hints
+                    or ctx.direct_send_deps is not deps or getattr(ctx, "store", None) is not store
+                    or any(getattr(self, name) is not value for name, value in cohort.items())):
+                raise RuntimeError("listener shutdown scope changed; retain original resources")
+
+        def retired(name):
+            rejoin()
+            setattr(self, name, None)
+            cohort[name] = None
+
+        service = cohort["_operator_read"]
         if service is not None:
-            debt = await service.stop()
-            self.operator_worker_debt = debt
             self._operator_read_drained = service
+            debt = await service.stop()
+            rejoin()
+            self.operator_worker_debt = debt
+            retired("_operator_read")
             if debt:
                 log_event("operator_read_stop", outcome="worker_debt")
         endpoint = self._at1_endpoint
         service = self._at1_service
         if endpoint is not None:
-            if await endpoint.close() is not True:
+            result = await endpoint.close()
+            rejoin()
+            if result is not True:
                 raise RuntimeError("approval test cleanup unavailable")
         elif service is not None:
             await service.shutdown()
+            rejoin()
         # All AT1 leases/authority reads/native owners have joined at this point.
-        self.ctx.push_hints.clear()
+        rejoin()
+        hints.clear()
         dispatcher = self._push_dispatcher or self._push_start_dispatcher
         if (self._push_dispatcher is not None and self._push_start_dispatcher is not None
                 and self._push_dispatcher is not self._push_start_dispatcher):
@@ -2198,32 +2259,40 @@ class HmpServer:
         if dispatcher is not None:
             self._push_dispatcher_drained = dispatcher
             await dispatcher.close()
+            rejoin()
             if dispatcher.retirement_pending:
                 self.operator_worker_debt += 1
-            self._push_dispatcher = None
+            retired("_push_dispatcher")
         elif self._push_relay_owner is not None:
             await self._push_relay_owner.close_bounded(1)
+            rejoin()
             if not self._push_relay_owner.successful:
                 self.operator_worker_debt += 1
         await self._cancel_pending_sends()
-        push_watch, self._push_watch = self._push_watch, None
+        rejoin()
+        push_watch = cohort["_push_watch"]
         if push_watch is not None and push_watch is not asyncio.current_task():
             push_watch.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await push_watch
-        watch, self._watch = self._watch, None
+            rejoin()
+        retired("_push_watch")
+        watch = cohort["_watch"]
         if watch is not None and watch is not asyncio.current_task():
             watch.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await watch
+            rejoin()
+        retired("_watch")
         runner = self._runner
         if runner is not None:
             if self._start_runner is not runner:
                 raise RuntimeError("listener runner scope changed")
             await runner.cleanup()
+            rejoin()
             if self._runner is not runner:
                 raise RuntimeError("listener runner scope changed")
-            self._runner = None
+            retired("_runner")
         if not self.closed.is_set():
             self.closed.set()
             if self._on_closed is not None:

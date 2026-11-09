@@ -213,3 +213,181 @@ def test_unknown_stop_owner_creation_never_replays_cleanup(monkeypatch, after_en
                 listener._stop_coro.close()  # only the fixture knows no Task was created
 
     asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("replacement", ("context", "dependencies", "runner"))
+def test_shutdown_rejoins_original_cohort_after_read_service_wait(monkeypatch, replacement):
+    async def scenario():
+        listener, runner, events, _, _ = rig(monkeypatch, setup_error=True)
+        with pytest.raises(RuntimeError):
+            await listener.start()
+        ctx = listener.ctx
+        clears = []
+        ctx.push_hints = SimpleNamespace(clear=lambda: clears.append("original"))
+        foreign = SimpleNamespace(
+            push_hints=SimpleNamespace(clear=lambda: clears.append("foreign")),
+            direct_send_deps=None,
+        )
+
+        async def stop_read():
+            await asyncio.sleep(0)
+            if replacement == "context":
+                listener.ctx = foreign
+            elif replacement == "dependencies":
+                ctx.direct_send_deps = object()
+            else:
+                listener._runner = object()
+            return 0
+
+        read = SimpleNamespace(stop=stop_read)
+        listener._operator_read = read
+        for _ in range(2):
+            with pytest.raises(RuntimeError, match="shutdown scope changed"):
+                await listener.stop()
+        assert not clears and "cleanup" not in events
+        assert listener._operator_read is read
+        assert listener._operator_read_drained is read
+        assert not listener.closed.is_set()
+        assert listener._start_runner is runner
+
+    asyncio.run(scenario())
+
+
+def operator_rig(monkeypatch, *, fail=False):
+    from hmp_plugin import operator_read
+
+    listener, runner, events, _, _ = rig(monkeypatch)
+    entered, release = asyncio.Event(), asyncio.Event()
+
+    class ReadService:
+        def __init__(self, ctx, *_args):
+            assert ctx is listener._operator_origin_ctx
+            events.append("read-created")
+
+        async def start(self):
+            events.append("read-start")
+            entered.set()
+            await release.wait()
+            events.append("read-return")
+            if fail:
+                raise OSError("synthetic startup failure")
+
+        async def stop(self):
+            events.append("read-stop")
+            return 0
+
+    monkeypatch.setattr(operator_read, "OperatorReadService", ReadService)
+    return listener, runner, events, entered, release
+
+
+def test_operator_start_caller_cancellation_retains_owner_and_stop_joins(monkeypatch, tmp_path):
+    async def scenario():
+        listener, _, events, entered, release = operator_rig(monkeypatch)
+        await listener.start()
+        caller = asyncio.create_task(listener.start_operator_read(tmp_path, "a" * 32))
+        await entered.wait()
+        retained = listener._operator_read
+        owner = listener._operator_start_owner
+        caller.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await caller
+        stop = asyncio.create_task(listener.stop())
+        await asyncio.sleep(0)
+        assert not stop.done() and "read-stop" not in events and "cleanup" not in events
+        release.set()
+        await stop
+        assert owner.done() and listener._operator_read_drained is retained
+        assert events.index("read-return") < events.index("read-stop") < events.index("cleanup")
+        assert listener.closed.is_set()
+        with pytest.raises(RuntimeError):
+            await listener.start_operator_read(tmp_path, "a" * 32)
+        assert events.count("read-created") == 1
+
+    asyncio.run(scenario())
+
+
+def test_operator_start_failure_retains_service_for_explicit_stop(monkeypatch, tmp_path):
+    async def scenario():
+        listener, _, events, _, release = operator_rig(monkeypatch, fail=True)
+        await listener.start()
+        release.set()
+        with pytest.raises(RuntimeError, match="startup incomplete"):
+            await listener.start_operator_read(tmp_path, "a" * 32)
+        assert listener._operator_read is not None
+        await listener.stop()
+        assert events.count("read-stop") == 1 and listener.closed.is_set()
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("after_enqueue", (False, True))
+def test_unknown_operator_start_owner_cannot_retry_or_certify_stop(
+    monkeypatch, tmp_path, after_enqueue
+):
+    async def scenario():
+        listener, runner, events, _, release = operator_rig(monkeypatch)
+        await listener.start()
+        loop, actual, calls = asyncio.get_running_loop(), [], []
+        original = loop.create_task
+
+        def create(coro, *args, **kwargs):
+            if getattr(getattr(coro, "cr_code", None), "co_name", None) != "_start_operator_owned":
+                return original(coro, *args, **kwargs)
+            calls.append(1)
+            if after_enqueue:
+                actual.append(original(coro, *args, **kwargs))
+            raise MemoryError("synthetic operator startup return loss")
+
+        monkeypatch.setattr(loop, "create_task", create)
+        try:
+            with pytest.raises(RuntimeError, match="startup ownership unresolved"):
+                await listener.start_operator_read(tmp_path, "a" * 32)
+            release.set()
+            if actual:
+                await actual[0]  # fixture-only observation cannot restore the lost owner
+            with pytest.raises(RuntimeError):
+                await listener.start_operator_read(tmp_path, "a" * 32)
+            with pytest.raises(RuntimeError, match="startup ownership unresolved"):
+                await listener.stop()
+            assert len(calls) == 1 and not listener.closed.is_set()
+            assert "read-stop" not in events and "cleanup" not in events
+        finally:
+            release.set()
+            if not after_enqueue:
+                listener._operator_start_coro.close()
+            for task in (listener._watch, listener._push_watch):
+                task.cancel()
+            await asyncio.gather(listener._watch, listener._push_watch, return_exceptions=True)
+            await runner.cleanup()  # fixture cleanup is not production drain evidence
+
+    asyncio.run(scenario())
+
+
+def test_operator_start_replacement_never_closes_foreign_service(monkeypatch, tmp_path):
+    async def scenario():
+        listener, runner, events, entered, release = operator_rig(monkeypatch)
+        await listener.start()
+        caller = asyncio.create_task(listener.start_operator_read(tmp_path, "a" * 32))
+        await entered.wait()
+        original = listener._operator_read
+        foreign_calls = []
+
+        async def foreign_stop():
+            foreign_calls.append("stop")
+            return 0
+
+        listener._operator_read = SimpleNamespace(stop=foreign_stop)
+        release.set()
+        with pytest.raises(RuntimeError, match="startup incomplete"):
+            await caller
+        with pytest.raises(RuntimeError, match="startup ownership unresolved"):
+            await listener.stop()
+        assert listener._operator_start_service is original
+        assert not foreign_calls and "read-stop" not in events and "cleanup" not in events
+        assert not listener.closed.is_set()
+        for task in (listener._watch, listener._push_watch):
+            task.cancel()
+        await asyncio.gather(listener._watch, listener._push_watch, return_exceptions=True)
+        await runner.cleanup()  # fixture-only cleanup; production must retain/refuse
+
+    asyncio.run(scenario())
