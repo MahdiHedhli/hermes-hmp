@@ -107,6 +107,18 @@ def _new_fresh_probe_plan(owner, root, selected, context):
           and vars(owner).get('_retaining') is True
           and vars(owner).get('_started') is False
           and vars(owner).get('_probe_plan') is None)
+    # Hold original code and namespace/owner inputs BEFORE any constructor can
+    # invoke a callback. Later matching mirrors cannot nominate new originals.
+    pure_code, observe_code = pure.__code__, observe.__code__
+    partial = names['_ROOT']
+    owner_names = vars(owner)
+    owner_entries = tuple(owner_names.items())
+    site_kind, plan_kind = _ProbeSite, _FreshProbePlan
+    site_fields, plan_fields = site_kind._fields, plan_kind._fields
+    site_members = tuple(vars(site_kind).get(field) for field in site_fields)
+    plan_members = tuple(vars(plan_kind).get(field) for field in plan_fields)
+    tuple_item, tuple_length = tuple.__getitem__, tuple.__len__
+    need, need_code, error_type = _need, _need.__code__, ProbePlanError
     # Six fixed possible sites per component. None is selected by a caller-
     # supplied operation/path/policy. Branch/ordinal consumption is still unwired.
     definitions = tuple(site for component in range(len(components)) for site in (
@@ -114,12 +126,44 @@ def _new_fresh_probe_plan(owner, root, selected, context):
         (3, 'probe_missing_confirmation', component),
         (3, 'probe_leaf_confirmation', component),
         (4, 'probe_final_descriptor', component), (3, 'probe_final_name', component)))
-    variants = tuple(_ProbeSite(owner, root, selected, site, ordinal)
+    variants = tuple(site_kind(owner, root, selected, site, ordinal)
                      for ordinal, site in enumerate(definitions))
-    return _FreshProbePlan(owner, root, selected, row, location, path, components,
-                           selected.proof, context, RuntimeCacheProbeOwner, module,
-                           pure, pure.__code__, observe, observe.__code__,
-                           definitions, variants, [0, None], [], [])
+    values = (owner, root, selected, row, location, path, components,
+              selected.proof, context, RuntimeCacheProbeOwner, module,
+              pure, pure_code, observe, observe_code,
+              definitions, variants, [0, None], [], [])
+    result = plan_kind(*values)
+    if need.__code__ is not need_code:
+        raise error_type from None
+    need(type(result) is plan_kind and tuple_length(result) == len(values)
+         and all(tuple_item(result, index) is original
+                 for index, original in enumerate(values))
+         and _ProbeSite is site_kind and _FreshProbePlan is plan_kind
+         and site_kind._fields is site_fields and plan_kind._fields is plan_fields
+         and all(vars(site_kind).get(field) is member
+                 for field, member in zip(site_fields, site_members, strict=True))
+         and all(vars(plan_kind).get(field) is member
+                 for field, member in zip(plan_fields, plan_members, strict=True)))
+    need(pure.__code__ is pure_code and observe.__code__ is observe_code
+         and pure.__globals__ is names and observe.__globals__ is names
+         and type(sys.modules) is dict
+         and sys.modules.get('hmp_startup.cache_probe') is module
+         and vars(module) is names
+         and names.get('RuntimeCacheProbeOwner') is RuntimeCacheProbeOwner
+         and vars(RuntimeCacheProbeOwner).get('_pure') is pure
+         and vars(RuntimeCacheProbeOwner).get('_observe_owned') is observe
+         and names.get('_OWNER') is owner and names.get('_CELL') is None
+         and names.get('_FACT') is None and names.get('_ROOT') is partial
+         and vars(owner) is owner_names and len(owner_names) == len(owner_entries)
+         and all(type(key) is str for key in owner_names)
+         and all(key in owner_names and owner_names[key] is value
+                 for key, value in owner_entries))
+    for ordinal, (site, variant) in enumerate(zip(definitions, variants, strict=True)):
+        need(type(variant) is site_kind and tuple_length(variant) == 5
+             and tuple_item(variant, 0) is owner and tuple_item(variant, 1) is root
+             and tuple_item(variant, 2) is selected and tuple_item(variant, 3) is site
+             and type(tuple_item(variant, 4)) is int and tuple_item(variant, 4) == ordinal)
+    return result
 
 
 def _fresh_probe_plan_tail(owner, scope, original):
