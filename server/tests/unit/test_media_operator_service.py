@@ -887,3 +887,124 @@ def test_completed_media_drain_cannot_attest_a_changed_generation(tmp_path):
         await finish(actor, store, service)
 
     asyncio.run(scenario())
+
+
+def attach_synthetic_listener(ctx, retirement, events):
+    from hmp_plugin import server
+
+    ctx.push_hints = SimpleNamespace(clear=lambda: events.append("push-clear"))
+    ctx.direct_send_deps = None
+    listener = server.HmpServer(
+        ctx,
+        server.ListenerSettings("127.0.0.1", 12345),
+        media_retirement=retirement,
+        on_closed=lambda: events.append("closed"),
+    )
+
+    async def cleanup():
+        events.append("network-cleanup")
+
+    # Real HmpServer teardown with a synthetic runner; no TLS/socket-start claim.
+    listener._runner = SimpleNamespace(cleanup=cleanup)
+    return listener
+
+
+def test_listener_network_cleanup_precedes_media_drain_and_store_stays_owned(tmp_path, monkeypatch):
+    from hmp_plugin.media_operator_retirement import MediaOperatorRetirement
+
+    async def scenario():
+        actor, store, ctx, request, service = await open_service(tmp_path)
+        entered, release, events = threading.Event(), threading.Event(), []
+
+        def blocked(*_args, **_kwargs):
+            entered.set()
+            assert release.wait(3)
+            return SimpleNamespace(status="refused", decision=None)
+
+        monkeypatch.setattr(service._executor, "decide", blocked)
+        retirement = MediaOperatorRetirement(service, actor)
+        listener = attach_synthetic_listener(ctx, retirement, events)
+        mutation = asyncio.create_task(service._decide(request, time.monotonic() + 1))
+        try:
+            assert await asyncio.to_thread(entered.wait, 1)
+            await listener.stop()
+            assert events == ["push-clear", "network-cleanup", "closed"]
+            assert listener.closed.is_set() and listener.operator_worker_debt == 1
+            assert service._stopping and actor._failed.is_set()
+            waiter = asyncio.create_task(listener.wait_operator_drain())
+            await asyncio.sleep(0)
+            assert not waiter.done() and not retirement.drained_for(store)
+            assert store.media_read_decision(ctx.iid, request.device_id).revision == 0
+            release.set()
+            assert decode_reply(await mutation, request=request).status == "unknown"
+            await asyncio.wait_for(waiter, 1)
+            assert listener.operator_worker_debt == 0 and retirement.drained_for(store)
+            assert store.media_read_decision(ctx.iid, request.device_id).revision == 0
+        finally:
+            release.set()
+            await mutation
+            await listener.stop()
+            await listener.wait_operator_drain()
+            await finish(actor, store, service)
+
+    asyncio.run(scenario())
+
+
+def test_listener_retains_creation_failure_and_cleans_network_without_false_drain(
+    tmp_path, monkeypatch
+):
+    from hmp_plugin.media_operator_retirement import MediaOperatorRetirement
+
+    async def scenario():
+        actor, store, ctx, request, service = await open_service(tmp_path)
+        retirement = MediaOperatorRetirement(service, actor)
+        events = []
+        listener = attach_synthetic_listener(ctx, retirement, events)
+        original_create = asyncio.create_task
+        calls = []
+
+        def create(coro, *args, **kwargs):
+            if getattr(getattr(coro, "cr_code", None), "co_name", None) == "_join":
+                calls.append(1)
+                raise MemoryError("synthetic known-before-scheduling failure")
+            return original_create(coro, *args, **kwargs)
+
+        monkeypatch.setattr(asyncio, "create_task", create)
+        try:
+            await listener.stop()
+            assert listener.closed.is_set() and events[-2:] == ["network-cleanup", "closed"]
+            assert service._stopping and actor._failed.is_set()
+            assert listener.operator_worker_debt == 1
+            with pytest.raises(RuntimeError, match="retain original Store"):
+                await listener.wait_operator_drain()
+            await listener.stop()  # same completed HTTP cleanup, never another media owner
+            assert len(calls) == 1 and not retirement.drained_for(store)
+            assert store.media_read_decision(ctx.iid, request.device_id).revision == 0
+        finally:
+            retirement._join_coro.close()  # fixture proves creation was never called
+            await finish(actor, store, service)
+
+    asyncio.run(scenario())
+
+
+def test_listener_rejects_foreign_context_retirement_before_taking_ownership(tmp_path):
+    from hmp_plugin import server
+    from hmp_plugin.media_operator_retirement import MediaOperatorRetirement
+
+    async def scenario():
+        actor, store, ctx, request, service = await open_service(tmp_path)
+        retirement = MediaOperatorRetirement(service, actor)
+        try:
+            foreign = SimpleNamespace(store=store)
+            with pytest.raises(RuntimeError, match="owner unavailable"):
+                server.HmpServer(
+                    foreign,
+                    server.ListenerSettings("127.0.0.1", 12345),
+                    media_retirement=retirement,
+                )
+            assert not retirement._started and not service._stopping
+            assert store.media_read_decision(ctx.iid, request.device_id).revision == 0
+        finally:
+            await finish(actor, store, service)
+
+    asyncio.run(scenario())
