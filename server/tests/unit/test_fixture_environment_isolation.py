@@ -50,3 +50,24 @@ def test_real_owner_home_refused_for_explicit_native_home():
     module = common()
     with pytest.raises(module.FixtureSafetyError):
         module.clean_hermes_env(extra={"HERMES_HOME": str(Path.home() / ".hermes")})
+
+
+def test_seed_child_uses_fixed_module_path_and_no_inherited_credentials(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    module = common()
+    monkeypatch.setenv("UNKNOWN_FUTURE_PROVIDER_TOKEN", "synthetic-test-value")
+    monkeypatch.setenv("PYTHONPATH", "/synthetic-external-code")
+    captured = []
+
+    def run(command, **kwargs):
+        captured.append((command, kwargs["env"]))
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(module.subprocess, "run", run)
+    build = module.BuildInfo("synthetic", tmp_path / "source", tmp_path / "python")
+    module.run_seed_script(build, tmp_path / "synthetic-helper.py")
+    assert len(captured) == 1
+    command, env = captured[0]
+    assert command == [str(build.venv_python), str(tmp_path / "synthetic-helper.py")]
+    assert env["PYTHONPATH"] == str(module.SERVER_DIR)
+    assert "UNKNOWN_FUTURE_PROVIDER_TOKEN" not in env
