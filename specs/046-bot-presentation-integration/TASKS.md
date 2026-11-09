@@ -1888,15 +1888,25 @@ change grants, deliver host-local chat media or certify release readiness.
       metadata/link/enumeration and native runtime boundaries. Existing source
       and device/release gates remain; this plan grants no runtime authority.
 
-## Fresh-probe original-plan binding — source/current-qualified only
+## Fresh-probe original-plan binding — bounded source qualification
 
 - [x] **PS1-FP-ORIGIN** Retain original scope/cache selection/components and fixed
       possible sites (`45c006c`), use actual original components during traversal,
       retain the unwired zero-state fence, and seal constructor/code provenance.
       Original gap controls:1normalPASS+4intendedFAIL; repaired27current+4reader
       compatibilityPASS. Independent source/evidence review completed.
-- [ ] **PS1-FP-ORIGIN-FLOOR** Complete the exact combined31-case minimum-version
-      suite; retain failed/control evidence and do not infer broad qualification.
+- [x] **PS1-FP-ORIGIN-FLOOR** Exact combined31-case Python3.11.15 suite PASS,
+      unchanged source, zero failures/errors/skips; bounded origin qualification.
+- [x] **PS1-FP-SCOPE** Seal outer Scope fields/member descriptors/dispatch and
+      vacant registration state (`b4173ee`); corrected baseline1PASS+5intendedFAIL,
+      repaired11current+11minimum PASS with independent review.
+- [x] **PS1-FP-INTENT** Bind original root probe resource to shared intent factory;
+      canonical resource and immutable registered helper/module/code origin
+      (`094ddb2`, test-only `5c387fa`). Four pre-fix controls each execute a
+      substituted helper once and fail; repaired13current+13minimum PASS,
+      independently audited source/log/XML/evidence. Initial green runs remain
+      withdrawn due swallowed late fixture assertions; corrected tests require
+      completed boundary checks outside the observer. No native admission added.
 - [ ] **PS1-FP-NATIVE** Implement the complete distinct probe resource/consumer,
       actual return/reported-missing ACK lifecycle and branch/final-close joins
       in FRESH_CACHE_PROBE_METADATA.md. Origin DATA does not complete this task.
