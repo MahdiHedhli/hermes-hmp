@@ -50,6 +50,7 @@ class MediaOperatorExecutor:
         self._identity, self._store, self._bridge = ctx.identity, ctx.store, ctx.bridge
         self._iid, self._generation, self._nonce = ctx.iid, ctx.readiness_generation, nonce
         self._loop, self._thread = actor._loop, actor._thread
+        self._publisher, self._failure = actor._publisher, actor._failed
         self._transaction = self._store.transaction
         self._set = self._store.set_media_read
         self._read = self._store.media_read_decision
@@ -61,7 +62,8 @@ class MediaOperatorExecutor:
                 and ctx.readiness_generation == self._generation
                 and self._store._mutation_observer is actor
                 and actor._loop is self._loop and actor._thread is self._thread
-                and not actor._failed.is_set())
+                and actor._publisher is self._publisher and actor._failed is self._failure
+                and not self._failure.is_set())
 
     def _check(self, deadline: float) -> None:
         if not self._same() or time.monotonic() >= deadline:
@@ -96,6 +98,7 @@ class MediaOperatorExecutor:
                 self._check(deadline)
                 written = self._set(request.expected, allowed=request.allowed, now=now)
                 self._check(deadline)
+            self._check(deadline)
             if written is None:
                 return MediaMutationResult('conflict', request.attempt, None)
             if type(written) is not MediaReadDecision:

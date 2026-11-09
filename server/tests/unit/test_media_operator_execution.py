@@ -74,3 +74,37 @@ def test_postcommit_readback_loss_remains_unknown_without_replay(tmp_path, monke
         assert actor.outstanding_mutations() == 0
         actor.close(); await actor.wait_drained(); store.close()
     asyncio.run(scenario())
+
+
+def test_context_drift_after_cas_rolls_back_and_never_claims_success(tmp_path):
+    async def scenario():
+        actor, store, ctx, request = await setup(tmp_path)
+        checks = []
+        def identity_current():
+            checks.append(1)
+            if len(checks) == 4: ctx.bridge = object()  # post-CAS, before COMMIT
+            return True
+        ctx.identity.still_current = identity_current
+        executor = MediaOperatorExecutor(ctx, actor, 'c' * 32)
+        with pytest.raises(MediaMutationUnknown):
+            await asyncio.to_thread(executor.decide, request, deadline=time.monotonic()+1.0)
+        assert len(checks) == 4
+        actual = store.media_read_decision(ctx.iid, 'device')
+        assert actual.allowed is None and actual.revision == 0
+        assert actor.outstanding_mutations() == 0
+        actor.close(); await actor.wait_drained(); store.close()
+    asyncio.run(scenario())
+
+
+def test_changed_actor_publisher_refuses_before_sql(tmp_path):
+    from hmp_plugin.media_publication import MediaPublication
+    async def scenario():
+        actor, store, ctx, request = await setup(tmp_path)
+        executor = MediaOperatorExecutor(ctx, actor, 'c' * 32)
+        actor._publisher = MediaPublication()
+        with pytest.raises(MediaMutationRefused):
+            await asyncio.to_thread(executor.decide, request, deadline=time.monotonic()+1.0)
+        assert store.media_read_decision(ctx.iid, 'device').allowed is None
+        assert actor.outstanding_mutations() == 0
+        actor.close(); await actor.wait_drained(); store.close()
+    asyncio.run(scenario())
