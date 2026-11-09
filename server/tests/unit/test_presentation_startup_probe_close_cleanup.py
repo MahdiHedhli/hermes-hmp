@@ -15,6 +15,7 @@ def test_startup_probe_known_close_cleanup(tmp_path, monkeypatch, case):
     script += r'''
 import os
 from hmp_plugin import presentation_startup_cache as cache_module
+from hmp_plugin import presentation_startup_probe as startup_native
 retained=EntryFileSnapshotOwner.retain_runtime_link_files(entry,recipe,plugin)
 inputs=retained._inputs
 row=next(row for row in inputs.cache_context_slot[0][3] if row.state=='needs_owned_absence')
@@ -25,9 +26,10 @@ prior_trace,prior_profile=sys.gettrace(),sys.getprofile()
 def current(frame):
     cursor=frame
     while cursor is not None:
-        if cursor.f_code is cache_module._probe.__code__:
+        if cursor.f_code is startup_native._run_startup_probe.__code__:
             values=cursor.f_locals
-            io,effect,resources=values.get('owner'),values.get('effect'),values.get('held')
+            io,plan,resources=values.get('owner'),values.get('plan'),values.get('held')
+            effect=plan.effect if type(plan) is startup_native._StartupPlan else None
             if (type(io) is not a.StartupArtifactOwner or io._origin.cache is None
                     or type(effect) is not cache_module._ProbeEffect
                     or effect.source is not io._origin.cache
@@ -67,13 +69,14 @@ def lose_ack(frame):
 trace_synthetic_boundary(a._close_native_file_known.__code__,
                          'close.result[0] = (close, fd, value)',lose_ack)
 def scope_ended(frame):
-    if not active_effects or frame.f_locals.get('effect') is not active_effects[0]:return
+    if not active_effects or frame.f_locals.get('plan').effect is not active_effects[0]:return
     restored.append(True)
     sys.setprofile(prior_profile);sys.settrace(prior_trace)
     path=Path(sys.argv[1])/'startup-probe-observer-scope-stage.json'
     fd=os.open(path,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
     with os.fdopen(fd,'w') as stream:json.dump({'scope_ended':True,'known':len(held),'close_calls':len(attempted)},stream)
-trace_synthetic_boundary(cache_module._probe.__code__,'return result, effect',scope_ended)
+trace_synthetic_boundary(startup_native._run_startup_probe.__code__,
+                         'return _finish(execution, predecessor, held)',scope_ended)
 refused=False
 try:
     try:checked=EntryFileSnapshotOwner.complete(retained)
@@ -96,6 +99,11 @@ if cleanup_case=='normal':
     assert not refused and faults==[] and restored==[True] and io._ready and io._cache_fact is not None
     assert all(row.closed and row.close_attempted and not row.unknown for row in held)
     assert active_effects[0].returned and not active_effects[0].unknown
+    assert type(active_effects[0].native_finish) is startup_native._ProbeFinish
+    assert io._origin.native_startup_probe_origin is not None
+    for effect in io._origin.cache.effects:
+        assert type(effect.native_finish) is startup_native._ProbeFinish
+        assert startup_native._historical_finish_tail(effect.native_finish) is effect.native_finish
 else:
     assert refused and faults==[True] and restored==[] and io._failed and io._unknown and not io._ready
     assert io._cache_fact is None and io._fact_cell is None and entry._activation._artifact_fact_cell is None

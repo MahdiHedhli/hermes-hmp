@@ -1,9 +1,9 @@
-"""Unwired native startup-absence policy engine; no installed feature.
+"""Experimental native startup absence driver; source integration unqualified.
 
-The driver uses the shared closed metadata pipeline and original open/close
-reservations. It is not yet connected to Scope retention or actual startup
-Missing/effect/pass publication. No route calls it and no runtime qualification
-is claimed. The default startup origin remains None until caller integration.
+Scope retention binds original source/path/code/type inputs. The actual cache
+observer carries the driver's literal finish through Missing/effect/pass
+publication using the shared metadata pipeline. This source is not installed;
+normal native and interruption behavior still require exact-candidate tests.
 """
 from __future__ import annotations
 
