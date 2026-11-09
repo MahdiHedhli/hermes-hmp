@@ -2050,14 +2050,30 @@ class HmpServer:
             self._stopping = asyncio.get_running_loop().create_task(self.stop())
 
     async def wait_operator_drain(self) -> None:
+        ctx = self.ctx
+        store, prompts, hints = ctx.store, ctx.prompt_store, ctx.push_hints
         service = self._operator_read_drained
+        dispatcher = self._push_dispatcher_drained
+        relay_owner = self._push_relay_owner
+
+        def check_scope():
+            if (self.ctx is not ctx or ctx.store is not store
+                    or ctx.prompt_store is not prompts or ctx.push_hints is not hints
+                    or self._operator_read_drained is not service
+                    or self._push_dispatcher_drained is not dispatcher
+                    or self._push_relay_owner is not relay_owner):
+                raise RuntimeError("listener drain scope changed")
+
+        check_scope()
         if service is not None:
             await service.wait_drained()
-        dispatcher = self._push_dispatcher_drained
+            check_scope()
         if dispatcher is not None:
             await dispatcher.wait_drained()
-        elif self._push_relay_owner is not None:
-            await self._push_relay_owner.wait_drained()
+            check_scope()
+        elif relay_owner is not None:
+            await relay_owner.wait_drained()
+            check_scope()
         self.operator_worker_debt = 0
 
     async def _cancel_pending_sends(self) -> None:

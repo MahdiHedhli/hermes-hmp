@@ -42,3 +42,35 @@ def test_unknown_relay_close_publication_never_replays_or_certifies(monkeypatch,
                 owner.operation.close()  # fixture knows enqueue was refused
 
     asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("field", ("ctx", "store", "prompt_store", "push_hints",
+                                  "_operator_read_drained", "_push_dispatcher_drained",
+                                  "_push_relay_owner"))
+def test_server_drain_rejects_resource_replacement_during_wait(field):
+    from hmp_plugin.server import HmpServer
+
+    async def scenario():
+        entered, release = asyncio.Event(), asyncio.Event()
+
+        async def wait_drained():
+            entered.set()
+            await release.wait()
+
+        ctx = SimpleNamespace(store=object(), prompt_store=object(), push_hints=object())
+        srv = HmpServer.__new__(HmpServer)
+        srv.ctx = ctx
+        srv._operator_read_drained = SimpleNamespace(wait_drained=wait_drained)
+        srv._push_dispatcher_drained = None
+        srv._push_relay_owner = None
+        srv.operator_worker_debt = 1
+        waiter = asyncio.create_task(srv.wait_operator_drain())
+        await entered.wait()
+        target = ctx if field in ("store", "prompt_store", "push_hints") else srv
+        setattr(target, field, object())
+        release.set()
+        with pytest.raises(RuntimeError, match="drain scope changed"):
+            await waiter
+        assert srv.operator_worker_debt == 1
+
+    asyncio.run(scenario())
