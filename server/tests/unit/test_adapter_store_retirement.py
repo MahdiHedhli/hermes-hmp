@@ -437,3 +437,35 @@ def test_cancelled_partial_recovery_joins_same_listener_before_store_close(adapt
         assert not adapter._startup_unresolved and not adapter._disconnect_unresolved
 
     asyncio.run(scenario())
+
+
+def test_real_store_migration_close_uncertainty_survives_component_cleanup(
+    adapter_module, monkeypatch, tmp_path
+):
+    import sqlite3
+    from hmp_plugin.compat import CompatResult, CompatStatus
+
+    calls = []
+
+    class Connection:
+        def execute(self, *_args):
+            raise ValueError("synthetic migration refusal")
+
+        def close(self):
+            calls.append("close")
+            raise OSError("synthetic close acknowledgement loss")
+
+    connection = Connection()
+    monkeypatch.setattr(sqlite3, "connect", lambda *_args, **_kwargs: connection)
+    monkeypatch.setattr(adapter_module.compat, "default_gate", lambda: SimpleNamespace(
+        evaluate=lambda: CompatResult(CompatStatus.UNSUPPORTED)))
+    monkeypatch.setattr(adapter_module.identity, "resolve_custody",
+                        lambda: SimpleNamespace(anchor_dir=tmp_path))
+    adapter = SimpleNamespace(config=SimpleNamespace(extra={}))
+    with pytest.raises(RuntimeError, match="Store close outcome unresolved"):
+        adapter_module.open_components(adapter)
+    owner = adapter._component_store_owner
+    assert owner.attempted and not owner.closed
+    assert owner.store._conn is connection
+    assert owner.store._poisoned and owner.store._close_uncertain
+    assert calls == ["close"]  # outer cleanup must not repeat migration's failed close
