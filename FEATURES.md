@@ -5,7 +5,8 @@ undeployed media backend `fb82aef`, despite its passing 1,059-case integration r
 Source `f7f5084` repairs post-callback media checks, original request/dependency
 cohort binding, clock ordering and final IID/listener-generation seals. Both
 89-case readiness suites pass, including causal callback/context regressions;
-independent re-review is pending. Performance/contention, non-atomic source reads,
+independent re-review verified the identified defects resolved on exact f7f5084.
+This is delta review only. Performance/contention, non-atomic source reads,
 legacy fallback revocation, migration and runtime/device gates remain open.
 No source-review or release clearance, grant, opt-in or deployment is claimed.
 

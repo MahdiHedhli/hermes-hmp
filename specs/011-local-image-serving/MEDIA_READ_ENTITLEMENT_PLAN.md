@@ -137,3 +137,7 @@ remain required. Synchronous final-check latency and migration gates remain open
 Repair checkpoint f7f5084: all reviewed callback/context findings have source
 repairs and causal tests; 89 readiness cases pass on both interpreters. Independent
 re-review is pending; prior blockers are not declared closed by self-testing.
+
+Independent reviewer subsequently verified exact f7f5084 and resolved the identified
+ordering/context defects, with no new blocker in the inspected delta. This is not
+full security, performance, runtime or release qualification.
