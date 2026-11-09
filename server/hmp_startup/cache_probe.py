@@ -377,19 +377,20 @@ class RuntimeCacheProbeOwner:
                  and origin[2][24][0] == '_finished_state_tail')
         actual = run(self, s, native_registration, plan)
         validate(origin)
-        _require(type(actual) is finish_kind and actual.execution is self._probe_execution
-                 and actual.execution.finished == [True]
+        _require(type(actual) is finish_kind
+                 and type(actual.execution) is origin[1][0][0]
+                 and actual.execution is self._probe_execution
+                 and type(actual.execution.finished) is list and len(actual.execution.finished) == 1
+                 and actual.execution.finished[0] is True
                  and actual.execution.owner is self and actual.execution.plan is plan
                  and type(actual.outcome) is tuple and len(actual.outcome) == 4
                  and type(actual.resources) is tuple)
         outcome, resources = actual.outcome, actual.resources
         _require(finish_tail(actual.execution, actual.predecessor, resources) is outcome)
-        kind = origin[1][6][0]
+        kind, fields, members, constructor, constructor_code = origin[1][6]
+        validate(origin)
         _require(CacheProbeData is kind)
-        fields = kind._fields
-        members = tuple(vars(kind).get(name) for name in fields)
-        constructor, constructor_code = kind.__new__, kind.__new__.__code__
-        result = kind(*outcome)
+        result = constructor(kind, *outcome)
         _require(CacheProbeData is kind and kind._fields is fields
                  and kind.__new__ is constructor and constructor.__code__ is constructor_code
                  and all(vars(kind).get(name) is member
@@ -398,7 +399,8 @@ class RuntimeCacheProbeOwner:
                  and all(tuple.__getitem__(result, i) is value
                          for i, value in enumerate(outcome)))
         _require(finish_tail(actual.execution, actual.predecessor, resources) is outcome
-                 and actual.execution.finished == [True])
+                 and type(actual.execution.finished) is list and len(actual.execution.finished) == 1
+                 and actual.execution.finished[0] is True)
         records = tuple(s.records)
         fact = (self, s, result, resources, count, records, selected, path, proof, root)
         _require(_native_walk_scope(self, native_registration) is s and _ROOT is root
@@ -414,7 +416,8 @@ class RuntimeCacheProbeOwner:
         _native_registration_tail(self, s, cell, root, native_registration, native_registry)
         validate(origin)
         _require(finish_tail(actual.execution, actual.predecessor, resources) is outcome
-                 and actual.execution.finished == [True]
+                 and type(actual.execution.finished) is list and len(actual.execution.finished) == 1
+                 and actual.execution.finished[0] is True
                  and self._ready is False and self._fact is None and _FACT is None
                  and self._count_cell is count and self._bytes_read == 0)
         self._fact = _FACT = s.activation._runtime_cache_probe_fact = fact

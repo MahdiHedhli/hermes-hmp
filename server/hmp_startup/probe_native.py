@@ -81,7 +81,8 @@ def _new_probe_engine_origin():
     kinds = (_ProbeExecution, _ProbeConsumer, _ProbeReturn, _ProbeCommit,
              metadata._ReportedMissingMetadataReturn, _ProbeFinish, CacheProbeData)
     types = tuple((kind, kind._fields,
-                   tuple(vars(kind).get(name) for name in kind._fields)) for kind in kinds)
+                   tuple(vars(kind).get(name) for name in kind._fields),
+                   kind.__new__, kind.__new__.__code__) for kind in kinds)
     functions = tuple((name, globals()[name], globals()[name].__code__) for name in (
         '_engine_origin_tail', '_execution_tail', '_history_tail',
         '_resource_tail', '_resource', '_consumer_tail',
@@ -116,8 +117,11 @@ def _engine_origin_tail(origin):
         _require(type(name) is str and type(function) is FunctionType
                  and vars(metadata).get(name) is function and function.__code__ is code
                  and function.__globals__ is vars(metadata))
-    for kind, fields, members in origin[1]:
+    for kind, fields, members, constructor, constructor_code in origin[1]:
         _require(type(kind) is type and vars(kind).get('_fields') is fields
+                 and type(constructor) is FunctionType
+                 and kind.__new__ is constructor and constructor.__code__ is constructor_code
+                 and constructor.__globals__.get('_tuple_new') is tuple.__new__
                  and all(vars(kind).get(name) is member
                          for name, member in zip(fields, members, strict=True)))
     for name, function, code in origin[2]:
@@ -442,15 +446,19 @@ def _open_ancestor(execution, commit, held):
 
 def _finish(execution, predecessor, held):
     _require(type(execution) is _ProbeExecution
-             and execution.finished == [False] and type(held) is list)
+             and type(execution.finished) is list and len(execution.finished) == 1
+             and execution.finished[0] is False and type(held) is list)
     resources = tuple(held)
     outcome = _finished_state_tail(execution, predecessor, resources)
     values = (execution, predecessor, resources, outcome)
-    result = _ProbeFinish(*values)
+    kind, fields, members, constructor, code = execution.origin[1][5]
+    _engine_origin_tail(execution.origin)
+    result = constructor(kind, *values)
     _engine_origin_tail(execution.origin)
     _require(type(result) is _ProbeFinish and tuple.__len__(result) == 4
              and all(tuple.__getitem__(result, i) is value for i, value in enumerate(values))
-             and execution.finished == [False])
+             and type(execution.finished) is list and len(execution.finished) == 1
+             and execution.finished[0] is False)
     _require(_finished_state_tail(execution, predecessor, resources) is outcome)
     execution.finished[0] = True
     return result
