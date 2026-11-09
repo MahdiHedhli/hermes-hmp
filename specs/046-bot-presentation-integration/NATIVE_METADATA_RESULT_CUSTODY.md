@@ -6,7 +6,30 @@ The server/scanner implementation on this documentation branch remains
 results appear in [FEATURES](../../FEATURES.md). Source tests do not establish
 runtime, device, feature or release acceptance.
 
-## Verified preparation and current unresolved defect
+## Current constructor binding checkpoint
+
+The combined fixed-site source `cc9603e` passed its selected121-case regression
+on both Python3.14.9 and3.11.15. A separate constructor control `5d25af8`
+subsequently reproduced accepted snapshot-field drift on both interpreters:
+the real native return was observed, but a replacement constructor supplied
+different primitive identity/mtime values. These are retained negative results,
+not qualification passes or evidence of deployed exposure.
+
+Repair `b2deb97` validates returned snapshot/tuple/field types before comparing
+each field to the held native-derived inputs. The native-origin closure remains
+checked after construction; the rejoin precedes producer publication. Separate
+identity-only and timestamp-only controls must prove post-native refusal,
+reclaimed payload with GC disabled, no invented ACK/consumer commit, and retained
+original failed operation, pending ordinal and debit. Normal and interrupted
+caller cases must continue to pass. Execution results are recorded in FEATURES;
+finite independent source review alone is not a test pass.
+
+The caller-held retirement repairs described in the current FEATURES checkpoint
+address the earlier lost-return/interruption controls within their exact tested
+scope. They do not establish every caller, original graph, repeated interruption
+or native-site integration. The older evidence below is historical and retained.
+
+## Earlier preparation evidence and lost-return defect
 
 - Original metadata plans/resources/intents and constructor closure have scoped
   current/floor passes, preserved in FEATURES.

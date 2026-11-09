@@ -1,4 +1,4 @@
-## November 8 — current reader passes; minimum-version timeout remains open
+## November 8 — reviewed host updates deployed; character integration remains open
 
 Declared bytecode-cache reader work has advanced separately: frozen producer
 `9d5e549` adds exact-type preflight and original-cohort cleanup, with three
@@ -144,10 +144,19 @@ now pass on each interpreter: normal, wrong actor and before/after-detach
 interruption, with unchanged source and rehashed evidence. The broader121-case
 selected regression of that exact source now passes on Python3.14.9, with zero
 failures/errors/skips, unchanged source and every source/log/XML hash rechecked.
-The Python3.11.15 run is active. A separate reviewed plugin snapshot-constructor
-drift control remains unrun: source inspection found a missing returned-field
-join to held native-derived identity/mtime; runtime acceptance is not yet proven.
-The121-case pass does not cover or clear that pending control. Other isolation/
+The same121 cases also passed on Python3.11.15, with unchanged source and
+source/log/XML bindings rehashed. Separate constructor controls on both versions
+then reproduced accepted snapshot identity/mtime drift after an actual native
+return. Those negative controls are retained as failures, not qualification.
+Isolated repair `b2deb97` rejoins primitive returned fields to held native-derived
+inputs before publication; independent finite review found no new blocker.
+Separate identity-only and timestamp-only regressions plus normal/interrupted
+caller cases now pass on both Python3.14.9 and3.11.15 (5 each, zero failures,
+errors or skips, unchanged source and rehashed receipt/log/XML). All four causal
+constructor checkpoints prove post-native refusal, no producer publication/ACK,
+reclaimed payload with GC disabled and preserved original debit/failed state.
+The121-case baseline did not cover this later constructor defect; its negative
+controls remain retained and the repair has only the stated focused scope. Other isolation/
 repeated-interruption cases, actual-site integration and physical/runtime
 qualification remain open. The older73-case baseline does not cover the later
 cross-thread preparation defect; the separate repair/control evidence above
@@ -178,10 +187,11 @@ and dated39-site inventory document the local work. Caller integration, all
 metadata/tree/link/missing-stat sites, six operations plus enumeration, original
 aggregate budgets/reserved cleanup, complete factory/service/key/runtime, the
 open minimum-version timeout and physical character delivery remain unfinished.
-No host activation, device/feature/release pass or observed user-data exposure
-is claimed. This startup bytecode/character custody work is separate from the
-reviewed host-local chat-image deployment, which retains its own owner decision
-and physical acceptance gates. No prototype is represented as installed.
+No character-prototype activation, device/feature/release pass or observed
+user-data exposure is claimed. This startup bytecode/character custody work is separate from the
+reviewed host-local chat-image deployment, which the owner has now authorized
+and which is installed separately as recorded below. Physical acceptance remains
+open. No character prototype is represented as installed.
 
 Open-registration source `1aa605d` passed all 1,434 configured startup cases on
 Python 3.14.9 with zero failures, errors or skips; its eight focused cases passed
@@ -236,11 +246,18 @@ allowing source diagnosis first; no active test was interrupted.
 
 Host-local media and desktop characters have separate source paths. Reviewed
 local-media package `5e247a6` plus client source `56d517c` do not depend on the
-unfinished character-source admission stack. The existing host code was freshly
-compared with its expected prior62-file tree and matched. Approval for the
-reviewed dependency installation and one supported gateway restart has been
-requested and remains pending; no host change or physical image-display pass is
-claimed. Character factory/runtime admission, remaining cache/metadata/link/
+unfinished character-source admission stack. After explicit owner approval,
+ColPanicM2 received the exact reviewed109-file HMP package and a single native
+graceful restart. Its new gateway retains native0.22.7/ed1afb0 and three profiles;
+TLS identity and send/jobs/model readiness checks pass. LLY520 completed its
+native0.23.0/0f0e96fc update, then received the same reviewed HMP package and a
+supported graceful restart. Five profiles remain served; Belac/default/School Bot
+channels are ready, while Lucas/Serenity retain their prior unavailable status.
+LLY520 configuration and paired-device/control fingerprints are unchanged across
+the HMP install/restart. Compatibility checks report local-media availability;
+no actual phone image-display pass or per-device/API execution is claimed.
+Existing paired-device legacy controls-decision warnings are retained for a
+separate access review; no grants were changed. Character factory/runtime admission, remaining cache/metadata/link/
 diagnostic integration and enumeration are still unfinished. Separate source
 486bf04 prepares original cache journal joins and transient head handling; its
 new helper is unused DATA validation. The actual cache producer, fixed consumer,
@@ -250,7 +267,8 @@ Device-local sections/static icons and selected-bot readiness are implemented in
 app source, with physical qualification pending. Desktop character parity and
 host-local image delivery remain unfinished. No upstream prerequisite has been
 established for the remaining HMP integration. Public integrated code remains
-`34b862e`; these are local candidates, with no new deployment. The connected iPad
+`34b862e` for the unfinished character work; the separate R3 image package
+deployment above does not qualify that stack. The connected iPad
 still refused automated launch as locked; no launch/crash acceptance is claimed.
 ## November 8 — selected registration checks passed; device features unchanged
 
