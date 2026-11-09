@@ -944,3 +944,75 @@ def test_unknown_push_worker_publication_retains_intent_and_refuses_drain(env, m
                         coro.close()  # fixture knows enqueue never happened
 
     run(env, scenario)
+
+
+def test_listener_keeps_push_debt_until_resistant_relay_actually_settles(env):
+    async def scenario(client):
+        _, _, _, _, prior, _, _ = await prepare(env, client)
+        await prior.close()
+        relay = Relay()
+        release = asyncio.Event()
+
+        async def resistant():
+            while not release.is_set():
+                with contextlib.suppress(asyncio.CancelledError):
+                    await release.wait()
+
+        relay.close = resistant
+        srv = server.HmpServer(env.ctx, server.ListenerSettings("127.0.0.1", 0),
+                               push_relay_factory=lambda: relay)
+        await srv.start()
+        dispatcher = srv._push_dispatcher
+        try:
+            await srv.stop(notify=False)
+            assert srv.closed.is_set() and srv.operator_worker_debt == 1
+            assert srv._push_dispatcher_drained is dispatcher
+            drain = asyncio.create_task(srv.wait_operator_drain())
+            await asyncio.sleep(0)
+            assert not drain.done() and srv.operator_worker_debt == 1
+            release.set()
+            await drain
+            assert srv.operator_worker_debt == 0 and not dispatcher.retirement_pending
+        finally:
+            release.set()
+            await srv.stop(notify=False)
+            await dispatcher.wait_drained()
+
+    run(env, scenario)
+
+
+@pytest.mark.parametrize("after_enqueue", (False, True))
+def test_unknown_push_close_owner_never_replays_or_certifies_drain(env, monkeypatch,
+                                                                 after_enqueue):
+    async def scenario(client):
+        _, _, _, _, dispatcher, _, _ = await prepare(env, client)
+        loop, actual, calls = asyncio.get_running_loop(), [], []
+        original = loop.create_task
+
+        def create(coro, *args, **kwargs):
+            if getattr(getattr(coro, "cr_code", None), "co_name", None) == "_close_owned":
+                calls.append(1)
+                if after_enqueue:
+                    actual.append(original(coro, *args, **kwargs))
+                raise MemoryError("synthetic push close publication loss")
+            return original(coro, *args, **kwargs)
+
+        monkeypatch.setattr(loop, "create_task", create)
+        try:
+            for _ in range(2):
+                with pytest.raises(RuntimeError, match="cleanup ownership unresolved"):
+                    await dispatcher.close()
+            if actual:
+                await actual[0]  # fixture observation is not retained production ownership
+            with pytest.raises(RuntimeError, match="cleanup ownership unresolved"):
+                await dispatcher.wait_drained()
+            assert len(calls) == 1 and dispatcher.retirement_pending
+        finally:
+            if not after_enqueue:
+                dispatcher._close_coro.close()
+                for task in dispatcher.workers:
+                    task.cancel()
+                await asyncio.gather(*dispatcher.workers, return_exceptions=True)
+                await dispatcher.relay.close()  # fixture cleanup only
+
+    run(env, scenario)
