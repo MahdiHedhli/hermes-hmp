@@ -756,6 +756,15 @@ class HmpAdapter(BasePlatformAdapter):
             log_event("adapter_connect", outcome="listener_failed")
             raise ConnectionError("HMP listener did not start") from exc
         self._server = srv
+
+        def startup_rejoin():
+            if (self._server is not srv or self._opening is not opening
+                    or opening.server is not srv or opening.ctx is not ctx
+                    or srv.ctx is not ctx or ctx.store is not opening.store
+                    or srv.closed.is_set() or srv._start_fenced or srv._stop_attempted):
+                raise RuntimeError("adapter startup ownership changed")
+
+        startup_rejoin()
         anchor = ctx.identity.custody.anchor_dir  # type: ignore[attr-defined]
         self._record = listener_record_path(anchor)
         # SR-7: one nonce for this listener incarnation, generated once here and reused by every
@@ -769,6 +778,7 @@ class HmpAdapter(BasePlatformAdapter):
             await srv.start_operator_read(anchor, self._nonce)
         except Exception:
             log_event("operator_read_start", outcome="unavailable")
+        startup_rejoin()
         if srv.bound is not None:
             # OD-F8 (2026-09-27): the served profiles, so `pair offer`'s one-command flow can
             # list bots by name without importing Hermes (S1). Best-effort only -- the bridge is
@@ -801,6 +811,7 @@ class HmpAdapter(BasePlatformAdapter):
             else:
                 self._known_profiles = tuple(profiles) if profiles is not None else None
                 await srv.start_approval_test(self._record, self._nonce)
+            startup_rejoin()
             if ctx.bridge is not None:
                 # Live-bug fix: the multiplexer brings secondary profiles online strictly AFTER
                 # this `connect()` returns, so the record just written above can already be stale
@@ -811,6 +822,7 @@ class HmpAdapter(BasePlatformAdapter):
                 self._profile_refresh_task = asyncio.get_running_loop().create_task(
                     self._periodic_profile_refresh()
                 )
+        startup_rejoin()
         self._opening = None
         self._mark_connected()
         return True

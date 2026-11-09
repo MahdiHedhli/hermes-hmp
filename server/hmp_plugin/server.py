@@ -2127,11 +2127,11 @@ class HmpServer:
             self._stopping = asyncio.get_running_loop().create_task(self.stop())
 
     async def wait_operator_drain(self) -> None:
-        if getattr(self, "_stop_attempted", False):
-            owner = self._stop_owner
-            if (owner is None or not owner.done() or owner.cancelled()
-                    or owner.result() is not self._stop_complete):
-                raise RuntimeError("listener shutdown ownership unresolved")
+        owner = self._stop_owner
+        if (not self._stop_attempted or owner is None or not owner.done()
+                or owner.cancelled() or owner.result() is not self._stop_complete
+                or not self.closed.is_set()):
+            raise RuntimeError("listener shutdown ownership unresolved")
         ctx = self.ctx
         store, prompts, hints = ctx.store, ctx.prompt_store, ctx.push_hints
         service = self._operator_read_drained

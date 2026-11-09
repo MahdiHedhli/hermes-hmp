@@ -60,6 +60,12 @@ def test_server_drain_rejects_resource_replacement_during_wait(field):
         ctx = SimpleNamespace(store=object(), prompt_store=object(), push_hints=object())
         srv = HmpServer.__new__(HmpServer)
         srv.ctx = ctx
+        srv._stop_attempted = True
+        srv._stop_complete = object()
+        srv._stop_owner = asyncio.get_running_loop().create_future()
+        srv._stop_owner.set_result(srv._stop_complete)
+        srv.closed = asyncio.Event()
+        srv.closed.set()
         srv._operator_read_drained = SimpleNamespace(wait_drained=wait_drained)
         srv._push_dispatcher_drained = None
         srv._push_relay_owner = None

@@ -437,3 +437,20 @@ def test_listener_refuses_substituted_relay_owner_before_dispatcher_close(monkey
         await runner.cleanup()  # fixture-only disposal, no production closure claim
 
     asyncio.run(scenario())
+
+
+def test_pre_stop_drain_refuses_without_changing_live_admission_or_debt(monkeypatch):
+    async def scenario():
+        listener, _runner, _events, _, _ = rig(monkeypatch)
+        await listener.start()
+        listener.operator_worker_debt = 7
+        try:
+            with pytest.raises(RuntimeError, match="shutdown ownership unresolved"):
+                await listener.wait_operator_drain()
+            assert listener.operator_worker_debt == 7
+            assert not listener._start_fenced and not listener._stop_attempted
+            assert not listener.closed.is_set()
+        finally:
+            await listener.stop()
+
+    asyncio.run(scenario())

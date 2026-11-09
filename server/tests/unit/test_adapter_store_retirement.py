@@ -469,3 +469,28 @@ def test_real_store_migration_close_uncertainty_survives_component_cleanup(
     assert owner.store._conn is connection
     assert owner.store._poisoned and owner.store._close_uncertain
     assert calls == ["close"]  # outer cleanup must not repeat migration's failed close
+
+
+def test_identity_close_during_auxiliary_start_cannot_publish_connected(adapter_module, monkeypatch, tmp_path):
+    from .hmp_kit import Env
+    env = Env(tmp_path)
+    adapter = adapter_module.HmpAdapter(SimpleNamespace(extra={"bind": "127.0.0.1", "port": 0}))
+    monkeypatch.setattr(adapter_module, "open_components", lambda _adapter: env.ctx)
+
+    async def interrupted(srv, *_args):
+        await srv.stop()  # real original stop invokes adapter's identity-close callback
+
+    monkeypatch.setattr(adapter_module.server.HmpServer, "start_operator_read", interrupted)
+
+    async def scenario():
+        with pytest.raises(RuntimeError, match="startup ownership changed"):
+            await adapter.connect()
+        assert adapter._server is None and adapter._opening is not None
+        assert adapter._startup_unresolved and "connected" not in adapter.states
+        await adapter.disconnect()
+        assert adapter._opening is None and adapter._retired_stores_ready()
+
+    try:
+        asyncio.run(scenario())
+    finally:
+        env.store.close()
