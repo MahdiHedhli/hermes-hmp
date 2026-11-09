@@ -436,6 +436,7 @@ class _GatewayHandle:
     def __init__(self, key: str, process: subprocess.Popen[bytes], log_path: Path) -> None:
         self.key = key
         self.process = process
+        self.stop_owner = fc.FixtureProcessOwner(process)
         self.log_path = log_path
 
 
@@ -481,16 +482,26 @@ def serve_instances(
     log_dir.mkdir(parents=True, exist_ok=True)
 
     def cleanup(*_: object) -> None:
+        pending = []
         for h in handles:
-            if h.process.poll() is None:
-                h.process.terminate()
+            try:
+                h.stop_owner.request_stop()
+            except Exception:
+                pending.append(h)
         deadline = time.monotonic() + 10
         for h in handles:
-            remaining = max(0.0, deadline - time.monotonic())
             try:
-                h.process.wait(timeout=remaining)
+                h.stop_owner.wait_stopped(max(0.0, deadline - time.monotonic()))
             except Exception:
-                h.process.kill()
+                if h not in pending:
+                    pending.append(h)
+        if pending:
+            marker = out_dir / "shutdown-pending.json"
+            marker.write_text(json.dumps({"processes": [
+                {"key": h.key, "pid": h.process.pid, "stopAttempted": h.stop_owner.stop_attempted}
+                for h in pending], "forced": False}) + "\n", encoding="utf-8")
+            marker.chmod(0o600)
+            raise fc.FixtureSafetyError("fixture graceful shutdown unresolved; retain process and artifacts")
 
     signal.signal(signal.SIGINT, lambda signum, frame: (cleanup(), sys.exit(130)))
     signal.signal(signal.SIGTERM, lambda signum, frame: (cleanup(), sys.exit(143)))
@@ -513,7 +524,7 @@ def serve_instances(
             log_path = log_dir / f"{key}.log"
             log_file = log_path.open("w", encoding="utf-8")
             proc = subprocess.Popen(
-                [str(hermes_bin), "gateway", "run", "--force"],
+                [str(hermes_bin), "gateway", "run"],
                 env=env,
                 stdout=log_file,
                 stderr=subprocess.STDOUT,

@@ -147,6 +147,7 @@ def run_selfcheck(
         stdout=subprocess.PIPE,
         text=True,
     )
+    owner = fc.FixtureProcessOwner(proc)
     assert proc.stdout is not None
     all_failures: list[str] = []
     try:
@@ -157,11 +158,15 @@ def run_selfcheck(
             failures = check_instance(manifest, by_key[key], info)
             all_failures += [f"[{build_label}/{key}] {f}" for f in failures]
     finally:
-        proc.terminate()
+        owner.request_stop()
         try:
-            proc.wait(timeout=30)
-        except subprocess.TimeoutExpired:
-            proc.kill()
+            owner.wait_stopped(30)
+        except fc.FixtureSafetyError:
+            marker = out_dir / "selfcheck-shutdown-pending.json"
+            marker.write_text(json.dumps({"pid": proc.pid, "stopAttempted": owner.stop_attempted,
+                                          "forced": False}) + "\n", encoding="utf-8")
+            marker.chmod(0o600)
+            raise
     return all_failures
 
 

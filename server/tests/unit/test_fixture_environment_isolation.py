@@ -117,3 +117,41 @@ def test_dependency_child_launch_failures_drop_private_exception_context(tmp_pat
         module.ensure_runtime_deps(build)
     assert "private" not in str(exc.value)
     assert exc.value.__context__ is None and exc.value.__cause__ is None
+
+
+@pytest.mark.parametrize("request_error", (False, True))
+def test_fixture_shutdown_timeout_never_kills_or_replays_stop(request_error):
+    module = common()
+    events = []
+
+    class Process:
+        def poll(self): return None
+        def terminate(self):
+            events.append("terminate")
+            if request_error: raise OSError("synthetic acknowledgement loss")
+        def wait(self, **_kwargs):
+            events.append("wait")
+            raise module.subprocess.TimeoutExpired("synthetic", 1)
+        def kill(self): raise AssertionError("forced shutdown forbidden")
+
+    process = Process()
+    owner = module.FixtureProcessOwner(process)
+    for _ in range(2):
+        if request_error and not owner.stop_attempted:
+            with pytest.raises(OSError): owner.request_stop()
+        else:
+            owner.request_stop()
+        with pytest.raises(module.FixtureSafetyError, match="retain process"):
+            owner.wait_stopped(0)
+    assert events == ["terminate", "wait", "wait"]
+    assert owner.process is process and owner.stop_attempted
+
+
+def test_fixture_shutdown_refuses_foreign_process():
+    module = common()
+    owner = module.FixtureProcessOwner(object())
+    owner.process = object()
+    with pytest.raises(module.FixtureSafetyError, match="owner changed"):
+        owner.request_stop()
+    with pytest.raises(module.FixtureSafetyError, match="owner changed"):
+        owner.wait_stopped(0)

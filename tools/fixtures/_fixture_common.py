@@ -276,3 +276,29 @@ def ensure_runtime_deps(build: BuildInfo, *, timeout: float = 300.0) -> None:
         valid = False
     if not valid:
         raise FixtureSafetyError(message)
+
+
+class FixtureProcessOwner:
+    """One graceful stop request; timeout retains ownership and never forces exit."""
+
+    def __init__(self, process):
+        self.process = self._original = process
+        self.stop_attempted = False
+
+    def request_stop(self):
+        if self.process is not self._original:
+            raise FixtureSafetyError("fixture process owner changed")
+        if self._original.poll() is None and not self.stop_attempted:
+            self.stop_attempted = True
+            self._original.terminate()
+
+    def wait_stopped(self, timeout):
+        if self.process is not self._original:
+            raise FixtureSafetyError("fixture process owner changed")
+        pending = False
+        try:
+            self._original.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            pending = True
+        if pending:
+            raise FixtureSafetyError("fixture graceful shutdown unresolved; retain process and artifacts")
