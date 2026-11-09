@@ -33,3 +33,13 @@ Five synthetic cases cover cancellation during startup, definite startup failure
 - `/private/tmp/hermes-qa-operator-start-ownership-floor-s_t336y0/receipt.json`
 
 The earlier 379-case run at `32fcecc` predates the original-service replacement guard and is not evidence for that final guard. Independent review, approval/push auxiliary publication, partial adapter recovery, full borrower/native authority/migration and physical qualification remain open. No runtime deployment or media activation occurred. Current plugin extension guidance was rechecked at https://hermes-agent.nousresearch.com/docs/developer-guide/plugins; exact pinned source remains the authority for these internal HMP lifecycle methods.
+
+## Approval test generation context fence
+
+Source `574899c` (production delta `e73c5cd`) pins approval-test generation to its original context and listener service and uses the immediate startup/shutdown fence, rather than the mere presence of a stop task handle. Copied-looking replacement context fields cannot authorize the original generation; restoration after observed drift does not revive it. Starting after lost shutdown-task publication creates no endpoint.
+
+491 combined listener/operator/adapter/approval/push tests pass unchanged on Python 3.14.9 and 3.11.15:
+- `/private/tmp/hermes-qa-approval-context-scope-current-j2qhl79q/receipt.json`
+- `/private/tmp/hermes-qa-approval-context-scope-floor-86mey4dp/receipt.json`
+
+The initial expanded run `/private/tmp/hermes-qa-approval-context-scope-current-mfw98bu3/receipt.json` failed one ordering-only fixture that omitted the current drain method; its port was updated with a joined-state assertion. Production checks were not relaxed. These fixtures are not native/physical qualification. Push actual-task retirement remains unresolved as documented in `push-retirement-gap-20261109.md`; no deployment or media activation occurred. Independent review remains pending.
