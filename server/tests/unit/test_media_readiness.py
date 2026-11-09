@@ -139,3 +139,21 @@ def test_route_final_delivery_fence_discards_post_worker_changes(tmp_path, monke
         assert changed and status == (404 if change == 'bot_revoke' else 503), data
         assert 'media' not in data and '_authority' not in str(data)
     run(env, scenario)
+
+
+def test_media_capability_is_authenticated_protocol_only(tmp_path):
+    from .hmp_kit import Env, pair, get, run
+    env = Env(tmp_path)
+
+    async def scenario(client):
+        device = await pair(env, client)
+        path = '/media-readiness/capabilities'
+        status, _ = await get(client, path, headers={'HMP-Instance': env.iid})
+        assert status == 401
+        status, body = await get(client, path, headers=env.headers(device))
+        assert status == 200
+        assert body == {'protocol': 1, 'media_readiness': True, 'remote_permission_write': False}
+        # Query extensions are not silently accepted as a different protocol.
+        status, _ = await get(client, path + '?protocol=2', headers=env.headers(device))
+        assert status == 400
+    run(env, scenario)

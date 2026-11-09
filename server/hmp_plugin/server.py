@@ -161,6 +161,7 @@ F1_ROUTES: tuple[tuple[str, str, str], ...] = (
     ("GET", "/readiness/capabilities", "AR1"),
     ("GET", "/bots/{p}/readiness", "AR1"),
     ("GET", "/bots/{p}/media-readiness", "LM-ENT1"),
+    ("GET", "/media-readiness/capabilities", "LM-ENT1"),
     ("POST", "/pair/request", "PR2"),
     ("POST", "/pair/complete", "PR4"),
     ("POST", "/auth/token", "PR5"),
@@ -695,6 +696,17 @@ def _collect_media_readiness(ctx: ServerContext, **scope: Any) -> dict[str, obje
     return {"protocol": 1, "checked_at": _readiness_now(ctx),
             "generation": scope["generation"], "media": payload,
             "_authority": (decision, permission)}
+
+
+async def handle_media_readiness_capabilities(request: web.Request) -> web.Response:
+    _readiness_empty_get(request)
+    _readiness_bearer(request)
+    # Protocol support only: never an entitlement, host opt-in, or file availability claim.
+    return web.Response(
+        body=wire.dump_json({"protocol": 1, "media_readiness": True,
+                             "remote_permission_write": False}),
+        content_type="application/json", headers={"Cache-Control": "no-store"},
+    )
 
 
 async def handle_media_readiness(request: web.Request) -> web.Response:
@@ -1666,6 +1678,7 @@ def build_app(ctx: ServerContext) -> web.Application:
         "/readiness/capabilities": handle_readiness_capabilities,
         "/bots/{p}/readiness": handle_readiness,
         "/bots/{p}/media-readiness": handle_media_readiness,
+        "/media-readiness/capabilities": handle_media_readiness_capabilities,
         "/push/registration": push_registration.handle_push_get,
         "/push/hints/resolve": partial(
             push_resolve.handle_push_resolve, require_gate=_require_approvals_gate
