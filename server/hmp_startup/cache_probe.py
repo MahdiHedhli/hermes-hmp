@@ -312,7 +312,7 @@ class RuntimeCacheProbeOwner:
         _native_work_origin_tail(self, native_registration, native)
         return result
 
-    def observe(self):
+    def _start(self):
         s = RuntimeCacheProbeOwner._pure(self)
         _require(self._started is False and self._retaining is False and self._ready is False
                  and self._admitting is False)
@@ -339,6 +339,11 @@ class RuntimeCacheProbeOwner:
                 self._admitting = False
         _require(admitted is True)
         self._started = True
+        return s, selected, path, proof, native_registration, root, cell, count
+
+    def observe(self):
+        s, selected, path, proof, native_registration, root, cell, count = (
+            RuntimeCacheProbeOwner._start(self))
         failed = False
         try:
             return RuntimeCacheProbeOwner._observe_owned(
