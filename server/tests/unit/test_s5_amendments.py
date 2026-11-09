@@ -39,7 +39,13 @@ def test_foreign_genuine_kind_ref_is_refused_by_phase_one(
             refs[6], registry.Caller(dev.device_id, USER, fx.ctx.iid, PROFILE)
         ) is None
         permission = fx.ctx.media_read_permission(dev.device_id)
-        assert permission.allowed is True
+        assert permission is not None and fx.ctx.media_read_current(permission) is True
+        generation = permission.generation
+        wrong_generation = (*generation[:2], generation[2] + 1, generation[3])
+        assert fx.registry.lookup(
+            refs[6], registry.Caller(dev.device_id, USER, fx.ctx.iid, PROFILE,
+                                     permission_generation=wrong_generation)
+        ) is None
         entry = fx.registry.lookup(
             refs[6], registry.Caller(dev.device_id, USER, fx.ctx.iid, PROFILE,
                                      permission_generation=permission.generation)
