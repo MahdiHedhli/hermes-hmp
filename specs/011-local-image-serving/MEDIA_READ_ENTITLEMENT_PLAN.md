@@ -456,3 +456,20 @@ partial adapter recovery, all Store borrowers, migration and native media author
 remain open. No deployment or media opt-in change; images/characters remain unfinished.
 
 Next: qualify approval/push auxiliary publication and recover partial adapter listeners only after actual original-scope cleanup; preserve all remaining borrower, native authority and release gates.
+
+
+## MR-START2d approval context scope and push gate
+
+MR-START2d source `574899c` pins the approval test generation to the original
+listener context/service and immediate shutdown fence. Copied context fields cannot
+authorize a replacement or revive a retired generation. Three new synthetic cases
+cover replacement/restore, pre-start replacement and lost shutdown publication.
+491 combined tests pass unchanged on each pinned runtime, zero failures/errors/skips;
+one outdated ordering-only fixture was corrected to implement the current drain contract.
+Independent/full-native and physical qualification remain pending. Source inspection
+also confirms a separate push retirement gap: bounded close is not actual borrower
+drain and task creation acknowledgement loss needs retained ownership. That gate,
+partial adapter recovery, other borrowers, migration and native media authority remain
+open. No deployment, permission change, push send or media activation occurred.
+
+Next: MR-PUSH1 retain creation intents and actual push drain owners, then integrate original-owner debt into Store retirement. Do not substitute bounded close for actual settlement.

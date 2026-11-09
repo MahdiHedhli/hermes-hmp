@@ -1,5 +1,17 @@
 ## November 9 — shutdown ownership checks pass; media integration remains open
 
+MR-START2d source `574899c` pins the approval test generation to the original
+listener context/service and immediate shutdown fence. Copied context fields cannot
+authorize a replacement or revive a retired generation. Three new synthetic cases
+cover replacement/restore, pre-start replacement and lost shutdown publication.
+491 combined tests pass unchanged on each pinned runtime, zero failures/errors/skips;
+one outdated ordering-only fixture was corrected to implement the current drain contract.
+Independent/full-native and physical qualification remain pending. Source inspection
+also confirms a separate push retirement gap: bounded close is not actual borrower
+drain and task creation acknowledgement loss needs retained ownership. That gate,
+partial adapter recovery, other borrowers, migration and native media authority remain
+open. No deployment, permission change, push send or media activation occurred.
+
 MR-START2c source `c5222b6` retains the optional operator-read service before
 startup, gives startup one shielded actual task, and joins that task before teardown.
 Caller cancellation cannot abandon the service; unknown task-publication acknowledgement
