@@ -34,8 +34,15 @@ def test_foreign_genuine_kind_ref_is_refused_by_phase_one(
         dev = await fx.rig.pair(client)
         refs = await fx.mint(client)
         assert await fx.served(client, refs[6]) == VALID_PNG
-        entry = fx.registry.lookup(
+        # Legacy/unversioned caller context must not authorize a version-bound ref.
+        assert fx.registry.lookup(
             refs[6], registry.Caller(dev.device_id, USER, fx.ctx.iid, PROFILE)
+        ) is None
+        permission = fx.ctx.media_read_permission(dev.device_id)
+        assert permission.allowed is True
+        entry = fx.registry.lookup(
+            refs[6], registry.Caller(dev.device_id, USER, fx.ctx.iid, PROFILE,
+                                     permission_generation=permission.generation)
         )
         assert entry is not None
         other_kind = (

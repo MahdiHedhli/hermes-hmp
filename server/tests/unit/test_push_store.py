@@ -134,7 +134,13 @@ def test_real_legacy_migration_preserves_data_and_reopens_idempotently(tmp_path,
             assert len(store.audit_events()) == 1
             assert store.owner_controls_decision("dev") is (True if version == 2 else None)
             meta = store._require_conn().execute("SELECT schema_version FROM meta").fetchone()
-            assert meta[0] == 3
+            assert meta[0] == 4  # current migration includes independent media decisions
+            media = store.media_read_decision("a" * 52, "dev")
+            assert media is not None and media.allowed is None and media.revision == 0
+            assert media.fallback_controls is (True if version == 2 else None)
+            assert store._require_conn().execute(
+                "SELECT COUNT(*) FROM device_media_read"
+            ).fetchone()[0] == 0  # migration never creates an explicit media grant
             ddl = dict(
                 store._require_conn().execute(
                     "SELECT name,sql FROM sqlite_master WHERE type='table'"
