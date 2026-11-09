@@ -4,8 +4,9 @@ November 9, 2026. The original requirements below remain the acceptance
 contract. Source `1898b64` now connects the actual observe caller to the shared
 engine and typed finish; it is **uninstalled and not fully qualified**. The same
 twenty actual probe/finish/constructor cases pass on current and minimum Python.
-The successor cleanup/boundary/diagnostic36 current selection is running; shared
-compatibility, broader failure and service/device/release gates remain.
+The successor cleanup/boundary/diagnostic36 current selection passes. The separate
+startup close-ACK repair passes3 current cases; combined39 minimum is running.
+Shared compatibility, full startup migration and service/device/release remain.
 See FEATURES for exact source and result scope. The original DATA plan keeps
 its zero-state fields; actual engine execution holds separate branch/history.
 This is local HMP work, not a demonstrated upstream Hermes blocker. No image,
