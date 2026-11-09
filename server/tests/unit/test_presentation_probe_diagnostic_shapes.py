@@ -70,29 +70,32 @@ fragment=('missing = _ReportedMissingMetadataReturn(' if diagnostic_case=='const
 trace_synthetic_boundary(metadata._produce_directory_metadata.__code__,fragment,inject)
 old_gc=gc.isenabled();gc.disable();refused=False
 try:
-    try:owner.observe()
-    except CacheProbeError:refused=True
+    try:
+        try:owner.observe()
+        except CacheProbeError:refused=True
+    finally:
+        sys.setprofile(prior)
+    assert not gc.isenabled()
+    assert len(snapshots)==1
+    operation,budget,attempts=snapshots[0]
+    facts={'case':diagnostic_case,'faults':len(faults),'refused':refused,
+           'foreign_hooks':list(hooks),'diagnostic_constructors':len(diagnostics),
+           'native_after_fault':len(after_native),'known':len(held),'closed':sum(row.closed for row in held),
+           'raw_alive':sum(ref() is not None for ref in references),'fact_published':owner._fact is not None}
+    path=Path(sys.argv[1])/'probe-diagnostic-shape-stage.json'
+    fd=os.open(path,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
+    with os.fdopen(fd,'w') as stream:json.dump(facts,stream,sort_keys=True)
+    assert faults==[True] and refused and owner._failed and not owner._ready
+    assert hooks==[] and diagnostics==[] and after_native==[]
+    assert owner._fact is None and owner._origin.activation._runtime_cache_probe_fact is None
+    assert operation.ended==[True] and operation.state==[True,False,True]
+    assert operation.result.acknowledged==[None]
+    assert held and all(row.closed and row.close_attempted and not row.unknown for row in held)
+    assert reg.native_ledger.counts==[budget[0]+len(held),budget[1]-len(held)]
+    assert len(reg.native_ledger.attempts)==attempts and reg.native_ledger.failed==[True]
+    assert all(ref() is None for ref in references) and owner._bytes_read==0
 finally:
-    sys.setprofile(prior)
     if old_gc:gc.enable()
-assert len(snapshots)==1
-operation,budget,attempts=snapshots[0]
-facts={'case':diagnostic_case,'faults':len(faults),'refused':refused,
-       'foreign_hooks':list(hooks),'diagnostic_constructors':len(diagnostics),
-       'native_after_fault':len(after_native),'known':len(held),'closed':sum(row.closed for row in held),
-       'raw_alive':sum(ref() is not None for ref in references),'fact_published':owner._fact is not None}
-path=Path(sys.argv[1])/'probe-diagnostic-shape-stage.json'
-fd=os.open(path,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
-with os.fdopen(fd,'w') as stream:json.dump(facts,stream,sort_keys=True)
-assert faults==[True] and refused and owner._failed and not owner._ready
-assert hooks==[] and diagnostics==[] and after_native==[]
-assert owner._fact is None and owner._origin.activation._runtime_cache_probe_fact is None
-assert operation.ended==[True] and operation.state==[True,False,True]
-assert operation.result.acknowledged==[None]
-assert held and all(row.closed and row.close_attempted and not row.unknown for row in held)
-assert reg.native_ledger.counts==[budget[0]+len(held),budget[1]-len(held)]
-assert len(reg.native_ledger.attempts)==attempts and reg.native_ledger.failed==[True]
-assert all(ref() is None for ref in references) and owner._bytes_read==0
 print(json.dumps({'mutation':mutation,'runtime_admitted':False}))
 '''
     monkeypatch.setattr(base, 'SCRIPT', script)
