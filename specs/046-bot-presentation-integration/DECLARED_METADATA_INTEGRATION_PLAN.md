@@ -49,6 +49,37 @@ Failure prevents subsequent site admission; cleanup retains original owned/
 ended/nonpending and reserved-close constraints. Preserve source hash/header,
 actual EOF, timestamp and final identity/source-fact checks.
 
+## Shared engine predecessor and source-effect contract
+
+The original integer cursor alone is insufficient predecessor evidence. Before
+enabling leaf roles, retain the actual raw-free ACK commits under the original
+plan and one immutable predecessor link per consumer. Rejoin each original
+indexed ledger attempt, acknowledged result and consumer commit, registration,
+held walk and site. Do not retain a copied prefix per consumer. Exact primitive
+ordinal checks must precede comparisons and indexing. Recheck history after
+callback-bearing material/native closure; matching reconstructed DATA is not an
+actual ACK. The current isolated history extension and its pending/verified
+execution scope are tracked in [ACK history](NATIVE_METADATA_ACK_HISTORY.md).
+
+For leaf-before, the fixed caller must retain the actual return of the original
+`source_digest.begin` call. The source-effect operand is that held `_DigestRoot`,
+not a current `effects[-1]` lookup, a boolean or a caller-selected policy callback.
+An absent operand must agree with the original inactive source-digest condition;
+cache/non-source reads must not acquire a timestamp requirement. Rejoin the
+actual source root/effect, original owner/scope/expected row and buffer before
+and after callbacks. Keep source-only timestamp DATA tied to that actual root
+and the same native snapshot, then carry it into the original source fact.
+This is a required implementation contract, not a claim those joins are wired.
+
+Use the original closed site variant to choose the literal stat/fstat call and
+fixed policy internally. No operation index, policy callback or dispatch name
+may be selected by a client. Preserve the normal directory engine while adding
+leaf-before, opened-leaf, post-EOF and final-ancestor roles to shared machinery.
+An ACK-list append interrupted before cursor advancement is partial history:
+retain it with sticky failure, no rollback/refund and no automatic replay.
+One retained predecessor link bounds reference storage linearly; repeated chain
+audits still need separate CPU/time qualification.
+
 ## Completion and acceptance
 
 Do not remove the current zero-cursor guard as a shortcut. Replace it only when

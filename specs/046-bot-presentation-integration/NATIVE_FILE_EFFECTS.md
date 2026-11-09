@@ -205,6 +205,35 @@ completed walker. Fresh static inspection of installed Hermes0.23.0/0f0e96fc
 still finds the unbounded native avatar getter; no qualified safe shortcut was
 established, no getter was called and no upstream change was made.
 
+The shared metadata engine now retains original raw-free ACK history in
+`c82a97a`: one predecessor link per consumer, original attempt/result/consumer
+joins, exact ordinal fences before indexing, and another join after material/
+native closure. Its33 selected cases pass on each supported interpreter with
+unchanged source, receipt/log/XML and six actual-result checkpoints rehashed.
+The after-append/before-cursor interruption keeps partial history, the old
+cursor, sticky failure and original debit; payload is reclaimed with GC disabled.
+The initial `b7df9ef` run remains30 cases with27 passes/3 fixture failures (an
+attached-payload assertion after retirement), not relabeled passing. Its source
+review also found type-order and copied-prefix storage problems corrected by
+`c82a97a`. Retained predecessor references are linear; full-chain audit CPU and
+the separate minimum-version timeout are not qualified by this statement.
+Three additional two-directory causal cases on test-only `9a96111` (production
+unchanged from `c82a97a`) pass on both Python3.14.9 and3.11.15 (3 each). Sources
+were unchanged; receipt/log/XML and all six causal checkpoints were rehashed.
+They retain real first/second ACKs without test refunds or history rearming, and
+copied or missing history blocks the second metadata C call/debit. The old walker
+stays refused intentionally. This is not a complete leaf/ancestor or runtime pass.
+See the [ACK history contract](https://github.com/MahdiHedhli/hermes-hmp/blob/feat/startup-bytecode-headers-20261107/specs/046-bot-presentation-integration/NATIVE_METADATA_ACK_HISTORY.md).
+
+LLY520's R3 installation does not opt into image access: a fresh read-only
+single-leaf check found its local-media flag absent/off and no configured
+approval-owner list. Jobs/model controls do not grant that role. No flag, owner
+role or device grant was changed. [LM-ENT1](https://github.com/MahdiHedhli/hermes-hmp/blob/feat/startup-bytecode-headers-20261107/specs/011-local-image-serving/MEDIA_READ_ENTITLEMENT_PLAN.md)
+records a reviewed HMP-owned proposal for a separate default-deny media-read
+permission, preserving existing owner-only fallback and all bot/image bounds.
+Its proposed operator commands are not implemented; no live opt-in is implied.
+Approval authority must not be granted merely as an image-access shortcut.
+
 Open-registration source `1aa605d` passed all 1,434 configured startup cases on
 Python 3.14.9 with zero failures, errors or skips; its eight focused cases passed
 on both Python 3.14.9 and 3.11.15. Exact source/receipt/log/XML bindings were
