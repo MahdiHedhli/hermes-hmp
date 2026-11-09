@@ -1,5 +1,14 @@
 ## November 8 — reviewed host updates deployed; character integration remains open
 
+The repaired media backend `f7f5084` now passes its combined 1,063-case current
+Python suite with zero failures/errors/skips and unchanged source. The matching
+floor run is active. Focused backend branch `feat/media-read-entitlement-20261108`
+and mobile branch `feat/media-readiness-mobile-20261108` are published. Mobile
+integration commit `5ca14a9` pins that exact HMP commit for reproducible source
+review; mobile tests against this new submodule pin remain to be rerun. No live
+migration, grant, opt-in, build installation or release occurred. Performance,
+legacy fallback, migration quiescence and runtime/device gates remain open.
+
 Media freshness regressions now have isolated negative controls: restoring the
 matching prior server implementations reproduces stale HTTP 200 responses where
 503 is required. One initial mismatched callback-count case was excluded and rerun
