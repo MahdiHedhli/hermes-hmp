@@ -791,7 +791,7 @@ def _origin_current(origin):
 def _link_policy_current(origin):
     """Validate the actual held early DATA seal; not native/link admission."""
     _require(type(origin) is tuple and len(origin) == 5
-             and type(origin[2]) is tuple and len(origin[2]) == 6)
+             and type(origin[2]) is tuple and len(origin[2]) == 7)
     row = origin[2][4]
     _require(type(row) is tuple and len(row) == 7 and type(row[0]) is str
              and row[0] == 'factory' and type(row[1]) is FunctionType
