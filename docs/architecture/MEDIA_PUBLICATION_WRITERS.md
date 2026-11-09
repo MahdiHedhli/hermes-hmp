@@ -347,3 +347,33 @@ This is NOT completed MR-LIFE2: adapter-retained Store owner/reconnect protectio
 all other borrower retirement, schema migration, native/config publication and
 physical/release qualification remain open. No adapter supplies the coordinator,
 no media service starts by default, and live hosts remain on c7482f1 only.
+
+## MR-LIFE2b: retained adapter Store owners — 5f684b8
+
+The adapter records the original server/context/Store/bound close method before
+dropping its listener pointer. Every retirement keeps its own coroutine, actual
+Task and opaque completion/failure result. A sticky setup latch covers allocation,
+registration and unknown scheduling; a lost handle never authorizes retry. A
+cancelled disconnect waiter leaves the actual close owner alive. Failed/cancelled
+owners return a private failure token rather than leaking an unhandled exception.
+
+Connect checks retained owners before open_components. Pending, failed or unknown
+retirement blocks replacement; only the actual retained Task's successful close
+result can be reaped. Scope is rejoined after drain and again after generation
+cleanup before invoking the original bound close once. A causal40ac2e0 control
+showed that omitting the second server-reference check could falsely complete after
+a generation callback installed another server sharing that Store; the narrowing
+fix and failing control are retained separately.
+
+Both342-case combined suites pass unchanged on3.14.9/3.11.15 and Ruff passes.
+Independent finite source/delta review found no further concrete blocker. Nine
+synthetic fault cases cover pending reconnect before open_components, cancelled
+waiter, before/after scheduling loss, close acknowledgement loss, context/Store and
+generation/server callback drift. Existing25 adapter cases remain in the suite.
+No live Store, configuration, permissions or deployed code changed in this work.
+
+This completes the bounded retained-owner/reconnect source slice, not whole
+activation qualification. Concurrent startup/bootstrap cancellation, all other
+HTTP/native/thread borrowers, migration/rollback, final native authority publication
+and physical/release acceptance remain separate gates. The media service is still
+not started by the adapter, and deployed hosts retain c7482f1 only.
