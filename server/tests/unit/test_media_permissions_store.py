@@ -37,16 +37,16 @@ def test_migration_preserves_legacy_controls_without_new_media_allows(store):
 
 def test_allow_and_deny_do_not_change_other_privileges(store):
     conn = store._require_conn()
-    before = {name: [tuple(row) for row in conn.execute('SELECT * FROM ' + name)]
-              for name in ('devices', 'users', 'device_owner_controls', 'token_families')}
+    queries = ('SELECT * FROM devices', 'SELECT * FROM users',
+               'SELECT * FROM device_owner_controls', 'SELECT * FROM token_families')
+    before = [[tuple(row) for row in conn.execute(query)] for query in queries]
     original = store.media_read_decision(IID, 'dev_a')
     allowed = store.set_media_read(original, allowed=True, now=10)
     assert allowed.allowed is True and allowed.revision == 1
     assert allowed.fallback_controls is allowed.fallback_revision is None
     denied = store.set_media_read(allowed, allowed=False, now=11)
     assert denied.allowed is False and denied.revision == 2
-    assert {name: [tuple(row) for row in conn.execute('SELECT * FROM ' + name)]
-            for name in before} == before
+    assert [[tuple(row) for row in conn.execute(query)] for query in queries] == before
 
 
 def test_stale_write_cannot_overwrite_a_newer_decision(store):
@@ -67,11 +67,14 @@ def test_deleted_decision_does_not_reset_its_generation(store):
     assert restored.revision == 3 and restored.generation != first.generation
 
 
-@pytest.mark.parametrize('field', ('instance_epoch', 'store_revocation_epoch'))
-def test_instance_transition_invalidates_a_prepared_write(store, field):
+@pytest.mark.parametrize('statement', (
+    'UPDATE meta SET instance_epoch=instance_epoch+1',
+    'UPDATE meta SET store_revocation_epoch=store_revocation_epoch+1',
+))
+def test_instance_transition_invalidates_a_prepared_write(store, statement):
     old = store.media_read_decision(IID, 'dev_a')
     with store.transaction() as conn:
-        conn.execute('UPDATE meta SET ' + field + '=' + field + '+1')
+        conn.execute(statement)
     assert store.set_media_read(old, allowed=True, now=10) is None
 
 
@@ -91,10 +94,9 @@ def test_revoked_or_missing_device_cannot_receive_a_grant(store):
 
 def test_outer_rollback_preserves_decision_and_revision(store):
     old = store.media_read_decision(IID, 'dev_a')
-    with pytest.raises(RuntimeError, match='synthetic rollback'):
-        with store.transaction():
-            assert store.set_media_read(old, allowed=True, now=10).revision == 1
-            raise RuntimeError('synthetic rollback')
+    with pytest.raises(RuntimeError, match='synthetic rollback'), store.transaction():
+        assert store.set_media_read(old, allowed=True, now=10).revision == 1
+        raise RuntimeError('synthetic rollback')
     assert store.media_read_decision(IID, 'dev_a') == old
 
 
