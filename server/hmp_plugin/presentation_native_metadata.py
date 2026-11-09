@@ -325,8 +325,9 @@ def _rejoin_probe_stages(owner, resource, origin, stages):
     """Rejoin retained originals after preceding stage callbacks; no nomination."""
     _require(type(resource) is _NativeProbeMetadataResource
              and type(resource.registration) is _NativeScopeRegistration
-             and resource.registration.scope.native_probe_engine_origin is origin
              and type(stages) is tuple and len(stages) == 7)
+    _native_work_registration_tail(owner, resource.registration)
+    _require(resource.registration.scope.native_probe_engine_origin is origin)
     actual = _probe_stage_functions(owner, resource)
     _require(resource.registration.scope.native_probe_engine_origin is origin
              and all(current is held for current, held in zip(actual, stages, strict=True)))
@@ -2012,7 +2013,7 @@ def _finished_declared_file_tail(owner, registration, held, last):
 
 
 def _run_directory_observation(owner, resource, predecessor=None, baseline=None, eof=None):
-    """Unwired shared declared-site caller with pre-effect independent memory custody.
+    """Shared fixed-policy caller with pre-effect independent memory custody.
 
     Only the actual factory/producer/policy/ACK returns are used. Cleanup is
     memory-only after the fixed synchronous producer has unwound; it never
@@ -2033,8 +2034,8 @@ def _run_directory_observation(owner, resource, predecessor=None, baseline=None,
         _acked_directory_commit_tail, _retired_directory_commit_tail)
     if type(resource) is _NativeProbeMetadataResource:
         _require(baseline is None and eof is None)
-        probe_origin = resource.registration.scope.native_probe_engine_origin
         probe_stages = _probe_stage_functions(owner, resource)
+        probe_origin = resource.registration.scope.native_probe_engine_origin
         prepare, latch, produce, consume, acknowledge, attached_tail, retired_tail = probe_stages
     try:
         # Reject a foreign actor before allocating/latching caller-owned custody.
