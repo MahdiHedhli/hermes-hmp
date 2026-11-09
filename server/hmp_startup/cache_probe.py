@@ -102,10 +102,42 @@ class RuntimeCacheProbeOwner:
             from .probe_metadata import _new_fresh_probe_plan
 
             plan = _new_fresh_probe_plan(owner, root, selected, context)
-            scope = _Scope(activation, root[2].io_scope.activation_scope,
-                           (selected.plan_row.source,), context, [], parent=(root, selected),
-                           native_files=root[2].entry_binding[0].native_files,
-                           native_registration_slot=[None], native_probe_plan=plan)
+            scope_kind = _Scope
+            owner_names = vars(owner)
+            owner_entries = tuple(owner_names.items())
+            need, need_code = _require, _require.__code__
+            material, observe = plan.material, plan.observe
+            material_code, observe_code = plan.material_code, plan.observe_code
+            activation_scope = root[2].io_scope.activation_scope
+            expected, records, parent = (selected.plan_row.source,), [], (root, selected)
+            native_files, slot = root[2].entry_binding[0].native_files, [None]
+            values = (activation, activation_scope, expected, context, records, parent,
+                      None, None, None, None, native_files, slot, None, plan)
+            tuple_item, tuple_length = tuple.__getitem__, tuple.__len__
+            scope = scope_kind(activation, activation_scope, expected, context, records,
+                               parent=parent, native_files=native_files,
+                               native_registration_slot=slot, native_probe_plan=plan)
+            # Scope construction is a separate callback boundary after the plan
+            # factory's seal. Do not overwrite a replacement owner/plan slot or
+            # publish a changed scope merely because the earlier factory closed.
+            if need.__code__ is not need_code:
+                raise CacheProbeError(owner) from None
+            need(type(scope) is scope_kind and _Scope is scope_kind
+                 and tuple_length(scope) == len(values)
+                 and all(tuple_item(scope, index) is original
+                         for index, original in enumerate(values))
+                 and vars(owner) is owner_names and len(owner_names) == len(owner_entries)
+                 and all(type(key) is str for key in owner_names)
+                 and all(key in owner_names and owner_names[key] is value
+                         for key, value in owner_entries)
+                 and owner_names.get('_probe_plan') is None
+                 and material.__code__ is material_code and observe.__code__ is observe_code
+                 and vars(cls).get('_pure') is material
+                 and vars(cls).get('_observe_owned') is observe
+                 and RuntimeCacheProbeOwner is cls
+                 and _ROOT is partial and _OWNER is owner and _CELL is None and _FACT is None
+                 and owner._root_cell is partial
+                 and activation._runtime_cache_probe_cell is partial)
             owner._probe_plan = plan
             cell = (owner, scope)
             runtime_root = (activation, owner, scope)
