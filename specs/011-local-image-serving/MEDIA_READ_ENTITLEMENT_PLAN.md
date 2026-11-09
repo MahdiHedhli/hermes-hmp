@@ -174,3 +174,26 @@ request/heartbeat remaining responsive, fixed deadline refusal, no late DTO afte
 revoke/flag change/cohort replacement, and exact worker-permit retention until real
 completion. Keep generation/authority negative controls. Real runtime latency and
 physical/device qualification remain separate from synthetic fixture evidence.
+
+Independent design census found no complete pure authority-publication seam in
+inspected HMP paths. Store locks/transactions and SQLite epochs may block;
+listener readiness_generation is not a revision of every authority mutation.
+Operator read snapshots do not coordinate permission writes. The bridge native
+bot/config helpers do not expose a published pure revision receipt in inspected
+paths. This is a scoped evidence gap, not proof that every current upstream API
+lacks a suitable contract.
+
+Next bounded HMP-owned task LM-ENT1-P2: define listener-owned immutable publication
+DATA and a monotonic invalidation epoch; fixed workers collect complete actual
+request authority while the loop checks only original request/cohort/revision
+and a single-use publication claim. Invalidate before each participating mutation,
+settle after commit/rollback; unknown or lost acknowledgement remains refused.
+Cover same-process store/CLI changes, then route supported operator-process writes
+through the same authority owner. Do not treat PRAGMA, file watch, polling or TTL
+as cross-process/native invalidation. Inventory exact native bot/config mutation
+paths and supported lease/revision hooks before enabling a pure final gate.
+
+P2 is necessary preparation, not sufficient completion. Final authorization cannot
+be relabeled an observation or replaced by stale cached grants. The new source
+route remains undeployed until the conjunction of mutation sources is justified;
+existing deployed features/rights are not disabled or changed.
