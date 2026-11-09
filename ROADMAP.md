@@ -1,6 +1,18 @@
 ## November 8 — reviewed host updates deployed; character integration remains open
 
 
+MR-START2b1 source `641e39c` retains the original runner/site before awaitedstartup
+effects and one shielded actualstartowner. Stop fencesstartup and joins thatowner
+beforecleanup; cleanupreturnloss keeps runner/knownstopowner without replay orfalse
+closedproof. Unknownstart/watcherpublication staysunresolved. Both370combinedcases
+pass unchanged on3.14.9/3.11.15 plusRuff; independentfinite review found no new
+concreteblocker in thisbounded slice. Six new syntheticstages are not allnative/
+Store qualification; blockedsetup maydelaystop indefinitely. Context-wideteardown,
+stopownercreation, auxiliaryservice/dispatcher publication, adapterpartialrecovery,
+otherborrowers, builder/migration/nativepublication and physical/release gates remain
+open. No checkpointdeployment; image service staysinactive and livehosts remain5ecd2ba.
+
+
 Read-context parity audit is completed: synthetic16ca49c control reproduced missing
 callerContextVars in directpool submission. Perread copy_context+Context.run now
 restores to_thread semantics without changing actualFuture/debt/drain. Independent

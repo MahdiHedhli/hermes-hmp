@@ -408,3 +408,19 @@ mediaretirement/service remainuninstalled. Partialbuilder/listenercleanup, other
 borrowers, migration/nativepublication and physical/release gates remainopen.
 
 Next MR-START2b: retain runner/site objects before every startup await, reconcile known partial listener setup and failed builder allocation, and require original-scope actual resource cleanup before permitting recovery. No default media activation; broader borrower/migration/native final-authority constraints remain.
+
+
+## MR-START2b1 original runner/site/start ownership reviewed
+
+MR-START2b1 source `641e39c` retains the original runner/site before awaitedstartup
+effects and one shielded actualstartowner. Stop fencesstartup and joins thatowner
+beforecleanup; cleanupreturnloss keeps runner/knownstopowner without replay orfalse
+closedproof. Unknownstart/watcherpublication staysunresolved. Both370combinedcases
+pass unchanged on3.14.9/3.11.15 plusRuff; independentfinite review found no new
+concreteblocker in thisbounded slice. Six new syntheticstages are not allnative/
+Store qualification; blockedsetup maydelaystop indefinitely. Context-wideteardown,
+stopownercreation, auxiliaryservice/dispatcher publication, adapterpartialrecovery,
+otherborrowers, builder/migration/nativepublication and physical/release gates remain
+open. No checkpointdeployment; image service staysinactive and livehosts remain5ecd2ba.
+
+MR-START2b2 next: seal teardown to original context/dependency owners across awaits; protect stop-task creation acknowledgement loss against replay; then qualify auxiliary service publication and explicit adapter partial-listener cleanup. Never infer whole Store retirement from this startup slice.
