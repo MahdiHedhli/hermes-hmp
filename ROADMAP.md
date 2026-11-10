@@ -1,5 +1,11 @@
 ## November 10: RBH-02 early parent and publication binding
 
+RBH-03's source-only inventory is now reproducible (seven modules, 22 selected
+functions). Its four offline causal checks pass on both runtimes, with identical
+inventory output. The exact success-path dependencies and legitimate mutable/late
+keys are documented in RETAINED_HELPER_TRANSITIVE_SOURCE.md. Original transitive
+runtime binding and audit consolidation remain the next implementation work.
+
 The parent environment is now env7 with a literal retained-helper capsule;
 engine6 and all original direct/nested audits remain. Bootstrap checks precede
 component dispatch, and selected-helper predicates are repeated inline after the

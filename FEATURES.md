@@ -8,6 +8,12 @@ last engine-checker return and at both actual Scope publication boundaries.
 No direct or nested recipe audit has been removed, and no mutable permission or
 safety verdict is cached. This binds inspection DATA, not an image-serving grant.
 
+The next dependency review now has a reproducible source-only inventory covering
+seven modules and 22 selected functions, including local imports and changing
+startup cells. Four inventory-tool checks pass on both runtimes; this does not
+complete transitive runtime custody or make images available. See
+`specs/046-bot-presentation-integration/RETAINED_HELPER_TRANSITIVE_SOURCE.md`.
+
 The same **120 selected checks pass on Python 3.14.9 and 3.11.15**, with unchanged
 source and matching case sets: 105 local controls, fourteen actual publication
 fault cases and one actual early-entry control. They include foreign imported

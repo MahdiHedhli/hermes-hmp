@@ -52,6 +52,9 @@ the initial test cleanup ordering error is fixed, not a production incident.
   approved-recipe or selection-owner methods. Use already qualified original
   transitive bindings where demonstrated, or extend coverage. A module export
   identity alone is insufficient for a whole-body execution claim.
+  The source-only seven-module/22-function inventory and mutable/late-key design
+  are now recorded in RETAINED_HELPER_TRANSITIVE_SOURCE.md. Four tool causals pass
+  on both runtimes with identical inventory output; runtime custody remains open.
 - RBH-04: only after those proofs, consider same-call recipe consolidation using
   exact original package/manifest/same-recipe/full-binding joins before and after
   the actual original package validator. Preserve legacy/unmatched direct checks,
