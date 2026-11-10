@@ -22,6 +22,10 @@
 
 ## Executable leaf-link integration
 
+Current diagnostic priority: [actual inclusive audit cost](LINK_AUDIT_COST.md).
+The owner/package/activation chain dominates the observed completed-call time;
+do not assume a local class-column benchmark resolves the full native deadline.
+
 - [x] **LP3-OWNER-GUARD-RUNTIME** Remove only the two runtime audits duplicated
       by the original owner guard, retaining immediate original runtime joins,
       fresh guard validation and all later native/resource/byte/custody checks.

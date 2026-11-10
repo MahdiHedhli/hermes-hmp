@@ -31,6 +31,10 @@ tracked={native_link._engine_origin_tail.__code__:'engine_origin',
          a.StartupArtifactOwner._guard.__code__:'owner_guard',
          link_origin.current.__code__:'parent_origin'}
 guard_calls={name:0 for name in tracked.values()}
+guard_seconds={name:0.0 for name in tracked.values()}
+# Unmatched starts, not necessarily live frames: PY_UNWIND does not emit
+# PY_RETURN. Completed durations below cover normal returns only.
+guard_started={code:[] for code in tracked}
 
 def observe(frame,event,callee):
     if event!='c_call':return
@@ -104,7 +108,14 @@ else:
     monitor.set_events(5,monitor.events.RAISE)
     def path_progress(code,offset,*ignored):
         if code in tracked:
-            guard_calls[tracked[code]]+=1
+            if not ignored:
+                guard_calls[tracked[code]]+=1
+                guard_started[code].append(time.monotonic())
+            else:
+                # Inclusive completed-call time only. Nested categories overlap;
+                # this diagnostic is never an authority or acceptance threshold.
+                began=guard_started[code].pop()
+                guard_seconds[tracked[code]]+=time.monotonic()-began
             return
         progress.append(dict(seconds=time.monotonic()-started,
                              path_event=len(progress),observed=len(observed),
@@ -115,6 +126,9 @@ else:
                              dead_link_capsules=sum(reference() is None
                                  for _,reference,_,_ in capsules),
                              guard_calls=dict(guard_calls),
+                             guard_inclusive_seconds=dict(guard_seconds),
+                             guard_open_calls={tracked[c]:len(s)
+                                               for c,s in guard_started.items()},
                              work_used=ledger.counts[0],reserved=ledger.counts[1]))
         destination=base/'native-link-private-progress.json'
         destination.write_text(json.dumps(progress))
@@ -123,7 +137,8 @@ else:
     monitor.register_callback(5,monitor.events.PY_RETURN,path_progress)
     monitor.set_local_events(5,native_link._drive_native_path.__code__,
                             monitor.events.PY_START|monitor.events.PY_RETURN)
-    for code in tracked:monitor.set_local_events(5,code,monitor.events.PY_START)
+    for code in tracked:monitor.set_local_events(5,code,
+                            monitor.events.PY_START|monitor.events.PY_RETURN)
     for code in codes:monitor.set_local_events(5,code,monitor.events.CALL)
 try:
     checked=EntryFileSnapshotOwner.complete(retained)
