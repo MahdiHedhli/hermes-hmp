@@ -1,5 +1,38 @@
 # Actual Link audit cost — November 10, 2026
 
+## Actual owner/claim follow-up
+
+A separate private diagnostic profiled ten real `StartupArtifactOwner` guard
+returns after actual startup retention, then stopped the synthetic fixture.
+The profiler was enabled across normal execution, not used to collect nested
+calls from inside its monitoring callback. It observed roughly one million
+calls in 0.255 profiled seconds. Repeated package retained-binding checks and
+closed-descriptor claim checks were prominent; activation was not among the
+top 25 cumulative categories. Imports for profiling expand the fixture closure,
+and inclusive times overlap. This is a target-selection diagnostic, not full
+native, normal completion or cleanup qualification.
+
+A reviewed prototype unpacked immutable allocation/registration/close tuple
+fields into locals while retaining fresh mutable-cell and ledger checks. On
+an actual original closed claim from the synthetic fixture, its local gain was
+only about four percent. It was withheld and production restored. No new
+authority, cached closed-state verdict or native tuple-unpack implementation is
+retained; the bound-audit design also remains unimplemented.
+
+The same broader 110-case open/close selection was run on the committed baseline
+and prototype with source hashes bound to each run: **93 pass and the same 17
+fail**, with identical per-case outcomes. This does not qualify the 17 intended
+causal observations. Diagnose their exact earlier refusal before attributing
+them to test observation or product code. Preserve required normal behavior and
+mutation/no-effect/cleanup assertions; never change expectations to call an
+unreached causal test a pass. Existing fixture migration guidance is relevant
+only where canonical-method substitution is actually demonstrated.
+
+The 302-case current/minimum passes remain bounded evidence for the restored
+committed source; they are not an aggregate green result for this broader gate.
+
+## Earlier inclusive category diagnostic
+
 Diagnostic execution on production source `b35a8be` leaves the original native
 contract and 60-second deadline unchanged. It adds local monitoring timestamps
 for completed normal calls of the four already-counted functions. It does not
