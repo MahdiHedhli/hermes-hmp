@@ -1,3 +1,23 @@
+## Desktop-character startup boundary — November 10, 2026
+
+The exact character source `15eeb14d` still fails its original 60-second native
+startup contract; the current-source receipt/log were revalidated rather than
+relabeling an older failure. This is an HMP implementation gate, not a demonstrated
+upstream-only limitation or a new phone delivery pass.
+
+Independent architecture review accepted the next immutable-audit-record boundary:
+original factory-return identity must join EntryOrigin/STARTED/CELL, lineage, Scope
+and both publication windows before a fixed checker can omit immutable schema
+reparsing. Every mutable code/namespace/class/closure, authorization and resource
+check remains fresh. A two-runtime representation probe showed why a considered
+`partial` carrier is unsuitable as immutable state; an exact tuple DATA record
+with held fixed dispatch was selected instead. This freezes an implementation
+contract only: no optimization, reduced audit, wider deadline or production
+activation has been implemented. Full character/name/avatar delivery remains open.
+
+The separately qualified `6796bfbb` local-image path must retain its later runtime
+and schema-4 fixes; the older character branch must not overwrite that deployment.
+
 ## November 10 — iPad development update installed; LB1 device checks remain
 
 The existing iPad Pro now has development build **2026110901**, installed once
