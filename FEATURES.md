@@ -1,3 +1,30 @@
+## November 10 — native API metadata inspection avoids foreign hooks
+
+Native root-API metadata is now validated with exact dictionary key types before
+lookups and exact string types before equality. The spec dictionary is read using
+a native ModuleSpec descriptor held in the original helper's keyword defaults,
+bypassing a mutable spec getter. Original helper-default custody still checks the
+primitive's identity; live metadata is never cached as authority. The native API
+function is not executed by this check, and no approval audit was removed.
+
+The preceding source passed the canonical metadata control but failed five actual
+foreign-key/file/getter controls. The corrected source passes 16 focused cases
+and both actual final-publication descriptor-default faults, with native private
+refusal/no-additional-work witnesses. Wrong source fields, registries and native
+descriptors refuse without foreign access; valid metadata still passes without
+calling the API. The same **438 selected cases pass on Python 3.14.9 and
+3.11.15**, with identical source maps and case sets. All 62 actual publication
+faults preserve zero foreign calls, new work, reservation change, later
+registration or successful retainer return; 38 verify native private-error state.
+Closed-plugin-surface passes. Independent source review found no new concrete
+blocker; it did not run or independently audit these suites.
+
+The seven-module/41-class/33-function DATA record and live projections are
+unchanged. This is not atomic validation against arbitrary concurrent/trace-time
+mutation, full import/native/property closure or complete startup qualification.
+Device bot-character and host-local image delivery remain unfinished. No affected
+deployed host or live incident was established, and no host/device state changed.
+
 ## November 10 — shared approval-record dispatch held early
 
 The original helper record now holds OperatorApprovalPath, _OperatorFileReceipt

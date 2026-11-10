@@ -12,7 +12,7 @@ import sys
 import threading
 from importlib.machinery import ModuleSpec
 from pathlib import PosixPath
-from types import FunctionType, ModuleType
+from types import FunctionType, GetSetDescriptorType, ModuleType
 from typing import NamedTuple
 
 from hmp_plugin.presentation_gateway_activation import _LATE_MODULES, GatewayActivationOwner
@@ -116,22 +116,35 @@ def _same_entry(before, after):
             and all(old is new for old, new in zip(before, after, strict=True)))
 
 
-def _api_state(source):
-    _require(type(source) is _RootSource and type(source.module) is ModuleType
+def _api_state(source, *, _spec_dict=ModuleSpec.__dict__["__dict__"]):
+    # The native descriptor is an inspection primitive, held in the original
+    # helper's defaults; mutable source/spec contents remain freshly checked.
+    _require(type(source) is _RootSource
+             and type(_spec_dict) is GetSetDescriptorType
+             and _spec_dict.__objclass__ is ModuleSpec
+             and _spec_dict.__name__ == "__dict__")
+    registry = sys.modules
+    _require(type(registry) is dict and all(type(key) is str for key in registry)
+             and type(source.module) is ModuleType
              and type(source.namespace) is dict and vars(source.module) is source.namespace
-             and sys.modules.get("hermes_constants") is source.module
+             and all(type(key) is str for key in source.namespace)
+             and type(source.spec) is ModuleSpec)
+    spec_namespace = _spec_dict.__get__(source.spec, ModuleSpec)
+    _require(type(spec_namespace) is dict
+             and all(type(key) is str for key in spec_namespace))
+    _require(registry.get("hermes_constants") is source.module
              and source.namespace.get("get_default_hermes_root") is source.function
              and type(source.function) is FunctionType
              and source.function.__globals__ is source.namespace
              and source.function.__code__ is source.code
-             and type(source.native_file) is str and source.file == source.native_file
+             and type(source.native_file) is str and type(source.file) is str
+             and source.file == source.native_file
              and source.code.co_filename == source.native_file
              and source.namespace.get("__file__") is source.file
              and source.namespace.get("__spec__") is source.spec
-             and type(source.spec) is ModuleSpec
              and type(source.origin) is str and source.origin == source.native_file
-             and vars(source.spec).get("origin") is source.origin
-             and vars(source.spec).get("loader") is source.loader)
+             and spec_namespace.get("origin") is source.origin
+             and spec_namespace.get("loader") is source.loader)
 
 
 class GatewayApprovalOwner:

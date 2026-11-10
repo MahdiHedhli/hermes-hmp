@@ -570,3 +570,36 @@ def test_shared_record_dispatch_rejoined_after_later_callbacks(captured, monkeyp
         assert type(caught.value) is expected_error and caught.value.args == expected_args
     finally:sys.setprofile(None)
     assert observed == [True] and calls == []
+
+
+@pytest.mark.parametrize('boundary', ('component', 'engine'))
+def test_native_spec_accessor_default_rejoined_after_callbacks(captured, monkeypatch, boundary):
+    from hmp_startup import gateway_approval as approval
+
+    helper = captured[0][6]
+    boundary_code = (helper[3][1][2] if boundary == 'component' else
+                     next(row[2] for row in captured[0][4][2]
+                          if row[0] == '_engine_origin_tail'))
+    parent_code = origins.current.__code__
+    observed, calls = [], []
+
+    class Foreign:
+        def __getattribute__(self, name):
+            calls.append(name)
+            raise AssertionError('foreign native spec accessor dispatched')
+
+    replacement = Foreign()
+
+    def observe(frame, event, value):
+        if (event == 'return' and frame.f_code is boundary_code
+                and frame.f_back.f_code is parent_code and not observed):
+            monkeypatch.setitem(approval._api_state.__kwdefaults__, '_spec_dict', replacement)
+            observed.append(True)
+
+    assert sys.getprofile() is None
+    sys.setprofile(observe)
+    try:
+        with pytest.raises(RuntimeError, match='BI1_LINK_FACTORY_ORIGIN_REFUSED'):
+            origins.current(captured)
+    finally:sys.setprofile(None)
+    assert observed == [True] and calls == []

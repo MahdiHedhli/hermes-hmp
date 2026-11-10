@@ -1,3 +1,12 @@
+## November 10 — native metadata read primitive qualified separately
+
+The API metadata helper now rejects non-string dictionary keys before lookup and
+non-string filenames before comparison. A held native ModuleSpec dictionary
+accessor bypasses mutable instance getter dispatch; its original identity is part
+of the helper's captured keyword pairs, not inferred from a nominal type alone.
+This reads current metadata only and does not call the API, certify all native
+callers or permit audit consolidation. The explicit inventory remains 33 helpers.
+
 ## November 10 — explicit project-type reads covered
 
 The three formerly unselected directly-read project classes now have original
