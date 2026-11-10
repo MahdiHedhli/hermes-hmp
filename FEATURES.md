@@ -7,7 +7,7 @@ seals. Existing fresh module/class/function/default/closure and native/resource/
 byte/custody audits remain. Fast schema use is not implemented; this increment
 makes no full-path speed claim and enables no presentation route.
 
-Current source passes the same **327 checks on Python 3.14.9 and 3.11.15**: the
+Unchanged production passed the same **327 checks on Python 3.14.9 and 3.11.15**: the
 302 regression checks plus 25 original-close/status controls. All runs retained unchanged source and matching case sets. The 302 include: 280 local controls, 12 actual runtime refusal controls and
 10 actual publication controls. New controls exposed and corrected late original
 invocation/getter ordering. The actual mutation cases require zero foreign calls,
@@ -40,10 +40,15 @@ negative interval. Independent review accepted writeback, exact failed-owner and
 no-effect assertions. Older Python retains tracing; artifact floor coverage is
 not claimed. Normal completion still times out; no broader aggregate pass is inferred.
 
-An earlier complete native-path attempt exceeded its unchanged
-60-second deadline. Its last retained checkpoint contains 44 typed native
-observations and one retired raw capsule; this subset is not full native
-acceptance or a speed improvement. The full native flow, startup/service/route
+A fresh native run of the retained production source still exceeds its unchanged
+60-second deadline. The last checkpoint contains 65 typed observations and two
+retired raw capsules; these remain a subset, not complete native acceptance.
+An experimental class-column vector comparison produced no useful full-path
+gain against this immediate control and was not retained. Four added live-class
+controls pass within a 41-check selection on both Python versions: changed values,
+same-size renamed None-valued keys and extra keys refuse; reordered keys remain
+valid. The generic schema checker remains unchanged.
+The full native flow, startup/service/route
 integration, desktop character/avatar display and host-local chat images remain
 unfinished. No upstream-only image blocker has
 been demonstrated. No host, device, permission, provider, model, job, installation

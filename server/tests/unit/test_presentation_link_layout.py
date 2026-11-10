@@ -85,3 +85,58 @@ def test_layout_rejects_copied_rows_and_noncorresponding_columns(fault):
         changed = (layout[0], tuple(modules))
     with pytest.raises(link.ArtifactObservationError):
         link._engine_origin_tail((*origin[:5], changed))
+
+
+@pytest.mark.parametrize('fault', ('value', 'renamed_none', 'extra', 'reordered'))
+def test_live_class_columns_compare_keys_before_none_values(monkeypatch, fault):
+    """A missing None-valued key must not masquerade as a successful get()."""
+    import sys
+    from pathlib import Path
+
+    from hmp_plugin import presentation_metadata_custody as custody
+
+    kind = custody._DirectoryPayload
+    name = '_synthetic_none_column'
+    monkeypatch.setattr(kind, name, None, raising=False)
+    original = link._capture_engine()
+    assert link._engine_origin_tail(original) is original
+    calls = []
+    if fault == 'value':
+        monkeypatch.setattr(kind, name, Foreign(calls))
+    elif fault == 'renamed_none':
+        monkeypatch.delattr(kind, name)
+        monkeypatch.setattr(kind, name + '_renamed', None, raising=False)
+    elif fault == 'extra':
+        monkeypatch.setattr(kind, name + '_extra', None, raising=False)
+    else:
+        monkeypatch.delattr(kind, name)
+        monkeypatch.setattr(kind, name, None, raising=False)
+
+    code = link._engine_origin_tail.__code__
+    source = Path(code.co_filename).read_text().splitlines()
+    end = max(line for _, _, line in code.co_lines() if line is not None)
+    boundary = [i + 1 for i in range(code.co_firstlineno - 1, end)
+                if 'if ' in source[i] and '_map(_type, names)' in source[i]]
+    assert len(boundary) == 1
+    observed = []
+
+    def trace(frame, event, value):
+        if frame.f_code is not code:
+            return None
+        if (event == 'line' and frame.f_lineno == boundary[0]
+                and frame.f_locals.get('kind') is kind):
+            observed.append(True)
+        return trace
+
+    prior = sys.gettrace()
+    assert prior is None
+    sys.settrace(trace)
+    try:
+        if fault == 'reordered':
+            assert link._engine_origin_tail(original) is original
+        else:
+            with pytest.raises(link.ArtifactObservationError):
+                link._engine_origin_tail(original)
+    finally:
+        sys.settrace(prior)
+    assert observed and calls == []

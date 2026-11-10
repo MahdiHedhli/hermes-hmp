@@ -1,3 +1,12 @@
+## November 10: immediate native control and next prerequisite
+
+Kept production remains unchanged after a withheld class-column vector experiment.
+A fresh immediate native control still times out60s (65typed/two retired capsules,
+not completion). Four added live-class controls pass in41cases on both runtimes.
+Next is original package/recipe helper custody before any same-call audit
+consolidation; see RETAINED_BINDING_AUDIT_PLAN.md. No skipped permission/fresh
+mutable checks, helper self-nomination, host/device/install/release changes.
+
 ## November 10: fixed-width audit checks
 
 Claim and closed-descriptor checks use direct indexed predicates after the same

@@ -1,3 +1,23 @@
+## November 10: class-column candidate withheld
+
+The full generic checker still validated every immutable layout pair on each
+call; only the later live class lookup used native mappingproxy contains/item
+vectors. Bounded independent review found no concrete predicate/security gap.
+A local whole-checker benchmark improved only a few percent. The exact candidate
+and immediate kept-source control both exceeded the original60second native
+deadline and retained65typed observations/two retired capsules. At event4 the
+candidate/control times were45.614/46.069seconds, but their initial event already
+differed by1.09seconds. No useful full-path benefit is established. Candidate
+production was restored to the preceding source; no cached schema authority or
+mutable verdict was introduced.
+
+The four new class controls are retained and pass within the same41 local cases
+on both actual runtimes. They independently prove same-size missing None-key
+refusal, exact live-value refusal, extra-key refusal and order independence, at
+the actual generic class predicate with zero foreign protocols. These tests do
+not establish native/service/image acceptance. Owner/dependency binding audits
+remain the dominant completed inclusive category (overlapping timing totals).
+
 ## November 10: fixed-width audit checks
 
 Claim and closed-descriptor checks use direct indexed predicates after the same
