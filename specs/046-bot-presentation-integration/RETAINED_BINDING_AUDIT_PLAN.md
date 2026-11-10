@@ -1,7 +1,8 @@
 # Same-call retained recipe audit consolidation — prerequisite review
 
-Status: selected-helper DATA component implemented as RBH-01; early-root
-integration and audit consolidation remain unimplemented. This is not an
+Status: RBH-01 selected-helper DATA and RBH-02 early-parent/scope binding are
+implemented with bounded source qualification. Transitive coverage and audit
+consolidation remain unimplemented. This is not an
 authorization shortcut. See SELECTED_RETAINED_HELPER_ORIGIN.md.
 
 The actual EntryFileSnapshotOwner._pure_lineage calls the recipe retained-binding

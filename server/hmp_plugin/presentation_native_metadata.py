@@ -613,7 +613,7 @@ def _closed_link_engine_origin(owner, resource):
     parent = tuple.__getitem__(lineage, 4)
     _require(type(parent) is tuple and len(parent) == 5)
     environment, own = parent[0], parent[2]
-    _require(type(environment) is tuple and len(environment) == 6
+    _require(type(environment) is tuple and len(environment) == 7
              and type(own) is tuple and len(own) == 7)
     current_row = own[3]
     _require(type(current_row) is tuple and len(current_row) == 7)

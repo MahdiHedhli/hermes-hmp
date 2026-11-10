@@ -161,3 +161,136 @@ def test_initialization_import_cannot_nominate_capture_helpers(monkeypatch, faul
     assert origins._CAPTURE_STARTED is True
     with pytest.raises(RuntimeError, match='BI1_LINK_FACTORY_ORIGIN_REFUSED'):
         origins.capture()  # no second initialization attempt after uncertainty
+
+
+def test_retained_helper_module_fenced_before_namespace_inspection(monkeypatch):
+    import builtins
+    import hmp_startup
+
+    monkeypatch.setattr(origins, '_CAPTURE_STARTED', False)
+    actual_import = builtins.__import__
+    reached, calls = [], []
+
+    class Foreign:
+        __slots__ = ()
+
+        def __getattribute__(self, name):
+            calls.append(name)
+            raise AssertionError('foreign module namespace inspected')
+
+    def observed_import(name, globals=None, locals=None, fromlist=(), level=0):
+        result = actual_import(name, globals, locals, fromlist, level)
+        if name == 'hmp_startup' and 'retained_binding_origin' in (fromlist or ()):
+            monkeypatch.setattr(hmp_startup, 'retained_binding_origin', Foreign())
+            reached.append(True)
+        return result
+
+    monkeypatch.setattr(builtins, '__import__', observed_import)
+    with pytest.raises(RuntimeError, match='BI1_LINK_FACTORY_ORIGIN_REFUSED'):
+        origins.capture()
+    assert reached == [True] and calls == []
+    assert origins._CAPTURE_STARTED is True
+
+
+@pytest.mark.parametrize('boundary', ('component', 'engine'))
+@pytest.mark.parametrize('fault', ('export', 'code'))
+def test_selected_helper_state_rejoined_after_final_checker_return(
+        captured, monkeypatch, boundary, fault):
+    from hmp_plugin import presentation_gateway_package as package
+
+    helper = captured[0][6]
+    checker_code = (helper[3][1][2] if boundary == 'component' else
+                    next(row[2] for row in captured[0][4][2]
+                         if row[0] == '_engine_origin_tail'))
+    parent_code = origins.current.__code__
+    target = package.GatewayPackageOwner._retained_binding
+    observed, calls = [], []
+
+    def foreign(*args):
+        calls.append(True)
+        raise AssertionError('foreign retained helper executed')
+
+    def forbidden_code(*args):
+        raise AssertionError('changed retained helper code executed')
+
+    def profile(frame, event, value):
+        if (event == 'return' and frame.f_code is checker_code
+                and frame.f_back.f_code is parent_code and not observed):
+            if fault == 'export':
+                monkeypatch.setattr(package.GatewayPackageOwner, '_retained_binding', foreign)
+            else:
+                monkeypatch.setattr(target, '__code__', forbidden_code.__code__)
+            observed.append(True)
+
+    prior = sys.getprofile()
+    assert prior is None
+    sys.setprofile(profile)
+    try:
+        with pytest.raises(RuntimeError, match='BI1_LINK_FACTORY_ORIGIN_REFUSED'):
+            origins.current(captured)
+    finally:
+        sys.setprofile(prior)
+    assert observed == [True] and calls == []
+
+
+@pytest.mark.parametrize('fault', ('capture_export', 'current_export', 'capture_code',
+                                  'current_code', 'capture_defaults', 'current_keywords',
+                                  'roles', 'error_constructor', 'packet'))
+def test_retained_component_bootstrap_refuses_before_dispatch(captured, monkeypatch, fault):
+    helper = captured[0][6]
+    component = helper[0]
+    calls = []
+
+    def foreign(*args, **kwargs):
+        calls.append(True)
+        raise AssertionError('foreign component executed')
+
+    def forbidden_code(*args, **kwargs):
+        raise AssertionError('changed component code executed')
+
+    changed = captured
+    if fault == 'capture_export':
+        monkeypatch.setattr(component, 'capture', foreign)
+    elif fault == 'current_export':
+        monkeypatch.setattr(component, 'current', foreign)
+    elif fault in ('capture_code', 'current_code'):
+        target = component.capture if fault == 'capture_code' else component.current
+        monkeypatch.setattr(target, '__code__', forbidden_code.__code__)
+    elif fault == 'capture_defaults':
+        monkeypatch.setattr(component.capture, '__defaults__', (object(),))
+    elif fault == 'current_keywords':
+        monkeypatch.setattr(component.current, '__kwdefaults__', {'synthetic': foreign})
+    elif fault == 'roles':
+        monkeypatch.setattr(component, '_FUNCTIONS', ())
+    elif fault == 'error_constructor':
+        monkeypatch.setattr(component.RetainedBindingOriginError, '__init__', foreign,
+                            raising=False)
+    else:
+        copied = (*helper[:6], object())
+        environment = (*captured[0][:6], copied)
+        changed = (environment, *captured[1:])
+    with pytest.raises(RuntimeError, match='BI1_LINK_FACTORY_ORIGIN_REFUSED'):
+        origins.current(changed)
+    assert calls == []
+
+
+def test_component_builtin_all_refuses_before_dispatch(captured):
+    import builtins
+
+    calls = []
+    original = builtins.all
+
+    def foreign(*args, **kwargs):
+        calls.append(True)
+        raise AssertionError('foreign builtin all executed')
+
+    refused = False
+    builtins.all = foreign
+    try:
+        try:
+            origins.current(captured)
+        except RuntimeError:
+            refused = True
+    finally:
+        builtins.all = original
+    assert refused and calls == []

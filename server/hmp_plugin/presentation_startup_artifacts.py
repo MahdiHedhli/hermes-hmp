@@ -567,8 +567,8 @@ def _has_native_link_engine(registration):
              and type(registration.lineage) is registration.type_pins[0])
     parent = tuple.__getitem__(registration.lineage, 4)
     _require(type(parent) is tuple and len(parent) == 5
-             and type(parent[0]) is tuple and len(parent[0]) in (4, 6))
-    return len(parent[0]) == 6
+             and type(parent[0]) is tuple and len(parent[0]) in (4, 7))
+    return len(parent[0]) == 7
 
 
 def _native_link_function(owner, registration, name):
@@ -3329,6 +3329,8 @@ class StartupArtifactOwner:
                      and tuple.__getitem__(native_files, 0) is digest_context.entry
                      and tuple.__getitem__(native_files, 4) is link_origin
                      and type(link_origin) is tuple and len(link_origin) == 5)
+                need(type(link_origin[0]) is tuple and len(link_origin[0]) == 7)
+                link_helper_origin = link_origin[0][6]
                 link_engine_origin = link_origin[0][4]
                 # Raw pointer joins above derive the actual origin. Its fixed
                 # early current row is independently code/default pinned below.
@@ -3583,7 +3585,7 @@ class StartupArtifactOwner:
                 if link_raw_type(link_origin) is not link_raw_tuple or link_raw_len(link_origin) != 5:
                     raise error_type(owner) from None
                 link_pin_environment, link_pin_modules, link_pin_own_functions, link_pin_policy_functions, link_pin_types = link_origin
-                if link_raw_type(link_pin_environment) is not link_raw_tuple or link_raw_len(link_pin_environment) != 6 or link_raw_type(link_pin_environment[0]) is not link_raw_module or (link_raw_type(link_pin_environment[1]) is not link_raw_dict) or (link_raw_vars(link_pin_environment[0]) is not link_pin_environment[1]) or link_raw_any((link_raw_type(link_pin_k) is not link_raw_str for link_pin_k in link_pin_environment[1])) or (link_raw_type(link_pin_environment[2]) is not link_raw_dict) or link_raw_any((link_raw_type(link_pin_k) is not link_raw_str for link_pin_k in link_pin_environment[2])) or (link_pin_environment[1].get('modules') is not link_pin_environment[2]) or (link_raw_type(link_pin_modules) is not link_raw_tuple) or (link_raw_len(link_pin_modules) != 4) or (link_raw_type(link_pin_own_functions) is not link_raw_tuple) or (link_raw_type(link_pin_policy_functions) is not link_raw_tuple) or (link_raw_type(link_pin_types) is not link_raw_tuple) or (link_raw_len(link_pin_types) != 11):
+                if link_raw_type(link_pin_environment) is not link_raw_tuple or link_raw_len(link_pin_environment) != 7 or link_raw_type(link_pin_environment[0]) is not link_raw_module or (link_raw_type(link_pin_environment[1]) is not link_raw_dict) or (link_raw_vars(link_pin_environment[0]) is not link_pin_environment[1]) or link_raw_any((link_raw_type(link_pin_k) is not link_raw_str for link_pin_k in link_pin_environment[1])) or (link_raw_type(link_pin_environment[2]) is not link_raw_dict) or link_raw_any((link_raw_type(link_pin_k) is not link_raw_str for link_pin_k in link_pin_environment[2])) or (link_pin_environment[1].get('modules') is not link_pin_environment[2]) or (link_raw_type(link_pin_modules) is not link_raw_tuple) or (link_raw_len(link_pin_modules) != 4) or (link_raw_type(link_pin_own_functions) is not link_raw_tuple) or (link_raw_type(link_pin_policy_functions) is not link_raw_tuple) or (link_raw_type(link_pin_types) is not link_raw_tuple) or (link_raw_len(link_pin_types) != 11):
                     raise error_type(owner) from None
                 link_pin_names = ('hmp_startup.link_factory_origin', 'hmp_plugin.presentation_link_path_policy', 'hmp_plugin.presentation_startup_artifacts', 'hmp_startup.runtime_files')
                 for link_pin_row, link_pin_name in link_raw_zip(link_pin_modules, link_pin_names, strict=True):
@@ -3618,6 +3620,165 @@ class StartupArtifactOwner:
                         link_pin_actual = link_pin_actual.__func__
                     if link_pin_namespace.get('_fields') is not link_pin_fields or link_pin_actual is not link_pin_constructor or link_pin_constructor.__code__ is not link_pin_code or (link_pin_constructor.__globals__ is not link_pin_globals_) or (link_pin_constructor.__defaults__ is not link_pin_defaults) or (link_pin_kind.__bases__ is not link_pin_bases) or (link_pin_globals_.get('_tuple_new') is not link_raw_tuple.__new__) or link_raw_any((link_pin_namespace.get(link_pin_n) is not link_pin_member for link_pin_n, link_pin_member in link_raw_zip(link_pin_fields, link_pin_members, strict=True))) or link_raw_any((link_raw_type(link_pin_row) is not link_raw_tuple or link_raw_len(link_pin_row) != 2 or link_raw_type(link_pin_row[0]) is not link_raw_str or (link_pin_namespace.get(link_pin_row[0]) is not link_pin_row[1]) for link_pin_row in link_pin_dispatch)):
                         raise error_type(owner) from None
+                # Original retained-helper prefix and DATA, with no final callback.
+                if link_pin_environment[6] is not link_helper_origin:
+                    raise error_type(owner) from None
+                link_helper_default_pairs = link_pin_own_functions[2][6]
+                link_helper_defaults = {}
+                for link_helper_pair in link_helper_default_pairs:
+                    if (link_raw_type(link_helper_pair) is not link_raw_tuple
+                            or link_raw_len(link_helper_pair) != 2
+                            or link_raw_type(link_helper_pair[0]) is not link_raw_str
+                            or link_helper_pair[0] in link_helper_defaults):
+                        raise error_type(owner) from None
+                    link_helper_defaults[link_helper_pair[0]] = link_helper_pair[1]
+                link_helper_default_names = ('_type', '_vars', '_tuple', '_len', '_dict', '_str',
+                    '_any', '_zip', '_all', '_set', '_error', '_value_error')
+                if link_raw_any(name not in link_helper_defaults for name in link_helper_default_names):
+                    raise error_type(owner) from None
+                link_helper_expected_builtins = link_raw_tuple(link_helper_defaults[name]
+                    for name in link_helper_default_names)
+                link_helper_system, link_helper_registry = link_pin_environment[0], link_pin_environment[2]
+                if link_raw_type(link_helper_origin) is not link_raw_tuple or link_raw_len(link_helper_origin) != 7 or link_raw_type(link_helper_origin[0]) is not link_raw_module or (link_raw_type(link_helper_origin[1]) is not link_raw_dict) or (link_raw_type(link_helper_origin[2]) is not link_raw_tuple) or (link_raw_type(link_helper_origin[3]) is not link_raw_tuple) or (link_raw_len(link_helper_origin[3]) != 2) or (link_raw_type(link_helper_origin[4]) is not link_raw_tuple) or (link_raw_len(link_helper_origin[4]) != 3) or (link_raw_type(link_helper_origin[5]) is not link_raw_tuple) or (link_raw_len(link_helper_origin[5]) != 3):
+                    raise error_type(owner) from None
+                link_seal_helper_module, link_seal_helper_namespace, link_seal_helper_pairs = link_helper_origin[:3]
+                link_seal_helper_builtin_module, link_seal_helper_builtin_namespace, link_seal_helper_primitive_pairs = link_helper_origin[5]
+                if link_raw_any((link_raw_type(k) is not link_raw_str for k in link_helper_registry)) or link_helper_registry.get('hmp_startup.retained_binding_origin') is not link_seal_helper_module or link_raw_vars(link_seal_helper_module) is not link_seal_helper_namespace or link_raw_any((link_raw_type(k) is not link_raw_str for k in link_seal_helper_namespace)) or (link_raw_len(link_seal_helper_namespace) != link_raw_len(link_seal_helper_pairs)) or (link_seal_helper_namespace.get('sys') is not link_helper_system) or (link_raw_type(link_seal_helper_builtin_module) is not link_raw_module) or (link_raw_type(link_seal_helper_builtin_namespace) is not link_raw_dict) or (link_helper_registry.get('builtins') is not link_seal_helper_builtin_module) or (link_raw_vars(link_seal_helper_builtin_module) is not link_seal_helper_builtin_namespace) or link_raw_any((link_raw_type(k) is not link_raw_str for k in link_seal_helper_builtin_namespace)) or (link_seal_helper_namespace.get('__builtins__') is not link_seal_helper_builtin_namespace) or (link_raw_type(link_seal_helper_primitive_pairs) is not link_raw_tuple) or (link_raw_len(link_seal_helper_primitive_pairs) != 12):
+                    raise error_type(owner) from None
+                link_seal_helper_seen = {}
+                for link_seal_helper_pair in link_seal_helper_pairs:
+                    if link_raw_type(link_seal_helper_pair) is not link_raw_tuple or link_raw_len(link_seal_helper_pair) != 2 or link_raw_type(link_seal_helper_pair[0]) is not link_raw_str:
+                        raise error_type(owner) from None
+                    link_seal_helper_key, link_seal_helper_value = link_seal_helper_pair
+                    if link_seal_helper_key in link_seal_helper_seen or link_seal_helper_key not in link_seal_helper_namespace or link_seal_helper_namespace[link_seal_helper_key] is not link_seal_helper_value:
+                        raise error_type(owner) from None
+                    link_seal_helper_seen[link_seal_helper_key] = link_seal_helper_value
+                for link_seal_helper_pair, link_seal_helper_name, link_seal_helper_expected in link_raw_zip(link_seal_helper_primitive_pairs, ('type', 'vars', 'tuple', 'len', 'dict', 'str', 'any', 'zip', 'all', 'set', 'RuntimeError', 'ValueError'), link_helper_expected_builtins, strict=True):
+                    if link_raw_type(link_seal_helper_pair) is not link_raw_tuple or link_raw_len(link_seal_helper_pair) != 2 or link_raw_type(link_seal_helper_pair[0]) is not link_raw_str or (link_seal_helper_pair[0] != link_seal_helper_name) or (link_seal_helper_pair[1] is not link_seal_helper_expected) or (link_seal_helper_builtin_namespace.get(link_seal_helper_name) is not link_seal_helper_expected):
+                        raise error_type(owner) from None
+                for link_seal_helper_row, link_seal_helper_name in link_raw_zip(link_helper_origin[3], ('capture', 'current'), strict=True):
+                    if link_raw_type(link_seal_helper_row) is not link_raw_tuple or link_raw_len(link_seal_helper_row) != 7 or link_raw_type(link_seal_helper_row[0]) is not link_raw_str or (link_seal_helper_row[0] != link_seal_helper_name) or (link_raw_type(link_seal_helper_row[1]) is not link_raw_function) or (link_seal_helper_row[3] is not link_seal_helper_namespace) or (link_seal_helper_namespace.get(link_seal_helper_name) is not link_seal_helper_row[1]) or (link_seal_helper_row[1].__code__ is not link_seal_helper_row[2]) or (link_seal_helper_row[1].__globals__ is not link_seal_helper_namespace) or (link_seal_helper_row[1].__builtins__ is not link_seal_helper_builtin_namespace) or (link_seal_helper_row[1].__defaults__ is not link_seal_helper_row[4]) or (link_seal_helper_row[1].__kwdefaults__ is not link_seal_helper_row[5]) or (link_seal_helper_row[1].__closure__ is not None) or (link_raw_type(link_seal_helper_row[6]) is not link_raw_tuple):
+                        raise error_type(owner) from None
+                    link_seal_helper_kw, link_seal_helper_kw_pairs = (link_seal_helper_row[5], link_seal_helper_row[6])
+                    if link_seal_helper_kw is None:
+                        if link_raw_len(link_seal_helper_kw_pairs) != 0:
+                            raise error_type(owner) from None
+                    else:
+                        if link_raw_type(link_seal_helper_kw) is not link_raw_dict or link_raw_any((link_raw_type(k) is not link_raw_str for k in link_seal_helper_kw)) or link_raw_len(link_seal_helper_kw) != link_raw_len(link_seal_helper_kw_pairs):
+                            raise error_type(owner) from None
+                        link_seal_helper_seen = {}
+                        for link_seal_helper_pair in link_seal_helper_kw_pairs:
+                            if link_raw_type(link_seal_helper_pair) is not link_raw_tuple or link_raw_len(link_seal_helper_pair) != 2 or link_raw_type(link_seal_helper_pair[0]) is not link_raw_str:
+                                raise error_type(owner) from None
+                            link_seal_helper_key, link_seal_helper_value = link_seal_helper_pair
+                            if link_seal_helper_key in link_seal_helper_seen or link_seal_helper_key not in link_seal_helper_kw or link_seal_helper_kw[link_seal_helper_key] is not link_seal_helper_value:
+                                raise error_type(owner) from None
+                            link_seal_helper_seen[link_seal_helper_key] = link_seal_helper_value
+                link_seal_helper_error_kind, link_seal_helper_error_bases, link_seal_helper_error_pairs = link_helper_origin[4]
+                if link_raw_type(link_seal_helper_error_kind) is not link_raw_type or link_seal_helper_namespace.get('RetainedBindingOriginError') is not link_seal_helper_error_kind or link_raw_type(link_seal_helper_error_bases) is not link_raw_tuple or (link_raw_len(link_seal_helper_error_bases) != 1) or (link_seal_helper_error_bases[0] is not link_helper_expected_builtins[10]) or (link_seal_helper_error_kind.__bases__ is not link_seal_helper_error_bases) or (link_raw_type(link_seal_helper_error_pairs) is not link_raw_tuple):
+                    raise error_type(owner) from None
+                link_seal_helper_error_names = link_raw_vars(link_seal_helper_error_kind)
+                if link_raw_any((link_raw_type(k) is not link_raw_str for k in link_seal_helper_error_names)) or link_raw_len(link_seal_helper_error_names) != link_raw_len(link_seal_helper_error_pairs) or '__init__' in link_seal_helper_error_names or ('__new__' in link_seal_helper_error_names):
+                    raise error_type(owner) from None
+                link_seal_helper_seen = {}
+                for link_seal_helper_pair in link_seal_helper_error_pairs:
+                    if link_raw_type(link_seal_helper_pair) is not link_raw_tuple or link_raw_len(link_seal_helper_pair) != 2 or link_raw_type(link_seal_helper_pair[0]) is not link_raw_str:
+                        raise error_type(owner) from None
+                    link_seal_helper_key, link_seal_helper_value = link_seal_helper_pair
+                    if link_seal_helper_key in link_seal_helper_seen or link_seal_helper_key not in link_seal_helper_error_names or link_seal_helper_error_names[link_seal_helper_key] is not link_seal_helper_value:
+                        raise error_type(owner) from None
+                    link_seal_helper_seen[link_seal_helper_key] = link_seal_helper_value
+                link_hdata_packet = link_helper_origin[6]
+                link_helper_all = link_helper_expected_builtins[8]
+                link_helper_set = link_helper_expected_builtins[9]
+                link_helper_value_error = link_helper_expected_builtins[11]
+                link_helper_modules = link_helper_origin[1]['_MODULES']
+                link_helper_classes = link_helper_origin[1]['_CLASSES']
+                link_helper_functions = link_helper_origin[1]['_FUNCTIONS']
+                if (link_raw_type(link_hdata_packet) is link_raw_tuple and link_raw_len(link_hdata_packet) == 6) is not True:
+                    raise error_type(owner) from None
+                link_hdata_system, link_hdata_system_names, link_hdata_registry, link_hdata_modules, link_hdata_classes, link_hdata_functions = link_hdata_packet
+                if (link_raw_type(link_hdata_system) is link_raw_module and link_raw_type(link_hdata_system_names) is link_raw_dict and (link_raw_vars(link_hdata_system) is link_hdata_system_names) and link_helper_all((link_raw_type(link_hdata_key) is link_raw_str for link_hdata_key in link_hdata_system_names)) and (link_raw_type(link_hdata_registry) is link_raw_dict) and link_helper_all((link_raw_type(link_hdata_key) is link_raw_str for link_hdata_key in link_hdata_registry)) and (link_hdata_system_names.get('modules') is link_hdata_registry) and (link_raw_type(link_hdata_modules) is link_raw_tuple) and (link_raw_len(link_hdata_modules) == link_raw_len(link_helper_modules)) and (link_raw_type(link_hdata_classes) is link_raw_tuple) and (link_raw_len(link_hdata_classes) == link_raw_len(link_helper_classes)) and (link_raw_type(link_hdata_functions) is link_raw_tuple) and (link_raw_len(link_hdata_functions) == link_raw_len(link_helper_functions))) is not True:
+                    raise error_type(owner) from None
+                for link_hdata_row, link_hdata_name in link_raw_zip(link_hdata_modules, link_helper_modules, strict=True):
+                    if (link_raw_type(link_hdata_row) is link_raw_tuple and link_raw_len(link_hdata_row) == 3) is not True:
+                        raise error_type(owner) from None
+                    link_hdata_module, link_hdata_namespace, link_hdata_pairs = link_hdata_row
+                    if (link_raw_type(link_hdata_module) is link_raw_module and link_raw_type(link_hdata_namespace) is link_raw_dict and link_helper_all((link_raw_type(link_hdata_key) is link_raw_str for link_hdata_key in link_hdata_registry)) and link_helper_all((link_raw_type(link_hdata_key) is link_raw_str for link_hdata_key in link_hdata_namespace)) and (link_hdata_registry.get(link_hdata_name) is link_hdata_module) and (link_raw_vars(link_hdata_module) is link_hdata_namespace) and (link_raw_type(link_hdata_namespace.get('__name__')) is link_raw_str) and (link_hdata_namespace['__name__'] == link_hdata_name) and (link_raw_type(link_hdata_pairs) is link_raw_tuple) and (link_raw_len(link_hdata_namespace) == link_raw_len(link_hdata_pairs))) is not True:
+                        raise error_type(owner) from None
+                    link_hdata_seen = link_helper_set()
+                    for link_hdata_pair in link_hdata_pairs:
+                        if (link_raw_type(link_hdata_pair) is link_raw_tuple and link_raw_len(link_hdata_pair) == 2 and (link_raw_type(link_hdata_pair[0]) is link_raw_str)) is not True:
+                            raise error_type(owner) from None
+                        link_hdata_key, link_hdata_value = link_hdata_pair
+                        if (link_hdata_key not in link_hdata_seen and link_hdata_key in link_hdata_namespace and (link_hdata_namespace[link_hdata_key] is link_hdata_value)) is not True:
+                            raise error_type(owner) from None
+                        link_hdata_seen.add(link_hdata_key)
+                for link_hdata_row, (link_hdata_index, link_hdata_name) in link_raw_zip(link_hdata_classes, link_helper_classes, strict=True):
+                    if (link_raw_type(link_hdata_row) is link_raw_tuple and link_raw_len(link_hdata_row) == 3) is not True:
+                        raise error_type(owner) from None
+                    link_hdata_kind, link_hdata_bases, link_hdata_pairs = link_hdata_row
+                    if (link_raw_type(link_hdata_kind) is link_raw_type and link_helper_all((link_raw_type(link_hdata_key) is link_raw_str for link_hdata_key in link_hdata_modules[link_hdata_index][1])) and (link_hdata_modules[link_hdata_index][1].get(link_hdata_name) is link_hdata_kind) and (link_hdata_kind.__bases__ is link_hdata_bases) and (link_raw_type(link_hdata_pairs) is link_raw_tuple)) is not True:
+                        raise error_type(owner) from None
+                    link_hdata_names = link_raw_vars(link_hdata_kind)
+                    if (link_helper_all((link_raw_type(link_hdata_key) is link_raw_str for link_hdata_key in link_hdata_names)) and link_raw_len(link_hdata_names) == link_raw_len(link_hdata_pairs)) is not True:
+                        raise error_type(owner) from None
+                    link_hdata_seen = link_helper_set()
+                    for link_hdata_pair in link_hdata_pairs:
+                        if (link_raw_type(link_hdata_pair) is link_raw_tuple and link_raw_len(link_hdata_pair) == 2 and (link_raw_type(link_hdata_pair[0]) is link_raw_str)) is not True:
+                            raise error_type(owner) from None
+                        link_hdata_key, link_hdata_value = link_hdata_pair
+                        if (link_hdata_key not in link_hdata_seen and link_hdata_key in link_hdata_names and (link_hdata_names[link_hdata_key] is link_hdata_value)) is not True:
+                            raise error_type(owner) from None
+                        link_hdata_seen.add(link_hdata_key)
+                for link_hdata_row, (link_hdata_index, link_hdata_owner, link_hdata_name) in link_raw_zip(link_hdata_functions, link_helper_functions, strict=True):
+                    if (link_raw_type(link_hdata_row) is link_raw_tuple and link_raw_len(link_hdata_row) == 8) is not True:
+                        raise error_type(owner) from None
+                    link_hdata_function, link_hdata_code, link_hdata_namespace, link_hdata_defaults, link_hdata_kw, link_hdata_pairs, link_hdata_closure, link_hdata_cells = link_hdata_row
+                    if (link_raw_type(link_hdata_namespace) is link_raw_dict and link_hdata_namespace is link_hdata_modules[link_hdata_index][1] and (link_raw_type(link_hdata_function) is link_raw_function) and (link_hdata_function.__globals__ is link_hdata_namespace) and (link_hdata_function.__code__ is link_hdata_code) and (link_hdata_function.__defaults__ is link_hdata_defaults) and (link_hdata_defaults is None or link_raw_type(link_hdata_defaults) is link_raw_tuple) and (link_hdata_function.__kwdefaults__ is link_hdata_kw) and (link_hdata_function.__closure__ is link_hdata_closure) and (link_raw_type(link_hdata_pairs) is link_raw_tuple) and (link_raw_type(link_hdata_cells) is link_raw_tuple)) is not True:
+                        raise error_type(owner) from None
+                    link_hdata_names = link_hdata_namespace
+                    if link_helper_all((link_raw_type(link_hdata_key) is link_raw_str for link_hdata_key in link_hdata_namespace)) is not True:
+                        raise error_type(owner) from None
+                    if link_hdata_owner is not None:
+                        link_hdata_held_kind = None
+                        for link_hdata_class_row, (link_hdata_class_index, link_hdata_class_name) in link_raw_zip(link_hdata_classes, link_helper_classes, strict=True):
+                            if link_hdata_class_index == link_hdata_index and link_hdata_class_name == link_hdata_owner:
+                                link_hdata_held_kind = link_hdata_class_row[0]
+                                break
+                        if (link_raw_type(link_hdata_held_kind) is link_raw_type and link_helper_all((link_raw_type(link_hdata_key) is link_raw_str for link_hdata_key in link_hdata_namespace)) and (link_hdata_namespace.get(link_hdata_owner) is link_hdata_held_kind)) is not True:
+                            raise error_type(owner) from None
+                        link_hdata_names = link_raw_vars(link_hdata_held_kind)
+                    if (link_helper_all((link_raw_type(link_hdata_key) is link_raw_str for link_hdata_key in link_hdata_names)) and link_hdata_names.get(link_hdata_name) is link_hdata_function) is not True:
+                        raise error_type(owner) from None
+                    if link_hdata_kw is None:
+                        if (link_hdata_pairs == ()) is not True:
+                            raise error_type(owner) from None
+                    else:
+                        if (link_raw_type(link_hdata_kw) is link_raw_dict and link_helper_all((link_raw_type(link_hdata_key) is link_raw_str for link_hdata_key in link_hdata_kw)) and (link_raw_len(link_hdata_kw) == link_raw_len(link_hdata_pairs))) is not True:
+                            raise error_type(owner) from None
+                        link_hdata_seen = link_helper_set()
+                        for link_hdata_pair in link_hdata_pairs:
+                            if (link_raw_type(link_hdata_pair) is link_raw_tuple and link_raw_len(link_hdata_pair) == 2 and (link_raw_type(link_hdata_pair[0]) is link_raw_str)) is not True:
+                                raise error_type(owner) from None
+                            link_hdata_key, link_hdata_value = link_hdata_pair
+                            if (link_hdata_key not in link_hdata_seen and link_hdata_key in link_hdata_kw and (link_hdata_kw[link_hdata_key] is link_hdata_value)) is not True:
+                                raise error_type(owner) from None
+                            link_hdata_seen.add(link_hdata_key)
+                    if link_hdata_closure is None:
+                        if (link_hdata_cells == ()) is not True:
+                            raise error_type(owner) from None
+                    else:
+                        if (link_raw_type(link_hdata_closure) is link_raw_tuple and link_raw_len(link_hdata_closure) == link_raw_len(link_hdata_cells)) is not True:
+                            raise error_type(owner) from None
+                        try:
+                            if link_helper_all((link_raw_type(link_hdata_cell) is link_raw_cell and link_hdata_cell.cell_contents is link_hdata_value for link_hdata_cell, link_hdata_value in link_raw_zip(link_hdata_closure, link_hdata_cells, strict=True))) is not True:
+                                raise error_type(owner) from None
+                        except link_helper_value_error:
+                            raise error_type(owner) from None
+                if (link_helper_all((link_raw_type(link_hdata_key) is link_raw_str for link_hdata_key in link_hdata_modules[0][1])) and link_hdata_modules[0][1].get('GatewayRecipeOwner') is link_hdata_classes[2][0] and (link_hdata_modules[0][1].get('_same_recipe_binding') is link_hdata_functions[4][0])) is not True:
+                    raise error_type(owner) from None
+
                 link_pin_encoding_origin = link_pin_environment[3]
                 if link_raw_type(link_pin_encoding_origin) is not link_pin_types[9][0] or link_raw_tuple.__len__(link_pin_encoding_origin) != 7:
                     raise error_type(owner) from None
@@ -3875,7 +4036,7 @@ class StartupArtifactOwner:
                 if link_raw_type(link_origin) is not link_raw_tuple or link_raw_len(link_origin) != 5:
                     raise error_type(owner) from None
                 link_pin_environment, link_pin_modules, link_pin_own_functions, link_pin_policy_functions, link_pin_types = link_origin
-                if link_raw_type(link_pin_environment) is not link_raw_tuple or link_raw_len(link_pin_environment) != 6 or link_raw_type(link_pin_environment[0]) is not link_raw_module or (link_raw_type(link_pin_environment[1]) is not link_raw_dict) or (link_raw_vars(link_pin_environment[0]) is not link_pin_environment[1]) or link_raw_any((link_raw_type(link_pin_k) is not link_raw_str for link_pin_k in link_pin_environment[1])) or (link_raw_type(link_pin_environment[2]) is not link_raw_dict) or link_raw_any((link_raw_type(link_pin_k) is not link_raw_str for link_pin_k in link_pin_environment[2])) or (link_pin_environment[1].get('modules') is not link_pin_environment[2]) or (link_raw_type(link_pin_modules) is not link_raw_tuple) or (link_raw_len(link_pin_modules) != 4) or (link_raw_type(link_pin_own_functions) is not link_raw_tuple) or (link_raw_type(link_pin_policy_functions) is not link_raw_tuple) or (link_raw_type(link_pin_types) is not link_raw_tuple) or (link_raw_len(link_pin_types) != 11):
+                if link_raw_type(link_pin_environment) is not link_raw_tuple or link_raw_len(link_pin_environment) != 7 or link_raw_type(link_pin_environment[0]) is not link_raw_module or (link_raw_type(link_pin_environment[1]) is not link_raw_dict) or (link_raw_vars(link_pin_environment[0]) is not link_pin_environment[1]) or link_raw_any((link_raw_type(link_pin_k) is not link_raw_str for link_pin_k in link_pin_environment[1])) or (link_raw_type(link_pin_environment[2]) is not link_raw_dict) or link_raw_any((link_raw_type(link_pin_k) is not link_raw_str for link_pin_k in link_pin_environment[2])) or (link_pin_environment[1].get('modules') is not link_pin_environment[2]) or (link_raw_type(link_pin_modules) is not link_raw_tuple) or (link_raw_len(link_pin_modules) != 4) or (link_raw_type(link_pin_own_functions) is not link_raw_tuple) or (link_raw_type(link_pin_policy_functions) is not link_raw_tuple) or (link_raw_type(link_pin_types) is not link_raw_tuple) or (link_raw_len(link_pin_types) != 11):
                     raise error_type(owner) from None
                 link_pin_names = ('hmp_startup.link_factory_origin', 'hmp_plugin.presentation_link_path_policy', 'hmp_plugin.presentation_startup_artifacts', 'hmp_startup.runtime_files')
                 for link_pin_row, link_pin_name in link_raw_zip(link_pin_modules, link_pin_names, strict=True):
@@ -3910,6 +4071,165 @@ class StartupArtifactOwner:
                         link_pin_actual = link_pin_actual.__func__
                     if link_pin_namespace.get('_fields') is not link_pin_fields or link_pin_actual is not link_pin_constructor or link_pin_constructor.__code__ is not link_pin_code or (link_pin_constructor.__globals__ is not link_pin_globals_) or (link_pin_constructor.__defaults__ is not link_pin_defaults) or (link_pin_kind.__bases__ is not link_pin_bases) or (link_pin_globals_.get('_tuple_new') is not link_raw_tuple.__new__) or link_raw_any((link_pin_namespace.get(link_pin_n) is not link_pin_member for link_pin_n, link_pin_member in link_raw_zip(link_pin_fields, link_pin_members, strict=True))) or link_raw_any((link_raw_type(link_pin_row) is not link_raw_tuple or link_raw_len(link_pin_row) != 2 or link_raw_type(link_pin_row[0]) is not link_raw_str or (link_pin_namespace.get(link_pin_row[0]) is not link_pin_row[1]) for link_pin_row in link_pin_dispatch)):
                         raise error_type(owner) from None
+                # Original retained-helper prefix and DATA, with no final callback.
+                if link_pin_environment[6] is not link_helper_origin:
+                    raise error_type(owner) from None
+                link_helper_default_pairs = link_pin_own_functions[2][6]
+                link_helper_defaults = {}
+                for link_helper_pair in link_helper_default_pairs:
+                    if (link_raw_type(link_helper_pair) is not link_raw_tuple
+                            or link_raw_len(link_helper_pair) != 2
+                            or link_raw_type(link_helper_pair[0]) is not link_raw_str
+                            or link_helper_pair[0] in link_helper_defaults):
+                        raise error_type(owner) from None
+                    link_helper_defaults[link_helper_pair[0]] = link_helper_pair[1]
+                link_helper_default_names = ('_type', '_vars', '_tuple', '_len', '_dict', '_str',
+                    '_any', '_zip', '_all', '_set', '_error', '_value_error')
+                if link_raw_any(name not in link_helper_defaults for name in link_helper_default_names):
+                    raise error_type(owner) from None
+                link_helper_expected_builtins = link_raw_tuple(link_helper_defaults[name]
+                    for name in link_helper_default_names)
+                link_helper_system, link_helper_registry = link_pin_environment[0], link_pin_environment[2]
+                if link_raw_type(link_helper_origin) is not link_raw_tuple or link_raw_len(link_helper_origin) != 7 or link_raw_type(link_helper_origin[0]) is not link_raw_module or (link_raw_type(link_helper_origin[1]) is not link_raw_dict) or (link_raw_type(link_helper_origin[2]) is not link_raw_tuple) or (link_raw_type(link_helper_origin[3]) is not link_raw_tuple) or (link_raw_len(link_helper_origin[3]) != 2) or (link_raw_type(link_helper_origin[4]) is not link_raw_tuple) or (link_raw_len(link_helper_origin[4]) != 3) or (link_raw_type(link_helper_origin[5]) is not link_raw_tuple) or (link_raw_len(link_helper_origin[5]) != 3):
+                    raise error_type(owner) from None
+                link_seal_helper_module, link_seal_helper_namespace, link_seal_helper_pairs = link_helper_origin[:3]
+                link_seal_helper_builtin_module, link_seal_helper_builtin_namespace, link_seal_helper_primitive_pairs = link_helper_origin[5]
+                if link_raw_any((link_raw_type(k) is not link_raw_str for k in link_helper_registry)) or link_helper_registry.get('hmp_startup.retained_binding_origin') is not link_seal_helper_module or link_raw_vars(link_seal_helper_module) is not link_seal_helper_namespace or link_raw_any((link_raw_type(k) is not link_raw_str for k in link_seal_helper_namespace)) or (link_raw_len(link_seal_helper_namespace) != link_raw_len(link_seal_helper_pairs)) or (link_seal_helper_namespace.get('sys') is not link_helper_system) or (link_raw_type(link_seal_helper_builtin_module) is not link_raw_module) or (link_raw_type(link_seal_helper_builtin_namespace) is not link_raw_dict) or (link_helper_registry.get('builtins') is not link_seal_helper_builtin_module) or (link_raw_vars(link_seal_helper_builtin_module) is not link_seal_helper_builtin_namespace) or link_raw_any((link_raw_type(k) is not link_raw_str for k in link_seal_helper_builtin_namespace)) or (link_seal_helper_namespace.get('__builtins__') is not link_seal_helper_builtin_namespace) or (link_raw_type(link_seal_helper_primitive_pairs) is not link_raw_tuple) or (link_raw_len(link_seal_helper_primitive_pairs) != 12):
+                    raise error_type(owner) from None
+                link_seal_helper_seen = {}
+                for link_seal_helper_pair in link_seal_helper_pairs:
+                    if link_raw_type(link_seal_helper_pair) is not link_raw_tuple or link_raw_len(link_seal_helper_pair) != 2 or link_raw_type(link_seal_helper_pair[0]) is not link_raw_str:
+                        raise error_type(owner) from None
+                    link_seal_helper_key, link_seal_helper_value = link_seal_helper_pair
+                    if link_seal_helper_key in link_seal_helper_seen or link_seal_helper_key not in link_seal_helper_namespace or link_seal_helper_namespace[link_seal_helper_key] is not link_seal_helper_value:
+                        raise error_type(owner) from None
+                    link_seal_helper_seen[link_seal_helper_key] = link_seal_helper_value
+                for link_seal_helper_pair, link_seal_helper_name, link_seal_helper_expected in link_raw_zip(link_seal_helper_primitive_pairs, ('type', 'vars', 'tuple', 'len', 'dict', 'str', 'any', 'zip', 'all', 'set', 'RuntimeError', 'ValueError'), link_helper_expected_builtins, strict=True):
+                    if link_raw_type(link_seal_helper_pair) is not link_raw_tuple or link_raw_len(link_seal_helper_pair) != 2 or link_raw_type(link_seal_helper_pair[0]) is not link_raw_str or (link_seal_helper_pair[0] != link_seal_helper_name) or (link_seal_helper_pair[1] is not link_seal_helper_expected) or (link_seal_helper_builtin_namespace.get(link_seal_helper_name) is not link_seal_helper_expected):
+                        raise error_type(owner) from None
+                for link_seal_helper_row, link_seal_helper_name in link_raw_zip(link_helper_origin[3], ('capture', 'current'), strict=True):
+                    if link_raw_type(link_seal_helper_row) is not link_raw_tuple or link_raw_len(link_seal_helper_row) != 7 or link_raw_type(link_seal_helper_row[0]) is not link_raw_str or (link_seal_helper_row[0] != link_seal_helper_name) or (link_raw_type(link_seal_helper_row[1]) is not link_raw_function) or (link_seal_helper_row[3] is not link_seal_helper_namespace) or (link_seal_helper_namespace.get(link_seal_helper_name) is not link_seal_helper_row[1]) or (link_seal_helper_row[1].__code__ is not link_seal_helper_row[2]) or (link_seal_helper_row[1].__globals__ is not link_seal_helper_namespace) or (link_seal_helper_row[1].__builtins__ is not link_seal_helper_builtin_namespace) or (link_seal_helper_row[1].__defaults__ is not link_seal_helper_row[4]) or (link_seal_helper_row[1].__kwdefaults__ is not link_seal_helper_row[5]) or (link_seal_helper_row[1].__closure__ is not None) or (link_raw_type(link_seal_helper_row[6]) is not link_raw_tuple):
+                        raise error_type(owner) from None
+                    link_seal_helper_kw, link_seal_helper_kw_pairs = (link_seal_helper_row[5], link_seal_helper_row[6])
+                    if link_seal_helper_kw is None:
+                        if link_raw_len(link_seal_helper_kw_pairs) != 0:
+                            raise error_type(owner) from None
+                    else:
+                        if link_raw_type(link_seal_helper_kw) is not link_raw_dict or link_raw_any((link_raw_type(k) is not link_raw_str for k in link_seal_helper_kw)) or link_raw_len(link_seal_helper_kw) != link_raw_len(link_seal_helper_kw_pairs):
+                            raise error_type(owner) from None
+                        link_seal_helper_seen = {}
+                        for link_seal_helper_pair in link_seal_helper_kw_pairs:
+                            if link_raw_type(link_seal_helper_pair) is not link_raw_tuple or link_raw_len(link_seal_helper_pair) != 2 or link_raw_type(link_seal_helper_pair[0]) is not link_raw_str:
+                                raise error_type(owner) from None
+                            link_seal_helper_key, link_seal_helper_value = link_seal_helper_pair
+                            if link_seal_helper_key in link_seal_helper_seen or link_seal_helper_key not in link_seal_helper_kw or link_seal_helper_kw[link_seal_helper_key] is not link_seal_helper_value:
+                                raise error_type(owner) from None
+                            link_seal_helper_seen[link_seal_helper_key] = link_seal_helper_value
+                link_seal_helper_error_kind, link_seal_helper_error_bases, link_seal_helper_error_pairs = link_helper_origin[4]
+                if link_raw_type(link_seal_helper_error_kind) is not link_raw_type or link_seal_helper_namespace.get('RetainedBindingOriginError') is not link_seal_helper_error_kind or link_raw_type(link_seal_helper_error_bases) is not link_raw_tuple or (link_raw_len(link_seal_helper_error_bases) != 1) or (link_seal_helper_error_bases[0] is not link_helper_expected_builtins[10]) or (link_seal_helper_error_kind.__bases__ is not link_seal_helper_error_bases) or (link_raw_type(link_seal_helper_error_pairs) is not link_raw_tuple):
+                    raise error_type(owner) from None
+                link_seal_helper_error_names = link_raw_vars(link_seal_helper_error_kind)
+                if link_raw_any((link_raw_type(k) is not link_raw_str for k in link_seal_helper_error_names)) or link_raw_len(link_seal_helper_error_names) != link_raw_len(link_seal_helper_error_pairs) or '__init__' in link_seal_helper_error_names or ('__new__' in link_seal_helper_error_names):
+                    raise error_type(owner) from None
+                link_seal_helper_seen = {}
+                for link_seal_helper_pair in link_seal_helper_error_pairs:
+                    if link_raw_type(link_seal_helper_pair) is not link_raw_tuple or link_raw_len(link_seal_helper_pair) != 2 or link_raw_type(link_seal_helper_pair[0]) is not link_raw_str:
+                        raise error_type(owner) from None
+                    link_seal_helper_key, link_seal_helper_value = link_seal_helper_pair
+                    if link_seal_helper_key in link_seal_helper_seen or link_seal_helper_key not in link_seal_helper_error_names or link_seal_helper_error_names[link_seal_helper_key] is not link_seal_helper_value:
+                        raise error_type(owner) from None
+                    link_seal_helper_seen[link_seal_helper_key] = link_seal_helper_value
+                link_hdata_packet = link_helper_origin[6]
+                link_helper_all = link_helper_expected_builtins[8]
+                link_helper_set = link_helper_expected_builtins[9]
+                link_helper_value_error = link_helper_expected_builtins[11]
+                link_helper_modules = link_helper_origin[1]['_MODULES']
+                link_helper_classes = link_helper_origin[1]['_CLASSES']
+                link_helper_functions = link_helper_origin[1]['_FUNCTIONS']
+                if (link_raw_type(link_hdata_packet) is link_raw_tuple and link_raw_len(link_hdata_packet) == 6) is not True:
+                    raise error_type(owner) from None
+                link_hdata_system, link_hdata_system_names, link_hdata_registry, link_hdata_modules, link_hdata_classes, link_hdata_functions = link_hdata_packet
+                if (link_raw_type(link_hdata_system) is link_raw_module and link_raw_type(link_hdata_system_names) is link_raw_dict and (link_raw_vars(link_hdata_system) is link_hdata_system_names) and link_helper_all((link_raw_type(link_hdata_key) is link_raw_str for link_hdata_key in link_hdata_system_names)) and (link_raw_type(link_hdata_registry) is link_raw_dict) and link_helper_all((link_raw_type(link_hdata_key) is link_raw_str for link_hdata_key in link_hdata_registry)) and (link_hdata_system_names.get('modules') is link_hdata_registry) and (link_raw_type(link_hdata_modules) is link_raw_tuple) and (link_raw_len(link_hdata_modules) == link_raw_len(link_helper_modules)) and (link_raw_type(link_hdata_classes) is link_raw_tuple) and (link_raw_len(link_hdata_classes) == link_raw_len(link_helper_classes)) and (link_raw_type(link_hdata_functions) is link_raw_tuple) and (link_raw_len(link_hdata_functions) == link_raw_len(link_helper_functions))) is not True:
+                    raise error_type(owner) from None
+                for link_hdata_row, link_hdata_name in link_raw_zip(link_hdata_modules, link_helper_modules, strict=True):
+                    if (link_raw_type(link_hdata_row) is link_raw_tuple and link_raw_len(link_hdata_row) == 3) is not True:
+                        raise error_type(owner) from None
+                    link_hdata_module, link_hdata_namespace, link_hdata_pairs = link_hdata_row
+                    if (link_raw_type(link_hdata_module) is link_raw_module and link_raw_type(link_hdata_namespace) is link_raw_dict and link_helper_all((link_raw_type(link_hdata_key) is link_raw_str for link_hdata_key in link_hdata_registry)) and link_helper_all((link_raw_type(link_hdata_key) is link_raw_str for link_hdata_key in link_hdata_namespace)) and (link_hdata_registry.get(link_hdata_name) is link_hdata_module) and (link_raw_vars(link_hdata_module) is link_hdata_namespace) and (link_raw_type(link_hdata_namespace.get('__name__')) is link_raw_str) and (link_hdata_namespace['__name__'] == link_hdata_name) and (link_raw_type(link_hdata_pairs) is link_raw_tuple) and (link_raw_len(link_hdata_namespace) == link_raw_len(link_hdata_pairs))) is not True:
+                        raise error_type(owner) from None
+                    link_hdata_seen = link_helper_set()
+                    for link_hdata_pair in link_hdata_pairs:
+                        if (link_raw_type(link_hdata_pair) is link_raw_tuple and link_raw_len(link_hdata_pair) == 2 and (link_raw_type(link_hdata_pair[0]) is link_raw_str)) is not True:
+                            raise error_type(owner) from None
+                        link_hdata_key, link_hdata_value = link_hdata_pair
+                        if (link_hdata_key not in link_hdata_seen and link_hdata_key in link_hdata_namespace and (link_hdata_namespace[link_hdata_key] is link_hdata_value)) is not True:
+                            raise error_type(owner) from None
+                        link_hdata_seen.add(link_hdata_key)
+                for link_hdata_row, (link_hdata_index, link_hdata_name) in link_raw_zip(link_hdata_classes, link_helper_classes, strict=True):
+                    if (link_raw_type(link_hdata_row) is link_raw_tuple and link_raw_len(link_hdata_row) == 3) is not True:
+                        raise error_type(owner) from None
+                    link_hdata_kind, link_hdata_bases, link_hdata_pairs = link_hdata_row
+                    if (link_raw_type(link_hdata_kind) is link_raw_type and link_helper_all((link_raw_type(link_hdata_key) is link_raw_str for link_hdata_key in link_hdata_modules[link_hdata_index][1])) and (link_hdata_modules[link_hdata_index][1].get(link_hdata_name) is link_hdata_kind) and (link_hdata_kind.__bases__ is link_hdata_bases) and (link_raw_type(link_hdata_pairs) is link_raw_tuple)) is not True:
+                        raise error_type(owner) from None
+                    link_hdata_names = link_raw_vars(link_hdata_kind)
+                    if (link_helper_all((link_raw_type(link_hdata_key) is link_raw_str for link_hdata_key in link_hdata_names)) and link_raw_len(link_hdata_names) == link_raw_len(link_hdata_pairs)) is not True:
+                        raise error_type(owner) from None
+                    link_hdata_seen = link_helper_set()
+                    for link_hdata_pair in link_hdata_pairs:
+                        if (link_raw_type(link_hdata_pair) is link_raw_tuple and link_raw_len(link_hdata_pair) == 2 and (link_raw_type(link_hdata_pair[0]) is link_raw_str)) is not True:
+                            raise error_type(owner) from None
+                        link_hdata_key, link_hdata_value = link_hdata_pair
+                        if (link_hdata_key not in link_hdata_seen and link_hdata_key in link_hdata_names and (link_hdata_names[link_hdata_key] is link_hdata_value)) is not True:
+                            raise error_type(owner) from None
+                        link_hdata_seen.add(link_hdata_key)
+                for link_hdata_row, (link_hdata_index, link_hdata_owner, link_hdata_name) in link_raw_zip(link_hdata_functions, link_helper_functions, strict=True):
+                    if (link_raw_type(link_hdata_row) is link_raw_tuple and link_raw_len(link_hdata_row) == 8) is not True:
+                        raise error_type(owner) from None
+                    link_hdata_function, link_hdata_code, link_hdata_namespace, link_hdata_defaults, link_hdata_kw, link_hdata_pairs, link_hdata_closure, link_hdata_cells = link_hdata_row
+                    if (link_raw_type(link_hdata_namespace) is link_raw_dict and link_hdata_namespace is link_hdata_modules[link_hdata_index][1] and (link_raw_type(link_hdata_function) is link_raw_function) and (link_hdata_function.__globals__ is link_hdata_namespace) and (link_hdata_function.__code__ is link_hdata_code) and (link_hdata_function.__defaults__ is link_hdata_defaults) and (link_hdata_defaults is None or link_raw_type(link_hdata_defaults) is link_raw_tuple) and (link_hdata_function.__kwdefaults__ is link_hdata_kw) and (link_hdata_function.__closure__ is link_hdata_closure) and (link_raw_type(link_hdata_pairs) is link_raw_tuple) and (link_raw_type(link_hdata_cells) is link_raw_tuple)) is not True:
+                        raise error_type(owner) from None
+                    link_hdata_names = link_hdata_namespace
+                    if link_helper_all((link_raw_type(link_hdata_key) is link_raw_str for link_hdata_key in link_hdata_namespace)) is not True:
+                        raise error_type(owner) from None
+                    if link_hdata_owner is not None:
+                        link_hdata_held_kind = None
+                        for link_hdata_class_row, (link_hdata_class_index, link_hdata_class_name) in link_raw_zip(link_hdata_classes, link_helper_classes, strict=True):
+                            if link_hdata_class_index == link_hdata_index and link_hdata_class_name == link_hdata_owner:
+                                link_hdata_held_kind = link_hdata_class_row[0]
+                                break
+                        if (link_raw_type(link_hdata_held_kind) is link_raw_type and link_helper_all((link_raw_type(link_hdata_key) is link_raw_str for link_hdata_key in link_hdata_namespace)) and (link_hdata_namespace.get(link_hdata_owner) is link_hdata_held_kind)) is not True:
+                            raise error_type(owner) from None
+                        link_hdata_names = link_raw_vars(link_hdata_held_kind)
+                    if (link_helper_all((link_raw_type(link_hdata_key) is link_raw_str for link_hdata_key in link_hdata_names)) and link_hdata_names.get(link_hdata_name) is link_hdata_function) is not True:
+                        raise error_type(owner) from None
+                    if link_hdata_kw is None:
+                        if (link_hdata_pairs == ()) is not True:
+                            raise error_type(owner) from None
+                    else:
+                        if (link_raw_type(link_hdata_kw) is link_raw_dict and link_helper_all((link_raw_type(link_hdata_key) is link_raw_str for link_hdata_key in link_hdata_kw)) and (link_raw_len(link_hdata_kw) == link_raw_len(link_hdata_pairs))) is not True:
+                            raise error_type(owner) from None
+                        link_hdata_seen = link_helper_set()
+                        for link_hdata_pair in link_hdata_pairs:
+                            if (link_raw_type(link_hdata_pair) is link_raw_tuple and link_raw_len(link_hdata_pair) == 2 and (link_raw_type(link_hdata_pair[0]) is link_raw_str)) is not True:
+                                raise error_type(owner) from None
+                            link_hdata_key, link_hdata_value = link_hdata_pair
+                            if (link_hdata_key not in link_hdata_seen and link_hdata_key in link_hdata_kw and (link_hdata_kw[link_hdata_key] is link_hdata_value)) is not True:
+                                raise error_type(owner) from None
+                            link_hdata_seen.add(link_hdata_key)
+                    if link_hdata_closure is None:
+                        if (link_hdata_cells == ()) is not True:
+                            raise error_type(owner) from None
+                    else:
+                        if (link_raw_type(link_hdata_closure) is link_raw_tuple and link_raw_len(link_hdata_closure) == link_raw_len(link_hdata_cells)) is not True:
+                            raise error_type(owner) from None
+                        try:
+                            if link_helper_all((link_raw_type(link_hdata_cell) is link_raw_cell and link_hdata_cell.cell_contents is link_hdata_value for link_hdata_cell, link_hdata_value in link_raw_zip(link_hdata_closure, link_hdata_cells, strict=True))) is not True:
+                                raise error_type(owner) from None
+                        except link_helper_value_error:
+                            raise error_type(owner) from None
+                if (link_helper_all((link_raw_type(link_hdata_key) is link_raw_str for link_hdata_key in link_hdata_modules[0][1])) and link_hdata_modules[0][1].get('GatewayRecipeOwner') is link_hdata_classes[2][0] and (link_hdata_modules[0][1].get('_same_recipe_binding') is link_hdata_functions[4][0])) is not True:
+                    raise error_type(owner) from None
+
                 link_pin_encoding_origin = link_pin_environment[3]
                 if link_raw_type(link_pin_encoding_origin) is not link_pin_types[9][0] or link_raw_tuple.__len__(link_pin_encoding_origin) != 7:
                     raise error_type(owner) from None

@@ -1,3 +1,15 @@
+## November 10: RBH-02 early parent and publication binding
+
+The parent environment is now env7 with a literal retained-helper capsule;
+engine6 and all original direct/nested audits remain. Bootstrap checks precede
+component dispatch, and selected-helper predicates are repeated inline after the
+final engine callback and at both Scope publication seals. Exact module/registry
+checks precede vars(). The same120 selected cases pass on both actual runtimes,
+including14 actual publication faults and1 early-entry control. Full transitive
+coverage and broader regression remain open; full native traversal still times
+out60seconds after44typed observations/one retired capsule. No performance,
+image/service/device/release pass or host/settings/install change is claimed.
+
 ## November 10: selected retained-helper preparation
 
 RBH-01 adds an unintegrated inspection DATA component for selected package/recipe

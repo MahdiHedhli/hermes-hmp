@@ -236,7 +236,8 @@ def test_actual_entry_and_wrapper_files(tmp_path, mutation):
                  "cache_candidates.py", "cache_context.py", "cache_selection.py",
                  "runtime_reader.py", "source_compiler.py", "cache_probe.py", "probe_metadata.py",
                  "probe_native.py",
-                 "cache_reader.py", "cache_decoder.py", "link_factory_origin.py"):
+                 "cache_reader.py", "cache_decoder.py", "link_factory_origin.py",
+                 "retained_binding_origin.py"):
         shutil.copyfile(SERVER / "hmp_startup" / name, tmp_path / "hmp_startup" / name)
     (tmp_path / "hmp_startup/unused.py").write_text("# SYNTHETIC UNUSED\n")
     (tmp_path / "outside.py").write_text("# SYNTHETIC OUTSIDE\n")

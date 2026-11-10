@@ -1,6 +1,8 @@
 # Immutable expected layout for native Link audits
 
-Original custody increment implemented November 10, 2026: engine6/env6 retain
+Original custody increment implemented November10 as engine6/env6; current
+RBH-02 extends the parent to env7 for the separate retained-helper capsule.
+Engine6 still retains
 expected class columns and literal identity joins through the parent, native
 selector, execution and both Scope seals. Independent bounded review and the same
 302 current/minimum Python cases pass. All previous live audits remain; fast

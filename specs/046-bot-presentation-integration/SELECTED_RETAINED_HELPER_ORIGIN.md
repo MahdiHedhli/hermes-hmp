@@ -1,7 +1,9 @@
 # Selected retained-helper inspection DATA
 
 RBH-01: implemented, independently reviewed within this scope and locally tested.
-It is not integrated into startup and supplies no original-root, reusable audit,
+RBH-02 now binds its literal result into the actual early parent environment7,
+with component primitive/global/code/default bootstrap checks and inline selected
+state seals at callback/publication boundaries. It supplies no reusable audit,
 permission or native-effect authority. Existing direct and nested audits remain.
 
 `server/hmp_startup/retained_binding_origin.py` reads only the two already loaded
@@ -35,14 +37,16 @@ the initial test cleanup ordering error is fixed, not a production incident.
 
 ## Remaining tasks
 
-- RBH-02: bind the actual packet before startup owner/constructor callbacks into
-  the independent actual EntryOrigin/parent root. The inspected parent captures
-  own/policy/artifacts/runtime-files modules; the engine captures five different
-  dependencies. Neither is complete package/recipe helper provenance. Authenticate
-  this component's own inspection primitives, globals/constants/functions/code/
-  defaults before dispatch, and rejoin original sys/registry/module/parent roots
-  after callback/constructor windows. The existing parent environment is a likely
-  extension point, not an implemented or accepted new format.
+- RBH-02: initial early-parent integration implemented. The parent authenticates
+  the component module/namespace, capture/current code/defaults, empty native-error
+  subclass and twelve builtin references before dispatch. Actual selected state
+  is resealed inline after the final engine callback and at both original Scope
+  publication boundaries. Engine6 stays unchanged; its parent environment is7.
+  The same120 selected source cases pass on both runtimes:105local,14actual
+  publication faults and1early-entry case. Copied capsule/parent grafts refuse
+  at the independent original-root chain; they can fail before a specific new
+  helper predicate. This is bounded qualification, not the broader regression
+  or full normal/native/service/device/release gate.
 - RBH-03: establish explicit transitive-helper coverage. The five selected code
   rows do not cover code-only mutation of every imported helper, such as recipe's
   approved-recipe or selection-owner methods. Use already qualified original

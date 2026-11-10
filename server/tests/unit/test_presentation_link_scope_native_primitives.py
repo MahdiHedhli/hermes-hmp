@@ -9,7 +9,7 @@ from .test_presentation_gateway_approval import operator_composed_script
 
 
 @pytest.mark.parametrize('publication', ('first', 'second'))
-@pytest.mark.parametrize('export', ('map', 'is_not', 'layout_graft', 'entry_getattribute', 'entry_subclass_dict'))
+@pytest.mark.parametrize('export', ('map', 'is_not', 'layout_graft', 'helper_graft', 'helper_checker', 'entry_getattribute', 'entry_subclass_dict'))
 def test_scope_publication_rejects_changed_primitive_or_layout_root(
         tmp_path, monkeypatch, request, publication, export):
     tree = ast.parse((base.SERVER / 'hmp_plugin/presentation_startup_artifacts.py').read_text())
@@ -43,7 +43,7 @@ export_name=export if export in ('map','is_not') else 'map'
 original=getattr(module,export_name)
 assign=setattr
 observed=[];mutated=[];foreign_calls=[];held=[];registrations=[];successful_returns=[]
-hook_restore=[];class_restore=[];missing=object()
+hook_restore=[];class_restore=[];helper_restore=[];missing=object()
 
 def foreign(*args,**kwargs):
     foreign_calls.append(True)
@@ -80,20 +80,33 @@ def observe(frame,event,value):
                 class_restore.append((entry_owner,entry_kind))
                 object.__setattr__(entry_owner,'__class__',ChangedEntry)
                 assert type(entry_owner) is ChangedEntry
-        elif export=='layout_graft':
+        elif export=='helper_checker':
+            component=context['link_helper_origin'][0]
+            helper_restore.append((component,component.current))
+            assign(component,'current',foreign)
+            assert component.current is foreign
+        elif export in ('layout_graft','helper_graft'):
             parent=context['link_origin']
             engine=parent[0][4]
             layout=engine[5]
-            copied_layout=tuple(list(layout))
-            copied_engine=(*engine[:5],copied_layout)
-            copied_environment=(*parent[0][:4],copied_engine,copied_layout)
+            if export=='layout_graft':
+                copied_layout=tuple(list(layout))
+                copied_engine=(*engine[:5],copied_layout)
+                copied_environment=(*parent[0][:4],copied_engine,copied_layout,*parent[0][6:])
+            else:
+                helper=parent[0][6]
+                copied_packet=tuple(list(helper[6]))
+                copied_helper=(*helper[:6],copied_packet)
+                copied_environment=(*parent[0][:6],copied_helper)
+                assert copied_packet is not helper[6] and copied_helper is not helper
             copied_parent=(copied_environment,*parent[1:])
             lineage=context['native_files']
             copied_lineage=lineage._replace(link_policy=copied_parent)
             entry_owner=source.inputs.entry
             invocation=entry_owner._scope
             copied_invocation=invocation._replace(native_files=copied_lineage)
-            assert copied_layout is not layout and copied_parent is not parent
+            assert copied_parent is not parent
+            if export=='layout_graft':assert copied_layout is not layout
             assert copied_parent[0][4][5] is copied_parent[0][5]
             assert copied_lineage.link_policy is copied_parent
             assign(entry_owner,'_scope',copied_invocation)
@@ -129,6 +142,7 @@ except EntryFilesError as caught:
     failed=True
 finally:
     sys.setprofile(prior);sys.settrace(None)
+    for component,previous in helper_restore:assign(component,'current',previous)
     for instance,entry_kind in class_restore:
         object.__setattr__(instance,'__class__',entry_kind)
     for entry_kind,previous in hook_restore:

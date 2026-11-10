@@ -875,7 +875,7 @@ def _execution_mirrors(execution):
     _require(type(parent) is tuple and len(parent) == 5
              and type(parent[4]) is tuple and len(parent[4]) >= 11
              and type(blueprint) is parent[4][6][0]
-             and type(parent[0]) is tuple and len(parent[0]) == 6
+             and type(parent[0]) is tuple and len(parent[0]) == 7
              and parent[0][4] is execution.origin
              and parent[0][5] is execution.origin[5]
              and tuple.__getitem__(execution.blueprint, 4) is parent

@@ -1,67 +1,42 @@
-## November 10 — original layout binding verified; image delivery remains open
+## November 10 — helper record bound to startup; image delivery remains open
 
-The experimental image startup path now retains immutable expected class-member
-columns from its original captured rows. The same literal layout is bound through
-the engine, parent environment, native selector, execution and both publication
-seals. Existing fresh module/class/function/default/closure and native/resource/
-byte/custody audits remain. Fast schema use is not implemented; this increment
-makes no full-path speed claim and enables no presentation route.
+The selected package/recipe helper record is now retained in the actual early
+parent environment (`env7`; the engine remains `engine6`). Component module,
+namespace, code/defaults, exception class and twelve inspection primitives are
+checked before dispatch. Selected helper state is checked again inline after the
+last engine-checker return and at both actual Scope publication boundaries.
+No direct or nested recipe audit has been removed, and no mutable permission or
+safety verdict is cached. This binds inspection DATA, not an image-serving grant.
 
-A selected package/recipe helper inspection component has been added, but is not
-wired into startup and skips no audit. The same 64 local checks pass on current
-and minimum Python, including 23 component controls and 41 existing layout/primitive
-controls. Original early-root binding, own checker/globals authentication,
-post-callback reseals and complete transitive-helper coverage remain required
-before any repeated audit can be consolidated. This is preparation, not a working
-image feature or a performance improvement.
+The same **120 selected checks pass on Python 3.14.9 and 3.11.15**, with unchanged
+source and matching case sets: 105 local controls, fourteen actual publication
+fault cases and one actual early-entry control. They include foreign imported
+module refusal before namespace inspection; late checker/engine-return export
+and code drift; changed component metadata and builtin `all`; original entry and
+primitive refusals; and copied helper/parent grafts. Graft refusals can occur at
+the earlier independent entry-root join and are not misreported as proof of one
+particular new predicate. Faults preserve zero foreign calls, subsequent scope
+registration, successful retainer returns or new work/reservation changes.
+These are bounded source/startup checks, not physical or release acceptance.
 
-Unchanged production passed the same **327 checks on Python 3.14.9 and 3.11.15**: the
-302 regression checks plus 25 original-close/status controls. All runs retained unchanged source and matching case sets. The 302 include: 280 local controls, 12 actual runtime refusal controls and
-10 actual publication controls. New controls exposed and corrected late original
-invocation/getter ordering. The actual mutation cases require zero foreign calls,
-new native work, registration after mutation or successful retainer returns, with
-unchanged close reservation. These are bounded source proofs, not physical or
-release acceptance.
+The full native traversal exposed two old internal environment-shape checks;
+both now use the same new format. After those fixes, traversal again reaches
+actual native observations but still exceeds its unchanged 60-second deadline.
+Its last checkpoint has 44 typed observations, one retired raw capsule and zero
+close reservation. This subset is not full traversal, normal completion or a
+speed improvement. The earlier 327-check result belongs to the preceding source;
+the broader regression still needs qualification on this composition.
 
-The production claim/closed-descriptor audit now directly checks its already
-shape-fenced three type pins and two boolean state values, avoiding generator
-allocation without caching authority or omitting fresh checks. Four new actual
-close cases reject foreign and integer state slots before native close/debit,
-then restore valid state and prove one original cleanup. Independent bounded
-review accepted the implementation and tests. The actual-claim helper benchmark
-is about 20 percent faster locally; fresh normal artifact completion still exceeds
-its unchanged 60-second limit. This is not full-path performance acceptance.
+Complete transitive-helper coverage remains required before any same-call audit
+consolidation. The selected record does not prove every imported helper's code.
+The original layout custody and fixed-width predicate optimization remain; the
+class-column vector experiment remains withheld. Full native/startup/service/
+route integration, desktop character/avatar display and host-local chat images
+remain unfinished. No upstream-only image blocker has been demonstrated.
 
-Before the fixture repair, a broader 110-case open/close selection passed 93
-and failed 17; a withheld optimization had the exact same outcomes. The repaired
-open-registration fixture now has six fault cases passing on both versions,
-including original native-close proof. Its two full normal-completion controls
-still time out at 60 seconds. The broader gate has not been freshly rerun and
-remains unqualified.
-
-On the preceding source, the declared-file fixture injects copied, unlisted and foreign declarations
-into the original method frame instead of replacing its canonical method. Three
-package refusal cases pass on Python 3.11.15; all six package/artifact refusal
-cases pass on Python 3.14.9 with source unchanged. Current Python now uses local
-method monitoring and arms exception/native observation only at the selected
-negative interval. Independent review accepted writeback, exact failed-owner and
-no-effect assertions. Older Python retains tracing; artifact floor coverage is
-not claimed. Normal completion still times out; no broader aggregate pass is inferred.
-
-A fresh native run of the retained production source still exceeds its unchanged
-60-second deadline. The last checkpoint contains 65 typed observations and two
-retired raw capsules; these remain a subset, not complete native acceptance.
-An experimental class-column vector comparison produced no useful full-path
-gain against this immediate control and was not retained. Four added live-class
-controls pass within a 41-check selection on both Python versions: changed values,
-same-size renamed None-valued keys and extra keys refuse; reordered keys remain
-valid. The generic schema checker remains unchanged.
-The full native flow, startup/service/route
-integration, desktop character/avatar display and host-local chat images remain
-unfinished. No upstream-only image blocker has
-been demonstrated. No host, device, permission, provider, model, job, installation
-or release changed; LLY520's authorized update still needs its established
-connection. Prepared Android/iOS 2026110901 are not new device qualification.
+No host, device, permission, provider, model, job, installation or release was
+changed. LLY520's authorized update still needs its established connection.
+Prepared Android/iOS 2026110901 are not new device qualification.
 
 # November 9: duplicate runtime checks removed; images still unqualified
 

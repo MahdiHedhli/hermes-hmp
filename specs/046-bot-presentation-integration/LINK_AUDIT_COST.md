@@ -1,3 +1,16 @@
+## November 10: env7 helper root, performance still unqualified
+
+The selected-helper root adds inspection work; no direct/nested audits are removed.
+An actual full-native attempt first exposed the two retained env6 selectors in
+_has_native_link_engine and _execution_mirrors; both now require the matching
+new env7 shape. Those early refusals are failures, not accepted partial runs.
+The corrected source again hits the original60second deadline. Last event4 at
+47.6296seconds has44typed observations, one retired capsule,963work and0reserved.
+Completed inclusive parent audit time is4.4457seconds; owner28.9550seconds and
+engine9.2498seconds overlap. This subset is not full traversal acceptance and
+does not prove speed. A final120case source selection passes current/minimum;
+transitive coverage and any consolidation remain separate future work.
+
 ## November 10: class-column candidate withheld
 
 The full generic checker still validated every immutable layout pair on each
