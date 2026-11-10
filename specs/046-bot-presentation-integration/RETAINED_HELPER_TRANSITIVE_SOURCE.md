@@ -1,12 +1,13 @@
 # RBH-03: retained-only source dependency review
 
-Status: source inventory, selection helpers and activation static projection
-are implemented. Complete transitive custody and audit consolidation remain open.
+Status: source inventory, selection helpers, activation static projection and
+shared artifact descriptor/expectation code origins are implemented. Complete
+transitive custody and audit consolidation remain open.
 These changes add runtime integrity checks, not availability gates. The actual
-record now covers four modules, thirteen classes and fifteen functions; same159
-selected cases pass on both runtimes, including24actual publication faults.
+record covers five modules, twenty-three classes and twenty-two functions; same238
+selected cases pass on both runtimes, including48actual publication faults.
 Source review found no blocker in the bounded extension. Later approval/import,
-mutable approval/entry state and remaining descriptor/dispatch/primitive closure are not
+mutable approval/entry state and entry-defined descriptor/dispatch/primitive closure are not
 qualified by that result. No audit has been removed or new target module imported.
 
 Reproduce without importing HMP or reading host configuration:
@@ -55,7 +56,7 @@ This repairs the reproduced retainer failures only. Nested helpers outside
 closure, normal/native timeout resolution, service/phone image or release
 qualification is inferred. No host or device was changed or deployed.
 
-The inventory pins seven source files and enumerates 22 explicitly selected
+The inventory pins seven source files and enumerates 33 explicitly selected
 functions, their lexical global reads (including comprehensions), call
 expressions, local imports and attribute/subscript stores. It refuses missing or
 ambiguous definitions. It does not infer a complete call graph, resolve dynamic
@@ -69,6 +70,34 @@ from locals/imported locals; both conditional branches and nonlocal stores remai
 visible; missing/duplicate definitions refuse. Both runtimes produce identical
 inventory JSON for the current source bytes. These four checks qualify only the
 inventory tool, not startup, transitive custody, images or release.
+
+## Shared artifact helper original binding
+
+The selected record now captures `_descriptor_closed_in_scope`,
+`_native_descriptor_closed`, `_native_descriptor_opened`,
+`_native_file_allocation_original`, `_expected`, `_require` and the artifact error
+constructor before the later engine capture. Required artifact data/registration/
+allocation/descriptor classes plus package scans/data and recipe inputs have
+member/base snapshots. Defining aliases in package/recipe/selection rejoin these
+same functions/types. Scope classrow4 remains the same actual artifact-defined
+class; it is not nominated again through a fresh imported alias.
+
+Two controls mutate code at the actual earlier capture return. Before the extension
+both failed to refuse: the later engine captured the changed code as its own
+candidate. Current controls require all external facts: earlier code held,
+completed mutation, later engine adoption, actual parent refusal and zero changed
+code calls. This proves why the later engine snapshot alone was insufficient for
+this required original-code claim. It does not prove native runtime admission.
+
+The parent final and both Scope inline DATA seals match the real extended checker.
+The original two-value activation projection and native private-refusal correction
+remain. Same238 selected cases pass on both runtimes with identical server maps
+and case sets, including48actual publication faults/24native refusal witnesses and
+30legacy artifact/constructor cases. Closed-plugin surface passes. Source/test
+review found no blocker in this bounded extension; reviewer did not run targets
+or independently hash/XML-audit test receipts. Complete entry native-type, late
+approval/import, builtin execution and remaining refusal/dispatch closure remain
+open. No retained audit was omitted or new module imported.
 
 ## Source-confirmed retained path
 
@@ -128,10 +157,11 @@ import back to entry must not introduce an initialization callback or native IO.
 
 1. Review an explicit function/class/static-export list and mutable/late-key table
    against the exact pinned source. Resolve artifact descriptor subcalls separately;
-   the 22-function inventory is a review boundary, not an exhaustive closure.
+   the 33-function inventory is a review boundary, not an exhaustive closure.
    Artifact's native closed path specifically continues through
    `_native_descriptor_closed` → `_native_descriptor_opened` →
-   `_native_file_allocation_original`; the last two are absent from that inventory.
+   `_native_file_allocation_original`; all are now in both the source inventory
+   and actual selected record. Entry-defined native type pins remain separate.
    Refusal-path constructor dispatch must remain safe even when the constructor
    itself is the changed object detected by a final seal.
 2. Bind that projection to the actual early original root, before callbacks. Rejoin

@@ -195,6 +195,52 @@ def test_retained_helper_module_fenced_before_namespace_inspection(monkeypatch):
     assert origins._CAPTURE_STARTED is True
 
 
+@pytest.mark.parametrize('name', ('_descriptor_closed_in_scope', '_native_file_allocation_original'))
+def test_artifact_code_held_before_later_engine_capture_cannot_be_renominated(monkeypatch, name):
+    from hmp_plugin import presentation_native_link as engine
+    from hmp_plugin import presentation_startup_artifacts as artifacts
+    from hmp_startup import retained_binding_origin as helpers
+
+    monkeypatch.setattr(origins, '_CAPTURE_STARTED', False)
+    target = getattr(artifacts, name)
+    original_code = target.__code__
+    helper_capture_code, engine_capture_code = helpers.capture.__code__, engine._capture_engine.__code__
+    parent_capture_code = origins.capture.__code__
+    reached, held_original, engine_adopted, foreign_calls = [], [], [], []
+
+    def forbidden_code(*args, **kwargs):
+        raise AssertionError('renominated artifact helper executed')
+
+    def observe(frame, event, value):
+        if event == 'call' and frame.f_code is forbidden_code.__code__:
+            foreign_calls.append(True)
+        if event != 'return' or frame.f_back.f_code is not parent_capture_code:
+            return
+        if frame.f_code is helper_capture_code and not reached:
+            held_original.append(any(row[0] is target and row[1] is original_code
+                                     for row in value[5]))
+            monkeypatch.setattr(target, '__code__', forbidden_code.__code__)
+            reached.append(True)
+        elif frame.f_code is engine_capture_code and reached:
+            # Prove the later real engine capture accepted the changed code as
+            # its own candidate. Only the earlier held record distinguishes it.
+            artifact = next(row for row in value[4][3]
+                            if row[0] == 'hmp_plugin.presentation_startup_artifacts')
+            engine_adopted.append(any(row[0] is target and row[1] is forbidden_code.__code__
+                                      for row in artifact[5]))
+
+    previous = sys.getprofile()
+    assert previous is None
+    sys.setprofile(observe)
+    try:
+        with pytest.raises(RuntimeError, match='BI1_LINK_FACTORY_ORIGIN_REFUSED'):
+            origins.capture()
+    finally:
+        sys.setprofile(previous)
+    assert reached == [True] and held_original == [True] and engine_adopted == [True]
+    assert foreign_calls == [] and origins._CAPTURE_STARTED is True
+
+
 @pytest.mark.parametrize('boundary', ('component', 'engine'))
 @pytest.mark.parametrize('fault', ('export', 'code'))
 def test_selected_helper_state_rejoined_after_final_checker_return(

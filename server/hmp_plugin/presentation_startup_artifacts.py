@@ -3842,6 +3842,12 @@ class StartupArtifactOwner:
                     raise refusal from None
                 if (link_helper_all((link_raw_type(link_hdata_key) is link_raw_str for link_hdata_key in link_hdata_modules[0][1])) and link_helper_all((link_raw_type(link_hdata_key) is link_raw_str for link_hdata_key in link_hdata_modules[1][1])) and link_helper_all((link_raw_type(link_hdata_key) is link_raw_str for link_hdata_key in link_hdata_modules[2][1])) and link_helper_all((link_raw_type(link_hdata_key) is link_raw_str for link_hdata_key in link_hdata_modules[3][1])) and (link_hdata_modules[0][1].get('GatewayActivationOwner') is link_hdata_classes[10][0]) and (link_hdata_modules[1][1].get('GatewayActivationOwner') is link_hdata_classes[10][0]) and (link_hdata_modules[2][1].get('GatewayActivationOwner') is link_hdata_classes[10][0]) and (link_hdata_modules[2][1].get('_LATE_MODULES') is link_hdata_modules[3][1].get('_LATE_MODULES'))) is not True:
                     raise refusal from None
+                if (link_helper_all((link_raw_type(link_hdata_key) is link_raw_str for link_hdata_key in link_hdata_modules[4][1])) and link_hdata_modules[4][1].get('_Scope') is link_hdata_classes[4][0] and (link_hdata_modules[4][1].get('GatewayActivationOwner') is link_hdata_classes[10][0])) is not True:
+                    raise refusal from None
+                for link_hdata_index in (0, 1, 2):
+                    link_hdata_namespace = link_hdata_modules[link_hdata_index][1]
+                    if (link_helper_all((link_raw_type(link_hdata_key) is link_raw_str for link_hdata_key in link_hdata_namespace)) and link_hdata_namespace.get('ExpectedArtifact') is link_hdata_classes[13][0] and (link_hdata_namespace.get('_descriptor_closed_in_scope') is link_hdata_functions[15][0]) and (link_hdata_namespace.get('_expected') is link_hdata_functions[19][0])) is not True:
+                        raise refusal from None
 
                 link_pin_encoding_origin = link_pin_environment[3]
                 if link_raw_type(link_pin_encoding_origin) is not link_pin_types[9][0] or link_raw_tuple.__len__(link_pin_encoding_origin) != 7:
@@ -4306,6 +4312,12 @@ class StartupArtifactOwner:
                     raise refusal from None
                 if (link_helper_all((link_raw_type(link_hdata_key) is link_raw_str for link_hdata_key in link_hdata_modules[0][1])) and link_helper_all((link_raw_type(link_hdata_key) is link_raw_str for link_hdata_key in link_hdata_modules[1][1])) and link_helper_all((link_raw_type(link_hdata_key) is link_raw_str for link_hdata_key in link_hdata_modules[2][1])) and link_helper_all((link_raw_type(link_hdata_key) is link_raw_str for link_hdata_key in link_hdata_modules[3][1])) and (link_hdata_modules[0][1].get('GatewayActivationOwner') is link_hdata_classes[10][0]) and (link_hdata_modules[1][1].get('GatewayActivationOwner') is link_hdata_classes[10][0]) and (link_hdata_modules[2][1].get('GatewayActivationOwner') is link_hdata_classes[10][0]) and (link_hdata_modules[2][1].get('_LATE_MODULES') is link_hdata_modules[3][1].get('_LATE_MODULES'))) is not True:
                     raise refusal from None
+                if (link_helper_all((link_raw_type(link_hdata_key) is link_raw_str for link_hdata_key in link_hdata_modules[4][1])) and link_hdata_modules[4][1].get('_Scope') is link_hdata_classes[4][0] and (link_hdata_modules[4][1].get('GatewayActivationOwner') is link_hdata_classes[10][0])) is not True:
+                    raise refusal from None
+                for link_hdata_index in (0, 1, 2):
+                    link_hdata_namespace = link_hdata_modules[link_hdata_index][1]
+                    if (link_helper_all((link_raw_type(link_hdata_key) is link_raw_str for link_hdata_key in link_hdata_namespace)) and link_hdata_namespace.get('ExpectedArtifact') is link_hdata_classes[13][0] and (link_hdata_namespace.get('_descriptor_closed_in_scope') is link_hdata_functions[15][0]) and (link_hdata_namespace.get('_expected') is link_hdata_functions[19][0])) is not True:
+                        raise refusal from None
 
                 link_pin_encoding_origin = link_pin_environment[3]
                 if link_raw_type(link_pin_encoding_origin) is not link_pin_types[9][0] or link_raw_tuple.__len__(link_pin_encoding_origin) != 7:

@@ -15,21 +15,26 @@ import symtable
 
 TARGETS = {
     "hmp_plugin/presentation_gateway_package.py": (
-        "GatewayPackageOwner._retained_binding", "_require"),
+        "GatewayPackageOwner._retained_binding", "_require", "PackageInventoryError.__init__"),
     "hmp_plugin/presentation_gateway_recipe.py": (
-        "GatewayRecipeOwner._retained_binding", "_require", "_same_recipe_binding"),
+        "GatewayRecipeOwner._retained_binding", "_require", "_same_recipe_binding",
+        "GatewayRecipeError.__init__"),
     "hmp_plugin/presentation_startup_selection.py": (
         "StartupSelectionOwner._retained_binding", "_approved_recipe",
-        "_approval_binding", "_require"),
+        "_approval_binding", "_require", "SelectionLoadError.__init__"),
     "hmp_startup/gateway_approval.py": (
         "GatewayApprovalOwner._retained_binding", "GatewayApprovalOwner._seal",
-        "GatewayApprovalOwner._closed_custody", "_api_state", "_same_entry", "_require"),
+        "GatewayApprovalOwner._closed_custody", "_api_state", "_same_entry", "_require",
+        "GatewayApprovalError.__init__"),
     "hmp_startup/gateway_entry.py": (
-        "GatewayEntryOwner._retained_binding", "_native_file_ledger_shape", "_require"),
+        "GatewayEntryOwner._retained_binding", "_native_file_ledger_shape", "_require",
+        "GatewayEntryError.__init__"),
     "hmp_plugin/presentation_gateway_activation.py": (
-        "GatewayActivationOwner._retained_scope", "_require"),
+        "GatewayActivationOwner._retained_scope", "_require", "ActivationCaptureError.__init__"),
     "hmp_plugin/presentation_startup_artifacts.py": (
-        "_expected", "_descriptor_closed_in_scope"),
+        "_expected", "_descriptor_closed_in_scope", "_native_descriptor_closed",
+        "_native_descriptor_opened", "_native_file_allocation_original", "_require",
+        "ArtifactObservationError.__init__"),
 }
 
 

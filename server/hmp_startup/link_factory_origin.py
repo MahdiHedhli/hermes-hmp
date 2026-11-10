@@ -627,6 +627,12 @@ def current(origin, *, _type=type, _vars=vars, _tuple=tuple, _len=len,
         raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
     if (_all((_type(helper_final_key) is _str for helper_final_key in helper_final_modules[0][1])) and _all((_type(helper_final_key) is _str for helper_final_key in helper_final_modules[1][1])) and _all((_type(helper_final_key) is _str for helper_final_key in helper_final_modules[2][1])) and _all((_type(helper_final_key) is _str for helper_final_key in helper_final_modules[3][1])) and (helper_final_modules[0][1].get('GatewayActivationOwner') is helper_final_classes[10][0]) and (helper_final_modules[1][1].get('GatewayActivationOwner') is helper_final_classes[10][0]) and (helper_final_modules[2][1].get('GatewayActivationOwner') is helper_final_classes[10][0]) and (helper_final_modules[2][1].get('_LATE_MODULES') is helper_final_modules[3][1].get('_LATE_MODULES'))) is not True:
         raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+    if (_all((_type(helper_final_key) is _str for helper_final_key in helper_final_modules[4][1])) and helper_final_modules[4][1].get('_Scope') is helper_final_classes[4][0] and (helper_final_modules[4][1].get('GatewayActivationOwner') is helper_final_classes[10][0])) is not True:
+        raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+    for helper_final_index in (0, 1, 2):
+        helper_final_namespace = helper_final_modules[helper_final_index][1]
+        if (_all((_type(helper_final_key) is _str for helper_final_key in helper_final_namespace)) and helper_final_namespace.get('ExpectedArtifact') is helper_final_classes[13][0] and (helper_final_namespace.get('_descriptor_closed_in_scope') is helper_final_functions[15][0]) and (helper_final_namespace.get('_expected') is helper_final_functions[19][0])) is not True:
+            raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
     return origin
 
 

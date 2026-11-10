@@ -5,6 +5,7 @@ from hmp_plugin import presentation_gateway_package as package
 from hmp_plugin import presentation_gateway_recipe as recipe
 from hmp_plugin import presentation_startup_selection as selection
 from hmp_plugin import presentation_gateway_activation as activation
+from hmp_plugin import presentation_startup_artifacts as artifacts
 from hmp_startup import retained_binding_origin as origin
 
 
@@ -82,7 +83,8 @@ def test_capture_is_data_not_independent_original_custody():
     assert origin.current(copied) is copied  # Future actual parent must refuse this graft.
 
 
-def test_foreign_live_module_key_refuses_before_hash_or_equality(monkeypatch):
+@pytest.mark.parametrize('module', (package, artifacts))
+def test_foreign_live_module_key_refuses_before_hash_or_equality(monkeypatch, module):
     captured = origin.capture()
     calls = []
 
@@ -96,7 +98,7 @@ def test_foreign_live_module_key_refuses_before_hash_or_equality(monkeypatch):
             raise AssertionError('foreign key equality')
 
     key = ForeignKey()
-    monkeypatch.setitem(vars(package), key, None)
+    monkeypatch.setitem(vars(module), key, None)
     calls.clear()  # Setup is not part of the checker refusal interval.
     with pytest.raises(origin.RetainedBindingOriginError):
         origin.current(captured)
@@ -219,6 +221,13 @@ def test_checker_callback_cannot_adopt_replacement_or_copy(monkeypatch, change):
     (activation, 'GatewayActivationOwner', '_retained_scope'),
     (activation, None, '_require'),
     (activation, 'ActivationCaptureError', '__init__'),
+    (artifacts, None, '_descriptor_closed_in_scope'),
+    (artifacts, None, '_native_descriptor_closed'),
+    (artifacts, None, '_native_descriptor_opened'),
+    (artifacts, None, '_native_file_allocation_original'),
+    (artifacts, None, '_expected'),
+    (artifacts, None, '_require'),
+    (artifacts, 'ArtifactObservationError', '__init__'),
 ))
 def test_selected_code_only_drift_refuses_before_helper_or_error_dispatch(
         monkeypatch, module, owner, name):
@@ -273,7 +282,11 @@ def test_selection_exports_dispatch_and_metadata_refuse(monkeypatch, drift):
                                        (recipe, 'StartupSelectionOwner'),
                                        (package, 'StartupSelectionOwner'),
                                        (recipe, 'GatewayActivationOwner'),
-                                       (selection, '_LATE_MODULES')))
+                                       (selection, '_LATE_MODULES'),
+                                       (package, '_descriptor_closed_in_scope'),
+                                       (recipe, '_expected'),
+                                       (selection, 'ExpectedArtifact'),
+                                       (artifacts, '_Scope')))
 def test_initial_import_alias_must_join_its_actual_defining_object(monkeypatch, module, name):
     calls = []
 
@@ -347,3 +360,24 @@ def test_activation_projection_does_not_allow_other_namespace_growth(monkeypatch
     monkeypatch.setattr(activation, '_synthetic_new_static_export', None, raising=False)
     with pytest.raises(origin.RetainedBindingOriginError):
         origin.current(captured)
+
+
+@pytest.mark.parametrize('module,name', (
+    (artifacts, 'ExpectedArtifact'), (artifacts, 'ArtifactObservationError'),
+    (artifacts, '_Descriptor'), (artifacts, '_NativeScopeRegistration'),
+    (artifacts, '_NativeOpenAllocation'), (artifacts, '_NativeCloseAllocation'),
+    (artifacts, '_NativeOpenedDescriptor'), (artifacts, '_Scope'),
+    (package, 'RetainedPackageData'), (package, '_Scan'), (recipe, '_Recipe'),
+))
+def test_shared_retained_data_class_dispatch_cannot_change(monkeypatch, module, name):
+    captured = origin.capture()
+    calls = []
+
+    def foreign(*args):
+        calls.append(True)
+        raise AssertionError('changed retained-data getter dispatched')
+
+    monkeypatch.setattr(getattr(module, name), '__getattribute__', foreign, raising=False)
+    with pytest.raises(origin.RetainedBindingOriginError):
+        origin.current(captured)
+    assert calls == []

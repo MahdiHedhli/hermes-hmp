@@ -1,44 +1,46 @@
-## November 10 — startup refusal path repaired; image delivery remains open
+## November 10 — descriptor helpers bound to startup; image delivery remains open
 
-Actual fault tests exposed two rejection-path bugs in the experimental startup
-retainer: reporting late constructor drift invoked that changed constructor, and
-the first final publication check inspected an owner's dictionary before rejecting
-a changed owner subclass. Both are corrected in source; nothing was deployed.
+The original early helper record now includes the already-loaded artifact module:
+the closed-descriptor → native-closed → native-opened → original-allocation chain,
+expectation/require helpers and artifact refusal-constructor metadata. Required
+field-access classes and missing recipe/package data classes are retained too.
+The record covers five modules, twenty-three classes and twenty-two function rows.
+Imported descriptor/expectation/type aliases must join their defining objects;
+activation's two existing live values remain the only static-value exclusions.
+No new target import, host setting, permission or availability gate was added.
 
-Each retainer attempt now holds a private typed refusal object through native base
-exception operations before callbacks. Fixed message/owner fields use held native
-dictionaries; reporting a refusal does not call changed constructors, getters or
-setters. Sticky failure writes require the actual owner's original dictionary.
-The final raise occurs outside the handler after native traceback/context/cause
-clearing. Thirty-eight local require/need statements keep the same exact-True
-checks inline; independent AST review confirms 36 unchanged conditions and two
-intentional exact-class/native-dictionary strengthenings. No parent/recipe audit
-or validation condition was removed, and no mutable permission verdict is cached.
+A before/after causal control demonstrates the ordering requirement: code changed
+after the earlier helper capture could be adopted by the later real engine
+capture on the preceding source. Both controls failed before the extension.
+They now require the earlier record to hold original code, the later engine to
+capture the changed code, and the actual parent to refuse without executing it.
+The parent final seal and both Scope seals inline the same extended predicates;
+the repaired native private-refusal path remains in use. No recipe/package audit
+was removed and no mutable permission/currentness result was cached.
 
-The same **205 selected tests pass on Python 3.14.9 and 3.11.15**, with identical
-server source maps and case sets: 134 local controls, forty actual publication
-faults, one early-entry control and thirty legacy artifact/constructor cases.
-All forty fault witnesses show zero foreign dispatch, new native work, reservation
-change, later registration or successful retainer return. Sixteen new actual
-refusal witnesses also verify the canonical error type, exact owner, fixed args,
-cleared context/cause and native sticky failure. Normal legacy artifact reads and
-original close/error behavior remain covered. Independent source review found no
-blocker within this correction; it did not run tests or import target modules.
+The same **238 selected tests pass on Python 3.14.9 and 3.11.15**, with identical
+server source maps and case sets: 159 local controls, forty-eight actual publication
+faults, one early-entry control and thirty legacy artifact/constructor cases. All
+forty-eight fault witnesses retain zero foreign calls, new native work, reservation
+change, later registration or successful retainer return. Twenty-four artifact
+witnesses also verify native error/owner/fixed-message/failure/context state.
+The closed-plugin-surface check passes. Independent source/test review found no
+blocker within this extension; it did not run targets or independently audit XML.
+The offline dependency map now lists 33 functions across seven modules; its four
+causal checks pass on each runtime, but it remains source-only review evidence.
 
-The original helper record remains four loaded modules/thirteen classes/fifteen
-function rows, including activation's fixed two-value live projection. Artifact
-helper code/dispatch closure, the late approval import and mutable approval/entry
-state still need original binding before recipe-audit consolidation. Other nested
-helpers' ordinary error construction is not certified by this bounded retainer
-fix. No new module import, host setting, permission or availability gate was added.
+This is still partial transitive provenance. Entry-defined native types/ledger/
+IO references, the late approval import, mutable approval/entry state, builtin
+execution references and remaining dispatch/refusal paths need original binding
+before same-call recipe audit consolidation. No complete normal/native/service/
+route or phone image pass is claimed. The previous full native run exceeded its
+unchanged 60-second deadline on preceding source; it does not qualify this new
+composition. Desktop character display, host-local chat images and physical/
+release qualification remain open. No upstream-only image blocker is demonstrated.
 
-The preceding full native run exceeded its unchanged 60-second deadline after
-44 typed observations and one retired raw capsule; it does not qualify this new
-composition. No complete normal/native/service/route, desktop character display,
-host-local image delivery or physical/release pass is claimed. No upstream-only
-image blocker has been demonstrated. No host/device/provider/model/job/install/
-release changes occurred. LLY520's authorized update still needs an established
-connection; Android/iOS 2026110901 were not newly installed or device-qualified.
+No host/device/provider/model/job/install/release changes occurred. LLY520's
+authorized update still needs an established connection. Android/iOS 2026110901
+were not newly installed or device-qualified by this work.
 
 # November 9: duplicate runtime checks removed; images still unqualified
 

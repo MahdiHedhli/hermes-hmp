@@ -12,17 +12,23 @@ from types import CellType, FunctionType, ModuleType
 _MODULES = ('hmp_plugin.presentation_gateway_package',
             'hmp_plugin.presentation_gateway_recipe',
             'hmp_plugin.presentation_startup_selection',
-            'hmp_plugin.presentation_gateway_activation')
+            'hmp_plugin.presentation_gateway_activation',
+            'hmp_plugin.presentation_startup_artifacts')
 # Only these two values legitimately change during activation allocation. Their
 # keys remain required; the original retained-scope body freshly joins their
 # values to its actual owner/scope. This DATA checker supplies no such authority.
-_LIVE_GLOBALS = ((), (), (), ('_ENTRY_OWNER', '_ENTRY_CELL'))
+_LIVE_GLOBALS = ((), (), (), ('_ENTRY_OWNER', '_ENTRY_CELL'), ())
 _CLASSES = ((0, 'GatewayPackageOwner'), (0, '_Manifest'), (1, 'GatewayRecipeOwner'),
             (2, 'StartupSelectionOwner'), (2, '_Scope'),
             (2, '_ApprovedSelectionSource'), (2, 'GatewayStartupSelection'),
             (2, 'SelectionLoadError'), (0, 'PackageInventoryError'),
             (1, 'GatewayRecipeError'), (3, 'GatewayActivationOwner'),
-            (3, '_ActivationScope'), (3, 'ActivationCaptureError'))
+            (3, '_ActivationScope'), (3, 'ActivationCaptureError'),
+            (4, 'ExpectedArtifact'), (4, 'ArtifactObservationError'),
+            (4, '_Descriptor'), (4, '_NativeScopeRegistration'),
+            (4, '_NativeOpenAllocation'), (4, '_NativeCloseAllocation'),
+            (4, '_NativeOpenedDescriptor'), (0, 'RetainedPackageData'),
+            (0, '_Scan'), (1, '_Recipe'))
 _FUNCTIONS = ((0, 'GatewayPackageOwner', '_retained_binding'),
               (1, 'GatewayRecipeOwner', '_retained_binding'),
               (0, None, '_require'), (1, None, '_require'),
@@ -33,7 +39,13 @@ _FUNCTIONS = ((0, 'GatewayPackageOwner', '_retained_binding'),
               (0, 'PackageInventoryError', '__init__'),
               (1, 'GatewayRecipeError', '__init__'),
               (3, 'GatewayActivationOwner', '_retained_scope'),
-              (3, None, '_require'), (3, 'ActivationCaptureError', '__init__'))
+              (3, None, '_require'), (3, 'ActivationCaptureError', '__init__'),
+              (4, None, '_descriptor_closed_in_scope'),
+              (4, None, '_native_descriptor_closed'),
+              (4, None, '_native_descriptor_opened'),
+              (4, None, '_native_file_allocation_original'),
+              (4, None, '_expected'), (4, None, '_require'),
+              (4, 'ArtifactObservationError', '__init__'))
 
 
 class RetainedBindingOriginError(RuntimeError):
@@ -251,4 +263,17 @@ def current(packet):
           and modules[2][1].get('GatewayActivationOwner') is classes[10][0]
           and modules[2][1].get('_LATE_MODULES') is modules[3][1].get('_LATE_MODULES')) is not True:
         raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+    # The shared descriptor/expectation code is held BEFORE the later engine
+    # capture. Rejoining that later engine snapshot alone could adopt code drift.
+    if (all(type(key) is str for key in modules[4][1])
+          and modules[4][1].get('_Scope') is classes[4][0]
+          and modules[4][1].get('GatewayActivationOwner') is classes[10][0]) is not True:
+        raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+    for index in (0, 1, 2):
+        namespace = modules[index][1]
+        if (all(type(key) is str for key in namespace)
+              and namespace.get('ExpectedArtifact') is classes[13][0]
+              and namespace.get('_descriptor_closed_in_scope') is functions[15][0]
+              and namespace.get('_expected') is functions[19][0]) is not True:
+            raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
     return packet

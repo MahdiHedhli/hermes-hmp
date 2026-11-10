@@ -16,6 +16,14 @@ remain, with two exact-class/native-dictionary strengthenings. This fixes actual
 reproduced retainer failures, not descriptor/approval/entry closure or the full
 native deadline. No retained recipe/package audit has been removed.
 
+Shared artifact descriptor/expectation code is now held in the earlier actual
+record before the later engine snapshot, with defining-type/helper alias joins
+and matching parent/two Scope final seals. Capture-order controls failed before
+this extension and now prove the engine cannot renominate changed code as original.
+Same238 selected cases pass on both runtimes;48actual publication faults preserve
+zero foreign calls/work/reservation/registration/retainer success. Entry/approval/
+builtin/remaining dispatch closure and complete normal/native deadline remain open.
+
 The actual EntryFileSnapshotOwner._pure_lineage calls the recipe retained-binding
 validator directly and then the package retained-binding validator. For an exact
 recipe-derived package, the latter freshly invokes that same recipe validator and

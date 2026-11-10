@@ -6,12 +6,16 @@ with component primitive/global/code/default bootstrap checks and inline selecte
 state seals at callback/publication boundaries. It supplies no reusable audit,
 permission or native-effect authority. Existing direct and nested audits remain.
 
-`server/hmp_startup/retained_binding_origin.py` reads four already-loaded
-HMP package/recipe/selection/activation modules. It retains static namespace/value
-identities, thirteen exact class/member/base snapshots and fifteen function/code/globals/
+`server/hmp_startup/retained_binding_origin.py` reads five already-loaded
+HMP package/recipe/selection/activation/artifact modules. It retains static namespace/value
+identities, twenty-three class/member/base snapshots and twenty-two function/code/globals/
 default/keyword-default/closure rows. Selection's retained binding, approved-recipe,
 approval-binding and require helpers, activation's retained-scope/require helpers
-and four refusal constructors join the original retained methods and comparator.
+and five refusal constructors join the original retained methods and comparator.
+The shared descriptor-closed/native-closed/native-opened/original-allocation chain,
+expectation/require helpers and field-access classes are now held before the later
+engine capture. Package/recipe/selection imports join actual defining helper/type
+objects, and shared scope classrow4 rejoins its artifact defining export.
 Imported selection owners, scope/data types and approved-recipe must rejoin their
 same defining objects. It reads no host profile, configuration, file or provider
 data, imports no new target module and executes none of those selected helpers.
@@ -37,6 +41,15 @@ conditions as exact-True inline checks. Sixteen actual error/owner drift control
 verify no foreign dispatch and exact error/owner/failure/context state. It does
 not add artifact modules/functions to this record or certify external nested
 helper error construction. See RETAINED_HELPER_TRANSITIVE_SOURCE.md.
+
+The subsequent artifact-code extension passes238 selected cases on both runtimes
+(159local,48actual publications,1early-entry,30legacy). Before-extension controls
+accepted changed artifact code as a later engine candidate; current controls prove
+the earlier actual record held original code, the later engine captured changed
+code and the parent refuses it without dispatch. All three final inline DATA
+copies match the extended checker. The private refusal fix remains active, with
+24actual native refusal witnesses. This is still not complete entry/approval/
+builtin/dispatch closure, audit consolidation or image/native acceptance.
 
 Candidate collection contains no delegated Python helper calls before the checker.
 Its actual checker return must be the literal packet. Generic current() accepts
@@ -72,14 +85,14 @@ the initial test cleanup ordering error is fixed, not a production incident.
   helper predicate. This is bounded qualification, not the broader regression
   or full normal/native/service/device/release gate.
 - RBH-03: establish explicit transitive-helper coverage. The five selected code
-  rows from RBH-01 are now fifteen: selection and activation retained-path helpers
-  and four refusal constructors have code/closure coverage. The same159 selected
-  tests pass on both runtimes, including late code-only and fixed-projection-schema
+  rows from RBH-01 are now twenty-two, including shared descriptor/expectation
+  helpers and five refusal constructors. The same238 selected tests pass on both
+  runtimes, including capture-order renomination, late code-only and fixed-projection-schema
   mutations at both publication boundaries. This still does not cover the later
   approval import or complete entry/descriptor/helper/dispatch/primitive
   closure. Reuse already qualified original transitive bindings only where their
   actual root/coverage is demonstrated. Export identity alone is insufficient.
-  The source-only seven-module/22-function inventory and mutable/late-key design
+  The source-only seven-module/33-function inventory and mutable/late-key design
   are now recorded in RETAINED_HELPER_TRANSITIVE_SOURCE.md. Four tool causals pass
   on both runtimes with identical inventory output; runtime custody remains open.
 - RBH-04: only after those proofs, consider same-call recipe consolidation using

@@ -1,3 +1,18 @@
+## November 10: shared descriptor/expectation original code binding
+
+The selected early helper record now covers5loaded modules/23classes/22functions.
+Artifact descriptor-closed/native-closed/native-opened/original-allocation helpers,
+expected/require/error-constructor metadata and required field-access classes join
+the same actual root and three final inline seals. Defining-module alias joins
+prevent independently coherent imported replacements. Original activation live
+projection/native refusal behavior stays intact; no new import/audit elision/gate.
+Before-extension2controls accepted code renomination by the later realengine;
+current2flags require earlier-original/later-changed captures plus actualparent
+refusal and0foreigncalls. Same238 selected cases pass on both runtimes, including
+48actual publication faults/24native refusal witnesses and30legacy cases. Closed
+surface passes;7module/33function offline map is source evidence only. Complete
+entry/approval/builtin/dispatch closure, native deadline and images remain open.
+
 ## November 10: retainer refusal constructor and native owner-dictionary correction
 
 Actual late-constructor controls failed at both publication seals; a broader
