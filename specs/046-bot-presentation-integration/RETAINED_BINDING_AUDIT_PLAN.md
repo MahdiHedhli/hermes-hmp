@@ -1,6 +1,8 @@
 # Same-call retained recipe audit consolidation — prerequisite review
 
-Status: design only, not implemented or an authorization shortcut.
+Status: selected-helper DATA component implemented as RBH-01; early-root
+integration and audit consolidation remain unimplemented. This is not an
+authorization shortcut. See SELECTED_RETAINED_HELPER_ORIGIN.md.
 
 The actual EntryFileSnapshotOwner._pure_lineage calls the recipe retained-binding
 validator directly and then the package retained-binding validator. For an exact

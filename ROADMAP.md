@@ -1,10 +1,20 @@
+## November 10: selected retained-helper preparation
+
+RBH-01 adds an unintegrated inspection DATA component for selected package/recipe
+helpers. The same 64 local checks pass on actual current/minimum Python. No audit
+is skipped. Original early-parent custody, the component's own primitive/global/
+function authentication, post-callback reseals and transitive-helper coverage
+remain prerequisites to RBH-04 consolidation. See
+SELECTED_RETAINED_HELPER_ORIGIN.md for exact scope and RBH-02 through RBH-05.
+Normal/native/service/routes/images/physical/release remain unqualified.
+
 ## November 10: fixed-width audit checks
 
 Claim and closed-descriptor checks use direct indexed predicates after the same
 exact tuple3/list2 fences. Every original type, identity, live ledger and cleanup
 check remains; no mutable verdict is retained. Independent bounded implementation
 and test review accepted the change. Same source and matching case sets pass
-302 regression plus25 close/status checks on both actual Python3.14.9 and3.11.15.
+302 regression plus25 close/status checks on both actual Python 3.14.9 and 3.11.15.
 Four added actual pending-close cases reject integer/foreign state slots before
 Cclose or ledger debit, then restore and close exactly once.
 

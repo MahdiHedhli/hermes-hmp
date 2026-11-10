@@ -7,6 +7,14 @@ seals. Existing fresh module/class/function/default/closure and native/resource/
 byte/custody audits remain. Fast schema use is not implemented; this increment
 makes no full-path speed claim and enables no presentation route.
 
+A selected package/recipe helper inspection component has been added, but is not
+wired into startup and skips no audit. The same 64 local checks pass on current
+and minimum Python, including 23 component controls and 41 existing layout/primitive
+controls. Original early-root binding, own checker/globals authentication,
+post-callback reseals and complete transitive-helper coverage remain required
+before any repeated audit can be consolidated. This is preparation, not a working
+image feature or a performance improvement.
+
 Unchanged production passed the same **327 checks on Python 3.14.9 and 3.11.15**: the
 302 regression checks plus 25 original-close/status controls. All runs retained unchanged source and matching case sets. The 302 include: 280 local controls, 12 actual runtime refusal controls and
 10 actual publication controls. New controls exposed and corrected late original
@@ -91,7 +99,7 @@ The isolated native-file-effects branch now carries one immutable original-entry
 lineage across package/artifact, source-read, cache-probe and cache-read scopes.
 Fresh digest contexts retain that same allocation; legacy scopes retain no lineage.
 Ten copied/foreign/legacy-context and retained-constructor cases passed on
-actual Python3.14.9 and3.11.15, zero failures/errors/skips, with unchanged source.
+actual Python 3.14.9 and 3.11.15, zero failures/errors/skips, with unchanged source.
 Syntax/full Ruff and bounded independent source review accepted the corrected
 allocation-only increment. The broader affected regression remains required. This is an identity
 binding prerequisite, not an operation/effect receipt, budget, fallback, working
