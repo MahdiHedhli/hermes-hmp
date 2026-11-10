@@ -32,6 +32,7 @@ from .presentation_startup_artifacts import (
     _NativeMetadataResource,
     _NativeProbeMetadataResource,
     _NativeStartupProbeMetadataResource,
+    _NativeLinkMetadataResource,
     _native_work_registration_tail,
     _NativeMetadataSnapshot,
     _NativeScopeRegistration,
@@ -165,6 +166,8 @@ def _closed_probe_engine_origin(owner, resource):
 
 def _resource_tail(owner, resource):
     """Rejoin the held actual resource; never adopt a current replacement."""
+    if type(resource) is _NativeLinkMetadataResource:
+        return _link_policy_helper(owner, resource, '_resource_tail')(owner, resource)
     if type(resource) is _NativeStartupProbeMetadataResource:
         origin = _startup_probe_origin_tail(owner, resource)
         return origin[3](owner, resource)
@@ -334,6 +337,203 @@ class _ProbeConsumer(NamedTuple):
     def __repr__(self):
         return '<ProbeConsumer fixed metadata policy redacted>'
 
+
+
+class _LinkMetadataConsumer(NamedTuple):
+    """Link-only metadata policy; no directory-owner or absence privilege."""
+    execution: object
+    operation: _MetadataOperation
+    predecessor: object
+    commit: list
+    custody: tuple
+    cursor: object
+
+    @property
+    def owner(self):
+        return self.execution.owner
+
+    @property
+    def resource(self):
+        return self.operation.resource
+
+    @property
+    def consumption(self):
+        return self.operation.result._cell(4)
+
+    @property
+    def baseline(self):
+        return None
+
+    @property
+    def eof(self):
+        return None
+
+    @property
+    def history(self):
+        return self.execution.history
+
+    def __repr__(self):
+        return '<LinkMetadataConsumer fixed no-absence policy redacted>'
+
+
+def _link_function_pin(row, namespace, name):
+    """Check a held original function before invoking its code or defaults."""
+    _require(type(row) is tuple and len(row) == 7
+             and type(name) is str and type(row[0]) is str and row[0] == name
+             and type(namespace) is dict and all(type(k) is str for k in namespace)
+             and type(row[1]) is FunctionType and row[1].__globals__ is namespace
+             and row[3] is namespace and row[1].__code__ is row[2]
+             and row[1].__defaults__ is row[4] and row[1].__kwdefaults__ is row[5]
+             and namespace.get(name) is row[1] and type(row[6]) is tuple)
+    if row[5] is None:
+        _require(row[6] == ())
+    else:
+        _require(type(row[5]) is dict and len(row[5]) == len(row[6])
+                 and all(type(k) is str for k in row[5])
+                 and all(type(pair) is tuple and len(pair) == 2
+                         and type(pair[0]) is str and pair[0] in row[5]
+                         and row[5][pair[0]] is pair[1] for pair in row[6]))
+    return row[1]
+
+
+def _closed_link_engine_origin(owner, resource):
+    """Only an early entry/Scope packet can select the closed link family.
+
+    Existing encoding-only origins have no engine slot and refuse here. No
+    late import, callback, copied resource or current export can fill that gap.
+    The complete native driver must extend the SAME early origin before wiring.
+    """
+    _require(type(owner) is StartupArtifactOwner
+             and type(resource) is _NativeLinkMetadataResource
+             and tuple.__getitem__(resource, 0) is owner
+             and type(tuple.__getitem__(resource, 1)) is _NativeScopeRegistration)
+    registration = tuple.__getitem__(resource, 1)
+    _native_work_registration_tail(owner, registration)
+    lineage = registration.lineage
+    _require(type(lineage) is registration.type_pins[0]
+             and tuple.__len__(lineage) == 5)
+    parent = tuple.__getitem__(lineage, 4)
+    _require(type(parent) is tuple and len(parent) == 5)
+    environment, own = parent[0], parent[2]
+    _require(type(environment) is tuple and len(environment) == 5
+             and type(own) is tuple and len(own) == 7)
+    current_row = own[3]
+    _require(type(current_row) is tuple and len(current_row) == 7)
+    # Authenticate the first retained validator with primitives. Calling the
+    # current exported pin helper here would let a replacement bootstrap itself.
+    namespace = current_row[3]
+    _require(type(namespace) is dict and all(type(k) is str for k in namespace)
+             and type(current_row[0]) is str and current_row[0] == 'current'
+             and type(current_row[1]) is FunctionType
+             and namespace.get('current') is current_row[1]
+             and current_row[1].__globals__ is namespace
+             and current_row[1].__defaults__ is current_row[4]
+             and current_row[1].__kwdefaults__ is current_row[5]
+             and type(current_row[6]) is tuple)
+    kw = current_row[5]
+    _require((kw is None and current_row[6] == ()) or
+             (type(kw) is dict and all(type(k) is str for k in kw)
+              and len(kw) == len(current_row[6])
+              and all(type(pair) is tuple and len(pair) == 2 and type(pair[0]) is str
+                      and pair[0] in kw and kw[pair[0]] is pair[1]
+                      for pair in current_row[6])))
+    validator = current_row[1]
+    if (validator.__code__ is not current_row[2]
+            or validator.__defaults__ is not current_row[4]
+            or validator.__kwdefaults__ is not kw):
+        raise ArtifactObservationError from None
+    _require(validator(parent) is parent)
+    scope = registration.scope
+    blueprint = tuple.__getitem__(scope, 17)
+    _require(type(parent[4]) is tuple and len(parent[4]) >= 11
+             and type(blueprint) is parent[4][6][0]
+             and tuple.__getitem__(blueprint, 0) is owner
+             and tuple.__getitem__(blueprint, 3) is lineage
+             and tuple.__getitem__(blueprint, 4) is parent)
+    origin = environment[4]
+    _require(type(origin) is tuple and len(origin) == 4
+             and type(origin[0]) is ModuleType and type(origin[2]) is tuple
+             and sys.modules.get('hmp_plugin.presentation_native_link') is origin[0])
+    rows = tuple(row for row in origin[2]
+                 if type(row) is tuple and len(row) == 7
+                 and type(row[0]) is str and row[0] == '_engine_origin_tail')
+    _require(len(rows) == 1)
+    row, namespace = rows[0], vars(origin[0])
+    _require(all(type(k) is str for k in namespace)
+             and type(row[1]) is FunctionType and row[3] is namespace
+             and namespace.get('_engine_origin_tail') is row[1]
+             and row[1].__globals__ is namespace and row[1].__defaults__ is row[4]
+             and row[1].__kwdefaults__ is row[5] and type(row[6]) is tuple)
+    kw = row[5]
+    _require((kw is None and row[6] == ()) or
+             (type(kw) is dict and all(type(k) is str for k in kw)
+              and len(kw) == len(row[6])
+              and all(type(pair) is tuple and len(pair) == 2 and type(pair[0]) is str
+                      and pair[0] in kw and kw[pair[0]] is pair[1] for pair in row[6])))
+    check = row[1]
+    if (check.__code__ is not row[2] or check.__defaults__ is not row[4]
+            or check.__kwdefaults__ is not kw):
+        raise ArtifactObservationError from None
+    _require(check(origin) is origin)
+    _require(tuple.__getitem__(registration.scope, 17) is blueprint
+             and tuple.__getitem__(registration.lineage, 4) is parent
+             and parent[0] is environment and environment[4] is origin)
+    return origin
+
+
+def _link_policy_helper(owner, resource, name):
+    """Closed internal projections; no caller-selectable native operation."""
+    _require(type(name) is str and name in (
+        '_resource_tail', '_latch_shared_consumer', '_lifetime_tail',
+        '_make_shared_commit', '_commit_shared_tail',
+        '_acked_shared_history', '_publish_shared_ack'))
+    origin = _closed_link_engine_origin(owner, resource)
+    rows = tuple(row for row in origin[2]
+                 if type(row) is tuple and len(row) == 7
+                 and type(row[0]) is str and row[0] == name)
+    _require(len(rows) == 1)
+    return _link_function_pin(rows[0], vars(origin[0]), name)
+
+
+def _link_stage_functions(owner, resource):
+    origin = _closed_link_engine_origin(owner, resource)
+    names = ('_prepare_shared_consumer', '_latch_shared_consumer',
+             '_produce_shared', '_consume_shared', '_ack_shared',
+             '_attached_shared', '_retired_shared')
+    shared = {'_produce_shared': '_produce_directory_metadata',
+              '_consume_shared': '_consume_directory_policy',
+              '_ack_shared': '_ack_directory_policy',
+              '_attached_shared': '_acked_directory_commit_tail',
+              '_retired_shared': '_retired_directory_commit_tail'}
+    stages = []
+    for name in names:
+        rows = tuple(row for row in origin[2]
+                     if type(row) is tuple and len(row) == 7
+                     and type(row[0]) is str and row[0] == name)
+        _require(len(rows) == 1)
+        row = rows[0]
+        if name in shared:
+            _require(vars(origin[0]).get(name) is row[1])
+            actual = (shared[name], *row[1:])
+            function = _link_function_pin(actual, globals(), shared[name])
+        else:
+            function = _link_function_pin(row, vars(origin[0]), name)
+        stages.append(function)
+    return tuple(stages)
+
+
+def _rejoin_link_stages(owner, resource, origin, stages):
+    _require(type(resource) is _NativeLinkMetadataResource
+             and type(stages) is tuple and len(stages) == 7
+             and _closed_link_engine_origin(owner, resource) is origin)
+    actual = _link_stage_functions(owner, resource)
+    _require(all(a is b for a, b in zip(actual, stages, strict=True))
+             and _closed_link_engine_origin(owner, resource) is origin)
+
+
+def _link_current_lifetime_tail(owner, consumer):
+    _require(type(consumer) is _LinkMetadataConsumer)
+    return _link_policy_helper(owner, consumer.resource, '_lifetime_tail')(owner, consumer)
 
 
 def _probe_shared_call(owner, consumer, index):
@@ -607,7 +807,8 @@ def _undebited_directory_cells_tail(owner, operation):
              and type(operation.operation) is int and operation.operation in (3, 4))
     resource, result = operation.resource, operation.result
     _require(type(resource) in (_NativeMetadataResource, _NativeProbeMetadataResource,
-                                        _NativeStartupProbeMetadataResource)
+                                        _NativeStartupProbeMetadataResource,
+                                        _NativeLinkMetadataResource)
              and type(resource.registration) is _NativeScopeRegistration)
     registration = resource.registration
     ledger, phase = registration.native_ledger, registration.native_phase
@@ -985,6 +1186,12 @@ def _latched_directory_resource_tail(owner, consumer):
     """Original already-latched cohort DATA; not a phase check or work grant."""
     if type(consumer) is _ProbeConsumer:
         return _probe_latched_resource_tail(owner, consumer)
+    if type(consumer) is _LinkMetadataConsumer:
+        _require(type(consumer.operation) is _MetadataOperation
+                 and type(consumer.resource) is _NativeLinkMetadataResource)
+        latch = _link_policy_helper(owner, consumer.resource, '_latch_shared_consumer')
+        _require(latch(owner, consumer, rejoin=True) is consumer)
+        return consumer.resource
     _require(type(consumer) is _DirectoryConsumer and consumer.owner is owner
              and type(consumer.operation) is _MetadataOperation
              and type(consumer.resource) is _NativeMetadataResource
@@ -1335,6 +1542,24 @@ def _returned_directory_operation_tail(owner, consumer, operation, raw):
 
 def _pending_directory_cohort_tail(owner, consumer, actual):
     """Rejoin the actual producer return; constructing matching DATA is no grant."""
+    if type(consumer) is _LinkMetadataConsumer:
+        # Links never receive the probe-only reported-missing interpretation.
+        _require(type(actual) is _DirectoryMetadataReturn)
+        operation = _charged_directory_operation_tail(owner, consumer)
+        result, phase = operation.result, operation.phase
+        _require(actual.operation is operation and actual.result is result
+                 and actual.consumer is consumer and operation.ended[0] is True
+                 and operation.state[1] is True
+                 and phase.current[0] is phase.pending
+                 and operation.ledger.inflight[0] is None
+                 and result.envelope[0] is actual
+                 and type(actual.raw) is operation.native.result_type
+                 and result.raw[0] is actual.raw
+                 and type(actual.snapshot) is _NativeMetadataSnapshot
+                 and result.snapshot[0] is actual.snapshot
+                 and type(result.category[0]) is str and result.category[0] == 'returned')
+        _link_current_lifetime_tail(owner, consumer)
+        return actual
     if type(consumer) is _ProbeConsumer:
         _require(type(actual) in (_DirectoryMetadataReturn, _ReportedMissingMetadataReturn))
         operation = _charged_directory_operation_tail(owner, consumer)
@@ -1391,7 +1616,8 @@ def _produce_directory_metadata(owner, consumer):
     unset, held_state = result.unset, operation.state
     raw, snapshot, actual = unset, None, None
     probe = type(consumer) is _ProbeConsumer
-    category = 'returned' if probe else _fixed_metadata_role(consumer.resource)
+    link = type(consumer) is _LinkMetadataConsumer
+    category = 'returned' if probe or link else _fixed_metadata_role(consumer.resource)
     native = operation.native
     missing_type = native.errors[1]
     error_number = vars(native.errors[0]).get('errno')
@@ -1445,12 +1671,16 @@ def _produce_directory_metadata(owner, consumer):
         if operation.operation == 4:
             if probe:
                 _probe_current_lifetime_tail(owner, consumer)
+            elif link:
+                _link_current_lifetime_tail(owner, consumer)
             raw = callee(arguments[0])
         else:
             if probe:
                 # Final lifetime closure is before the call but OUTSIDE the
                 # diagnostic handler: control failure is never native missing.
                 _probe_current_lifetime_tail(owner, consumer)
+            elif link:
+                _link_current_lifetime_tail(owner, consumer)
             try:
                 raw = callee(arguments[0], dir_fd=arguments[1], follow_symlinks=False)
             except missing_type as error:
@@ -1563,6 +1793,9 @@ def _consuming_directory_return_tail(owner, consumer, actual):
 
 
 def _directory_commit_cohort_tail(owner, consumer, actual, commit):
+    if type(consumer) is _LinkMetadataConsumer:
+        function = _link_policy_helper(owner, consumer.resource, '_commit_shared_tail')
+        return function(owner, consumer, actual, commit)
     if type(consumer) is _ProbeConsumer:
         function = _probe_policy_helper(owner, consumer, '_commit_shared_tail')
         return function(owner, consumer, actual, commit)
@@ -1624,7 +1857,10 @@ def _consume_directory_policy(owner, consumer, actual):
             raise
         _native_post_actor_state(owner, actor_state, actor_arguments)
         _consuming_directory_return_tail(owner, consumer, actual)
-        if type(consumer) is _ProbeConsumer:
+        if type(consumer) is _LinkMetadataConsumer:
+            make_commit = _link_policy_helper(owner, consumer.resource, '_make_shared_commit')
+            commit = make_commit(owner, consumer, actual)
+        elif type(consumer) is _ProbeConsumer:
             make_commit = _probe_policy_helper(owner, consumer, '_make_shared_commit')
             commit = make_commit(owner, consumer, actual)
         else:
@@ -1713,6 +1949,9 @@ def _directory_ack_preparation_tail(owner, consumer, actual, commit):
 
 def _acked_directory_history_tail(owner, consumer, commit):
     """Raw-free ACK history closure; not admission or a returned-receipt proof."""
+    if type(consumer) is _LinkMetadataConsumer:
+        function = _link_policy_helper(owner, consumer.resource, '_acked_shared_history')
+        return function(owner, consumer, commit)
     if type(consumer) is _ProbeConsumer:
         function = _probe_policy_helper(owner, consumer, '_acked_shared_history')
         return function(owner, consumer, commit)
@@ -1898,7 +2137,10 @@ def _ack_directory_policy(owner, consumer, actual, commit):
         result.envelope[0] = None
         result.category[0] = None
         consumer.consumption[0] = commit  # retire the raw-bearing backlink too
-        if type(consumer) is _ProbeConsumer:
+        if type(consumer) is _LinkMetadataConsumer:
+            publish = _link_policy_helper(owner, consumer.resource, '_publish_shared_ack')
+            publish(owner, consumer, commit)
+        elif type(consumer) is _ProbeConsumer:
             publish = _probe_policy_helper(owner, consumer, '_publish_shared_ack')
             publish(owner, consumer, commit)
         else:
@@ -2359,6 +2601,7 @@ def _run_directory_observation(owner, resource, predecessor=None, baseline=None,
     # Retain these fixed function references across preparation callbacks. This
     # is not a caller-selected dispatcher or a new admission surface.
     probe_origin = probe_stages = None
+    stage_rejoin = _rejoin_probe_stages
     prepare, latch, produce, consume, acknowledge, attached_tail, retired_tail = (
         _prepare_directory_consumer, _latch_directory_consumer,
         _produce_directory_metadata, _consume_directory_policy, _ack_directory_policy,
@@ -2367,6 +2610,12 @@ def _run_directory_observation(owner, resource, predecessor=None, baseline=None,
         _require(baseline is None and eof is None)
         probe_stages = _probe_stage_functions(owner, resource)
         probe_origin = _closed_probe_engine_origin(owner, resource)
+        prepare, latch, produce, consume, acknowledge, attached_tail, retired_tail = probe_stages
+    elif type(resource) is _NativeLinkMetadataResource:
+        _require(baseline is None and eof is None)
+        probe_stages = _link_stage_functions(owner, resource)
+        probe_origin = _closed_link_engine_origin(owner, resource)
+        stage_rejoin = _rejoin_link_stages
         prepare, latch, produce, consume, acknowledge, attached_tail, retired_tail = probe_stages
     try:
         # Reject a foreign actor before allocating/latching caller-owned custody.
@@ -2394,13 +2643,13 @@ def _run_directory_observation(owner, resource, predecessor=None, baseline=None,
         held_state, held_reference = marker.state, marker.reference
         custody = (origin, marker, held_link, held_slot, held_state, held_reference)
         if probe_stages is not None:
-            _rejoin_probe_stages(owner, resource, probe_origin, probe_stages)
+            stage_rejoin(owner, resource, probe_origin, probe_stages)
         consumer = prepare(owner, operation, predecessor, baseline, eof, custody)
         _require(consumer.predecessor is predecessor
              and consumer.baseline is baseline and consumer.eof is eof
              and consumer.custody is custody)
         if probe_stages is not None:
-            _rejoin_probe_stages(owner, resource, probe_origin, probe_stages)
+            stage_rejoin(owner, resource, probe_origin, probe_stages)
         _require(latch(owner, consumer) is consumer
                  and consumer.predecessor is predecessor
                  and consumer.baseline is baseline and consumer.eof is eof
@@ -2408,20 +2657,20 @@ def _run_directory_observation(owner, resource, predecessor=None, baseline=None,
         producer_started = True
         try:
             if probe_stages is not None:
-                _rejoin_probe_stages(owner, resource, probe_origin, probe_stages)
+                stage_rejoin(owner, resource, probe_origin, probe_stages)
             actual = produce(owner, consumer)
         finally:
             # Control flow, not a current stored ended flag: the actual fixed
             # synchronous call returned or raised before this caller continues.
             producer_unwound = True
         if probe_stages is not None:
-            _rejoin_probe_stages(owner, resource, probe_origin, probe_stages)
+            stage_rejoin(owner, resource, probe_origin, probe_stages)
         commit = consume(owner, consumer, actual)
         if probe_stages is not None:
-            _rejoin_probe_stages(owner, resource, probe_origin, probe_stages)
+            stage_rejoin(owner, resource, probe_origin, probe_stages)
         acked = acknowledge(owner, consumer, actual, commit)
         if probe_stages is not None:
-            _rejoin_probe_stages(owner, resource, probe_origin, probe_stages)
+            stage_rejoin(owner, resource, probe_origin, probe_stages)
         _require(acked is commit
                  and attached_tail(owner, consumer, commit) is commit)
         complete = True
@@ -2552,7 +2801,7 @@ def _run_directory_observation(owner, resource, predecessor=None, baseline=None,
                                   operation.context)
             _native_post_actor_state(owner, actor_state, actor_arguments)
             if probe_stages is not None:
-                _rejoin_probe_stages(owner, resource, probe_origin, probe_stages)
+                stage_rejoin(owner, resource, probe_origin, probe_stages)
             _require(retired_tail(
                 owner, consumer, commit, origin, marker, record) is commit)
             return commit

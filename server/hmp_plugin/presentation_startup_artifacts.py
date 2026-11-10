@@ -1164,6 +1164,24 @@ class _NativeStartupProbeMetadataResource(NamedTuple):
         return '<StartupProbeResource DATA no-admission>'
 
 
+class _NativeLinkMetadataResource(NamedTuple):
+    """Closed executable-link stat site; not a native admission or receipt.
+
+    No existing caller constructs this family. The shared kernel additionally
+    requires its independently retained early engine origin before preparation.
+    """
+    owner: object
+    registration: object
+    execution: object
+    site: tuple
+    ordinal: int
+    arguments: tuple
+    descriptor: object
+
+    def __repr__(self):
+        return '<NativeLinkMetadataResource fixed path site redacted>'
+
+
 class _NativeMetadataResource(NamedTuple):
     """Bound original resource DATA; no admission, syscall, debit or ACK."""
     owner: object

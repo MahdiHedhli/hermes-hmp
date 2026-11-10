@@ -72,6 +72,27 @@ remain authoritative; reserved cleanup must not depend on successful traversal.
 
 ## Native integration contract
 
+The coupled implementation branch now contains an **unwired metadata draft**:
+`_NativeLinkMetadataResource`, `_LinkMetadataConsumer`, closed shared-kernel
+branches and `presentation_native_link.py` policy/lifecycle/commit projections.
+Directory ownership and probe-only reported-missing interpretation stay separate.
+The current actual early origin has four environment fields; new-family lookup
+requires the future fifth engine field and therefore refuses before admission.
+There is no late engine capture or current-export fallback. Do not extend that
+field or connect the native caller until the distinct op5 byte family, complete
+driver/finish, raw-free histories, original property/core bindings and fresh
+callback seals are implemented and reviewed together.
+
+Selected checks cover 26 local refusal/bootstrap/cursor boundaries plus the 119
+existing policy/encoding controls on both Python versions. They do not exercise
+an admitted Link cohort. Actual normal Directory caller checks pass on both
+versions after replacing an obsolete `_fstat` test hook with observation at the
+original shared-operation site. The unchanged parent independently reproduced
+the old missed-hook failure. Nested observation uses `sys.call_tracing`; no
+native or owner method is replaced by the entry hook. The wider interruption
+matrix and enabled Link lifetime/projection/constructor/finalizer tests remain
+required; neither selected compatibility nor packet tests qualify this draft.
+
 Capture code/type/member/dispatch and all original immutable policy inputs in the
 pre-Scope factory, then seal actual constructor returns. Use a distinct fixed
 link resource/consumer on the canonical shared kernel; do not broaden the

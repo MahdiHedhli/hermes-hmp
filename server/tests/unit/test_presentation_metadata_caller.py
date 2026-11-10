@@ -259,15 +259,25 @@ def exercise(frame):
         metadata.progress[:]=[0,None]
         metadata.commits.clear()  # dispose this synthetic fixture's ACK history only
         ledger.preparation[:]=preparation
-original_fstat=vars(a.StartupArtifactOwner)['_fstat']
 original_file_code=a.StartupArtifactOwner._file.__code__
-def at_original_fstat(actual_owner,fd,scope,registration=None):
-    if actual_owner is owner and not seen:
-        frame=sys._getframe(1)
-        assert frame.f_code is original_file_code
-        assert frame.f_locals['native_registration'] is registration
-        assert frame.f_locals['fd'] is fd
-        try:exercise(frame)
+source_lines,source_start=inspect.getsourcelines(a.StartupArtifactOwner._file)
+entry_line=next(source_start+i for i,line in enumerate(source_lines)
+                if 'metadata_last = metadata._run_directory_observation(' in line)
+initial_trace=sys.gettrace()
+assert initial_trace is None
+# Observe the original typed directory site. The old _fstat replacement was
+# bypassed after _file adopted the shared kernel and never exercised this test.
+def at_original_site(frame,event,value):
+    if event=='call':
+        if frame.f_code is not original_file_code or frame.f_locals.get('self') is not owner:
+            return None
+    if event=='line' and frame.f_lineno==entry_line and not seen:
+        sys.settrace(None)
+        frame.f_trace=None
+        assert frame.f_locals['metadata_resource'].ordinal==0
+        # Nested observers are otherwise suppressed inside a trace callback.
+        # The supported debugger API enables the test's real C/return probes.
+        try:sys.call_tracing(exercise,(frame,))
         except BaseException:
             # Only synthetic fixture diagnostics; keep the original failure.
             import traceback
@@ -275,10 +285,10 @@ def at_original_fstat(actual_owner,fd,scope,registration=None):
             diagnostic_fd=os.open(path,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
             with os.fdopen(diagnostic_fd,'w') as stream:traceback.print_exc(file=stream)
             raise
-    return original_fstat(actual_owner,fd,scope,registration)
-a.StartupArtifactOwner._fstat=at_original_fstat
+    return at_original_site
+sys.settrace(at_original_site)
 try:owner.read()
-finally:a.StartupArtifactOwner._fstat=original_fstat
+finally:sys.settrace(initial_trace)
 assert seen==[True] and owner._ready
 assert owner.completed_binding()[4] is owner._original_buffer
 owner.release()

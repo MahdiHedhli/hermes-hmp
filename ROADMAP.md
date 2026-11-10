@@ -1,5 +1,11 @@
 ## Native-link acceptance baseline — November 9, 2026
 
+Closed Link metadata resources/consumers, kernel branches and policy/commit
+projections now exist as an unwired draft. Existing early origins refuse them.
+Do not activate the engine or present packet/compatibility tests as completion:
+distinct op5, full traversal/finish/raw retirement, original core/property
+bindings and actual enabled-cohort tests remain in the same coupled task.
+
 The next implementation remains the complete native link traversal. A new
 actual-startup test reaches normal completion on current Python and deliberately
 fails metadata admission, link-read admission and raw-byte retirement. This

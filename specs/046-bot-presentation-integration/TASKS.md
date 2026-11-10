@@ -14,6 +14,10 @@
       actual-startup contract test is deliberately red on current Python;
       minimum-Python instrumentation timed out, not a causal pass. No native
       path/service/physical image completion follows from earlier DATA checks.
+      The Link metadata/kernel/policy draft is written but early admission is
+      deliberately unavailable. Its local/bootstrap tests and existing Directory
+      compatibility do not close this task. Add op5, full driver/finishes and
+      actual early property/core bindings before connecting the native caller.
 
 - [x] **GR2-LINKS-L1** Explicit recipe2/interpreter2 document loader under original immutable version/root/IO/counter ownership, no detection/fallback/retry; D1 rejects recipe2 before artifact acquisition. Bounded independent source review accepted. This loads pinned DATA only.
 - [x] **GR2-LINKS-L2** Decode/retain the closed selected interpreter link plan against original entry/runtime bindings, canonical target/UID/executable-mode constraints and raw/normalized path policy. Preserve stricter pins during deduplication and reserve both text observations in the original limits. Independent source review accepted the plan boundary; actual completion is tracked separately in L3.

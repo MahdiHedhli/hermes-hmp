@@ -1,5 +1,11 @@
 # November 9: native image traversal remains unfinished
 
+The coupled branch now has a disabled Link metadata implementation on the shared
+operation kernel. Its early-engine gate stays closed; byte operations, complete
+traversal/finishes and runtime wiring are still required. Selected local guards
+and existing Directory compatibility pass on both Python versions. This is source
+progress, not an installed image feature or complete native qualification.
+
 The draft native-link branch now has an actual-startup acceptance test covering
 the real link-path filesystem calls. On Python 3.14.9 startup completes, but the
 test exposes missing typed admission for 129 metadata/two link-read calls and
