@@ -603,3 +603,38 @@ def test_native_spec_accessor_default_rejoined_after_callbacks(captured, monkeyp
             origins.current(captured)
     finally:sys.setprofile(None)
     assert observed == [True] and calls == []
+
+
+def test_parent_retains_literal_engine_capture_record(monkeypatch):
+    # Observe the real factory return; do not substitute a test capture helper.
+    from hmp_plugin import presentation_native_link as engine
+    monkeypatch.setattr(origins, '_CAPTURE_STARTED', False)
+    observed = []
+    code = engine._capture_engine.__code__
+    assert sys.getprofile() is None
+    def observe(frame, event, value):
+        if event == 'return' and frame.f_code is code:
+            observed.append(value)
+    sys.setprofile(observe)
+    try:
+        parent = origins.capture()
+    finally:
+        sys.setprofile(None)
+    assert len(observed) == 1
+    environment = parent[0]
+    assert len(environment) == 8 and environment[7] is observed[0]
+    record = environment[7]
+    assert record[0] is environment[4] and record[1] is environment[5]
+    assert sum(row is record[2] for row in environment[4][2]) == 1
+    assert origins.current(parent) is parent
+
+
+@pytest.mark.parametrize('field', (0, 1, 2))
+def test_parent_refuses_mismatched_audit_record_fields(captured, field):
+    environment = list(captured[0])
+    record = list(environment[7])
+    record[field] = ()
+    environment[7] = tuple(record)
+    changed = (tuple(environment), *captured[1:])
+    with pytest.raises(RuntimeError, match='BI1_LINK_FACTORY_ORIGIN_REFUSED'):
+        origins.current(changed)

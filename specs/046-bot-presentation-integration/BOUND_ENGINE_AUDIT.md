@@ -171,9 +171,30 @@ joins, presence of the actual record before the validator callback, tuple
 immutability, and the distinction between an original record and a coherent DATA
 copy. Independent bounded source review found no concrete issue in that subset.
 
-**This draft is not an integrated candidate.** Parent consumers still expect the
-old engine-six return and must migrate; original EntryOrigin/STARTED/CELL/lineage/
+**This draft is not an integrated candidate.** The immediate parent now retains the literal record in environment field 7
+(environment width 8); remaining consumers must migrate. Original EntryOrigin/STARTED/CELL/lineage/
 Scope root custody, both publication windows and selectors remain incomplete.
 No lost-return/copy refusal, fast dispatch, startup, feature or deployment pass is
 claimed. BA2 stays unchecked. Do not deploy or merge this draft into the working
 media candidate until the coherent integration and its causal review are complete.
+
+
+### BA2 immediate-parent checkpoint — November 10
+
+`link_factory_origin.capture` retains the literal engine capture return, rather
+than constructing an equivalent record. Its DATA validator requires the engine,
+layout and uniquely held checker row to match that record before the complete
+generic audit, and rejoins record identities after that callback. The selected
+helper capsule remains at environment field 6; no existing field is repurposed.
+
+Eight focused cases pass on each actual Python 3.14.9 and 3.11.15 interpreter,
+with unchanged source maps and zero failures/errors/skips. In addition to the
+three engine construction cases and existing real parent-capture control, a
+profile callback observes the actual return and three negative cases replace
+individual record fields. These are DATA controls, not original-root coherent
+copy rejection. Independent read-only review accepted this bounded delta; it did
+not independently rehash the reported test receipts. Private receipts:
+`/private/tmp/hq-zr13k0gx/receipt.json` and
+`/private/tmp/hq-6s1f9j83/receipt.json`, bound to HEAD b0502551 plus the tested
+source delta. EntryOrigin, lineage, Scope, final publication and selectors remain
+pending. Full BA2 and startup/deployment acceptance remain open.

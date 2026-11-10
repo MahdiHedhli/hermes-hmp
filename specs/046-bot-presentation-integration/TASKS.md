@@ -1046,3 +1046,11 @@ partial/callable carrier is introduced. Mutable contained values stay freshly ch
 - [ ] BI1-BA5: original native 60-second completion, then full startup acceptance.
 - [ ] BI1-BA6/7: current-media-safe service/route/character integration and physical,
   native-storage/accessibility/security-release acceptance.
+
+
+BA2 immediate-parent progress (2026-11-10): literal record retained in parent
+loopback environment field7 (width8), full generic validator preserved with
+pre/post record joins. Eight focused cases passed on each supported interpreter;
+independent bounded source review found no introduced issue. Original entry,
+lineage, Scope, final publication windows and selectors remain pending. BA2 is
+still unchecked; no startup or deployment qualification.

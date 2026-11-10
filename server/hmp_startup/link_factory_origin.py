@@ -86,7 +86,7 @@ def current(origin, *, _type=type, _vars=vars, _tuple=tuple, _len=len,
     if _type(origin) is not _tuple or _len(origin) != 5:
         raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
     environment, modules, own_functions, policy_functions, types = origin
-    if (_type(environment) is not _tuple or _len(environment) != 7
+    if (_type(environment) is not _tuple or _len(environment) != 8
             or _type(environment[0]) is not _module or _type(environment[1]) is not dict
             or _vars(environment[0]) is not environment[1]
             or _any(_type(k) is not str for k in environment[1])
@@ -423,6 +423,12 @@ def current(origin, *, _type=type, _vars=vars, _tuple=tuple, _len=len,
     if _len(selected) != 1:
         raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
     held = selected[0]
+    audit_record = environment[7]
+    if (_type(audit_record) is not _tuple or _len(audit_record) != 3
+            or audit_record[0] is not engine
+            or audit_record[1] is not environment[5]
+            or audit_record[2] is not held):
+        raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
     namespace = _vars(engine[0])
     if (_any(_type(k) is not _str for k in namespace)
             or held[3] is not namespace or _type(held[1]) is not _function
@@ -439,7 +445,11 @@ def current(origin, *, _type=type, _vars=vars, _tuple=tuple, _len=len,
     if held[1](engine) is not engine:
         raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
     # Final selected-helper seal is inline: no checker-return window follows.
-    if origin[0] is not environment or environment[6] is not helper_capsule:
+    if (origin[0] is not environment or environment[6] is not helper_capsule
+            or environment[7] is not audit_record
+            or audit_record[0] is not engine
+            or audit_record[1] is not environment[5]
+            or audit_record[2] is not held):
         raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
     # Authenticate the component before dispatch; the actual parent holds this DATA.
     if (_type(helper_capsule) is not _tuple or _len(helper_capsule) != 7
@@ -915,7 +925,10 @@ def capture(*,
             or any(k not in capture_kw or capture_kw[k] is not value
                    for k, value in expected_capture_defaults.items())):
         raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
-    engine_origin = engine_capture()
+    audit_record = engine_capture()
+    if (_type(audit_record) is not _tuple or _len(audit_record) != 3):
+        raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+    engine_origin, engine_layout, engine_check = audit_record
     if (_type(engine_origin) is not _tuple or _len(engine_origin) != 6
             or _type(engine_origin[4]) is not _tuple or _len(engine_origin[4]) != 4
             or engine_origin[4][0] is not _sys or engine_origin[4][1] is not sys_namespace
@@ -924,8 +937,12 @@ def capture(*,
     if (engine._capture_engine is not engine_capture
             or engine_capture.__code__ is not engine_capture_code):
         raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
-    engine_layout = engine_origin[5]
-    engine_check = next(row for row in engine_origin[2] if row[0] == '_engine_origin_tail')
+    if (engine_origin[5] is not engine_layout
+            or _type(engine_check) is not _tuple or _len(engine_check) != 7
+            or _type(engine_check[0]) is not _str
+            or engine_check[0] != '_engine_origin_tail'
+            or _len(_tuple(row for row in engine_origin[2] if row is engine_check)) != 1):
+        raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
     policy_namespace = modules[1][2]
     policy_names = ('_need', '_parts', '_policy_tail', '_new_policy', '_sites', '_directory', '_leaf', '_cursor_tail', '_start', '_action', '_advance', '_outcome', '_scope_blueprint_guard', '_scope_blueprint_cohort', '_scope_blueprint_tail', '_new_scope_blueprint')
     functions = _tuple((pin_function(name, policy_namespace.get(name), policy_namespace) for name in policy_names))
@@ -990,7 +1007,10 @@ def capture(*,
                     or _any((names.get(n) is not member for n, member in _zip(fields, members, strict=True)))
                     or _any((names.get(n) is not member for n, member in dispatch))):
                 raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
-        if (engine_capture.__code__ is not engine_capture_code
+        if (audit_record[0] is not engine_origin
+                or audit_record[1] is not engine_layout
+                or audit_record[2] is not engine_check
+                or engine_capture.__code__ is not engine_capture_code
                 or _type(engine_origin) is not _tuple or _len(engine_origin) != 6
                 or engine_origin[0] is not engine or engine_origin[5] is not engine_layout
                 or engine_check[1].__code__ is not engine_check[2]
@@ -1042,7 +1062,7 @@ def capture(*,
             or _tuple.__len__(encoding_origin) != _len(values)
             or _any((_tuple.__getitem__(encoding_origin, i) is not value for i, value in _enumerate(values)))):
         raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
-    result = ((_sys, sys_namespace, registry, encoding_origin, engine_origin, engine_layout, helper_capsule), modules, own_functions, functions, kinds)
+    result = ((_sys, sys_namespace, registry, encoding_origin, engine_origin, engine_layout, helper_capsule, audit_record), modules, own_functions, functions, kinds)
     if (_type(_sys) is not _module or _any(_type(k) is not _str for k in registry)
             or _any(_type(row[1]) is not _module or _vars(row[1]) is not row[2]
                     or _any(_type(k) is not _str for k in row[2])
