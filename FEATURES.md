@@ -1,18 +1,23 @@
-## November 10 — path validation optimized; startup gate remains open
+## November 10 — path and digest validation optimized; startup still blocked
 
-The artifact validator now checks the same 33 forbidden ASCII control characters
-with bounded string searches. Exact string, UTF-8 length, path-component, digest,
-size and total-budget checks remain unchanged. No audit, authorization or native
-file check was removed. Independent source review found no new concrete blocker.
+Artifact validation now checks the same forbidden path characters and exact
+lowercase SHA-256 alphabet with bounded native string operations. Exact types,
+lengths, path components, duplicate paths, size/total budgets and all custody,
+authorization and native file checks remain unchanged. Independent source review
+found no concrete semantic or security discrepancy in either optimization.
 
-All 476 selected regression cases pass on Python 3.14.9; the 38 focused path
-cases also pass on Python 3.11.15. Broader minimum-runtime verification is pending.
-The full isolated native contract still fails its original 60-second deadline.
-Its last checkpoint was event 4 at 52.78 seconds, work 963 and reserved zero;
-this single observation does not establish a repeatable startup speed gain.
-Detailed profiling adds substantial overhead and is retained as private diagnostic
-evidence only. Bot-character delivery, host-local images, service and physical
-qualification remain open. No host update, restart or device install occurred.
+The path-only source passed the same 476 selected cases on Python 3.14.9 and
+3.11.15. The subsequent digest change passes 328 focused path/digest and actual
+artifact cases on each runtime, including all ASCII controls, digest-alphabet
+substitutions and refusal of a string subclass without calling its override.
+These are separate qualification sets, not a combined full-suite claim.
+
+The current full isolated native contract still fails its original 60-second
+deadline. Its last checkpoint was event 4 at 51.22 seconds, work 963 and reserved
+zero. Single-run checkpoints and helper timings do not establish a repeatable
+startup improvement or completion. Bot characters, host-local images, service,
+physical-device and release qualification remain open. No host update, restart
+or device install occurred. LLY520 has no currently established access route.
 
 ## November 10 — native startup still misses deadline; audit shortcut rejected
 

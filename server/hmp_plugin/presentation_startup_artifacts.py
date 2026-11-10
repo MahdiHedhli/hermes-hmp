@@ -723,7 +723,7 @@ def _expected(rows):
         _require(1 <= len(parts) <= 64 and all(p not in ("", ".", "..") for p in parts)
                  and row.path not in seen and type(row.size) is int
                  and 0 <= row.size <= _MAX_FILE and type(row.sha256) is str
-                 and len(row.sha256) == 64 and all(c in "0123456789abcdef" for c in row.sha256))
+                 and len(row.sha256) == 64 and not row.sha256.strip("0123456789abcdef"))
         seen.add(row.path)
         total += row.size
         _require(total <= _MAX_TOTAL)
