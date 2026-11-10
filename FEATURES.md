@@ -30,6 +30,13 @@ malformed-entry controls pass on both Python 3.14.9 and 3.11.15. Full normal pub
 60-second deadlines, including unobserved normal Scope completion on both runtimes.
 No timeout fix, complete character delivery, merge-ready or deployment claim is made.
 
+The next fixed live-checker body is now present in the isolated draft, with its
+own early-held function row. Independent AST comparison confirms only immutable
+layout parsing was omitted;124 selected cases pass on both runtimes, including
+fresh mutable-state and post-callback drift refusals. No production caller selects
+this body yet: strict rooted parent/caller wiring and original startup acceptance
+remain pending. This source step does not qualify character delivery or deployment.
+
 ## November 10 — iPad development update installed; LB1 device checks remain
 
 The existing iPad Pro now has development build **2026110901**, installed once

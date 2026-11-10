@@ -1077,3 +1077,9 @@ separate live-checker role in engine rows, append a strict rooted parent entrypo
 without moving existing indices, and migrate actual rooted callers plus inline
 seals together. Missing roots refuse rather than selecting generic fallback.
 No code fast dispatch exists yet; original deadlines and mutable checks remain.
+
+BA3 fixed target source progress (2026-11-10): preheld distinct livechecker row,
+static live body omits only immutable layout parsing; generic fullvalidator and
+record3genericrow retained.124 selected cases pass current/minimum; independent
+source-only AST comparison accepted. Strict rooted parent/caller wiring still
+pending, no production selector calls newtarget; no integratedperformance pass.

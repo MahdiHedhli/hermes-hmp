@@ -144,6 +144,7 @@ _ENGINE_FUNCTIONS = (
     '_finish_mirrors', '_finish_path', '_drive_native_path', '_path_history_mirrors',
     '_history_phase_mirrors', '_finish_history', '_snapshot_history_mirrors', '_snapshot',
     '_make_fact', '_recheck', '_open_shared', '_close_known_shared', '_prepare_open_shared',
+    '_engine_live_tail',
 )
 
 
@@ -245,6 +246,18 @@ def _capture_engine(*, _type=type, _tuple=tuple, _dict=dict, _str=str,
     # not the original audit input retained by the actual capture return.
     checker_row = ('_engine_origin_tail', checker, checker_code, globals(),
                    checker_defaults, checker_kw, checker_pairs)
+    live_checker = _engine_live_tail
+    if (_type(live_checker) is not _function
+            or live_checker.__globals__ is not globals()):
+        raise _error from None
+    live_code, live_defaults, live_kw = (live_checker.__code__,
+        live_checker.__defaults__, live_checker.__kwdefaults__)
+    if (live_kw is not None and (_type(live_kw) is not _dict
+            or _any(_type(k) is not _str for k in live_kw))):
+        raise _error from None
+    live_pairs = () if live_kw is None else tuple(live_kw.items())
+    live_checker_row = ('_engine_live_tail', live_checker, live_code, globals(),
+                        live_defaults, live_kw, live_pairs)
     if (_type(sys) is not _module or _type(sys.modules) is not _dict
             or _any(_type(k) is not _str for k in sys.modules)):
         raise _error from None
@@ -401,6 +414,12 @@ def _capture_engine(*, _type=type, _tuple=tuple, _dict=dict, _str=str,
                     or function.__defaults__ is not checker_defaults or kw is not checker_kw):
                 raise _error from None
             functions.append(checker_row)
+        elif name == '_engine_live_tail':
+            if (function is not live_checker or function.__code__ is not live_code
+                    or function.__globals__ is not live_checker_row[3]
+                    or function.__defaults__ is not live_defaults or kw is not live_kw):
+                raise _error from None
+            functions.append(live_checker_row)
         else:
             functions.append((name, function, function.__code__, function.__globals__,
                               function.__defaults__, kw, () if kw is None else tuple(kw.items())))
@@ -623,7 +642,18 @@ def _capture_engine(*, _type=type, _tuple=tuple, _dict=dict, _str=str,
             or audit_record[0] is not origin or audit_record[1] is not layout
             or origin[5] is not layout or audit_record[2] is not checker_row
             or _len(_tuple(row for row in origin[2] if row is checker_row)) != 1
-            or checker_row[1] is not checker or checker_row[2] is not checker_code):
+            or checker_row[1] is not checker or checker_row[2] is not checker_code
+            or _len(_tuple(row for row in origin[2] if row is live_checker_row)) != 1
+            or live_checker_row[1] is not live_checker
+            or live_checker_row[2] is not live_code
+            or globals().get('_engine_live_tail') is not live_checker
+            or live_checker.__code__ is not live_code
+            or live_checker.__globals__ is not live_checker_row[3]
+            or live_checker.__defaults__ is not live_defaults
+            or live_checker.__kwdefaults__ is not live_kw
+            or (live_kw is not None and (_any(_type(k) is not _str for k in live_kw)
+                or _len(live_kw) != _len(live_pairs)
+                or _any(k not in live_kw or live_kw[k] is not value for k, value in live_pairs)))):
         raise _error from None
     return audit_record
 
@@ -801,7 +831,234 @@ def _engine_origin_tail(origin, *, _type=type, _tuple=tuple, _dict=dict, _str=st
             raise _error from None
     shared = {'_produce_shared': '_produce_directory_metadata', '_consume_shared': '_consume_directory_policy', '_ack_shared': '_ack_directory_policy', '_attached_shared': '_acked_directory_commit_tail', '_retired_shared': '_retired_directory_commit_tail'}
     effects = ('_open_shared', '_close_known_shared', '_prepare_open_shared')
-    required_functions = ('_capture_engine', '_dependency_mirrors', '_engine_origin_tail', '_execution_mirrors', '_opened_chain_tail', '_lifetime_tail', '_resource_tail', '_prepare_shared_consumer', '_latch_shared_consumer', '_make_shared_commit', '_commit_shared_tail', '_publish_shared_ack', '_acked_shared_history', '_resource_bindings', '_byte_record_tail', '_make_shared_bytes_commit', '_commit_shared_bytes_tail', '_publish_shared_bytes_ack', '_acked_shared_bytes_history', *shared, '_effect_pin', '_new_execution', '_append_action', '_finish_mirrors', '_finish_path', '_drive_native_path', '_path_history_mirrors', '_history_phase_mirrors', '_finish_history', '_snapshot_history_mirrors', '_snapshot', '_make_fact', '_recheck', *effects)
+    required_functions = ('_capture_engine', '_dependency_mirrors', '_engine_origin_tail', '_execution_mirrors', '_opened_chain_tail', '_lifetime_tail', '_resource_tail', '_prepare_shared_consumer', '_latch_shared_consumer', '_make_shared_commit', '_commit_shared_tail', '_publish_shared_ack', '_acked_shared_history', '_resource_bindings', '_byte_record_tail', '_make_shared_bytes_commit', '_commit_shared_bytes_tail', '_publish_shared_bytes_ack', '_acked_shared_bytes_history', *shared, '_effect_pin', '_new_execution', '_append_action', '_finish_mirrors', '_finish_path', '_drive_native_path', '_path_history_mirrors', '_history_phase_mirrors', '_finish_history', '_snapshot_history_mirrors', '_snapshot', '_make_fact', '_recheck', *effects, '_engine_live_tail')
+    if not (all((type(row) is tuple and len(row) == 7 and (type(row[0]) is str) for row in origin[2])) and len(origin[2]) == len(required_functions) and (len({row[0] for row in origin[2]}) == len(required_functions)) and all((name in required_functions for name, *_ in origin[2]))):
+        raise _error from None
+    for row in origin[2]:
+        if not (type(row) is tuple and len(row) == 7 and (type(row[0]) is str)):
+            raise _error from None
+        name = row[0]
+        if pin_function.__code__ is not first[2] or pin_function.__defaults__ is not None or pin_function.__kwdefaults__ is not None or (kernel_names['_link_function_pin'] is not pin_function):
+            raise metadata.ArtifactObservationError from None
+        if name in shared:
+            if not globals().get(name) is row[1]:
+                raise _error from None
+            held_pin_row = (shared[name], *row[1:])
+            held_pin_namespace = kernel_names
+            held_pin_name = shared[name]
+            if not (type(held_pin_row) is tuple and len(held_pin_row) == 7 and (type(held_pin_name) is str) and (type(held_pin_row[0]) is str) and (held_pin_row[0] == held_pin_name) and (type(held_pin_namespace) is dict) and (checked_namespaces.get(_id(held_pin_namespace)) is held_pin_namespace) and (type(held_pin_row[1]) is FunctionType) and (held_pin_row[1].__globals__ is held_pin_namespace) and (held_pin_row[3] is held_pin_namespace) and (held_pin_row[1].__code__ is held_pin_row[2]) and (held_pin_row[1].__defaults__ is held_pin_row[4]) and (held_pin_row[1].__kwdefaults__ is held_pin_row[5]) and (held_pin_namespace.get(held_pin_name) is held_pin_row[1]) and (type(held_pin_row[6]) is tuple)):
+                raise _error from None
+            if held_pin_row[5] is None:
+                if not held_pin_row[6] == ():
+                    raise _error from None
+            elif not (type(held_pin_row[5]) is dict and len(held_pin_row[5]) == len(held_pin_row[6]) and (not _any(_map(_not_identity, _map(_type, held_pin_row[5]), (_str,) * _len(held_pin_row[5])))) and all((type(pair) is tuple and len(pair) == 2 and (type(pair[0]) is str) and (pair[0] in held_pin_row[5]) and (held_pin_row[5][pair[0]] is pair[1]) for pair in held_pin_row[6]))):
+                raise _error from None
+        elif name in effects:
+            if not (globals().get(name) is row[1] and type(row[1]) is FunctionType and (row[1].__code__ is row[2]) and (row[1].__globals__ is row[3]) and (row[1].__defaults__ is row[4]) and (row[1].__kwdefaults__ is row[5]) and (type(row[6]) is tuple)):
+                raise _error from None
+            namespace = row[3]
+            if not (type(namespace) is dict and checked_namespaces.get(_id(namespace)) is namespace and (namespace.get('StartupArtifactOwner') is StartupArtifactOwner)):
+                raise _error from None
+            if name == '_open_shared':
+                if not vars(StartupArtifactOwner).get('_open') is row[1]:
+                    raise _error from None
+            elif name == '_close_known_shared':
+                if not namespace.get('_close_native_file_known') is row[1]:
+                    raise _error from None
+            elif not namespace.get('_prepare_native_link_open') is row[1]:
+                raise _error from None
+            if row[5] is not None:
+                if not (type(row[5]) is dict and len(row[5]) == len(row[6]) and (not _any(_map(_not_identity, _map(_type, row[5]), (_str,) * _len(row[5])))) and all((type(pair) is tuple and len(pair) == 2 and (type(pair[0]) is str) and (pair[0] in row[5]) and (row[5][pair[0]] is pair[1]) for pair in row[6]))):
+                    raise _error from None
+            elif not len(row[6]) == 0:
+                raise _error from None
+        else:
+            held_pin_row = row
+            held_pin_namespace = globals()
+            held_pin_name = name
+            if not (type(held_pin_row) is tuple and len(held_pin_row) == 7 and (type(held_pin_name) is str) and (type(held_pin_row[0]) is str) and (held_pin_row[0] == held_pin_name) and (type(held_pin_namespace) is dict) and (checked_namespaces.get(_id(held_pin_namespace)) is held_pin_namespace) and (type(held_pin_row[1]) is FunctionType) and (held_pin_row[1].__globals__ is held_pin_namespace) and (held_pin_row[3] is held_pin_namespace) and (held_pin_row[1].__code__ is held_pin_row[2]) and (held_pin_row[1].__defaults__ is held_pin_row[4]) and (held_pin_row[1].__kwdefaults__ is held_pin_row[5]) and (held_pin_namespace.get(held_pin_name) is held_pin_row[1]) and (type(held_pin_row[6]) is tuple)):
+                raise _error from None
+            if held_pin_row[5] is None:
+                if not held_pin_row[6] == ():
+                    raise _error from None
+            elif not (type(held_pin_row[5]) is dict and len(held_pin_row[5]) == len(held_pin_row[6]) and (not _any(_map(_not_identity, _map(_type, held_pin_row[5]), (_str,) * _len(held_pin_row[5])))) and all((type(pair) is tuple and len(pair) == 2 and (type(pair[0]) is str) and (pair[0] in held_pin_row[5]) and (held_pin_row[5][pair[0]] is pair[1]) for pair in held_pin_row[6]))):
+                raise _error from None
+    required_kernel = ('_link_function_pin', '_closed_link_engine_origin', '_link_policy_helper', '_link_stage_functions', '_rejoin_link_stages', '_link_current_lifetime_tail', '_resource_tail', '_prepare_metadata_operation_with_custody', '_undebited_directory_cells_tail', '_unspent_directory_cells_tail', '_unused_directory_cells_tail', '_unused_directory_intent_tail', '_latched_directory_resource_tail', '_charged_directory_history_tail', '_charged_directory_operation_tail', '_active_directory_operation_tail', '_directory_admission_preparation_tail', '_admit_directory_operation', '_returned_directory_operation_tail', '_pending_directory_cohort_tail', '_pending_directory_return_tail', '_produce_directory_metadata', '_consuming_directory_return_tail', '_directory_commit_cohort_tail', '_prepared_directory_commit_tail', '_consume_directory_policy', '_directory_ack_preparation_tail', '_acked_directory_history_tail', '_acked_directory_commit_tail', '_retired_directory_commit_tail', '_ack_directory_policy', '_run_directory_observation', '_capture_payload_origin', '_allocate_directory_custody', '_origin_tail', '_directory_payload_cells', '_marker_tail', '_payload_state_is_clear', '_native_actor_context', '_native_pre_actor_state', '_native_post_actor_state', '_native_work_origin_tail', '_native_work_registration_tail', '_native_metadata_snapshot', '_require', '_operation_result_family', '_capture_link_byte_count', '_retain_link_byte_failure')
+    if not all((type(row) is tuple and len(row) == 7 and (type(row[0]) is str) for row in origin[3])):
+        raise _error from None
+    kernel_roles = tuple((row[0] for row in origin[3]))
+    if not (len(set(kernel_roles)) == len(kernel_roles) and all((name in kernel_roles for name in required_kernel))):
+        raise _error from None
+    for row in origin[3]:
+        if not kernel_names.get(row[0]) is row[1]:
+            raise _error from None
+        if pin_function.__code__ is not first[2] or pin_function.__defaults__ is not None or pin_function.__kwdefaults__ is not None or (kernel_names['_link_function_pin'] is not pin_function):
+            raise metadata.ArtifactObservationError from None
+        held_pin_row = row
+        held_pin_namespace = row[3]
+        held_pin_name = row[0]
+        if not (type(held_pin_row) is tuple and len(held_pin_row) == 7 and (type(held_pin_name) is str) and (type(held_pin_row[0]) is str) and (held_pin_row[0] == held_pin_name) and (type(held_pin_namespace) is dict) and (checked_namespaces.get(_id(held_pin_namespace)) is held_pin_namespace) and (type(held_pin_row[1]) is FunctionType) and (held_pin_row[1].__globals__ is held_pin_namespace) and (held_pin_row[3] is held_pin_namespace) and (held_pin_row[1].__code__ is held_pin_row[2]) and (held_pin_row[1].__defaults__ is held_pin_row[4]) and (held_pin_row[1].__kwdefaults__ is held_pin_row[5]) and (held_pin_namespace.get(held_pin_name) is held_pin_row[1]) and (type(held_pin_row[6]) is tuple)):
+            raise _error from None
+        if held_pin_row[5] is None:
+            if not held_pin_row[6] == ():
+                raise _error from None
+        elif not (type(held_pin_row[5]) is dict and len(held_pin_row[5]) == len(held_pin_row[6]) and (not _any(_map(_not_identity, _map(_type, held_pin_row[5]), (_str,) * _len(held_pin_row[5])))) and all((type(pair) is tuple and len(pair) == 2 and (type(pair[0]) is str) and (pair[0] in held_pin_row[5]) and (held_pin_row[5][pair[0]] is pair[1]) for pair in held_pin_row[6]))):
+            raise _error from None
+    return origin
+
+
+def _engine_live_tail(origin, bound_layout, *, _type=type, _tuple=tuple, _dict=dict, _str=str, _len=len, _vars=vars, _any=any, _zip=zip, _module=ModuleType, _function=FunctionType, _cell=CellType, _id=id, _builtin=BuiltinFunctionType, _map=map, _not_identity=_native_identity_is_not, _error=ArtifactObservationError):
+    """Audit mutable state for a root-authenticated literal engine/layout only.
+
+    This internal fixed target is not a standalone parser or authority. Its
+    production caller must authenticate original record/root and function
+    provenance before dispatch; no startup caller selects it yet.
+    """
+    if _type(origin) is not _tuple or _len(origin) != 6:
+        raise _error from None
+    dependencies = origin[4]
+    if _type(dependencies) is not _tuple or _len(dependencies) != 4 or _type(dependencies[0]) is not _module or (_type(dependencies[1]) is not _dict) or (_vars(dependencies[0]) is not dependencies[1]) or _any((_type(k) is not _str for k in dependencies[1])) or (_type(dependencies[2]) is not _dict) or (dependencies[1].get('modules') is not dependencies[2]) or _any((_type(k) is not _str for k in dependencies[2])) or (_type(dependencies[3]) is not _tuple) or (_len(dependencies[3]) != 5):
+        raise _error from None
+    # Only the original immutable layout correspondence was proven at capture.
+    # Every mutable namespace/class/function/keyword/closure check below stays.
+    if (origin[5] is not bound_layout or _type(bound_layout) is not _tuple
+            or _len(bound_layout) != 2 or bound_layout[0] is not dependencies):
+        raise _error from None
+    if _type(origin[2]) is not _tuple:
+        raise _error from None
+    audit_rows = _tuple(row for row in origin[2]
+        if _type(row) is _tuple and _len(row)==7 and _type(row[0]) is _str
+        and row[0]=='_engine_origin_tail')
+    if _len(audit_rows)!=1:
+        raise _error from None
+    audit_checker, audit_kw, audit_pairs = audit_rows[0][1], audit_rows[0][5], audit_rows[0][6]
+    if (_type(audit_checker) is not _function or _type(audit_kw) is not _dict
+            or audit_checker.__kwdefaults__ is not audit_kw
+            or _any(_type(k) is not _str for k in audit_kw)):
+        raise _error from None
+    if _type(audit_pairs) is not _tuple or _len(audit_kw) != _len(audit_pairs):
+        raise _error from None
+    audit_originals = {}
+    for audit_pair in audit_pairs:
+        if (_type(audit_pair) is not _tuple or _len(audit_pair) != 2
+                or _type(audit_pair[0]) is not _str):
+            raise _error from None
+        audit_name, audit_expected = audit_pair
+        if (audit_name in audit_originals or audit_name not in audit_kw
+                or audit_kw[audit_name] is not audit_expected):
+            raise _error from None
+        audit_originals[audit_name] = audit_expected
+    audit_id = audit_originals.get('_id')
+    audit_map = audit_originals.get('_map')
+    audit_not = audit_originals.get('_not_identity')
+    if (_type(audit_id) is not _builtin or audit_id.__name__ != 'id'
+            or _type(audit_id.__self__) is not _module
+            or dependencies[2].get('builtins') is not audit_id.__self__):
+        raise _error from None
+    audit_builtins = _vars(audit_id.__self__)
+    if (_any(_type(k) is not _str for k in audit_builtins)
+            or audit_checker.__builtins__ is not audit_builtins):
+        raise _error from None
+    for audit_name, audit_value in (('type',_type), ('tuple',_tuple), ('dict',_dict),
+            ('str',_str), ('len',_len), ('vars',_vars), ('any',_any), ('zip',_zip),
+            ('id',audit_id), ('map',audit_map)):
+        if (audit_builtins.get(audit_name) is not audit_value
+                or audit_originals.get('_'+audit_name) is not audit_value):
+            raise _error from None
+    if _type(audit_map) is not _type:
+        raise _error from None
+    audit_map_names = _vars(audit_map)
+    if _any(_type(k) is not _str for k in audit_map_names):
+        raise _error from None
+    audit_new = audit_map_names.get('__new__')
+    if (_type(audit_new) is not _builtin or audit_new.__self__ is not audit_map
+            or audit_new.__name__ != '__new__' or audit_map.__name__ != 'map'
+            or audit_map.__module__ != 'builtins'
+            or _type(audit_not) is not _builtin or audit_not.__name__ != 'is_not'
+            or _type(audit_not.__self__) is not _module
+            or dependencies[2].get('_operator') is not audit_not.__self__):
+        raise _error from None
+    audit_operator = _vars(audit_not.__self__)
+    if (_any(_type(k) is not _str for k in audit_operator)
+            or audit_operator.get('is_not') is not audit_not):
+        raise _error from None
+    if _id is not audit_id or _map is not audit_map or _not_identity is not audit_not:
+        raise _error from None
+    checked_namespaces = {}
+    expected_modules = ('hmp_plugin.presentation_native_link', 'hmp_plugin.presentation_native_metadata', 'hmp_plugin.presentation_startup_artifacts', 'hmp_plugin.presentation_metadata_custody', 'hmp_plugin.presentation_link_path_policy')
+    for row, expected_name in _zip(dependencies[3], expected_modules, strict=True):
+        if _type(row) is not _tuple or _len(row) != 6 or _type(row[0]) is not _str or (row[0] != expected_name) or (_type(row[1]) is not _module) or (_type(row[2]) is not _dict) or _any(_map(_not_identity, _map(_type, row[2]), (_str,) * _len(row[2]))) or (dependencies[2].get(expected_name) is not row[1]) or (_vars(row[1]) is not row[2]) or (_type(row[3]) is not _tuple) or (_len(row[2]) != _len(row[3])) or _any((_type(pair) is not _tuple or _len(pair) != 2 or _type(pair[0]) is not _str or (pair[0] not in row[2]) or (row[2][pair[0]] is not pair[1]) for pair in row[3])) or (_type(row[4]) is not _tuple) or (_type(row[5]) is not _tuple):
+            raise _error from None
+        checked_namespaces[_id(row[2])] = row[2]
+        for class_row in row[4]:
+            if _type(class_row) is not _tuple or _len(class_row) != 3:
+                raise _error from None
+            kind, bases, members = class_row
+            if _type(kind) is not _type or kind.__bases__ is not bases:
+                raise _error from None
+            names = _vars(kind)
+            if _any(_map(_not_identity, _map(_type, names), (_str,) * _len(names))) or _type(members) is not _tuple or _len(names) != _len(members) or _any((_type(pair) is not _tuple or _len(pair) != 2 or _type(pair[0]) is not _str or (pair[0] not in names) or (names[pair[0]] is not pair[1]) for pair in members)):
+                raise _error from None
+        for function_row in row[5]:
+            if _type(function_row) is not _tuple or _len(function_row) != 8:
+                raise _error from None
+            function, code, namespace, defaults, kw, pairs, closure, cells = function_row
+            if _type(function) is not _function or function.__code__ is not code or function.__globals__ is not namespace or (_type(namespace) is not _dict) or (function.__defaults__ is not defaults) or (function.__kwdefaults__ is not kw) or (_type(pairs) is not _tuple) or (function.__closure__ is not closure) or (_type(cells) is not _tuple):
+                raise _error from None
+            if checked_namespaces.get(_id(namespace)) is not namespace:
+                if _any(_map(_not_identity, _map(_type, namespace), (_str,) * _len(namespace))):
+                    raise _error from None
+                checked_namespaces[_id(namespace)] = namespace
+            if kw is None:
+                if _len(pairs) != 0:
+                    raise _error from None
+            elif _type(kw) is not _dict or _any(_map(_not_identity, _map(_type, kw), (_str,) * _len(kw))) or _len(kw) != _len(pairs) or _any((_type(pair) is not _tuple or _len(pair) != 2 or _type(pair[0]) is not _str or (pair[0] not in kw) or (kw[pair[0]] is not pair[1]) for pair in pairs)):
+                raise _error from None
+            if closure is None:
+                if _len(cells) != 0:
+                    raise _error from None
+            elif _type(closure) is not _tuple or _len(closure) != _len(cells) or _any((_type(cell) is not _cell or cell.cell_contents is not value for cell, value in _zip(closure, cells, strict=True))):
+                raise _error from None
+    if not (type(origin) is tuple and len(origin) == 6 and (type(origin[0]) is ModuleType) and (sys.modules.get('hmp_plugin.presentation_native_link') is origin[0]) and (vars(origin[0]) is globals()) and (type(origin[1]) is tuple) and (type(origin[2]) is tuple) and (type(origin[3]) is tuple)):
+        raise _error from None
+    if not (type(metadata) is ModuleType and sys.modules.get('hmp_plugin.presentation_native_metadata') is metadata):
+        raise _error from None
+    kernel_names = vars(metadata)
+    if not (checked_namespaces.get(_id(kernel_names)) is kernel_names and all((type(row) is tuple and len(row) == 7 and (type(row[0]) is str) for row in origin[3]))):
+        raise _error from None
+    first = tuple((row for row in origin[3] if row[0] == '_link_function_pin'))
+    if not len(first) == 1:
+        raise _error from None
+    first = first[0]
+    if not (type(first[1]) is FunctionType and first[3] is kernel_names and (kernel_names.get('_link_function_pin') is first[1]) and (first[1].__globals__ is kernel_names) and (first[4] is first[5] is None) and (type(first[6]) is tuple) and (len(first[6]) == 0)):
+        raise _error from None
+    pin_function = first[1]
+    if pin_function.__code__ is not first[2] or pin_function.__defaults__ is not None or pin_function.__kwdefaults__ is not None:
+        raise metadata.ArtifactObservationError from None
+    allocator = _RECORD_ALLOCATOR
+    if not (type(allocator) is BuiltinFunctionType and type(_LinkRead.__bases__) is tuple and (len(_LinkRead.__bases__) == 1) and (allocator.__self__ is _LinkRead.__bases__[0]) and (allocator.__name__ == '__new__') and (vars(_LinkRead.__bases__[0]).get('__new__') is allocator)):
+        raise _error from None
+    expected = (_LinkExecution, _LinkMetadataConsumer, _LinkMetadataCommit, _NativeLinkMetadataResource, _LinkBytesConsumer, _LinkBytesCommit, _NativeLinkBytesResource, metadata._LinkBytesOperation, metadata._LinkBytesResult, metadata._LinkBytesReturn, _LinkRead, _LinkAction, _LinkPathFinish, _NativeReadlinkObservation, _LinkSnapshot, _LinkTargetObservation, _LinkRecheck)
+    if not len(origin[1]) == len(expected):
+        raise _error from None
+    for row, selected in zip(origin[1], expected, strict=True):
+        if not (type(row) is tuple and len(row) == 9 and (row[0] is selected)):
+            raise _error from None
+        kind, fields, members, constructor, code, namespace, defaults, bases, dispatch = row
+        names = vars(kind)
+        actual = names.get('__init__' if fields is None else '__new__')
+        if type(actual) is staticmethod:
+            actual = actual.__func__
+        if not (type(kind) is type and actual is constructor and (type(constructor) is FunctionType) and (constructor.__code__ is code) and (constructor.__globals__ is namespace) and (constructor.__defaults__ is defaults) and (kind.__bases__ is bases) and all((names.get(n) is member for n, member in dispatch))):
+            raise _error from None
+        if fields is None:
+            if not (kind is _LinkRead and len(names) == len(members) and all((type(pair) is tuple and len(pair) == 2 and (type(pair[0]) is str) and (pair[0] in names) and (names[pair[0]] is pair[1]) for pair in members))):
+                raise _error from None
+        elif not (type(fields) is tuple and names.get('_fields') is fields and (namespace.get('_tuple_new') is tuple.__new__) and all((names.get(n) is member for n, member in zip(fields, members, strict=True)))):
+            raise _error from None
+    shared = {'_produce_shared': '_produce_directory_metadata', '_consume_shared': '_consume_directory_policy', '_ack_shared': '_ack_directory_policy', '_attached_shared': '_acked_directory_commit_tail', '_retired_shared': '_retired_directory_commit_tail'}
+    effects = ('_open_shared', '_close_known_shared', '_prepare_open_shared')
+    required_functions = ('_capture_engine', '_dependency_mirrors', '_engine_origin_tail', '_execution_mirrors', '_opened_chain_tail', '_lifetime_tail', '_resource_tail', '_prepare_shared_consumer', '_latch_shared_consumer', '_make_shared_commit', '_commit_shared_tail', '_publish_shared_ack', '_acked_shared_history', '_resource_bindings', '_byte_record_tail', '_make_shared_bytes_commit', '_commit_shared_bytes_tail', '_publish_shared_bytes_ack', '_acked_shared_bytes_history', *shared, '_effect_pin', '_new_execution', '_append_action', '_finish_mirrors', '_finish_path', '_drive_native_path', '_path_history_mirrors', '_history_phase_mirrors', '_finish_history', '_snapshot_history_mirrors', '_snapshot', '_make_fact', '_recheck', *effects, '_engine_live_tail')
     if not (all((type(row) is tuple and len(row) == 7 and (type(row[0]) is str) for row in origin[2])) and len(origin[2]) == len(required_functions) and (len({row[0] for row in origin[2]}) == len(required_functions)) and all((name in required_functions for name, *_ in origin[2]))):
         raise _error from None
     for row in origin[2]:

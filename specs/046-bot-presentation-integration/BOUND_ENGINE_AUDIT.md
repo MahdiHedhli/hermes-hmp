@@ -332,3 +332,34 @@ Private probe `/private/tmp/hermes-bound-audit-cost-probe-20261110.py`, results
 This supports targeting original-bound immutable parsing first while retaining
 fresh mutable dependency checks. It does not predict end-to-end speedup or close
 any native/startup/feature gate. BA3 implementation remains pending.
+
+
+### BA3 fixed live body — unwired source draft, November 10
+
+`_engine_live_tail(origin,bound_layout)` now exists as a separate fixed target.
+Capture holds its literal function/code/globals/defaults/keyword-pairs row before
+callbacks, retains it exactly once in engine function rows, and rejoins it after
+the generic callback. Record3 field2 remains the original generic checker row.
+Generic schemas explicitly require the additional fixed role; generic validation
+remains complete. No startup/parent/Scope selector chooses the live target yet.
+
+Independent source review compared the two bodies with AST normalization: only
+the signature/docstring and immutable layout-correspondence traversal differ.
+The live body replaces that traversal with literal bound-layout identity/shape/
+dependency joins. All other mutable/dependency/role/class/function/kernel checks
+remain text-equivalent. Its future rooted caller MUST authenticate the live row's
+own defaults/code/builtins/closure before invocation; the body still bootstraps
+primitive checks from the generic row. Direct canonical DATA tests are not proof
+of that caller provenance or root authority. No unrooted caller is enabled.
+
+124 selected cases pass on each Python3.14.9 and3.11.15, source maps unchanged and
+no failures/errors/skips: hq-jhako9cy / hq-79w2czdj. They include all prior113 generic
+DATA cases, actual real entry/lineage, literal early live-row retention, copied
+layout refusal, fresh missing-None/value/reordering differential controls, code/
+export/keyword drift after earlier success, and live-checker code/keyword mutation
+at the actual generic-validator return during capture. No foreign callback runs.
+The earlier122-case receipts hq-e7wj_yhn / hq-r0vdos61 remain historical partials.
+
+This is not BA3 coherent integration or a demonstrated speedup. Strict rooted
+parent dispatch and actual publication/selector callers remain to implement;
+full native60s and fresh-probe/startup/feature/device/release gates remain open.
