@@ -1129,3 +1129,12 @@ failures/errors/skips, including independent native-error default binding.
 Final-source original native run alone still times out at the unchanged60s.
 No selected immutable omission enabled; rooted-before-live native-fenced reorder,
 mutable causal checks and unchanged native deadline remain required next.
+
+Rooted selected-live audit checkpoint (2026-11-10):
+- [x] Prove original roots before fixed live dispatch; native tuple and ownerdict fences.
+- [x] Original immutable columns in live target, parent final and both Scope bodies; generic DATA stays complete.
+- [x] Reproduce/fix owner-class key lookup; explicit lateGC, root/callee and mutable-state causals.
+- [x] Independently compare all3 inline bodies;454 checks pass current/minimum.
+- [ ] Original60s native traversal: stillTimeoutExpired, no BA3/startup acceptance.
+- [ ] Profile remaining activation/package/runtime seals; review next root-bound immutable-only optimization.
+- [ ] Full startup/media integration, OS/device and release qualification remain required; no deployment claimed.

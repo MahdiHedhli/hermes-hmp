@@ -655,3 +655,68 @@ Next work must complete original-root-before-selected-live eligibility and the
 reviewed immutable-only audit reduction together, preserve all fresh mutable
 checks and generic DATA validation, then rerun the unchanged full native gate.
 No newer source was deployed and no physical build was changed.
+
+Rooted selected-live audit reduction (2026-11-10; final qualification active)
+-------------------------------------------------------------------------
+The strict current_started entrypoint now proves original roots before selecting
+the held current_live row. Native tuple widths/indexes fence packet/module/class
+rows before any extraction. The canonical entry module and exact EntryOrigin,
+owner_type, STARTED/CELL, owner, invocation and native lineage are joined to the
+actual parent environment/capsule/packet/record/layout/checker. Owner storage is
+read through the original native GetSet after exact owner type verification; its
+class namespace is traversed live-to-private with exact-string keys before any
+literal comparison. Actual roots and callee provenance are rejoined after return.
+
+The private live target and its three inline copies now consume original immutable
+key/value columns. Removed work is only immutable row/pair/schema shape, duplicate
+keys and column correspondence already checked by full generic validation before
+publication. Standalone capture/current remain complete untrusted DATA parsers.
+Every module/registry/sys identity/key/cardinality/builtins/value predicate, class
+export/bases/member membership+identity, function code/globals/builtins/default/kw/
+closure/cell check and alias crossjoin stays fresh. Module comparison still builds
+a fresh private expected index and scans live-to-private; no currentness verdict,
+mutable namespace or owner authorization is cached. Both final Scope bodies stay
+inline, using held native primitives and the original private refusal, so no final
+checker-return window is introduced.
+
+Initial root-first127 cases passed (hq-jbk8bzyz). Review identified the owner class
+namespace lookup needed its own fence after reordering. Actual supported Python
+gc.get_referents(mappingproxy) access let the isolated test remove its native
+__dict__ key and insert a colliding nonstring key: hq-83wqt1n4 failed with one eq
+call and zero live calls. The new native iterator rejects before hashing/equality;
+the class dictionary is restored by clear/update before diagnostics. This was a
+local draft regression corrected before deployment, not observed live exploitation.
+
+Initial22 new cases (hq-nbqomizb) exposed a code-fixture closure-width mismatch,
+monkeypatch __bases__ teardown error, and generated first-Scope duplication while
+the second stayed generic. Generator replacement now uses both original anchors
+in reverse order; the test uses manual bases restoration and zero-closure code.
+Final44 causal/AST cases pass (hq-dkkrnuo1):18 post-success mutable drifts; explicit
+gc.collect injection after the private module index; independent AST comparison
+of the one parent and two Scope copies; actual started pre-live malformed root
+fields; and post-selected-return root/callee mutations refusing before enginecall.
+The explicit GC injection proves that boundary, not automatic-GC/all-body atomicity.
+A separate current-source refusal-form check confirms all26 live and114 rooted
+parent raises use fixed native calls without keywords.
+
+Final combined454 suites hq-6lnifid4 (Python3.14.9) and hq-m8vddnml
+(Python3.11.15) pass with source unchanged and zero failures/errors/skips.
+The unchanged original native run hq-u5fb5dq8 runs alone and still fails
+TimeoutExpired60s, not an early setup error. Last progress: event4 at50.1507s,
+44 observed/typed, work963/reserved0. No intrinsic speedup is inferred from this
+single timed-out run or comparison with prior runs. No full startup/BA3,
+character delivery, physical-device/release or deployment pass is established.
+Working media6796 is unchanged.
+
+Separate diagnostic /private/tmp/hprof-5zue6v4p/receipt.json uses the same candidate
+source and unchanged60s/assertions but adds original current_started/current_live/
+engine_live code objects to the existing monitor. It too times out; it is NOT an
+official acceptance run. At event6/53.8346s it records parent_started3549 calls /
+8.1954 inclusive seconds, helper_live3549 /1.6356, engine_live7087 /6.5752,
+owner_guard5575 /30.3372 and runtime_current5589 /7.3918. Categories overlap and
+observation overhead differs; do not add them, infer exclusive time, compare
+progress totals to the original wrapper, or claim a speedup. Source inspection
+shows _guard also calls GatewayActivationOwner.current and source/runtime seals.
+Profile the retained activation/package/selection validators and runtime seals
+before choosing the next immutable-only optimization; helper parsing is no longer
+an assumed dominant target. All currentness/owner/permission state stays fresh.

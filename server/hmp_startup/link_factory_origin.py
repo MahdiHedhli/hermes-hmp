@@ -947,8 +947,123 @@ def current_started(origin, *, _type=type, _vars=vars, _tuple=tuple, _len=len,
             or helper_packet[0] is not environment[0] or helper_packet[1] is not environment[1]
             or helper_packet[2] is not environment[2]):
         raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+    # Establish original started roots BEFORE selecting the live audit. The
+    # immutable DATA parser has not run here; use only held native shape fences.
+    if (_type(helper_packet[3]) is not _tuple or _len(helper_packet[3]) != 7
+            or _type(helper_packet[4]) is not _tuple or _len(helper_packet[4]) != 41
+            or _type(helper_packet[3][6]) is not _tuple or _len(helper_packet[3][6]) != 3):
+        raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+    for started_index in (27, 29, 30, 35):
+        if (_type(helper_packet[4][started_index]) is not _tuple
+                or _len(helper_packet[4][started_index]) != 3
+                or _type(helper_packet[4][started_index][0]) is not _type):
+            raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+    if (_any(_type(k) is not _str for k in environment[2])):
+        raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+    started_entry_module = environment[2].get('hmp_startup.gateway_entry')
+    if (_type(started_entry_module) is not _module
+            or helper_packet[3][6][0] is not started_entry_module):
+        raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+    started_entry_names = _vars(started_entry_module)
+    if (_type(started_entry_names) is not _dict
+            or helper_packet[3][6][1] is not started_entry_names
+            or _any(_type(k) is not _str for k in started_entry_names)):
+        raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+    started_entry_kind = helper_packet[4][30][0]
+    started_invocation_kind = helper_packet[4][29][0]
+    started_lineage_kind = helper_packet[4][35][0]
+    started_owner_kind = helper_packet[4][27][0]
+    if (_type(started_entry_module) is not _module
+            or _type(started_entry_names) is not _dict
+            or _vars(started_entry_module) is not started_entry_names
+            or _any(_type(k) is not _str for k in started_entry_names)
+            or environment[2].get('hmp_startup.gateway_entry') is not started_entry_module):
+        raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+    started_origin = started_entry_names.get('_ENTRY_ORIGIN')
+    started_root = started_entry_names.get('_STARTED')
+    started_cell = started_entry_names.get('_CELL')
+    started_owner = started_entry_names.get('_OWNER')
+    if (started_entry_names.get('_EntryOrigin') is not started_entry_kind
+            or started_entry_names.get('_Invocation') is not started_invocation_kind
+            or started_entry_names.get('_NativeFileLineage') is not started_lineage_kind
+            or started_entry_names.get('GatewayEntryOwner') is not started_owner_kind
+            or (_len(started_entry_kind.__bases__) != 1 or started_entry_kind.__bases__[0] is not _tuple)
+            or (_len(started_invocation_kind.__bases__) != 1 or started_invocation_kind.__bases__[0] is not _tuple)
+            or (_len(started_lineage_kind.__bases__) != 1 or started_lineage_kind.__bases__[0] is not _tuple)):
+        raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+    if (_type(started_entry_kind) is not _type or _type(started_origin) is not started_entry_kind
+            or _tuple.__len__(started_origin) != 12
+            or _type(started_root) is not _tuple or _len(started_root) != 7
+            or _type(started_cell) is not _tuple or _len(started_cell) != 2
+            or _type(started_owner_kind) is not _type or _type(started_owner) is not started_owner_kind
+            or started_root[0] is not started_owner or started_root[2] is not started_cell
+            or started_root[5] is not started_origin or started_cell[0] is not started_owner
+            or _tuple.__getitem__(started_origin, 7) is not started_owner_kind
+            or _tuple.__getitem__(started_origin, 10) is not origin
+            or _tuple.__getitem__(started_origin, 11) is not environment[7]):
+        raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+    started_invocation = started_root[1]
+    if (_type(started_invocation_kind) is not _type
+            or _type(started_invocation) is not started_invocation_kind
+            or _tuple.__len__(started_invocation) != 11
+            or started_cell[1] is not started_invocation):
+        raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+    started_lineage = _tuple.__getitem__(started_invocation, 9)
+    if (_type(started_lineage_kind) is not _type
+            or _type(started_lineage) is not started_lineage_kind
+            or _tuple.__len__(started_lineage) != 6
+            or _tuple.__getitem__(started_lineage, 0) is not started_owner
+            or _tuple.__getitem__(started_lineage, 4) is not origin
+            or _tuple.__getitem__(started_lineage, 5) is not environment[7]):
+        raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+    started_owner_namespace = _vars(started_owner_kind)
+    started_dict_descriptor = None
+    # Inspect live keys before comparing exact strings; never hash an expected
+    # name into a class dictionary which a GC callback can mutate after a fence.
     try:
-        helper_checked = helper_capsule[3][1][1](helper_packet)
+        for started_key, started_value in started_owner_namespace.items():
+            if _type(started_key) is not _str:
+                raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+            if started_key == '__dict__':
+                started_dict_descriptor = started_value
+    except _error:
+        raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+    if (_type(started_dict_descriptor) is not _getset
+            or started_dict_descriptor.__objclass__ is not started_owner_kind
+            or started_dict_descriptor.__name__ != '__dict__'):
+        raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+    started_owner_names = started_dict_descriptor.__get__(started_owner, started_owner_kind)
+    if (_type(started_owner) is not started_owner_kind
+            or _type(started_entry_module) is not _module
+            or _vars(started_entry_module) is not started_entry_names
+            or _any(_type(k) is not _str for k in started_entry_names)
+            or _any(_type(k) is not _str for k in environment[2])
+            or environment[2].get('hmp_startup.gateway_entry') is not started_entry_module
+            or started_entry_names.get('_ENTRY_ORIGIN') is not started_origin
+            or started_entry_names.get('_STARTED') is not started_root
+            or started_entry_names.get('_CELL') is not started_cell
+            or started_entry_names.get('_OWNER') is not started_owner
+            or _type(started_owner_names) is not _dict
+            or _any(_type(k) is not _str for k in started_owner_names)
+            or started_dict_descriptor.__get__(started_owner, started_owner_kind) is not started_owner_names
+            or started_owner_names.get('_scope') is not started_invocation
+            or started_owner_names.get('_started_cell') is not started_root
+            or started_owner_names.get('_ready') is not True
+            or started_owner_names.get('_failed') is not False
+            or _tuple.__getitem__(started_origin, 7) is not started_owner_kind
+            or _tuple.__getitem__(started_origin, 10) is not origin
+            or _tuple.__getitem__(started_origin, 11) is not environment[7]
+            or _tuple.__getitem__(started_lineage, 4) is not origin
+            or _tuple.__getitem__(started_lineage, 5) is not environment[7]):
+        raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+    if (origin[0] is not environment or environment[6] is not helper_capsule
+            or helper_capsule[7] is not helper_bound_record
+            or helper_bound_record[0] is not helper_packet
+            or helper_bound_record[1] is not helper_bound_layout
+            or helper_bound_record[2] is not helper_capsule[3][3]):
+        raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+    try:
+        helper_checked = helper_capsule[3][3][1](helper_packet, helper_bound_layout)
     except _error:
         raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
     if (helper_checked is not helper_packet or origin[0] is not environment
@@ -959,21 +1074,30 @@ def current_started(origin, *, _type=type, _vars=vars, _tuple=tuple, _len=len,
             or helper_bound_record[0] is not helper_packet
             or helper_bound_record[2] is not helper_capsule[3][3]):
         raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
-    for helper_columns, helper_rows, helper_pair_index in _zip(
-            helper_bound_layout[1:], helper_packet[3:], (2, 2, 5), strict=True):
-        if (_type(helper_columns) is not _tuple or _len(helper_columns) != _len(helper_rows)):
-            raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
-        for helper_column, helper_data_row in _zip(helper_columns, helper_rows, strict=True):
-            if (_type(helper_column) is not _tuple or _len(helper_column) != 3
-                    or helper_column[0] is not helper_data_row
-                    or _type(helper_column[1]) is not _tuple or _type(helper_column[2]) is not _tuple
-                    or _len(helper_column[1]) != _len(helper_data_row[helper_pair_index])
-                    or _len(helper_column[2]) != _len(helper_column[1])):
-                raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
-            for helper_pair, helper_key, helper_value in _zip(
-                    helper_data_row[helper_pair_index], helper_column[1], helper_column[2], strict=True):
-                if (helper_pair[0] is not helper_key or helper_pair[1] is not helper_value):
-                    raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+    if (_type(started_owner) is not started_owner_kind
+            or _type(started_entry_module) is not _module
+            or _vars(started_entry_module) is not started_entry_names
+            or _any(_type(k) is not _str for k in started_entry_names)
+            or _any(_type(k) is not _str for k in environment[2])
+            or environment[2].get('hmp_startup.gateway_entry') is not started_entry_module
+            or started_entry_names.get('_ENTRY_ORIGIN') is not started_origin
+            or started_entry_names.get('_STARTED') is not started_root
+            or started_entry_names.get('_CELL') is not started_cell
+            or started_entry_names.get('_OWNER') is not started_owner
+            or _type(started_owner_names) is not _dict
+            or _any(_type(k) is not _str for k in started_owner_names)
+            or started_dict_descriptor.__get__(started_owner, started_owner_kind) is not started_owner_names
+            or started_owner_names.get('_scope') is not started_invocation
+            or started_owner_names.get('_started_cell') is not started_root
+            or started_owner_names.get('_ready') is not True
+            or started_owner_names.get('_failed') is not False
+            or _tuple.__getitem__(started_origin, 7) is not started_owner_kind
+            or _tuple.__getitem__(started_origin, 10) is not origin
+            or _tuple.__getitem__(started_origin, 11) is not environment[7]
+            or _tuple.__getitem__(started_lineage, 4) is not origin
+            or _tuple.__getitem__(started_lineage, 5) is not environment[7]):
+        raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+
     # Authenticate the component before dispatch; the actual parent holds this DATA.
     if (_type(helper_capsule) is not _tuple or _len(helper_capsule) != 8
             or _type(helper_capsule[0]) is not _module
@@ -1075,76 +1199,6 @@ def current_started(origin, *, _type=type, _vars=vars, _tuple=tuple, _len=len,
             raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
         helper_seen[helper_key] = helper_value
 
-    # The selected-helper packet was fully checked above, including its exact
-    # module/class schemas. Hold actual original started roots before live dispatch.
-    started_entry_module, started_entry_names, _ = helper_packet[3][6]
-    started_entry_kind = helper_packet[4][30][0]
-    started_invocation_kind = helper_packet[4][29][0]
-    started_lineage_kind = helper_packet[4][35][0]
-    started_owner_kind = helper_packet[4][27][0]
-    if (_type(started_entry_module) is not _module
-            or _type(started_entry_names) is not _dict
-            or _vars(started_entry_module) is not started_entry_names
-            or _any(_type(k) is not _str for k in started_entry_names)
-            or environment[2].get('hmp_startup.gateway_entry') is not started_entry_module):
-        raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
-    started_origin = started_entry_names.get('_ENTRY_ORIGIN')
-    started_root = started_entry_names.get('_STARTED')
-    started_cell = started_entry_names.get('_CELL')
-    started_owner = started_entry_names.get('_OWNER')
-    if (_type(started_entry_kind) is not _type or _type(started_origin) is not started_entry_kind
-            or _tuple.__len__(started_origin) != 12
-            or _type(started_root) is not _tuple or _len(started_root) != 7
-            or _type(started_cell) is not _tuple or _len(started_cell) != 2
-            or _type(started_owner_kind) is not _type or _type(started_owner) is not started_owner_kind
-            or started_root[0] is not started_owner or started_root[2] is not started_cell
-            or started_root[5] is not started_origin or started_cell[0] is not started_owner
-            or _tuple.__getitem__(started_origin, 10) is not origin
-            or _tuple.__getitem__(started_origin, 11) is not environment[7]):
-        raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
-    started_invocation = started_root[1]
-    if (_type(started_invocation_kind) is not _type
-            or _type(started_invocation) is not started_invocation_kind
-            or _tuple.__len__(started_invocation) != 11
-            or started_cell[1] is not started_invocation):
-        raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
-    started_lineage = _tuple.__getitem__(started_invocation, 9)
-    if (_type(started_lineage_kind) is not _type
-            or _type(started_lineage) is not started_lineage_kind
-            or _tuple.__len__(started_lineage) != 6
-            or _tuple.__getitem__(started_lineage, 0) is not started_owner
-            or _tuple.__getitem__(started_lineage, 4) is not origin
-            or _tuple.__getitem__(started_lineage, 5) is not environment[7]):
-        raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
-    started_descriptors = _tuple(pair[1] for pair in helper_packet[4][27][2]
-                                 if pair[0] == '__dict__')
-    if (_len(started_descriptors) != 1 or _type(started_descriptors[0]) is not _getset
-            or started_descriptors[0].__objclass__ is not started_owner_kind):
-        raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
-    started_dict_descriptor = started_descriptors[0]
-    started_owner_names = started_dict_descriptor.__get__(started_owner, started_owner_kind)
-    if (_type(started_owner) is not started_owner_kind
-            or _type(started_entry_module) is not _module
-            or _vars(started_entry_module) is not started_entry_names
-            or _any(_type(k) is not _str for k in started_entry_names)
-            or _any(_type(k) is not _str for k in environment[2])
-            or environment[2].get('hmp_startup.gateway_entry') is not started_entry_module
-            or started_entry_names.get('_ENTRY_ORIGIN') is not started_origin
-            or started_entry_names.get('_STARTED') is not started_root
-            or started_entry_names.get('_CELL') is not started_cell
-            or started_entry_names.get('_OWNER') is not started_owner
-            or _type(started_owner_names) is not _dict
-            or _any(_type(k) is not _str for k in started_owner_names)
-            or started_dict_descriptor.__get__(started_owner, started_owner_kind) is not started_owner_names
-            or started_owner_names.get('_scope') is not started_invocation
-            or started_owner_names.get('_started_cell') is not started_root
-            or started_owner_names.get('_ready') is not True
-            or started_owner_names.get('_failed') is not False
-            or _tuple.__getitem__(started_origin, 10) is not origin
-            or _tuple.__getitem__(started_origin, 11) is not environment[7]
-            or _tuple.__getitem__(started_lineage, 4) is not origin
-            or _tuple.__getitem__(started_lineage, 5) is not environment[7]):
-        raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
 
     engine = environment[4]
     if (_type(engine) is not _tuple or _len(engine) != 6
@@ -1376,14 +1430,15 @@ def current_started(origin, *, _type=type, _vars=vars, _tuple=tuple, _len=len,
                 or helper_error_names[helper_key] is not helper_value):
             raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
         helper_seen[helper_key] = helper_value
-    helper_final_packet = helper_packet
     helper_data_modules = helper_namespace['_MODULES']
     helper_data_classes = helper_namespace['_CLASSES']
     helper_data_functions = helper_namespace['_FUNCTIONS']
     helper_data_live_globals = helper_namespace['_LIVE_GLOBALS']
-    if (_type(helper_final_packet) is _tuple and _len(helper_final_packet) == 6) is not True:
+    if _type(helper_bound_layout) is not _tuple or _len(helper_bound_layout) != 4 or helper_bound_layout[0] is not helper_packet:
         raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
-    helper_final_system, helper_final_system_names, helper_final_registry, helper_final_modules, helper_final_classes, helper_final_functions = helper_final_packet
+    if (_type(helper_packet) is _tuple and _len(helper_packet) == 6) is not True:
+        raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+    helper_final_system, helper_final_system_names, helper_final_registry, helper_final_modules, helper_final_classes, helper_final_functions = helper_packet
     if (_type(helper_final_system) is _module and _type(helper_final_system_names) is _dict and (_vars(helper_final_system) is helper_final_system_names) and _all((_type(helper_final_key) is _str for helper_final_key in helper_final_system_names)) and (_type(helper_final_registry) is _dict) and _all((_type(helper_final_key) is _str for helper_final_key in helper_final_registry)) and (helper_final_system_names.get('modules') is helper_final_registry) and (_type(helper_final_modules) is _tuple) and (_len(helper_final_modules) == _len(helper_data_modules)) and (_type(helper_final_classes) is _tuple) and (_len(helper_final_classes) == _len(helper_data_classes)) and (_type(helper_final_functions) is _tuple) and (_len(helper_final_functions) == _len(helper_data_functions))) is not True:
         raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
     helper_final_builtin_module = helper_final_registry.get('builtins')
@@ -1392,20 +1447,12 @@ def current_started(origin, *, _type=type, _vars=vars, _tuple=tuple, _len=len,
     helper_final_builtin_namespace = _vars(helper_final_builtin_module)
     if (_type(helper_final_builtin_namespace) is _dict and _all((_type(helper_final_key) is _str for helper_final_key in helper_final_builtin_namespace))) is not True:
         raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
-    for helper_final_row, helper_final_name, helper_final_live_keys in _zip(helper_final_modules, helper_data_modules, helper_data_live_globals, strict=True):
-        if (_type(helper_final_row) is _tuple and _len(helper_final_row) == 3) is not True:
-            raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+    for helper_final_row, helper_final_name, helper_final_live_keys, helper_final_column in _zip(helper_final_modules, helper_data_modules, helper_data_live_globals, helper_bound_layout[1], strict=True):
         helper_final_module, helper_final_namespace, helper_final_pairs = helper_final_row
-        if (_type(helper_final_module) is _module and _type(helper_final_namespace) is _dict and _all((_type(helper_final_key) is _str for helper_final_key in helper_final_registry)) and _all((_type(helper_final_key) is _str for helper_final_key in helper_final_namespace)) and (helper_final_registry.get(helper_final_name) is helper_final_module) and (_vars(helper_final_module) is helper_final_namespace) and (_type(helper_final_namespace.get('__name__')) is _str) and (helper_final_namespace['__name__'] == helper_final_name) and (helper_final_namespace.get('__builtins__') is helper_final_builtin_namespace or helper_final_namespace.get('__builtins__') is helper_final_builtin_module) and (_type(helper_final_pairs) is _tuple) and (_len(helper_final_namespace) == _len(helper_final_pairs) + _len(helper_final_live_keys))) is not True:
+        helper_final__, helper_final_keys, helper_final_values = helper_final_column
+        if (_type(helper_final_module) is _module and _type(helper_final_namespace) is _dict and _all((_type(helper_final_key) is _str for helper_final_key in helper_final_registry)) and _all((_type(helper_final_key) is _str for helper_final_key in helper_final_namespace)) and (helper_final_registry.get(helper_final_name) is helper_final_module) and (_vars(helper_final_module) is helper_final_namespace) and (_type(helper_final_namespace.get('__name__')) is _str) and (helper_final_namespace['__name__'] == helper_final_name) and (helper_final_namespace.get('__builtins__') is helper_final_builtin_namespace or helper_final_namespace.get('__builtins__') is helper_final_builtin_module) and (_len(helper_final_namespace) == _len(helper_final_keys) + _len(helper_final_live_keys))) is not True:
             raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
-        helper_final_expected_pairs = {}
-        for helper_final_pair in helper_final_pairs:
-            if (_type(helper_final_pair) is _tuple and _len(helper_final_pair) == 2 and (_type(helper_final_pair[0]) is _str)) is not True:
-                raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
-            helper_final_key, helper_final_value = helper_final_pair
-            if helper_final_key in helper_final_live_keys or helper_final_key in helper_final_expected_pairs:
-                raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
-            helper_final_expected_pairs[helper_final_key] = helper_final_value
+        helper_final_expected_pairs = _dict(_zip(helper_final_keys, helper_final_values, strict=True))
         helper_final_valid, helper_final_observed, helper_final_live_seen = (True, 0, 0)
         try:
             for helper_final_key, helper_final_value in helper_final_namespace.items():
@@ -1420,30 +1467,23 @@ def current_started(origin, *, _type=type, _vars=vars, _tuple=tuple, _len=len,
                     break
         except _error:
             helper_final_valid = False
-        if (helper_final_valid is True and helper_final_observed == _len(helper_final_pairs) + _len(helper_final_live_keys) and (helper_final_live_seen == _len(helper_final_live_keys))) is not True:
+        if (helper_final_valid is True and helper_final_observed == _len(helper_final_keys) + _len(helper_final_live_keys) and (helper_final_live_seen == _len(helper_final_live_keys))) is not True:
             raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
-    for helper_final_row, (helper_final_index, helper_final_name) in _zip(helper_final_classes, helper_data_classes, strict=True):
-        if (_type(helper_final_row) is _tuple and _len(helper_final_row) == 3) is not True:
-            raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+    for helper_final_row, (helper_final_index, helper_final_name), helper_final_column in _zip(helper_final_classes, helper_data_classes, helper_bound_layout[2], strict=True):
         helper_final_kind, helper_final_bases, helper_final_pairs = helper_final_row
-        if (_type(helper_final_kind) is _type and _all((_type(helper_final_key) is _str for helper_final_key in helper_final_modules[helper_final_index][1])) and (helper_final_modules[helper_final_index][1].get(helper_final_name) is helper_final_kind) and (helper_final_kind.__bases__ is helper_final_bases) and (_type(helper_final_pairs) is _tuple)) is not True:
+        helper_final__, helper_final_keys, helper_final_values = helper_final_column
+        if (_type(helper_final_kind) is _type and _all((_type(helper_final_key) is _str for helper_final_key in helper_final_modules[helper_final_index][1])) and (helper_final_modules[helper_final_index][1].get(helper_final_name) is helper_final_kind) and (helper_final_kind.__bases__ is helper_final_bases)) is not True:
             raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
         helper_final_names = _vars(helper_final_kind)
-        if (_all((_type(helper_final_key) is _str for helper_final_key in helper_final_names)) and _len(helper_final_names) == _len(helper_final_pairs)) is not True:
+        if (_all((_type(helper_final_key) is _str for helper_final_key in helper_final_names)) and _len(helper_final_names) == _len(helper_final_keys)) is not True:
             raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
-        helper_final_seen = _set()
-        for helper_final_pair in helper_final_pairs:
-            if (_type(helper_final_pair) is _tuple and _len(helper_final_pair) == 2 and (_type(helper_final_pair[0]) is _str)) is not True:
+        for helper_final_key, helper_final_value in _zip(helper_final_keys, helper_final_values, strict=True):
+            if (helper_final_key in helper_final_names and helper_final_names[helper_final_key] is helper_final_value) is not True:
                 raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
-            helper_final_key, helper_final_value = helper_final_pair
-            if (helper_final_key not in helper_final_seen and helper_final_key in helper_final_names and (helper_final_names[helper_final_key] is helper_final_value)) is not True:
-                raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
-            helper_final_seen.add(helper_final_key)
-    for helper_final_row, (helper_final_index, helper_final_owner, helper_final_name) in _zip(helper_final_functions, helper_data_functions, strict=True):
-        if (_type(helper_final_row) is _tuple and _len(helper_final_row) == 8) is not True:
-            raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+    for helper_final_row, (helper_final_index, helper_final_owner, helper_final_name), helper_final_column in _zip(helper_final_functions, helper_data_functions, helper_bound_layout[3], strict=True):
         helper_final_function, helper_final_code, helper_final_namespace, helper_final_defaults, helper_final_kw, helper_final_pairs, helper_final_closure, helper_final_cells = helper_final_row
-        if (_type(helper_final_namespace) is _dict and helper_final_namespace is helper_final_modules[helper_final_index][1] and (_type(helper_final_function) is _function) and (helper_final_function.__globals__ is helper_final_namespace) and (helper_final_function.__builtins__ is helper_final_builtin_namespace) and (helper_final_function.__code__ is helper_final_code) and (helper_final_function.__defaults__ is helper_final_defaults) and (helper_final_defaults is None or _type(helper_final_defaults) is _tuple) and (helper_final_function.__kwdefaults__ is helper_final_kw) and (helper_final_function.__closure__ is helper_final_closure) and (_type(helper_final_pairs) is _tuple) and (_type(helper_final_cells) is _tuple)) is not True:
+        helper_final__, helper_final_keys, helper_final_values = helper_final_column
+        if (_type(helper_final_namespace) is _dict and helper_final_namespace is helper_final_modules[helper_final_index][1] and (_type(helper_final_function) is _function) and (helper_final_function.__globals__ is helper_final_namespace) and (helper_final_function.__builtins__ is helper_final_builtin_namespace) and (helper_final_function.__code__ is helper_final_code) and (helper_final_function.__defaults__ is helper_final_defaults) and (helper_final_function.__kwdefaults__ is helper_final_kw) and (helper_final_function.__closure__ is helper_final_closure)) is not True:
             raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
         helper_final_names = helper_final_namespace
         if _all((_type(helper_final_key) is _str for helper_final_key in helper_final_namespace)) is not True:
@@ -1459,24 +1499,13 @@ def current_started(origin, *, _type=type, _vars=vars, _tuple=tuple, _len=len,
             helper_final_names = _vars(helper_final_held_kind)
         if (_all((_type(helper_final_key) is _str for helper_final_key in helper_final_names)) and helper_final_names.get(helper_final_name) is helper_final_function) is not True:
             raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
-        if helper_final_kw is None:
-            if (helper_final_pairs == ()) is not True:
+        if helper_final_kw is not None:
+            if (_type(helper_final_kw) is _dict and _all((_type(helper_final_key) is _str for helper_final_key in helper_final_kw)) and (_len(helper_final_kw) == _len(helper_final_keys))) is not True:
                 raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
-        else:
-            if (_type(helper_final_kw) is _dict and _all((_type(helper_final_key) is _str for helper_final_key in helper_final_kw)) and (_len(helper_final_kw) == _len(helper_final_pairs))) is not True:
-                raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
-            helper_final_seen = _set()
-            for helper_final_pair in helper_final_pairs:
-                if (_type(helper_final_pair) is _tuple and _len(helper_final_pair) == 2 and (_type(helper_final_pair[0]) is _str)) is not True:
+            for helper_final_key, helper_final_value in _zip(helper_final_keys, helper_final_values, strict=True):
+                if (helper_final_key in helper_final_kw and helper_final_kw[helper_final_key] is helper_final_value) is not True:
                     raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
-                helper_final_key, helper_final_value = helper_final_pair
-                if (helper_final_key not in helper_final_seen and helper_final_key in helper_final_kw and (helper_final_kw[helper_final_key] is helper_final_value)) is not True:
-                    raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
-                helper_final_seen.add(helper_final_key)
-        if helper_final_closure is None:
-            if (helper_final_cells == ()) is not True:
-                raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
-        else:
+        if helper_final_closure is not None:
             if (_type(helper_final_closure) is _tuple and _len(helper_final_closure) == _len(helper_final_cells)) is not True:
                 raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
             try:

@@ -1,3 +1,32 @@
+## Rooted selected-helper live audit — November 10, 2026
+
+The local character draft now establishes the original entry, owner, invocation,
+lineage and helper record/layout before calling the retained live audit. Generic
+untrusted DATA validation stays complete. The live target and all three inline
+copies use original immutable columns while preserving every fresh mutable-state
+check; no currentness or authorization verdict is cached. A native class-key
+lookup regression introduced by reordering was reproduced and corrected before
+deployment.
+
+All 454 focused checks pass on Python 3.14.9 and 3.11.15, with unchanged source,
+no failures, errors or skips. Coverage includes malformed pre-live roots with
+zero foreign hooks/live calls, late root/callee changes with zero subsequent
+engine calls, post-success mutable drifts, explicit GC collision injection,
+coherent publication grafts and independent AST equivalence of all inline copies.
+
+The unchanged native startup test still times out after 60 seconds. This source
+checkpoint is not a delivered character feature, full startup/BA3, physical-device
+or release acceptance. No host or phone build was changed; working media6796
+remains separate and must be preserved during integration.
+
+Additional diagnostic monitoring confirms the selected live helper is now only
+a small part of the observed audit cost. Those inclusive timings overlap, the
+wrapper has extra observation overhead, and that run is not native acceptance.
+Next: measure the remaining retained activation/package and runtime validator
+costs, then choose an original-root-bound immutable-only reduction while keeping
+all live ownership, provenance, cardinality, member and state predicates. The
+original 60-second traversal requirement remains unchanged.
+
 ## Selected-helper parent integration — November 10, 2026
 
 The local character draft now retains the selected helper factory's actual

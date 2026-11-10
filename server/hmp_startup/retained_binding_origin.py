@@ -348,10 +348,11 @@ def current(packet):
 
 
 def current_live(packet, bound_layout, *, _error=RuntimeError):
-    """Unwired selected-live target; still performs full generic validation.
+    """Fresh mutable audit using the independently held original layout only.
 
-    Rooted immutable-only parsing changes require separate caller/capsule wiring.
-    Canonical DATA calls here do not establish independent root authority.
+    The rooted parent must establish actual original entry/capsule/layout identity
+    and callee provenance BEFORE this call. Generic current() remains the complete
+    untrusted DATA parser; this internal target supplies no original-root authority.
     """
     if (type(bound_layout) is not tuple or len(bound_layout) != 4
             or bound_layout[0] is not packet):
@@ -375,10 +376,9 @@ def current_live(packet, bound_layout, *, _error=RuntimeError):
     if (type(builtin_namespace) is dict
           and all(type(key) is str for key in builtin_namespace)) is not True:
         raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
-    for row, name, live_keys in zip(modules, _MODULES, _LIVE_GLOBALS, strict=True):
-        if (type(row) is tuple and len(row) == 3) is not True:
-            raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+    for row, name, live_keys, column in zip(modules, _MODULES, _LIVE_GLOBALS, bound_layout[1], strict=True):
         module, namespace, pairs = row
+        _, keys, values = column
         if (type(module) is ModuleType and type(namespace) is dict
               and all(type(key) is str for key in registry)
               and all(type(key) is str for key in namespace)
@@ -386,21 +386,11 @@ def current_live(packet, bound_layout, *, _error=RuntimeError):
               and type(namespace.get('__name__')) is str and namespace['__name__'] == name
               and (namespace.get('__builtins__') is builtin_namespace
                    or namespace.get('__builtins__') is builtin_module)
-              and type(pairs) is tuple
-              and len(namespace) == len(pairs) + len(live_keys)) is not True:
+              and len(namespace) == len(keys) + len(live_keys)) is not True:
             raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
-        # Compare in the live-to-private direction. Allocations may run GC
-        # callbacks after the initial key fence; never hash an expected name
-        # into that subsequently mutable dictionary. The private index contains
-        # only exact strings from the original packet, not live foreign keys.
-        expected_pairs = {}
-        for pair in pairs:
-            if (type(pair) is tuple and len(pair) == 2 and type(pair[0]) is str) is not True:
-                raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
-            key, value = pair
-            if key in live_keys or key in expected_pairs:
-                raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
-            expected_pairs[key] = value
+        # Original immutable columns were fully validated before root publication.
+        # Fresh private lookup plus live-to-private iteration preserves GC refusal.
+        expected_pairs = dict(zip(keys, values, strict=True))
         valid, observed, live_seen = True, 0, 0
         try:
             for key, value in namespace.items():
@@ -414,41 +404,31 @@ def current_live(packet, bound_layout, *, _error=RuntimeError):
                     valid = False
                     break
         except RuntimeError:
-            valid = False  # A changed-size/key iterator is refusal, not retry.
-        if (valid is True and observed == len(pairs) + len(live_keys)
+            valid = False
+        if (valid is True and observed == len(keys) + len(live_keys)
                 and live_seen == len(live_keys)) is not True:
             raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
-    for row, (index, name) in zip(classes, _CLASSES, strict=True):
-        if (type(row) is tuple and len(row) == 3) is not True:
-            raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+    for row, (index, name), column in zip(classes, _CLASSES, bound_layout[2], strict=True):
         kind, bases, pairs = row
+        _, keys, values = column
         if (type(kind) is type
               and all(type(key) is str for key in modules[index][1])
-              and modules[index][1].get(name) is kind
-              and kind.__bases__ is bases and type(pairs) is tuple) is not True:
+              and modules[index][1].get(name) is kind and kind.__bases__ is bases) is not True:
             raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
         names = vars(kind)
-        if (all(type(key) is str for key in names) and len(names) == len(pairs)) is not True:
+        if (all(type(key) is str for key in names) and len(names) == len(keys)) is not True:
             raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
-        seen = set()
-        for pair in pairs:
-            if (type(pair) is tuple and len(pair) == 2 and type(pair[0]) is str) is not True:
+        for key, value in zip(keys, values, strict=True):
+            if (key in names and names[key] is value) is not True:
                 raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
-            key, value = pair
-            if (key not in seen and key in names and names[key] is value) is not True:
-                raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
-            seen.add(key)
-    for row, (index, owner, name) in zip(functions, _FUNCTIONS, strict=True):
-        if (type(row) is tuple and len(row) == 8) is not True:
-            raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+    for row, (index, owner, name), column in zip(functions, _FUNCTIONS, bound_layout[3], strict=True):
         function, code, namespace, defaults, kw, pairs, closure, cells = row
+        _, keys, values = column
         if (type(namespace) is dict and namespace is modules[index][1]
               and type(function) is FunctionType and function.__globals__ is namespace
               and function.__builtins__ is builtin_namespace
               and function.__code__ is code and function.__defaults__ is defaults
-              and (defaults is None or type(defaults) is tuple)
-              and function.__kwdefaults__ is kw and function.__closure__ is closure
-              and type(pairs) is tuple and type(cells) is tuple) is not True:
+              and function.__kwdefaults__ is kw and function.__closure__ is closure) is not True:
             raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
         names = namespace
         if (all(type(key) is str for key in namespace)) is not True:
@@ -466,25 +446,14 @@ def current_live(packet, bound_layout, *, _error=RuntimeError):
             names = vars(held_kind)
         if (all(type(key) is str for key in names) and names.get(name) is function) is not True:
             raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
-        if kw is None:
-            if (pairs == ()) is not True:
-                raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
-        else:
+        if kw is not None:
             if (type(kw) is dict and all(type(key) is str for key in kw)
-                  and len(kw) == len(pairs)) is not True:
+                  and len(kw) == len(keys)) is not True:
                 raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
-            seen = set()
-            for pair in pairs:
-                if (type(pair) is tuple and len(pair) == 2 and type(pair[0]) is str) is not True:
+            for key, value in zip(keys, values, strict=True):
+                if (key in kw and kw[key] is value) is not True:
                     raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
-                key, value = pair
-                if (key not in seen and key in kw and kw[key] is value) is not True:
-                    raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
-                seen.add(key)
-        if closure is None:
-            if (cells == ()) is not True:
-                raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
-        else:
+        if closure is not None:
             if (type(closure) is tuple and len(closure) == len(cells)) is not True:
                 raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
             try:

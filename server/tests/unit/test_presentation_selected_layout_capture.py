@@ -32,7 +32,7 @@ def test_bound_capture_retains_actual_packet_columns_and_preheld_checker_row():
             for pair,key,value in zip(original[pair_index],keys,values,strict=True):
                 assert pair[0] is key and pair[1] is value
     assert selected.current(packet) is packet
-    assert selected.current_live(packet,layout) is packet  # still complete generic DATA
+    assert selected.current_live(packet,layout) is packet  # actual captured layout; no admission authority
     with pytest.raises(TypeError):record[1]=()
 
 
