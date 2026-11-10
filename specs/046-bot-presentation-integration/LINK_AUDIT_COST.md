@@ -78,3 +78,13 @@ this sequence. No activation check was removed.
 The full original character/avatar and local-image delivery requirements remain
 open, including full native lifecycle, runtime/service/route integration and
 physical device acceptance. No upstream-only blocker has been established.
+
+## November 10: local phase diagnostic
+
+A normal synthetic fixture with local method monitoring reaches the first
+declared-file call28.39seconds after package qualification. Its before-snapshot
+runs9.48–28.39seconds; all29 observed file returns complete by39.76seconds,
+when the after-snapshot starts. The child still hits its original60second limit.
+This is instrumented phase evidence, not full completion or uninstrumented speed.
+Global fixture tracing had hidden actual artifact refusal reachability; local
+monitoring now qualifies six negative declarations without production changes.

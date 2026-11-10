@@ -4,12 +4,15 @@
 
 The declared-file fixture now injects copied, unlisted and foreign declarations
 into the original method frame instead of replacing its canonical method. Three
-package refusal cases pass on Python3.14.9 and3.11.15 with source unchanged;
-independent review accepted their writeback, exact failed-owner and no-effect
-assertions. The current four-case run still fails its artifact case at60seconds.
-Artifact and normal completion remain unqualified; no aggregate pass is inferred.
+package refusal cases pass on Python3.11.15; all six package/artifact refusal
+cases pass on Python3.14.9 with source unchanged. Current Python now uses local
+method monitoring and arms exception/native observation only at the selected
+negative interval. Independent review accepted writeback, exact failed-owner and
+no-effect assertions. Older Python retains tracing; artifact floor coverage is
+not claimed. Normal completion still times out; no broader aggregate pass is inferred.
 
-The current strict4 receipt has3passes/1timeout; minimum strict3 has3passes.
+The superseded strict4 had3passes/1timeout. The local-monitor strict6 now passes
+all six current cases; minimum strict3 passes all three package cases.
 Normal checked._ready remains unchanged; production source is untouched.
 Native-open observation covers the canonical selected open boundary, not every
 possible filesystem effect. Monitoring is diagnostic, not a timing proof.
