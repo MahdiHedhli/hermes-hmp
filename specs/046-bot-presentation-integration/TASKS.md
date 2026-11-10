@@ -1070,3 +1070,10 @@ refusal (3 each) pass current/minimum. Review-found dictionary fences and fresh-
 probe field-count regression repaired. Original full normal publication/native
 traversal and unobserved Scope normal still timeout60s, real fresh-probe normal
 remains pending. No BA2 completion/BA3 fast dispatch/deployment acceptance.
+
+BA3 implementation split clarified (2026-11-10 independent architecture review):
+keep record3/generic field2 and explicit full-generic parent current; prehold a
+separate live-checker role in engine rows, append a strict rooted parent entrypoint
+without moving existing indices, and migrate actual rooted callers plus inline
+seals together. Missing roots refuse rather than selecting generic fallback.
+No code fast dispatch exists yet; original deadlines and mutable checks remain.

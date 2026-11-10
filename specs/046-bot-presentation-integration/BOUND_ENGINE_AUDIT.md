@@ -108,6 +108,42 @@ These are implementation prerequisites, not a license for a partially wired
 selector. No fast dispatch may become reachable before the complete root chain
 and causal controls are in place.
 
+## BA3 dispatch clarification — November 10
+
+Independent architecture review resolved the generic-versus-rooted phase split
+before implementation. Keep the existing three-field record unchanged: field2
+remains the literal generic-checker row. A distinct fixed `_engine_live_tail` row
+must be held before capture callbacks and retained by identity exactly once in
+original engine function rows. Extend the complete generic required-role checks;
+do not nominate the live function from an exported replacement or a new carrier.
+
+Keep `link_factory_origin.current(origin)` explicitly full generic for capture,
+EntryOrigin construction and standalone DATA. Introduce a separate strict rooted
+entrypoint, tentatively `current_started`, captured as another original parent
+function row without shifting existing row indices. It must require independent
+original EntryOrigin/STARTED/CELL/invocation/lineage/record joins before selecting
+the held live checker. Missing/torn roots refuse; there is no implicit generic
+fallback from failed rooted eligibility. Pre-entry callers remain explicitly
+on the existing full generic path. Actual Scope callers additionally join their
+preheld original record at both publication windows and every selector.
+
+The rooted parent body must preserve every parent/module/type/selected-helper
+mutable check and post-callback reseal while replacing only the full engine DATA
+parser with fixed original bound live dispatch. Its new row/code/default/closure
+provenance and exact count must be included in original capture, both inline
+publication seals, selectors and causal controls. Authenticate raw defining
+module/root dictionaries before any lookup; do not call a current exported
+root helper to bootstrap its own authority. No function/primitive is supplied by
+an external caller. The independently held checker receives the literal original
+engine/layout arguments directly.
+
+This is an implementation clarification, not a trust-model waiver or accepted
+optimization. Generic/rooted differential tests, original missing/copy/lost-return
+refusals, live mutations after earlier success, both publication grafts and
+current/minimum suites remain required. Fresh-probe normal and the original
+60-second full native contract stay open; no performance or device acceptance is
+inferred from the root-custody tests.
+
 ## Allowed omission versus checks that remain fresh
 
 Only immutable tuple/pair widths, duplicate-key parsing and immutable key-column
@@ -279,3 +315,20 @@ not fabricated registrations or fake authorization. Profiling costs about50s
 per case but each meets its unchanged60s deadline. No runtime timing improvement
 is inferred. Real normal fresh-probe flow and full normal traversal are still
 unqualified; BA2 remains open pending complete review/coverage.
+
+
+### BA3 cost diagnostic — full generic DATA, not a startup pass
+
+An isolated unchanged-source probe used actual Python3.14.9 and3.11.15. After five
+warmups,100 unobserved complete generic audits took0.10044s and0.11786s respectively.
+A separate10-call line-traced diagnostic attributed about49%/48% of traced time
+to immutable layout parsing and37%/40% to dependency checks. Trace overhead changes
+these proportions and they are not unobserved phase costs. No checker/schema/
+authorization behavior was changed; all110 observed/unobserved returns per runtime
+were the literal original engine. The production file hash stayed unchanged.
+
+Private probe `/private/tmp/hermes-bound-audit-cost-probe-20261110.py`, results
+`/private/tmp/hermes-audit-cost-4zxa7nid/current.json` and `floor.json`.
+This supports targeting original-bound immutable parsing first while retaining
+fresh mutable dependency checks. It does not predict end-to-end speedup or close
+any native/startup/feature gate. BA3 implementation remains pending.
