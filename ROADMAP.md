@@ -1,3 +1,19 @@
+## November 10 — path validation optimized; startup gate remains open
+
+The artifact validator now checks the same 33 forbidden ASCII control characters
+with bounded string searches. Exact string, UTF-8 length, path-component, digest,
+size and total-budget checks remain unchanged. No audit, authorization or native
+file check was removed. Independent source review found no new concrete blocker.
+
+All 476 selected regression cases pass on Python 3.14.9; the 38 focused path
+cases also pass on Python 3.11.15. Broader minimum-runtime verification is pending.
+The full isolated native contract still fails its original 60-second deadline.
+Its last checkpoint was event 4 at 52.78 seconds, work 963 and reserved zero;
+this single observation does not establish a repeatable startup speed gain.
+Detailed profiling adds substantial overhead and is retained as private diagnostic
+evidence only. Bot-character delivery, host-local images, service and physical
+qualification remain open. No host update, restart or device install occurred.
+
 ## November 10 — native startup still misses deadline; audit shortcut rejected
 
 The fresh isolated native-link contract on production source f98ede4 still timed
