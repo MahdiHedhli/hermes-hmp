@@ -9,7 +9,7 @@ from .test_presentation_gateway_approval import operator_composed_script
 
 
 @pytest.mark.parametrize('publication', ('first', 'second'))
-@pytest.mark.parametrize('export', ('map', 'is_not', 'layout_graft', 'audit_graft', 'helper_graft', 'helper_checker', 'helper_projection_schema', 'api_spec_dict_default', 'record_path_dispatch', 'record_receipt_dispatch', 'record_read_effect_dispatch', 'selection_approval_alias', 'selection_code', 'selection_error_code', 'activation_code', 'activation_error_code', 'artifact_error_code', 'artifact_error_new', 'artifact_error_getattribute', 'artifact_error_setattr', 'artifact_error_owner_property', 'artifact_owner_getattribute', 'artifact_owner_setattr', 'artifact_owner_dict_subclass', 'artifact_descriptor_code', 'artifact_allocation_code', 'artifact_expected_code', 'artifact_allocation_dispatch', 'execution_sum', 'execution_ord', 'entry_getattribute', 'entry_subclass_dict'))
+@pytest.mark.parametrize('export', ('map', 'is_not', 'layout_graft', 'audit_graft', 'helper_graft', 'helper_layout_graft', 'helper_record_graft', 'helper_checker', 'helper_projection_schema', 'api_spec_dict_default', 'record_path_dispatch', 'record_receipt_dispatch', 'record_read_effect_dispatch', 'selection_approval_alias', 'selection_code', 'selection_error_code', 'activation_code', 'activation_error_code', 'artifact_error_code', 'artifact_error_new', 'artifact_error_getattribute', 'artifact_error_setattr', 'artifact_error_owner_property', 'artifact_owner_getattribute', 'artifact_owner_setattr', 'artifact_owner_dict_subclass', 'artifact_descriptor_code', 'artifact_allocation_code', 'artifact_expected_code', 'artifact_allocation_dispatch', 'execution_sum', 'execution_ord', 'entry_getattribute', 'entry_subclass_dict'))
 def test_scope_publication_rejects_changed_primitive_or_layout_root(
         tmp_path, monkeypatch, request, publication, export):
     tree = ast.parse((base.SERVER / 'hmp_plugin/presentation_startup_artifacts.py').read_text())
@@ -198,7 +198,7 @@ def observe(frame,event,value):
             helper_code_restore.append((function,function.__code__))
             assign(function,'__code__',late_helper_code)
             assert function.__code__ is late_helper_code
-        elif export in ('layout_graft','audit_graft','helper_graft'):
+        elif export in ('layout_graft','audit_graft','helper_graft','helper_layout_graft','helper_record_graft'):
             parent=context['link_origin']
             engine=parent[0][4]
             layout=engine[5]
@@ -214,9 +214,24 @@ def observe(frame,event,value):
             else:
                 helper=parent[0][6]
                 copied_packet=tuple(list(helper[6]))
-                copied_helper=(*helper[:6],copied_packet)
+                copied_columns=tuple(tuple((row,tuple(list(keys)),tuple(list(values)))
+                    for row,keys,values in columns) for columns in helper[7][1][1:])
+                copied_helper_layout=(copied_packet,*copied_columns)
+                copied_helper_record=(copied_packet,copied_helper_layout,helper[7][2])
+                if export=='helper_layout_graft':
+                    copied_packet=helper[6]
+                    copied_helper_layout=tuple(list(helper[7][1]))
+                    copied_helper_record=(copied_packet,copied_helper_layout,helper[7][2])
+                elif export=='helper_record_graft':
+                    copied_packet=helper[6]
+                    copied_helper_record=tuple(list(helper[7]))
+                copied_helper=(*helper[:6],copied_packet,copied_helper_record)
                 copied_environment=(*parent[0][:6],copied_helper,*parent[0][7:])
-                assert copied_packet is not helper[6] and copied_helper is not helper
+                assert copied_helper is not helper and copied_helper_record is not helper[7]
+                assert copied_helper_record[0] is copied_packet
+                assert copied_helper_record[1][0] is copied_packet
+                if export=='helper_graft': assert copied_packet is not helper[6]
+                if export=='helper_layout_graft': assert copied_helper_layout is not helper[7][1]
             copied_parent=(copied_environment,*parent[1:])
             lineage=context['native_files']
             copied_lineage=lineage._replace(link_policy=copied_parent, audit_record=copied_environment[7])

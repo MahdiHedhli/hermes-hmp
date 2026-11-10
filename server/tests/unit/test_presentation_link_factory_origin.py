@@ -208,7 +208,7 @@ def test_artifact_code_held_before_later_engine_capture_cannot_be_renominated(mo
     monkeypatch.setattr(origins, '_CAPTURE_STARTED', False)
     target = getattr(artifacts, name)
     original_code = target.__code__
-    helper_capture_code, engine_capture_code = helpers.capture.__code__, engine._capture_engine.__code__
+    helper_capture_code, engine_capture_code = helpers.capture_bound.__code__, engine._capture_engine.__code__
     parent_capture_code = origins.capture.__code__
     reached, held_original, engine_adopted, foreign_calls = [], [], [], []
 
@@ -222,7 +222,7 @@ def test_artifact_code_held_before_later_engine_capture_cannot_be_renominated(mo
             return
         if frame.f_code is helper_capture_code and not reached:
             held_original.append(any(row[0] is target and row[1] is original_code
-                                     for row in value[5]))
+                                     for row in value[0][5]))
             monkeypatch.setattr(target, '__code__', forbidden_code.__code__)
             reached.append(True)
         elif frame.f_code is engine_capture_code and reached:
@@ -515,7 +515,7 @@ def test_shared_record_dispatch_held_before_later_engine_capture(monkeypatch, na
 
     monkeypatch.setattr(origins, '_CAPTURE_STARTED', False)
     target = getattr(artifacts, name)
-    helper_code, engine_code = helpers.capture.__code__, engine._capture_engine.__code__
+    helper_code, engine_code = helpers.capture_bound.__code__, engine._capture_engine.__code__
     parent_code = origins.capture.__code__
     reached, held_original, engine_returned, calls = [], [], [], []
 
@@ -525,7 +525,7 @@ def test_shared_record_dispatch_held_before_later_engine_capture(monkeypatch, na
         if event == 'call' and frame.f_code is foreign.__code__:calls.append(True)
         if event != 'return' or frame.f_back.f_code is not parent_code:return
         if frame.f_code is helper_code and not reached:
-            held_original.append(any(row[0] is target for row in value[4]))
+            held_original.append(any(row[0] is target for row in value[0][4]))
             monkeypatch.setattr(target, '__getattribute__', foreign, raising=False)
             reached.append(True)
         elif frame.f_code is engine_code and reached:engine_returned.append(True)
@@ -640,3 +640,149 @@ def test_parent_refuses_mismatched_audit_record_fields(captured, field):
     changed = (tuple(environment), *captured[1:])
     with pytest.raises(RuntimeError, match='BI1_LINK_FACTORY_ORIGIN_REFUSED'):
         origins.current(changed)
+
+
+def test_parent_retains_actual_selected_factory_return_and_checker_row(monkeypatch):
+    from hmp_startup import retained_binding_origin as helpers
+    monkeypatch.setattr(origins, '_CAPTURE_STARTED', False)
+    factory_code, parent_code = helpers.capture_bound.__code__, origins.capture.__code__
+    observed = []
+    def observe(frame, event, value):
+        if (event == 'return' and frame.f_code is factory_code
+                and frame.f_back is not None and frame.f_back.f_code is parent_code):
+            observed.append(value)
+    assert sys.getprofile() is None
+    sys.setprofile(observe)
+    try: parent = origins.capture()
+    finally: sys.setprofile(None)
+    assert len(observed) == 1
+    helper = parent[0][6]
+    assert len(helper) == 8 and helper[7] is observed[0]
+    assert helper[6] is observed[0][0] is observed[0][1][0]
+    assert helper[3][3] is observed[0][2]
+    assert tuple(row[0] for row in helper[3]) == ('capture', 'current', 'capture_bound', 'current_live')
+    assert origins.current(parent) is parent
+
+
+def test_lost_actual_selected_factory_return_cannot_be_recovered(monkeypatch):
+    from hmp_startup import retained_binding_origin as helpers
+    monkeypatch.setattr(origins, '_CAPTURE_STARTED', False)
+    factory_code, parent_code = helpers.capture_bound.__code__, origins.capture.__code__
+    reached = []
+    class LostReturn(Exception): pass
+    def observe(frame, event, value):
+        if (event == 'return' and frame.f_code is factory_code
+                and frame.f_back is not None and frame.f_back.f_code is parent_code):
+            reached.append(True)
+            raise LostReturn
+    assert sys.getprofile() is None
+    sys.setprofile(observe)
+    try:
+        with pytest.raises(LostReturn): origins.capture()
+    finally: sys.setprofile(None)
+    assert reached == [True] and origins._CAPTURE_STARTED is True
+    with pytest.raises(RuntimeError, match='BI1_LINK_FACTORY_ORIGIN_REFUSED'): origins.capture()
+
+
+@pytest.mark.parametrize('key', ('_checker', '_live', '_error', '_error_kind', '_live_pairs', '_error_members'))
+def test_factory_defaults_cannot_nominate_foreign_dependencies(monkeypatch, key):
+    from hmp_startup import retained_binding_origin as helpers
+    monkeypatch.setattr(origins, '_CAPTURE_STARTED', False)
+    reached, foreign_calls = [], []
+    factory_code = helpers.capture_bound.__code__
+    def foreign(*args, **kwargs): foreign_calls.append(True)
+    values = dict(helpers.capture_bound.__kwdefaults__)
+    values[key] = foreign
+    monkeypatch.setattr(helpers.capture_bound, '__kwdefaults__', values)
+    def observe(frame, event, value):
+        if event == 'call' and frame.f_code is factory_code: reached.append(True)
+    assert sys.getprofile() is None
+    sys.setprofile(observe)
+    try:
+        with pytest.raises(RuntimeError, match='BI1_LINK_FACTORY_ORIGIN_REFUSED'): origins.capture()
+    finally: sys.setprofile(None)
+    assert reached == foreign_calls == []
+
+
+@pytest.mark.parametrize('fault', ('record_type', 'layout_type', 'columns_type', 'column_type', 'key_type', 'wrong_key', 'wrong_value', 'wrong_row', 'wrong_live_row'))
+def test_generic_parent_checks_selected_layout_data_without_foreign_hooks(captured, fault):
+    calls = []
+    class Foreign:
+        def __iter__(self): calls.append('iter'); raise AssertionError
+        def __len__(self): calls.append('len'); raise AssertionError
+        def __eq__(self, other): calls.append('eq'); raise AssertionError
+        def __hash__(self): calls.append('hash'); raise AssertionError
+    helper = captured[0][6]
+    packet, layout, live = helper[7]
+    if fault == 'record_type': record = Foreign()
+    elif fault == 'layout_type': record = (packet, Foreign(), live)
+    elif fault == 'wrong_live_row': record = (packet, layout, tuple(list(live)))
+    else:
+        columns = layout[1]
+        row, keys, values = columns[0]
+        if fault == 'columns_type': changed = Foreign()
+        else:
+            if fault == 'column_type': column = Foreign()
+            elif fault == 'key_type': column = (row, Foreign(), values)
+            elif fault == 'wrong_key': column = (row, (Foreign(), *keys[1:]), values)
+            elif fault == 'wrong_value': column = (row, keys, (object(), *values[1:]))
+            else: column = (tuple(list(row)), keys, values)
+            changed = (column, *columns[1:])
+        record = (packet, (packet, changed, *layout[2:]), live)
+    changed_helper = (*helper[:7], record)
+    changed = ((*captured[0][:6], changed_helper, captured[0][7]), *captured[1:])
+    with pytest.raises(RuntimeError, match='BI1_LINK_FACTORY_ORIGIN_REFUSED'): origins.current(changed)
+    assert calls == []
+
+
+@pytest.mark.parametrize('fault', ('live_code', 'live_export', 'live_default', 'factory_code', 'factory_export'))
+def test_parent_rejoins_selected_provenance_at_actual_factory_return(monkeypatch, fault):
+    from hmp_startup import retained_binding_origin as helpers
+    from hmp_plugin import presentation_native_link as engine
+    monkeypatch.setattr(origins, '_CAPTURE_STARTED', False)
+    parent_code = origins.capture.__code__
+    factory_code, engine_code = helpers.capture_bound.__code__, engine._capture_engine.__code__
+    changed, entered_engine, foreign_calls = [], [], []
+    def foreign(*args, **kwargs): raise AssertionError('changed selected dependency executed')
+    def observe(frame, event, value):
+        if event == 'call' and frame.f_code is foreign.__code__: foreign_calls.append(True)
+        if (event == 'call' and frame.f_code is engine_code
+                and frame.f_back is not None and frame.f_back.f_code is parent_code):
+            entered_engine.append(True)
+        if (event == 'return' and frame.f_code is factory_code
+                and frame.f_back is not None and frame.f_back.f_code is parent_code):
+            assert type(value) is tuple and len(value) == 3
+            assert value[2][1] is helpers.current_live
+            if fault == 'live_code': monkeypatch.setattr(helpers.current_live, '__code__', foreign.__code__)
+            elif fault == 'live_export': monkeypatch.setattr(helpers, 'current_live', foreign)
+            elif fault == 'live_default': monkeypatch.setitem(helpers.current_live.__kwdefaults__, '_error', foreign)
+            elif fault == 'factory_code': monkeypatch.setattr(helpers.capture_bound, '__code__', foreign.__code__)
+            else: monkeypatch.setattr(helpers, 'capture_bound', foreign)
+            changed.append(True)
+    assert sys.getprofile() is None
+    sys.setprofile(observe)
+    try:
+        with pytest.raises(RuntimeError, match='BI1_LINK_FACTORY_ORIGIN_REFUSED'): origins.capture()
+    finally: sys.setprofile(None)
+    assert changed == [True] and entered_engine == foreign_calls == []
+    assert origins._CAPTURE_STARTED is True
+
+
+def test_coherent_live_error_default_nomination_refuses_before_factory(monkeypatch):
+    from hmp_startup import retained_binding_origin as helpers
+    monkeypatch.setattr(origins, '_CAPTURE_STARTED', False)
+    factory_code = helpers.capture_bound.__code__
+    factory_calls, foreign_calls = [], []
+    def foreign(*args, **kwargs): foreign_calls.append(True)
+    # Keep the candidate's nominated live-default snapshots internally coherent.
+    # The original parent must still require its own held native error primitive.
+    monkeypatch.setitem(helpers.current_live.__kwdefaults__, '_error', foreign)
+    monkeypatch.setitem(helpers.capture_bound.__kwdefaults__, '_live_pairs', (('_error', foreign),))
+    def observe(frame, event, value):
+        if event == 'call' and frame.f_code is factory_code: factory_calls.append(True)
+    assert sys.getprofile() is None
+    sys.setprofile(observe)
+    try:
+        with pytest.raises(RuntimeError, match='BI1_LINK_FACTORY_ORIGIN_REFUSED'): origins.capture()
+    finally: sys.setprofile(None)
+    assert factory_calls == foreign_calls == []

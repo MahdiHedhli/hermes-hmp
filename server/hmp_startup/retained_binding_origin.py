@@ -565,11 +565,11 @@ def capture_bound(*, _checker=current, _checker_code=current.__code__,
                   _vars=vars, _any=any, _function=FunctionType, _error=RuntimeError,
                   _error_kind=RetainedBindingOriginError, _error_bases=RetainedBindingOriginError.__bases__,
                   _error_members=tuple(vars(RetainedBindingOriginError).items())):
-    """Literal selected packet/layout/checker DATA; no caller uses it for startup yet.
+    """Literal selected packet/layout/checker DATA retained by the original parent.
 
-    Generic capture() keeps its six-field API. The future independent parent
-    must authenticate this original factory and retain this literal return.
-    Mutable object currentness is never cached by the immutable layout.
+    Generic capture() keeps its six-field API. The independent parent authenticates
+    this original factory and retains this literal return. A consistent copy is
+    not original-object authority. Mutable currentness is never cached by layout.
     """
     if (_type(_checker) is not _function or _type(_live) is not _function):
         raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None

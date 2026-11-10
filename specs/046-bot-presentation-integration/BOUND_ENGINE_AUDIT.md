@@ -577,3 +577,81 @@ foreign constructor calls; direct malformed live DATA has the same assertion.
 The record remains unwired: parent-capsule construction/actual-return retention
 and independent original root eligibility are next. No full native rerun,
 startup-time improvement, deployment or physical-device acceptance is claimed.
+
+Selected-helper parent integration (2026-11-10, focused qualification passed): the
+helper capsule now appends its actual capture_bound record at field7 and retains
+packet6 at field6. Existing capture/current roles0/1 remain; capture_bound and
+current_live are appended roles2/3. Before dispatch the parent authenticates the
+factory defaults against the original checker/live function components, native
+primitives, schema objects and original error-class members. After return it
+compares the returned live row to the preheld original components, retains that
+actual row by identity, and immediately reseals the complete helper prefix before
+engine capture. Lost-return recovery remains forbidden by the one-attempt latch.
+
+Both generic and started parent validators still invoke the complete generic
+selected-packet validator and additionally validate every immutable layout column
+against the actual packet rows. No selected immutable parser has been omitted.
+Scope retains the original record/layout from the actual EntryOrigin capsule;
+its rejoin and both inline publication seals compare those exact pointers.
+Additional tests cover the actual literal return, loss, six default nomination
+refusals, nine malformed column/record zero-hook refusals, five late return
+code/export/default drifts refusing before engine capture, and coherent copied
+selected packet/layout/record/capsule grafts at both publication windows.
+Protected combined qualification is in progress; construction or generic DATA
+consistency cannot establish original-object authority or startup acceptance.
+
+Next-stage source review (not implementation acceptance): existing original
+EntryOrigin -> link_policy -> environment -> helper capsule retains enough
+authority; no new success token is needed. In current_started retain the native
+primitive/helper prefix before any dispatch, then move original started-root
+proof before selecting current_live. Add exact native tuple shape/index fences
+for packet6, module rows7, class rows41 and the entry/owner/invocation/lineage
+rows. Resolve the canonical entry module through the held real registry; join
+its namespace and original ENTRY_ORIGIN/STARTED/CELL/OWNER. Read owner storage
+through a held native GetSet descriptor from the actual original owner class,
+not a descriptor nominated by unvalidated member-pair DATA. Native tuple reads
+and exact class/owner type fences must precede all project getters.
+
+Eligibility must join actual entry owner_type, invocation/lineage, ready/failed
+state and original helper capsule/packet/record/layout/checker pointers before
+calling the preheld selected live function with the original packet/layout.
+Reseal original roots and callee provenance after return and retain final mutable
+checks. Missing/torn/pre-entry roots refuse without a generic fallback. Generic
+pre-entry capture/current retain full immutable DATA validation; all namespace,
+class, code/default/closure/alias and runtime ownership checks remain live.
+Add pre-live malformed-root zero-hook/zero-live-call controls, coherent grafts
+and post-success mutable drift cases before claiming any parsing omission.
+
+Final integration suites hq-z5lgnxnr (Python3.14.9) and hq-n9wr8h2v
+(Python3.11.15) each pass417 tests, no failures/errors/skips, source unchanged.
+The first current run hq-nofdr107 also passed417; the final pair additionally
+includes the corrected factory documentation. The reviewer accepted the finite
+source/causal-test fidelity and next-boundary plan; execution receipt hashes
+were not independently rehashed by that reviewer. No selected parsing reduction
+or native timing acceptance follows from these focused passes.
+
+Further semantic binding correction: hq-zfr_32l2 actually reproduced a coherent
+current_live error-default plus factory live-pair snapshot nomination; the parent
+accepted this self-consistent candidate. Before enabling the unused live helper,
+the parent now requires its live keyword dictionary to have exact native string
+keys/cardinality1 and _error identical to the parent's independently held native
+RuntimeError. The new causal requires refusal before any factory or foreign call.
+Finite independent source/test review accepted this correction. Expanded418
+current/floor suites are active; the prior417 passes do not qualify this delta.
+
+The standalone original native test hq-0ga3ww3d, before this final default guard,
+failed by TimeoutExpired60s (not an early setup refusal), with unchanged source.
+Last progress was event3 at48.5717s,44 observed/typed, work487/reserved0. Inclusive
+diagnostic timings overlap and are not an intrinsic speedup claim. Source after
+the final guard still requires a fresh native run alone. Full native/BA3/startup,
+character delivery, physical device and release gates remain open.
+
+Final post-guard qualification: hq-qqfoonca (Python3.14.9) and hq-a3g88y8t
+(Python3.11.15) each pass418 tests with unchanged source, no failures/errors/skips.
+The final native run hq-2r2e92z5 ran alone and again failed TimeoutExpired60s,
+with source unchanged; it is not an early setup error or native acceptance.
+The integration and semantic binding are reviewed/tested source progress only.
+Next work must complete original-root-before-selected-live eligibility and the
+reviewed immutable-only audit reduction together, preserve all fresh mutable
+checks and generic DATA validation, then rerun the unchanged full native gate.
+No newer source was deployed and no physical build was changed.

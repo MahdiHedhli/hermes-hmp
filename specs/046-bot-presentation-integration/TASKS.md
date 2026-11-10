@@ -1119,3 +1119,13 @@ callback regression reproduced and corrected in the new unwired factory/live
 paths;243 focused cases pass both actual runtimes with unchanged source. Legacy
 generic API unchanged. Parent capsule/actual root integration remains next,
 and native startup timeout/full feature/device gates remain open.
+
+Selected-helper parent capsule integration (2026-11-10): actual record appended
+at capsule7, packet6 unchanged, four authenticated roles with actual returned
+checker row retained. Factory defaults bound to original components; immediate
+postreturn prefix and both Scope publication pointer seals added. Final
+418-case combined suites pass both actual runtimes with unchanged source and no
+failures/errors/skips, including independent native-error default binding.
+Final-source original native run alone still times out at the unchanged60s.
+No selected immutable omission enabled; rooted-before-live native-fenced reorder,
+mutable causal checks and unchanged native deadline remain required next.

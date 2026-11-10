@@ -1,3 +1,30 @@
+## Selected-helper parent integration — November 10, 2026
+
+The local character draft now retains the selected helper factory's actual
+packet/layout/checker record in the original parent capsule. Old packet and
+function-role fields remain in place. The parent authenticates the factory's
+default dependencies before calling it, retains the literal returned checker
+row, and immediately reseals the original component after return. Scope and
+both inline publication seals retain the same actual record/layout pointers.
+Standalone generic validation remains complete; no selected immutable parsing
+has been removed and no cached-success decision has been added.
+
+The final 418-case combined suites pass on Python 3.14.9 and 3.11.15, with
+unchanged source and no failures, errors or skips. The coherent live-error-default
+nomination is refused before any factory or foreign call. The final-source
+standalone native startup run still exceeds its unchanged 60-second deadline.
+No native timing pass is established.
+Coverage includes actual factory-return loss and late drift before engine
+capture, malformed DATA without foreign calls, and coherent selected
+packet/layout/record/capsule grafts at both real publication windows. This is a
+source integration checkpoint, not delivered bot-character functionality or a
+physical-device/release pass. The native startup timing gate remains open.
+
+Next: move the original started-root eligibility proof before the selected live
+audit using native type/tuple/owner-dictionary fences, retain every fresh mutable
+check, then qualify only the allowed immutable-parsing reduction. Working HMP
+media source `6796bfbb` and installed device builds remain unchanged.
+
 ## Desktop-character startup boundary — November 10, 2026
 
 The isolated `feat/bound-engine-custody-20261110` draft now connects actual retained

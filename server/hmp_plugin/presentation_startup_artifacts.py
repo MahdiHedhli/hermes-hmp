@@ -3397,6 +3397,21 @@ class StartupArtifactOwner:
                 if (type(link_origin[0]) is tuple and len(link_origin[0]) == 8) is not True:
                     raise refusal from None
                 link_helper_origin = link_origin[0][6]
+                if (link_raw_type(link_helper_origin) is not link_raw_tuple
+                        or link_raw_len(link_helper_origin) != 8
+                        or link_raw_type(link_helper_origin[3]) is not link_raw_tuple
+                        or link_raw_len(link_helper_origin[3]) != 4):
+                    raise refusal from None
+                link_helper_record = link_helper_origin[7]
+                if (link_raw_type(link_helper_record) is not link_raw_tuple
+                        or link_raw_len(link_helper_record) != 3
+                        or link_helper_record[0] is not link_helper_origin[6]
+                        or link_helper_record[2] is not link_helper_origin[3][3]
+                        or link_raw_type(link_helper_record[1]) is not link_raw_tuple
+                        or link_raw_len(link_helper_record[1]) != 4
+                        or link_helper_record[1][0] is not link_helper_origin[6]):
+                    raise refusal from None
+                link_helper_layout = link_helper_record[1]
                 link_engine_origin = link_origin[0][4]
                 link_audit_record = tuple.__getitem__(entry_origin, 11)
                 if (type(link_audit_record) is tuple and len(link_audit_record) == 3
@@ -3514,6 +3529,11 @@ class StartupArtifactOwner:
                          and tuple.__getitem__(entry_origin, 11) is link_audit_record
                          and tuple.__getitem__(native_files, 5) is link_audit_record
                          and link_origin[0][7] is link_audit_record
+                         and link_origin[0][6] is link_helper_origin
+                         and link_helper_origin[7] is link_helper_record
+                         and link_helper_record[0] is link_helper_origin[6]
+                         and link_helper_record[1] is link_helper_layout
+                         and link_helper_record[2] is link_helper_origin[3][3]
                          and origin_entry_names.get('_ENTRY_ORIGIN') is entry_origin
                          and origin_entry_names.get('GatewayEntryOwner') is tuple.__getitem__(entry_origin, 7)
                          and tuple.__getitem__(runtime, 0) is runtime_entry
@@ -3724,7 +3744,11 @@ class StartupArtifactOwner:
                     if link_pin_namespace.get('_fields') is not link_pin_fields or link_pin_actual is not link_pin_constructor or link_pin_constructor.__code__ is not link_pin_code or (link_pin_constructor.__globals__ is not link_pin_globals_) or (link_pin_constructor.__defaults__ is not link_pin_defaults) or (link_pin_kind.__bases__ is not link_pin_bases) or (link_pin_globals_.get('_tuple_new') is not link_raw_tuple.__new__) or link_raw_any((link_pin_namespace.get(link_pin_n) is not link_pin_member for link_pin_n, link_pin_member in link_raw_zip(link_pin_fields, link_pin_members, strict=True))) or link_raw_any((link_raw_type(link_pin_row) is not link_raw_tuple or link_raw_len(link_pin_row) != 2 or link_raw_type(link_pin_row[0]) is not link_raw_str or (link_pin_namespace.get(link_pin_row[0]) is not link_pin_row[1]) for link_pin_row in link_pin_dispatch)):
                         raise refusal from None
                 # Original retained-helper prefix and DATA, with no final callback.
-                if link_pin_environment[6] is not link_helper_origin:
+                if (link_pin_environment[6] is not link_helper_origin
+                        or link_helper_origin[7] is not link_helper_record
+                        or link_helper_record[0] is not link_helper_origin[6]
+                        or link_helper_record[1] is not link_helper_layout
+                        or link_helper_record[2] is not link_helper_origin[3][3]):
                     raise refusal from None
                 link_helper_default_pairs = link_pin_own_functions[2][6]
                 link_helper_defaults = {}
@@ -3743,7 +3767,7 @@ class StartupArtifactOwner:
                 link_helper_expected_builtins = link_raw_tuple(link_helper_defaults[name]
                     for name in link_helper_default_names)
                 link_helper_system, link_helper_registry = link_pin_environment[0], link_pin_environment[2]
-                if link_raw_type(link_helper_origin) is not link_raw_tuple or link_raw_len(link_helper_origin) != 7 or link_raw_type(link_helper_origin[0]) is not link_raw_module or (link_raw_type(link_helper_origin[1]) is not link_raw_dict) or (link_raw_type(link_helper_origin[2]) is not link_raw_tuple) or (link_raw_type(link_helper_origin[3]) is not link_raw_tuple) or (link_raw_len(link_helper_origin[3]) != 2) or (link_raw_type(link_helper_origin[4]) is not link_raw_tuple) or (link_raw_len(link_helper_origin[4]) != 3) or (link_raw_type(link_helper_origin[5]) is not link_raw_tuple) or (link_raw_len(link_helper_origin[5]) != 3):
+                if link_raw_type(link_helper_origin) is not link_raw_tuple or link_raw_len(link_helper_origin) != 8 or link_raw_type(link_helper_origin[0]) is not link_raw_module or (link_raw_type(link_helper_origin[1]) is not link_raw_dict) or (link_raw_type(link_helper_origin[2]) is not link_raw_tuple) or (link_raw_type(link_helper_origin[3]) is not link_raw_tuple) or (link_raw_len(link_helper_origin[3]) != 4) or (link_raw_type(link_helper_origin[4]) is not link_raw_tuple) or (link_raw_len(link_helper_origin[4]) != 3) or (link_raw_type(link_helper_origin[5]) is not link_raw_tuple) or (link_raw_len(link_helper_origin[5]) != 3):
                     raise refusal from None
                 link_seal_helper_module, link_seal_helper_namespace, link_seal_helper_pairs = link_helper_origin[:3]
                 link_seal_helper_builtin_module, link_seal_helper_builtin_namespace, link_seal_helper_primitive_pairs = link_helper_origin[5]
@@ -3760,7 +3784,7 @@ class StartupArtifactOwner:
                 for link_seal_helper_pair, link_seal_helper_name, link_seal_helper_expected in link_raw_zip(link_seal_helper_primitive_pairs, ('type', 'vars', 'tuple', 'len', 'dict', 'str', 'any', 'zip', 'all', 'set', 'RuntimeError', 'ValueError', 'bool', 'int', 'list', 'bytes', 'bytearray', 'sum', 'ord', 'super'), link_helper_expected_builtins, strict=True):
                     if link_raw_type(link_seal_helper_pair) is not link_raw_tuple or link_raw_len(link_seal_helper_pair) != 2 or link_raw_type(link_seal_helper_pair[0]) is not link_raw_str or (link_seal_helper_pair[0] != link_seal_helper_name) or (link_seal_helper_pair[1] is not link_seal_helper_expected) or (link_seal_helper_builtin_namespace.get(link_seal_helper_name) is not link_seal_helper_expected):
                         raise refusal from None
-                for link_seal_helper_row, link_seal_helper_name in link_raw_zip(link_helper_origin[3], ('capture', 'current'), strict=True):
+                for link_seal_helper_row, link_seal_helper_name in link_raw_zip(link_helper_origin[3], ('capture', 'current', 'capture_bound', 'current_live'), strict=True):
                     if link_raw_type(link_seal_helper_row) is not link_raw_tuple or link_raw_len(link_seal_helper_row) != 7 or link_raw_type(link_seal_helper_row[0]) is not link_raw_str or (link_seal_helper_row[0] != link_seal_helper_name) or (link_raw_type(link_seal_helper_row[1]) is not link_raw_function) or (link_seal_helper_row[3] is not link_seal_helper_namespace) or (link_seal_helper_namespace.get(link_seal_helper_name) is not link_seal_helper_row[1]) or (link_seal_helper_row[1].__code__ is not link_seal_helper_row[2]) or (link_seal_helper_row[1].__globals__ is not link_seal_helper_namespace) or (link_seal_helper_row[1].__builtins__ is not link_seal_helper_builtin_namespace) or (link_seal_helper_row[1].__defaults__ is not link_seal_helper_row[4]) or (link_seal_helper_row[1].__kwdefaults__ is not link_seal_helper_row[5]) or (link_seal_helper_row[1].__closure__ is not None) or (link_raw_type(link_seal_helper_row[6]) is not link_raw_tuple):
                         raise refusal from None
                     link_seal_helper_kw, link_seal_helper_kw_pairs = (link_seal_helper_row[5], link_seal_helper_row[6])
@@ -4230,7 +4254,11 @@ class StartupArtifactOwner:
                     if link_pin_namespace.get('_fields') is not link_pin_fields or link_pin_actual is not link_pin_constructor or link_pin_constructor.__code__ is not link_pin_code or (link_pin_constructor.__globals__ is not link_pin_globals_) or (link_pin_constructor.__defaults__ is not link_pin_defaults) or (link_pin_kind.__bases__ is not link_pin_bases) or (link_pin_globals_.get('_tuple_new') is not link_raw_tuple.__new__) or link_raw_any((link_pin_namespace.get(link_pin_n) is not link_pin_member for link_pin_n, link_pin_member in link_raw_zip(link_pin_fields, link_pin_members, strict=True))) or link_raw_any((link_raw_type(link_pin_row) is not link_raw_tuple or link_raw_len(link_pin_row) != 2 or link_raw_type(link_pin_row[0]) is not link_raw_str or (link_pin_namespace.get(link_pin_row[0]) is not link_pin_row[1]) for link_pin_row in link_pin_dispatch)):
                         raise refusal from None
                 # Original retained-helper prefix and DATA, with no final callback.
-                if link_pin_environment[6] is not link_helper_origin:
+                if (link_pin_environment[6] is not link_helper_origin
+                        or link_helper_origin[7] is not link_helper_record
+                        or link_helper_record[0] is not link_helper_origin[6]
+                        or link_helper_record[1] is not link_helper_layout
+                        or link_helper_record[2] is not link_helper_origin[3][3]):
                     raise refusal from None
                 link_helper_default_pairs = link_pin_own_functions[2][6]
                 link_helper_defaults = {}
@@ -4249,7 +4277,7 @@ class StartupArtifactOwner:
                 link_helper_expected_builtins = link_raw_tuple(link_helper_defaults[name]
                     for name in link_helper_default_names)
                 link_helper_system, link_helper_registry = link_pin_environment[0], link_pin_environment[2]
-                if link_raw_type(link_helper_origin) is not link_raw_tuple or link_raw_len(link_helper_origin) != 7 or link_raw_type(link_helper_origin[0]) is not link_raw_module or (link_raw_type(link_helper_origin[1]) is not link_raw_dict) or (link_raw_type(link_helper_origin[2]) is not link_raw_tuple) or (link_raw_type(link_helper_origin[3]) is not link_raw_tuple) or (link_raw_len(link_helper_origin[3]) != 2) or (link_raw_type(link_helper_origin[4]) is not link_raw_tuple) or (link_raw_len(link_helper_origin[4]) != 3) or (link_raw_type(link_helper_origin[5]) is not link_raw_tuple) or (link_raw_len(link_helper_origin[5]) != 3):
+                if link_raw_type(link_helper_origin) is not link_raw_tuple or link_raw_len(link_helper_origin) != 8 or link_raw_type(link_helper_origin[0]) is not link_raw_module or (link_raw_type(link_helper_origin[1]) is not link_raw_dict) or (link_raw_type(link_helper_origin[2]) is not link_raw_tuple) or (link_raw_type(link_helper_origin[3]) is not link_raw_tuple) or (link_raw_len(link_helper_origin[3]) != 4) or (link_raw_type(link_helper_origin[4]) is not link_raw_tuple) or (link_raw_len(link_helper_origin[4]) != 3) or (link_raw_type(link_helper_origin[5]) is not link_raw_tuple) or (link_raw_len(link_helper_origin[5]) != 3):
                     raise refusal from None
                 link_seal_helper_module, link_seal_helper_namespace, link_seal_helper_pairs = link_helper_origin[:3]
                 link_seal_helper_builtin_module, link_seal_helper_builtin_namespace, link_seal_helper_primitive_pairs = link_helper_origin[5]
@@ -4266,7 +4294,7 @@ class StartupArtifactOwner:
                 for link_seal_helper_pair, link_seal_helper_name, link_seal_helper_expected in link_raw_zip(link_seal_helper_primitive_pairs, ('type', 'vars', 'tuple', 'len', 'dict', 'str', 'any', 'zip', 'all', 'set', 'RuntimeError', 'ValueError', 'bool', 'int', 'list', 'bytes', 'bytearray', 'sum', 'ord', 'super'), link_helper_expected_builtins, strict=True):
                     if link_raw_type(link_seal_helper_pair) is not link_raw_tuple or link_raw_len(link_seal_helper_pair) != 2 or link_raw_type(link_seal_helper_pair[0]) is not link_raw_str or (link_seal_helper_pair[0] != link_seal_helper_name) or (link_seal_helper_pair[1] is not link_seal_helper_expected) or (link_seal_helper_builtin_namespace.get(link_seal_helper_name) is not link_seal_helper_expected):
                         raise refusal from None
-                for link_seal_helper_row, link_seal_helper_name in link_raw_zip(link_helper_origin[3], ('capture', 'current'), strict=True):
+                for link_seal_helper_row, link_seal_helper_name in link_raw_zip(link_helper_origin[3], ('capture', 'current', 'capture_bound', 'current_live'), strict=True):
                     if link_raw_type(link_seal_helper_row) is not link_raw_tuple or link_raw_len(link_seal_helper_row) != 7 or link_raw_type(link_seal_helper_row[0]) is not link_raw_str or (link_seal_helper_row[0] != link_seal_helper_name) or (link_raw_type(link_seal_helper_row[1]) is not link_raw_function) or (link_seal_helper_row[3] is not link_seal_helper_namespace) or (link_seal_helper_namespace.get(link_seal_helper_name) is not link_seal_helper_row[1]) or (link_seal_helper_row[1].__code__ is not link_seal_helper_row[2]) or (link_seal_helper_row[1].__globals__ is not link_seal_helper_namespace) or (link_seal_helper_row[1].__builtins__ is not link_seal_helper_builtin_namespace) or (link_seal_helper_row[1].__defaults__ is not link_seal_helper_row[4]) or (link_seal_helper_row[1].__kwdefaults__ is not link_seal_helper_row[5]) or (link_seal_helper_row[1].__closure__ is not None) or (link_raw_type(link_seal_helper_row[6]) is not link_raw_tuple):
                         raise refusal from None
                     link_seal_helper_kw, link_seal_helper_kw_pairs = (link_seal_helper_row[5], link_seal_helper_row[6])
