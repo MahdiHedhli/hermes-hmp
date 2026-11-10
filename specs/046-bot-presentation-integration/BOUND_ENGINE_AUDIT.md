@@ -720,3 +720,73 @@ shows _guard also calls GatewayActivationOwner.current and source/runtime seals.
 Profile the retained activation/package/selection validators and runtime seals
 before choosing the next immutable-only optimization; helper parsing is no longer
 an assumed dominant target. All currentness/owner/permission state stays fresh.
+
+Path-control scan optimization (2026-11-10; source qualification complete)
+-----------------------------------------------------------------------
+An extended observer-only run (hprof-ojgvmpt1) identifies repeated retained graph
+validation: package_source4681 calls, package_retained40288, recipe_retained85585,
+selection_retained225747 and activation_retained1843385 at its last progress.
+Inclusive times overlap and the many observer callbacks add overhead; these are
+not exclusive costs or native acceptance. The first attempt hprof-j7f_owct failed
+in2.22s before timing because GatewayEntryOwner has no _pure_current; the corrected
+probe tracks EntryFileSnapshotOwner. The exact failed driver was reconstructed
+and SHA-verified against its saved receipt, separately retained.
+
+_expected no longer rescans each path for33 control characters in Python. In the
+existing shortcircuit it first checks exact ExpectedArtifact, then holds its path,
+checks exactstr, performs strictUTF8 encoding with the same1<byte_length<=4096
+guard, checks absolute prefix, then compares the encoded length with the result
+of bytes.translate(None, literal00..1f+7f). Only those ASCII controls encode to
+those bytes; all other valid UTF8 scalar encodings avoid them. The original path
+remains unchanged; deletion is used only for the validation comparison. C1/other
+Unicode remains accepted as before; surrogates still raise at strict encoding.
+Held path is used for segments/duplicates/set; size, digest, per-file/count/total
+limits remain unchanged. No validation, callback boundary, permission decision or
+currentness/authorization check is omitted or cached.
+
+API semantics reference: Python3.11 bytes.translate permits table=None with a
+delete-byte argument: https://docs.python.org/3.11/library/stdtypes.html#bytes.translate .
+Actual qualification is on Python3.14.9 and3.11.15, not inferred from documentation.
+Independent exactdiff review found no security/equivalence blocker; execution
+receipts were not independently rehashed by that reviewer.
+
+New146 cases exercise the actual validator:99 control/position combinations
+(first position means immediately after the leading slash),24Unicode/UTF8-byte/
+segment boundaries,13 other-field rejections,7 foreign/subclass zero-hook cases,
+all1114112 codepoints (including2048 strict surrogate refusals), limits and no
+reuse after previous success. hq-lhe5omq6 passes146 current cases. Final combined
+600 suites hq-du20qkv8/current and hq-vl3d2trr/minimum pass with unchanged source,
+zero failures/errors/skips.
+
+Function-only synthetic benchmark uses the pinned dc4bc97 _expected baseline and
+actual candidate,6 rows/call,3000calls/sample,5samples: medians0.0431323s baseline
+and0.0236893s candidate. This is not a startup-time result. A separate unwired
+private exact-key C-combinator prototype has no established meaningful gain; it
+is not production code, not a qualification shortcut and not a permission change.
+
+The original final-source native test hq-n3qun25h ran alone and still failed
+TimeoutExpired60s, not an early setup refusal. Last progress event4 at48.9669s,
+44 observed/typed, work963/reserved0. No speedup is inferred from cross-run
+progress/timing differences. Original native/full startup/BA3, character delivery,
+media integration, OS/device and release gates remain open; no deployment.
+
+The final narrow diagnostic hprof-9e_liiqi adds approval API/seal/retained/closed
+custody, _expected, _approved_recipe and configuration_rows counters only; source
+bytes and original60s/assertions are unchanged, but wrapper/overhead differ and
+it is not acceptance. At event2/39.1707s: approval_api/seal301810 calls; approval
+retained/closed147655 each; recipe_retained37876; selection_retained98527;
+_expected37879; _approved_recipe37876. Inclusive times overlap: approval_api3.48s,
+seal11.71, retained17.84, closed8.69, expected0.56, approved_recipe10.55. No
+exclusive subtraction or cross-wrapper speed comparison is valid. This directs
+the next work to the repeated retained graph, not activation liveness or another
+unproven key-scan shortcut.
+
+Next contract: generic standalone approval/selection/recipe/package validators
+remain complete. A separate scoped path needs independently actual original
+artifact Scope/source/registration and original retained binding pointers before
+selecting a fixed early-captured audit. It may reuse only already-validated
+immutable document/row data, never a previous currentness/permission verdict.
+Every live root, owner flag, buffer, counter, descriptor/receipt/read sequence,
+namespace/spec/function/default and provenance condition must be freshly checked
+and rejoined after any callback. Missing/torn roots refuse; no self-nominated
+marker or permissive fallback. Review this call-family contract before code.

@@ -1138,3 +1138,11 @@ Rooted selected-live audit checkpoint (2026-11-10):
 - [ ] Original60s native traversal: stillTimeoutExpired, no BA3/startup acceptance.
 - [ ] Profile remaining activation/package/runtime seals; review next root-bound immutable-only optimization.
 - [ ] Full startup/media integration, OS/device and release qualification remain required; no deployment claimed.
+
+Path-validator cost checkpoint (2026-11-10):
+- [x] Extended retained-graph diagnostic, corrected setup mistake and preserved failed evidence.
+- [x] Exact equivalent C-backed control-byte scan; every generic validation rule retained.
+- [x] Full Unicode/control/type/boundary/aggregate causals;600 checks pass current/minimum.
+- [ ] Original native60s remainsTimeoutExpired; no startup or feature/device acceptance.
+- [ ] Separate repeated approval API/closed-custody costs before selecting the next graph optimization.
+- [ ] No C-combinator prototype wiring without proven benefit and independent boundary review.

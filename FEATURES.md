@@ -1,3 +1,24 @@
+## Generic path-validation optimization — November 10, 2026
+
+The local character draft now validates forbidden path controls with a bounded
+C-backed byte scan. It keeps strict UTF-8, the exact control set, absolute paths,
+byte/segment/count/size/digest/aggregate limits and every other validation rule.
+It holds immutable path data once; it caches no mutable state or authority.
+
+All600 focused checks pass on Python3.14.9 and3.11.15, with unchanged source and
+zero failures/errors/skips. The new cases exercise every Unicode code point,
+all forbidden controls, boundaries and foreign/subclass refusals. Independent
+review found no equivalence/security blocker. A function-only benchmark is
+faster, but the original native startup test still exceeds60seconds. This is
+source progress, not delivered bot-character functionality or a deployment.
+
+Extended diagnostics identify repeated retained approval/recipe/package checks.
+Their timings overlap and extra monitoring adds overhead; they are not a startup
+pass. Next is a reviewed original-root-bound retained-graph audit that avoids
+repeated immutable work while keeping all mutable ownership, counter, receipt,
+namespace and provenance checks fresh. Generic standalone validators stay full.
+Working media6796, host/device builds, grants, providers and jobs are unchanged.
+
 ## Rooted selected-helper live audit — November 10, 2026
 
 The local character draft now establishes the original entry, owner, invocation,

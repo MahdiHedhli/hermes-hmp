@@ -722,17 +722,20 @@ def _expected(rows):
     _require(type(rows) is tuple and 1 <= len(rows) <= _MAX_FILES)
     seen, total = set(), 0
     for row in rows:
-        _require(type(row) is ExpectedArtifact and type(row.path) is str
-                 and 1 < len(row.path.encode("utf-8")) <= 4096
-                 and row.path.startswith("/")
-                 and not any(c in row.path for c in "\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f"
-                             "\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1a\x1b\x1c\x1d\x1e\x1f\x7f"))
-        parts = row.path[1:].split("/")
+        # Hold the immutable field once, after the exact row/str fences. Strict
+        # UTF-8 maps only these ASCII controls to the same forbidden bytes.
+        _require(type(row) is ExpectedArtifact and type(path := row.path) is str
+                 and 1 < len(encoded := path.encode("utf-8")) <= 4096
+                 and path.startswith("/")
+                 and len(encoded.translate(None,
+                     b"\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f"
+                     b"\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1a\x1b\x1c\x1d\x1e\x1f\x7f")) == len(encoded))
+        parts = path[1:].split("/")
         _require(1 <= len(parts) <= 64 and all(p not in ("", ".", "..") for p in parts)
-                 and row.path not in seen and type(row.size) is int
+                 and path not in seen and type(row.size) is int
                  and 0 <= row.size <= _MAX_FILE and type(row.sha256) is str
                  and len(row.sha256) == 64 and not row.sha256.strip("0123456789abcdef"))
-        seen.add(row.path)
+        seen.add(path)
         total += row.size
         _require(total <= _MAX_TOTAL)
 
