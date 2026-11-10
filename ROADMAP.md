@@ -1,5 +1,10 @@
 ## Native-link acceptance baseline — November 9, 2026
 
+The distinct op5 byte family and shared producer/count/ACK draft are now written.
+Keep it disabled until the actual path driver, finishes, snapshot/recheck and
+complete early code/property bindings are connected and tested together. Local
+memory checks and passing old Directory calls do not qualify actual op5 effects.
+
 Closed Link metadata resources/consumers, kernel branches and policy/commit
 projections now exist as an unwired draft. Existing early origins refuse them.
 Do not activate the engine or present packet/compatibility tests as completion:

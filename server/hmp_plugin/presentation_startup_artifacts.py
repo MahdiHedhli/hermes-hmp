@@ -445,6 +445,9 @@ class _LinkRead:
     after: tuple | None = None
     data: bytes | None = None
     unknown: bool = False
+    length: int | None = None
+    acknowledgement: object = None
+    native_result: object = None
 
 
 class _ReadlinkObservation(NamedTuple):
@@ -1180,6 +1183,22 @@ class _NativeLinkMetadataResource(NamedTuple):
 
     def __repr__(self):
         return '<NativeLinkMetadataResource fixed path site redacted>'
+
+
+class _NativeLinkBytesResource(NamedTuple):
+    """Fixed readlink site; no metadata/absence or source-read authority."""
+    owner: object
+    registration: object
+    execution: object
+    site: tuple
+    ordinal: int
+    arguments: tuple
+    descriptor: object
+    record: object
+    encoded: object
+
+    def __repr__(self):
+        return '<NativeLinkBytesResource fixed readlink site redacted>'
 
 
 class _NativeMetadataResource(NamedTuple):

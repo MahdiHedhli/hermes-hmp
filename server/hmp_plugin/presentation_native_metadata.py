@@ -33,6 +33,9 @@ from .presentation_startup_artifacts import (
     _NativeProbeMetadataResource,
     _NativeStartupProbeMetadataResource,
     _NativeLinkMetadataResource,
+    _NativeLinkBytesResource,
+    _LinkRead,
+    _MAX_TOTAL,
     _native_work_registration_tail,
     _NativeMetadataSnapshot,
     _NativeScopeRegistration,
@@ -71,7 +74,7 @@ class _MetadataResult(NamedTuple):
         # across effects; following this current link cannot establish custody.
         origin = self.custody_origin
         _require(type(self.attempt) is list and len(self.attempt) == 1
-                 and type(self.attempt[0]) is _MetadataOperation
+                 and _operation_result_family(self.attempt[0], self)
                  and self.attempt[0].result is self
                  and type(self.custody_link) is list and len(self.custody_link) == 1
                  and type(self.custody_slot) is list and len(self.custody_slot) == 1)
@@ -129,6 +132,73 @@ class _MetadataOperation(NamedTuple):
         return '<MetadataOperation unqualified original intent redacted>'
 
 
+class _LinkBytesResult(NamedTuple):
+    """Distinct op5 result: raw bytes stay only in the original capsule."""
+    attempt: list
+    consumer: list
+    unset: object
+    acknowledged: list
+    custody_origin: _PayloadOrigin
+    custody_link: list
+    custody_slot: list
+    length: list
+    before_count: tuple
+    counted: list
+    record: object
+    record_names: dict
+    count_context: tuple
+
+    _cell = _MetadataResult._cell
+    raw = _MetadataResult.raw
+    category = _MetadataResult.category
+    snapshot = _MetadataResult.snapshot
+    envelope = _MetadataResult.envelope
+
+    def __repr__(self):
+        return '<LinkBytesResult actual length/custody DATA redacted>'
+
+
+class _LinkBytesOperation(NamedTuple):
+    owner: object
+    resource: _NativeLinkBytesResource
+    registration: object
+    ledger: object
+    phase: object
+    native: object
+    context: tuple
+    operation: int
+    callee: object
+    arguments: tuple
+    index: int
+    attempts: list
+    budget: tuple
+    result: _LinkBytesResult
+    state: list
+    ended: list
+
+    def __repr__(self):
+        return '<LinkBytesOperation fixed op5 intent redacted>'
+
+
+def _operation_result_family(operation, result=None):
+    """Closed type/role relation only; not an admission, debit or receipt."""
+    if type(operation) not in (_MetadataOperation, _LinkBytesOperation):
+        return False
+    actual = tuple.__getitem__(operation, 13)
+    if result is not None and actual is not result:
+        return False
+    opcode, resource = tuple.__getitem__(operation, 7), tuple.__getitem__(operation, 1)
+    if type(opcode) is not int:
+        return False
+    if type(operation) is _LinkBytesOperation:
+        return (opcode == 5 and type(actual) is _LinkBytesResult
+                and type(resource) is _NativeLinkBytesResource)
+    return (opcode in (3, 4) and type(actual) is _MetadataResult
+            and type(resource) in (_NativeMetadataResource, _NativeProbeMetadataResource,
+                                   _NativeStartupProbeMetadataResource,
+                                   _NativeLinkMetadataResource))
+
+
 def _startup_probe_origin_tail(owner, resource):
     """Only an original registered startup scope may select its fixed policy."""
     _require(type(resource) is _NativeStartupProbeMetadataResource
@@ -166,7 +236,7 @@ def _closed_probe_engine_origin(owner, resource):
 
 def _resource_tail(owner, resource):
     """Rejoin the held actual resource; never adopt a current replacement."""
-    if type(resource) is _NativeLinkMetadataResource:
+    if type(resource) in (_NativeLinkMetadataResource, _NativeLinkBytesResource):
         return _link_policy_helper(owner, resource, '_resource_tail')(owner, resource)
     if type(resource) is _NativeStartupProbeMetadataResource:
         origin = _startup_probe_origin_tail(owner, resource)
@@ -254,12 +324,30 @@ def _prepare_metadata_operation_with_custody(owner, resource):
     callee = native.operations[operation]
     unset = object()
     origin = _capture_payload_origin()
-    result = _MetadataResult([None], [None], unset, [None], origin, [None], [None])
-    intent = _MetadataOperation(owner, resource, registration, ledger, phase, native,
+    bytes_site = type(resource) is _NativeLinkBytesResource
+    if bytes_site:
+        execution = resource.execution
+        record = resource.record
+        _require(type(record) is _LinkRead)
+        names = vars(record)
+        _require(type(names) is dict and names.get('native_result') is None)
+        context = (vars(owner), registration.scope, registration.root, registration.cell,
+                   registration.scope.runtime.count, execution.count,
+                   names, execution.count[0])
+        result = _LinkBytesResult([None], [None], unset, [None], origin, [None], [None],
+                                  [None], execution.count[0], [None], record, names, context)
+        kind = _LinkBytesOperation
+    else:
+        result = _MetadataResult([None], [None], unset, [None], origin, [None], [None])
+        kind = _MetadataOperation
+    intent = kind(owner, resource, registration, ledger, phase, native,
                                 registration.context, operation, callee, resource.arguments,
                                 index, attempts, (counts, used, reserved, used + 1), result,
                                 [False, False, False], [False])
     result.attempt[0] = intent
+    if bytes_site:
+        _require(names.get('native_result') is None)
+        names['native_result'] = result
     marker, payload = _allocate_directory_custody(
         owner, intent, None, origin, result.custody_link, result.custody_slot, unset)
     _require(_resource_tail(owner, resource) is resource
@@ -376,6 +464,116 @@ class _LinkMetadataConsumer(NamedTuple):
         return '<LinkMetadataConsumer fixed no-absence policy redacted>'
 
 
+class _LinkBytesConsumer(NamedTuple):
+    """Distinct byte policy on the same one-use custody lifecycle; no EOF."""
+    execution: object
+    operation: _LinkBytesOperation
+    predecessor: object
+    commit: list
+    custody: tuple
+    cursor: object
+
+    owner = _LinkMetadataConsumer.owner
+    resource = _LinkMetadataConsumer.resource
+    consumption = _LinkMetadataConsumer.consumption
+    baseline = _LinkMetadataConsumer.baseline
+    eof = _LinkMetadataConsumer.eof
+    history = _LinkMetadataConsumer.history
+
+    def __repr__(self):
+        return '<LinkBytesConsumer fixed byte policy not-file/EOF redacted>'
+
+
+def _capture_link_byte_count(operation, raw):
+    """One-use accounting of a caller-held actual return, never a native ACK.
+
+    The producer already owns the real C return. This memory-only operation
+    must also work after lifetime refusal; it cannot invoke a callee, retry or
+    turn a current stored count into an original returned receipt.
+    """
+    _require(type(operation) is _LinkBytesOperation and _operation_result_family(operation)
+             and type(tuple.__getitem__(operation, 13)) is _LinkBytesResult
+             and type(raw) is bytes)
+    result = tuple.__getitem__(operation, 13)
+    length, before, counted, names, context = (
+        tuple.__getitem__(result, 7), tuple.__getitem__(result, 8),
+        tuple.__getitem__(result, 9), tuple.__getitem__(result, 11),
+        tuple.__getitem__(result, 12))
+    _require(type(length) is list and len(length) == 1 and length[0] is None
+             and type(counted) is list and len(counted) == 1 and counted[0] is None
+             and type(names) is dict and all(type(k) is str for k in names)
+             and type(context) is tuple and len(context) == 8
+             and context[6] is names and context[7] is before
+             and type(before) is tuple and len(before) == 3
+             and before[0] is tuple.__getitem__(operation, 0)
+             and before[1] is context[1] and type(before[2]) is int and before[2] >= 0)
+    actual_length = len(raw)
+    length[0] = actual_length  # real observation before allocations/postchecks
+    if (names.get('native_result') is not result or names.get('attempted') is not True
+            or names.get('returned') is not False or names.get('length') is not None
+            or names.get('after') is not None or names.get('unknown') is not False
+            or names.get('data') is not None or names.get('acknowledgement') is not None
+            or names.get('before') is not before):
+        raise ArtifactObservationError from None
+    names['returned'] = True
+    names['length'] = actual_length
+    owner, scope = before[0], before[1]
+    following = (owner, scope, before[2] + actual_length)
+    own, _, root, cell, runtime_count, execution_count, _, _ = context
+    _require(type(own) is dict and all(type(k) is str for k in own)
+             and type(runtime_count) is list and len(runtime_count) == 1
+             and type(execution_count) is list and len(execution_count) == 1)
+    # Preserve replacements. A copied/equal current count cannot be adopted as
+    # this call's independently held following tuple.
+    if (counted[0] is not None or own.get('_scope') is not scope
+            or own.get('_origin') is not scope or own.get('_root_cell') is not root
+            or own.get('_cell') is not cell or own.get('_count_cell') is not before
+            or own.get('_bytes_read') is not before[2]
+            or runtime_count[0] is not before or execution_count[0] is not before):
+        raise ArtifactObservationError from None
+    counted[0] = following
+    names['after'] = following
+    own['_bytes_read'] = following[2]
+    own['_count_cell'] = following
+    runtime_count[0] = following
+    execution_count[0] = following
+    _require(following[2] <= _MAX_TOTAL)
+    return following
+
+
+def _retain_link_byte_failure(operation, raw):
+    """Audit actual captured length on failure; no receipt recovery or replay."""
+    if (type(operation) is not _LinkBytesOperation or not _operation_result_family(operation)
+            or type(raw) is not bytes
+            or type(tuple.__getitem__(operation, 13)) is not _LinkBytesResult):
+        return
+    result = tuple.__getitem__(operation, 13)
+    length, names = tuple.__getitem__(result, 7), tuple.__getitem__(result, 11)
+    actual_length = len(raw)
+    if type(length) is list and len(length) == 1 and length[0] is None:
+        length[0] = actual_length
+    if type(names) is dict and all(type(k) is str for k in names):
+        if names.get('native_result') is result:
+            if names.get('returned') is False:
+                names['returned'] = True
+            if names.get('length') is None:
+                names['length'] = actual_length
+            if names.get('unknown') is False:
+                names['unknown'] = True
+
+
+def _mark_link_byte_failed(operation):
+    """Mark only the original attempted record; no result lookup or credit."""
+    if (type(operation) is _LinkBytesOperation and _operation_result_family(operation)
+            and type(tuple.__getitem__(operation, 13)) is _LinkBytesResult):
+        result = tuple.__getitem__(operation, 13)
+        names = tuple.__getitem__(result, 11)
+        if (type(names) is dict and all(type(k) is str for k in names)
+                and names.get('native_result') is result
+                and names.get('attempted') is True and names.get('unknown') is False):
+            names['unknown'] = True
+
+
 def _link_function_pin(row, namespace, name):
     """Check a held original function before invoking its code or defaults."""
     _require(type(row) is tuple and len(row) == 7
@@ -404,7 +602,7 @@ def _closed_link_engine_origin(owner, resource):
     The complete native driver must extend the SAME early origin before wiring.
     """
     _require(type(owner) is StartupArtifactOwner
-             and type(resource) is _NativeLinkMetadataResource
+             and type(resource) in (_NativeLinkMetadataResource, _NativeLinkBytesResource)
              and tuple.__getitem__(resource, 0) is owner
              and type(tuple.__getitem__(resource, 1)) is _NativeScopeRegistration)
     registration = tuple.__getitem__(resource, 1)
@@ -486,7 +684,9 @@ def _link_policy_helper(owner, resource, name):
     _require(type(name) is str and name in (
         '_resource_tail', '_latch_shared_consumer', '_lifetime_tail',
         '_make_shared_commit', '_commit_shared_tail',
-        '_acked_shared_history', '_publish_shared_ack'))
+        '_acked_shared_history', '_publish_shared_ack',
+        '_make_shared_bytes_commit', '_commit_shared_bytes_tail',
+        '_acked_shared_bytes_history', '_publish_shared_bytes_ack'))
     origin = _closed_link_engine_origin(owner, resource)
     rows = tuple(row for row in origin[2]
                  if type(row) is tuple and len(row) == 7
@@ -523,7 +723,7 @@ def _link_stage_functions(owner, resource):
 
 
 def _rejoin_link_stages(owner, resource, origin, stages):
-    _require(type(resource) is _NativeLinkMetadataResource
+    _require(type(resource) in (_NativeLinkMetadataResource, _NativeLinkBytesResource)
              and type(stages) is tuple and len(stages) == 7
              and _closed_link_engine_origin(owner, resource) is origin)
     actual = _link_stage_functions(owner, resource)
@@ -532,7 +732,7 @@ def _rejoin_link_stages(owner, resource, origin, stages):
 
 
 def _link_current_lifetime_tail(owner, consumer):
-    _require(type(consumer) is _LinkMetadataConsumer)
+    _require(type(consumer) in (_LinkMetadataConsumer, _LinkBytesConsumer))
     return _link_policy_helper(owner, consumer.resource, '_lifetime_tail')(owner, consumer)
 
 
@@ -802,13 +1002,13 @@ def _fixed_metadata_identity_size(resource):
 
 def _undebited_directory_cells_tail(owner, operation):
     """Untouched original intent cells only; caller proves resource/consumer joins."""
-    _require(type(operation) is _MetadataOperation and operation.owner is owner
-             and type(operation.result) is _MetadataResult
-             and type(operation.operation) is int and operation.operation in (3, 4))
+    _require(_operation_result_family(operation) and operation.owner is owner
+             and type(operation.result) in (_MetadataResult, _LinkBytesResult)
+             and type(operation.operation) is int and operation.operation in (3, 4, 5))
     resource, result = operation.resource, operation.result
     _require(type(resource) in (_NativeMetadataResource, _NativeProbeMetadataResource,
                                         _NativeStartupProbeMetadataResource,
-                                        _NativeLinkMetadataResource)
+                                        _NativeLinkMetadataResource, _NativeLinkBytesResource)
              and type(resource.registration) is _NativeScopeRegistration)
     registration = resource.registration
     ledger, phase = registration.native_ledger, registration.native_phase
@@ -870,7 +1070,7 @@ def _unused_directory_cells_tail(owner, operation):
 
 def _unused_directory_intent_tail(owner, operation):
     """Original unclaimed preparation input; no consumer can renew it."""
-    _require(type(operation) is _MetadataOperation)
+    _require(_operation_result_family(operation))
     _resource_tail(owner, operation.resource)
     result = _unused_directory_cells_tail(owner, operation)
     _require(type(result.consumer) is list and len(result.consumer) == 1
@@ -1186,9 +1386,14 @@ def _latched_directory_resource_tail(owner, consumer):
     """Original already-latched cohort DATA; not a phase check or work grant."""
     if type(consumer) is _ProbeConsumer:
         return _probe_latched_resource_tail(owner, consumer)
-    if type(consumer) is _LinkMetadataConsumer:
-        _require(type(consumer.operation) is _MetadataOperation
-                 and type(consumer.resource) is _NativeLinkMetadataResource)
+    if type(consumer) in (_LinkMetadataConsumer, _LinkBytesConsumer):
+        _require(_operation_result_family(consumer.operation)
+                 and ((type(consumer) is _LinkMetadataConsumer
+                       and type(consumer.operation) is _MetadataOperation
+                       and type(consumer.resource) is _NativeLinkMetadataResource)
+                      or (type(consumer) is _LinkBytesConsumer
+                          and type(consumer.operation) is _LinkBytesOperation
+                          and type(consumer.resource) is _NativeLinkBytesResource)))
         latch = _link_policy_helper(owner, consumer.resource, '_latch_shared_consumer')
         _require(latch(owner, consumer, rejoin=True) is consumer)
         return consumer.resource
@@ -1342,7 +1547,7 @@ def _latch_directory_consumer(owner, consumer):
 
 def _directory_admission_preparation_tail(owner, consumer, operation, token):
     """Original reserved preparation cohort after actor sampling; no new grant."""
-    _require(type(operation) is _MetadataOperation
+    _require(_operation_result_family(operation)
              and _latched_directory_resource_tail(owner, consumer) is operation.resource
              and consumer.operation is operation)
     result = _unspent_directory_cells_tail(owner, operation)
@@ -1452,6 +1657,26 @@ class _DirectoryMetadataReturn(NamedTuple):
 
 
 
+class _LinkBytesReturn(NamedTuple):
+    """Actual op5 bytes return; no stat snapshot, file EOF or missing result."""
+    operation: _LinkBytesOperation
+    result: _LinkBytesResult
+    consumer: _LinkBytesConsumer
+    raw: bytes
+    counted: tuple
+
+    @property
+    def snapshot(self):
+        return None
+
+    @property
+    def category(self):
+        return 'returned'
+
+    def __repr__(self):
+        return '<LinkBytesReturn actual caller-held return redacted>'
+
+
 class _ReportedMissingMetadataReturn(NamedTuple):
     """Actual known-raised STAT outcome; no exception/errno/filename retained."""
     operation: _MetadataOperation
@@ -1532,7 +1757,8 @@ def _returned_directory_operation_tail(owner, consumer, operation, raw):
              and operation.phase.current[0] is operation.phase.active
              and operation.ledger.inflight[0] is operation
              and consumer.consumption[0] is None and consumer.commit[0] is None
-             and type(raw) is operation.native.result_type
+             and type(raw) is (bytes if type(operation) is _LinkBytesOperation
+                               else operation.native.result_type)
              and operation.result.raw[0] is raw
              and all(cell[0] is None for cell in (operation.result.category,
                      operation.result.snapshot, operation.result.acknowledged,
@@ -1542,6 +1768,22 @@ def _returned_directory_operation_tail(owner, consumer, operation, raw):
 
 def _pending_directory_cohort_tail(owner, consumer, actual):
     """Rejoin the actual producer return; constructing matching DATA is no grant."""
+    if type(consumer) is _LinkBytesConsumer:
+        _require(type(actual) is _LinkBytesReturn)
+        operation = _charged_directory_operation_tail(owner, consumer)
+        result, phase = operation.result, operation.phase
+        _require(type(operation) is _LinkBytesOperation and type(result) is _LinkBytesResult
+                 and actual.operation is operation and actual.result is result
+                 and actual.consumer is consumer and operation.operation == 5
+                 and operation.state[1] is True and operation.ended[0] is True
+                 and phase.current[0] is phase.pending and operation.ledger.inflight[0] is None
+                 and result.envelope[0] is actual and type(actual.raw) is bytes
+                 and result.raw[0] is actual.raw and result.snapshot[0] is None
+                 and type(result.category[0]) is str and result.category[0] == 'returned'
+                 and type(result.length[0]) is int and result.length[0] == len(actual.raw)
+                 and type(result.counted[0]) is tuple and actual.counted is result.counted[0])
+        _link_current_lifetime_tail(owner, consumer)
+        return actual
     if type(consumer) is _LinkMetadataConsumer:
         # Links never receive the probe-only reported-missing interpretation.
         _require(type(actual) is _DirectoryMetadataReturn)
@@ -1605,7 +1847,7 @@ def _pending_directory_return_tail(owner, consumer, actual):
 
 
 def _produce_directory_metadata(owner, consumer):
-    """One fixed captured fstat/no-follow stat with original custody; no policy ACK.
+    """One fixed metadata or link-byte call with original custody; no policy ACK.
 
     This producer is unwired. Its caller must retain the actual return and use
     the fixed policy consumer; PENDING cannot admit more work or descriptor close.
@@ -1617,7 +1859,8 @@ def _produce_directory_metadata(owner, consumer):
     raw, snapshot, actual = unset, None, None
     probe = type(consumer) is _ProbeConsumer
     link = type(consumer) is _LinkMetadataConsumer
-    category = 'returned' if probe or link else _fixed_metadata_role(consumer.resource)
+    bytes_site = type(consumer) is _LinkBytesConsumer
+    category = 'returned' if probe or link or bytes_site else _fixed_metadata_role(consumer.resource)
     native = operation.native
     missing_type = native.errors[1]
     error_number = vars(native.errors[0]).get('errno')
@@ -1632,7 +1875,27 @@ def _produce_directory_metadata(owner, consumer):
     _require(not probe or type(enoent) is int)
     origin = marker = payload = cells = joined_cells = None
     raw_cell = category_cell = snapshot_cell = envelope_cell = None
+    count_function = failure_function = count_pin = failure_pin = byte_names = byte_counted = None
+    byte_length = byte_count_slot = None
     try:
+        if bytes_site:
+            _require(type(operation) is _LinkBytesOperation and type(result) is _LinkBytesResult)
+            held_engine = _closed_link_engine_origin(owner, operation.resource)
+            selected = []
+            for name in ('_capture_link_byte_count', '_retain_link_byte_failure'):
+                rows = tuple(row for row in held_engine[3]
+                             if type(row) is tuple and len(row) == 7
+                             and type(row[0]) is str and row[0] == name)
+                _require(len(rows) == 1)
+                _link_function_pin(rows[0], globals(), name)
+                selected.append(rows[0])
+            count_pin, failure_pin = selected
+            count_function, failure_function = count_pin[1], failure_pin[1]
+            byte_names = tuple.__getitem__(result, 11)
+            byte_length, byte_count_slot = tuple.__getitem__(result, 7), tuple.__getitem__(result, 9)
+            _require(type(byte_length) is list and len(byte_length) == 1 and byte_length[0] is None
+                     and type(byte_count_slot) is list and len(byte_count_slot) == 1
+                     and byte_count_slot[0] is None)
         # Capture actual cells before the native call. Compatibility properties
         # perform closure work and must not sit between the C return and storage.
         origin = result.custody_origin
@@ -1668,7 +1931,16 @@ def _produce_directory_metadata(owner, consumer):
                  and result.acknowledged[0] is None
                  and type(consumer.commit) is list and len(consumer.commit) == 1
                  and consumer.commit[0] is None)
-        if operation.operation == 4:
+        if bytes_site:
+            _require(operation.operation == 5 and type(arguments[0]) is bytes
+                     and type(arguments[1]) is int)
+            _link_current_lifetime_tail(owner, consumer)
+            _require(type(byte_names) is dict and byte_names.get('native_result') is result
+                     and byte_names.get('attempted') is False
+                     and byte_names.get('returned') is False and byte_names.get('unknown') is False)
+            byte_names['attempted'] = True
+            raw = callee(arguments[0], dir_fd=arguments[1])
+        elif operation.operation == 4:
             if probe:
                 _probe_current_lifetime_tail(owner, consumer)
             elif link:
@@ -1702,12 +1974,30 @@ def _produce_directory_metadata(owner, consumer):
             operation.state[1] = True
         operation.ended[0] = True
         if missing is None:
+            if bytes_site:
+                if (count_function.__code__ is not count_pin[2]
+                        or count_function.__defaults__ is not count_pin[4]
+                        or count_function.__kwdefaults__ is not count_pin[5]):
+                    raise ArtifactObservationError from None
+                byte_counted = count_function(operation, raw)
+                _require(type(byte_counted) is tuple and len(byte_counted) == 3
+                         and byte_counted is byte_count_slot[0]
+                         and byte_names.get('after') is byte_counted)
             _returned_directory_operation_tail(owner, consumer, operation, raw)
-            snapshot = _native_metadata_snapshot(owner, operation.registration,
-                                                 operation.native, raw)
-            _returned_directory_operation_tail(owner, consumer, operation, raw)
-            _require(type(snapshot) is _NativeMetadataSnapshot)
-            actual = _DirectoryMetadataReturn(operation, result, consumer, raw, snapshot)
+            if bytes_site:
+                actual = _LinkBytesReturn(operation, result, consumer, raw, byte_counted)
+                _require(type(actual) is _LinkBytesReturn
+                         and tuple.__getitem__(actual, 0) is operation
+                         and tuple.__getitem__(actual, 1) is result
+                         and tuple.__getitem__(actual, 2) is consumer
+                         and tuple.__getitem__(actual, 3) is raw
+                         and tuple.__getitem__(actual, 4) is byte_counted)
+            else:
+                snapshot = _native_metadata_snapshot(owner, operation.registration,
+                                                     operation.native, raw)
+                _returned_directory_operation_tail(owner, consumer, operation, raw)
+                _require(type(snapshot) is _NativeMetadataSnapshot)
+                actual = _DirectoryMetadataReturn(operation, result, consumer, raw, snapshot)
             _returned_directory_operation_tail(owner, consumer, operation, raw)
         else:
             # A known raised outcome is ended, charged and still NOT returned.
@@ -1723,6 +2013,32 @@ def _produce_directory_metadata(owner, consumer):
         _require(_pending_directory_return_tail(owner, consumer, actual) is actual)
         return actual
     except BaseException:
+        if bytes_site:
+            # Only the held raw variable comes from this call. Never fetch a
+            # current envelope/count to repair a lost producer return.
+            if (type(raw) is bytes and type(count_function) is FunctionType
+                    and type(count_pin) is tuple
+                    and count_function.__code__ is count_pin[2]
+                    and count_function.__defaults__ is count_pin[4]
+                    and count_function.__kwdefaults__ is count_pin[5]
+                    and type(byte_length) is list and len(byte_length) == 1
+                    and type(byte_count_slot) is list and len(byte_count_slot) == 1
+                    and byte_length[0] is None and byte_count_slot[0] is None):
+                try:
+                    count_function(operation, raw)  # audit only; caller still refuses
+                except BaseException:
+                    pass
+            if (type(failure_function) is FunctionType and type(failure_pin) is tuple
+                    and failure_function.__code__ is failure_pin[2]
+                    and failure_function.__defaults__ is failure_pin[4]
+                    and failure_function.__kwdefaults__ is failure_pin[5]):
+                try:
+                    failure_function(operation, raw)
+                except BaseException:
+                    pass
+            if (type(byte_names) is dict and byte_names.get('native_result') is result
+                    and byte_names.get('attempted') is True and byte_names.get('unknown') is False):
+                byte_names['unknown'] = True
         # This held local is assigned ONLY by the literal native call. Even if
         # a later bookkeeping store failed, retain actual returned history;
         # never reconstruct it from a current result cell or false diagnostic.
@@ -1765,6 +2081,8 @@ def _produce_directory_metadata(owner, consumer):
         actual = None
         missing = number = filename = None
         error_number = error_filename = missing_type = enoent = None
+        count_function = failure_function = count_pin = failure_pin = byte_names = byte_counted = None
+        byte_length = byte_count_slot = None
         origin = marker = payload = cells = joined_cells = None
         raw_cell = category_cell = snapshot_cell = envelope_cell = None
     raise ArtifactObservationError(owner) from None
@@ -1793,6 +2111,9 @@ def _consuming_directory_return_tail(owner, consumer, actual):
 
 
 def _directory_commit_cohort_tail(owner, consumer, actual, commit):
+    if type(consumer) is _LinkBytesConsumer:
+        function = _link_policy_helper(owner, consumer.resource, '_commit_shared_bytes_tail')
+        return function(owner, consumer, actual, commit)
     if type(consumer) is _LinkMetadataConsumer:
         function = _link_policy_helper(owner, consumer.resource, '_commit_shared_tail')
         return function(owner, consumer, actual, commit)
@@ -1857,7 +2178,10 @@ def _consume_directory_policy(owner, consumer, actual):
             raise
         _native_post_actor_state(owner, actor_state, actor_arguments)
         _consuming_directory_return_tail(owner, consumer, actual)
-        if type(consumer) is _LinkMetadataConsumer:
+        if type(consumer) is _LinkBytesConsumer:
+            make_commit = _link_policy_helper(owner, consumer.resource, '_make_shared_bytes_commit')
+            commit = make_commit(owner, consumer, actual)
+        elif type(consumer) is _LinkMetadataConsumer:
             make_commit = _link_policy_helper(owner, consumer.resource, '_make_shared_commit')
             commit = make_commit(owner, consumer, actual)
         elif type(consumer) is _ProbeConsumer:
@@ -1949,6 +2273,9 @@ def _directory_ack_preparation_tail(owner, consumer, actual, commit):
 
 def _acked_directory_history_tail(owner, consumer, commit):
     """Raw-free ACK history closure; not admission or a returned-receipt proof."""
+    if type(consumer) is _LinkBytesConsumer:
+        function = _link_policy_helper(owner, consumer.resource, '_acked_shared_bytes_history')
+        return function(owner, consumer, commit)
     if type(consumer) is _LinkMetadataConsumer:
         function = _link_policy_helper(owner, consumer.resource, '_acked_shared_history')
         return function(owner, consumer, commit)
@@ -2137,7 +2464,10 @@ def _ack_directory_policy(owner, consumer, actual, commit):
         result.envelope[0] = None
         result.category[0] = None
         consumer.consumption[0] = commit  # retire the raw-bearing backlink too
-        if type(consumer) is _LinkMetadataConsumer:
+        if type(consumer) is _LinkBytesConsumer:
+            publish = _link_policy_helper(owner, consumer.resource, '_publish_shared_bytes_ack')
+            publish(owner, consumer, commit)
+        elif type(consumer) is _LinkMetadataConsumer:
             publish = _link_policy_helper(owner, consumer.resource, '_publish_shared_ack')
             publish(owner, consumer, commit)
         elif type(consumer) is _ProbeConsumer:
@@ -2611,7 +2941,7 @@ def _run_directory_observation(owner, resource, predecessor=None, baseline=None,
         probe_stages = _probe_stage_functions(owner, resource)
         probe_origin = _closed_probe_engine_origin(owner, resource)
         prepare, latch, produce, consume, acknowledge, attached_tail, retired_tail = probe_stages
-    elif type(resource) is _NativeLinkMetadataResource:
+    elif type(resource) in (_NativeLinkMetadataResource, _NativeLinkBytesResource):
         _require(baseline is None and eof is None)
         probe_stages = _link_stage_functions(owner, resource)
         probe_origin = _closed_link_engine_origin(owner, resource)
@@ -2681,7 +3011,7 @@ def _run_directory_observation(owner, resource, predecessor=None, baseline=None,
     # error cannot carry its private exception/traceback as implicit context.
     actual = None
     try:
-        _require(type(operation) is _MetadataOperation and operation.owner is owner
+        _require(_operation_result_family(operation) and operation.owner is owner
                  and (not producer_started or producer_unwound))
         native = operation.native
         actor_arguments = (operation, marker)
@@ -2703,6 +3033,13 @@ def _run_directory_observation(owner, resource, predecessor=None, baseline=None,
                      held_reference, origin.reference_type) is None
                  and origin.reference_call(held_reference) is payload)
         if not complete and producer_started and producer_unwound:
+            if type(operation) is _LinkBytesOperation and type(result) is _LinkBytesResult:
+                byte_names = tuple.__getitem__(result, 11)
+                if (type(byte_names) is dict and all(type(k) is str for k in byte_names)
+                        and byte_names.get('native_result') is result
+                        and byte_names.get('attempted') is True
+                        and byte_names.get('unknown') is False):
+                    byte_names['unknown'] = True
             # Preserve real debit/ACK/cursor history and all foreign replacements.
             # This branch admits no native work and does not require live grants.
             ledger, phase = operation.ledger, operation.phase
@@ -2758,7 +3095,7 @@ def _run_directory_observation(owner, resource, predecessor=None, baseline=None,
         complete = False
     finally:
         try:
-            if not retired and type(operation) is _MetadataOperation:
+            if not retired and _operation_result_family(operation):
                 # An interruption can precede the first detach store. Recheck
                 # the original actor and pre-effect custody before a final
                 # memory-only detach; never manufacture a retirement/ACK record.
@@ -2813,7 +3150,7 @@ def _run_directory_observation(owner, resource, predecessor=None, baseline=None,
     # matching history under the original actor; never rewind a real ACK/cursor.
     if producer_started and producer_unwound:
         try:
-            _require(type(operation) is _MetadataOperation and operation.owner is owner)
+            _require(_operation_result_family(operation) and operation.owner is owner)
             actor_arguments = (operation, marker)
             actor_state = _native_pre_actor_state(owner, actor_arguments)
             native = operation.native

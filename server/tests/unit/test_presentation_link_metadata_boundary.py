@@ -92,7 +92,9 @@ def packet():
              '_lifetime_tail', '_resource_tail', '_prepare_shared_consumer',
              '_latch_shared_consumer', '_make_shared_commit', '_commit_shared_tail',
              '_publish_shared_ack', '_acked_shared_history', '_produce_shared',
-             '_consume_shared', '_ack_shared', '_attached_shared', '_retired_shared')
+             '_consume_shared', '_ack_shared', '_attached_shared', '_retired_shared',
+             '_resource_bindings', '_byte_record_tail', '_make_shared_bytes_commit', '_commit_shared_bytes_tail',
+             '_publish_shared_bytes_ack', '_acked_shared_bytes_history')
     functions = tuple(_pin_function(name, vars(link)[name], vars(link)[name].__globals__)
                       for name in names)
     kernel_functions = tuple(_pin_function(name, function, function.__globals__)
@@ -100,7 +102,17 @@ def packet():
                              if name.startswith('_') and type(function) is FunctionType)
     types = tuple(_pin_type(kind) for kind in (
         link._LinkExecution, kernel._LinkMetadataConsumer,
-        link._LinkMetadataCommit, _NativeLinkMetadataResource))
+        link._LinkMetadataCommit, _NativeLinkMetadataResource,
+        kernel._LinkBytesConsumer, link._LinkBytesCommit, link._NativeLinkBytesResource,
+        kernel._LinkBytesOperation, kernel._LinkBytesResult, kernel._LinkBytesReturn))
+    kind = link._LinkRead
+    namespace = vars(kind)
+    constructor = namespace['__init__']
+    record_pin = (kind, None, tuple(namespace.items()), constructor, constructor.__code__,
+                  constructor.__globals__, constructor.__defaults__, kind.__bases__,
+                  tuple((name, namespace.get(name)) for name in (
+                      '__getattribute__', '__getattr__', '__setattr__', '__delattr__')))
+    types = (*types, record_pin)
     return sys.modules[link.__name__], types, functions, kernel_functions
 
 
@@ -213,4 +225,33 @@ def test_cursor_positions_are_fenced_before_pending_policy_dispatch(monkeypatch,
     monkeypatch.setattr(kernel, '_pending_directory_cohort_tail', pending_trap)
     with pytest.raises(ArtifactObservationError):
         link._commit_shared_tail(owner, consumer, None, commit)
+    assert calls == []
+
+
+@pytest.mark.parametrize('drift', ('none', 'opened', 'arguments', 'position'))
+def test_pure_final_binding_rejects_stale_descriptor_or_fd_data(drift):
+    """Synthetic tuple mirrors only: no original FD, registration or admission."""
+    owner, registration = object(), object()
+    descriptor = link._NativeOpenedDescriptor(None, 7, None)
+    site = (4, 0, None)
+    cursor = link.policy._LinkPathCursor(None, 1, (), None, None, None)
+    values = [None] * len(link._LinkExecution._fields)
+    values[0], values[1], values[5], values[9], values[12] = (
+        owner, registration, ((0, '/', None), site), [cursor], [descriptor])
+    execution = link._LinkExecution(*values)
+    resource = _NativeLinkMetadataResource(owner, registration, execution, site, 1,
+                                           (descriptor.fd,), descriptor)
+    calls = []
+    if drift == 'none':
+        assert link._resource_bindings(execution, resource) is resource
+        return
+    if drift == 'opened':
+        # Same numeric FD is insufficient: the original descriptor is required.
+        execution.opened[0] = link._NativeOpenedDescriptor(None, 7, None)
+    elif drift == 'arguments':
+        resource = resource._replace(arguments=(9,))
+    else:
+        execution.cursor[0] = cursor._replace(position=Foreign(calls))
+    with pytest.raises(ArtifactObservationError):
+        link._resource_bindings(execution, resource)
     assert calls == []

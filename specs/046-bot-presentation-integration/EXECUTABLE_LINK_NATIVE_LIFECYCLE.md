@@ -93,6 +93,27 @@ native or owner method is replaced by the entry hook. The wider interruption
 matrix and enabled Link lifetime/projection/constructor/finalizer tests remain
 required; neither selected compatibility nor packet tests qualify this draft.
 
+The same disabled branch now also contains the **op5 byte-family draft**. Its
+resource/operation/result/consumer/return/commit types are distinct from metadata,
+file reads and probe absence. It uses the shared admission, capsule, producer,
+consumption, ACK and retirement caller; no parallel custody/caller state machine
+was added. The
+producer holds the actual count-helper return and byte-return fields, while
+memory-only failure auditing never adopts a current envelope/count as a receipt.
+Record drift is refused and preserved; independently held result length remains
+available for failure accounting. Exact descriptor/FD/encoded-name/record bindings
+are repeated after callback-bearing guards using retained original functions.
+
+Selected current/minimum checks pass 179 cases each: 119 prior DATA controls,
+30 metadata/local packet/binding controls and 30 synthetic byte-memory/family
+controls. Actual normal Directory compatibility also passes on both versions.
+These are **not actual op5 C-call, admitted Link, partial-store, complete history
+or finish qualification**. The old native caller still runs its legacy link path;
+the end-to-end link acceptance remains deliberately red. The early environment
+gate stays closed. Complete the real driver/finishes/snapshot/recheck, original
+code/property bindings, interruption/cleanup matrix and physical/runtime gates
+before enabling image delivery.
+
 Capture code/type/member/dispatch and all original immutable policy inputs in the
 pre-Scope factory, then seal actual constructor returns. Use a distinct fixed
 link resource/consumer on the canonical shared kernel; do not broaden the

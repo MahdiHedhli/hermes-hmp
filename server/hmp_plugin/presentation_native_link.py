@@ -17,6 +17,7 @@ from . import presentation_native_metadata as metadata
 from .presentation_startup_artifacts import (
     StartupArtifactOwner, _NativeLinkMetadataResource, _NativeOpenedDescriptor,
     _NativeOpenAllocation, _LinkSnapshot, _LinkTargetObservation,
+    _NativeLinkBytesResource, _LinkRead,
     _NativeScopeRegistration, _Scope, _native_descriptor_opened,
     _native_work_origin_tail, _native_work_registration_tail, _require,
     _runtime_current,
@@ -60,6 +61,22 @@ class _LinkMetadataCommit(NamedTuple):
 
 
 _LinkMetadataConsumer = metadata._LinkMetadataConsumer
+_LinkBytesConsumer = metadata._LinkBytesConsumer
+
+
+class _LinkBytesCommit(NamedTuple):
+    consumer: object
+    sequence: int
+    site: int
+    before: object
+    cursor: object
+    length: int
+    before_count: tuple
+    after_count: tuple
+    record: object
+
+    def __repr__(self):
+        return '<LinkBytesCommit actual raw-free length/count ACK redacted>'
 
 # Only these five aliases may use the shared module's namespace. The stage
 # selector validates both their retained kernel exports and these aliases.
@@ -100,22 +117,30 @@ def _engine_origin_tail(origin):
             or pin_function.__kwdefaults__ is not None):
         raise metadata.ArtifactObservationError from None
     expected = (_LinkExecution, _LinkMetadataConsumer, _LinkMetadataCommit,
-                _NativeLinkMetadataResource)
+                _NativeLinkMetadataResource, _LinkBytesConsumer, _LinkBytesCommit,
+                _NativeLinkBytesResource, metadata._LinkBytesOperation,
+                metadata._LinkBytesResult, metadata._LinkBytesReturn, _LinkRead)
     _require(len(origin[1]) == len(expected))
     for row, selected in zip(origin[1], expected, strict=True):
         _require(type(row) is tuple and len(row) == 9 and row[0] is selected)
         kind, fields, members, constructor, code, namespace, defaults, bases, dispatch = row
         names = vars(kind)
-        actual = names.get('__new__')
+        actual = names.get('__init__' if fields is None else '__new__')
         if type(actual) is staticmethod:
             actual = actual.__func__
-        _require(type(kind) is type and names.get('_fields') is fields
-                 and actual is constructor and type(constructor) is FunctionType
+        _require(type(kind) is type and actual is constructor and type(constructor) is FunctionType
                  and constructor.__code__ is code and constructor.__globals__ is namespace
                  and constructor.__defaults__ is defaults and kind.__bases__ is bases
-                 and namespace.get('_tuple_new') is tuple.__new__
-                 and all(names.get(n) is member for n, member in zip(fields, members, strict=True))
                  and all(names.get(n) is member for n, member in dispatch))
+        if fields is None:
+            _require(kind is _LinkRead and len(names) == len(members)
+                     and all(type(pair) is tuple and len(pair) == 2 and type(pair[0]) is str
+                             and pair[0] in names and names[pair[0]] is pair[1]
+                             for pair in members))
+        else:
+            _require(type(fields) is tuple and names.get('_fields') is fields
+                     and namespace.get('_tuple_new') is tuple.__new__
+                     and all(names.get(n) is member for n, member in zip(fields, members, strict=True)))
     shared = {'_produce_shared': '_produce_directory_metadata',
               '_consume_shared': '_consume_directory_policy',
               '_ack_shared': '_ack_directory_policy',
@@ -125,7 +150,9 @@ def _engine_origin_tail(origin):
         '_engine_origin_tail', '_execution_mirrors', '_opened_chain_tail', '_lifetime_tail',
         '_resource_tail', '_prepare_shared_consumer', '_latch_shared_consumer',
         '_make_shared_commit', '_commit_shared_tail', '_publish_shared_ack',
-        '_acked_shared_history', *shared,
+        '_acked_shared_history', '_resource_bindings', '_byte_record_tail', '_make_shared_bytes_commit',
+        '_commit_shared_bytes_tail', '_publish_shared_bytes_ack',
+        '_acked_shared_bytes_history', *shared,
     )
     _require(all(type(row) is tuple and len(row) == 7 and type(row[0]) is str
                  for row in origin[2])
@@ -166,6 +193,7 @@ def _engine_origin_tail(origin):
         '_native_actor_context', '_native_pre_actor_state', '_native_post_actor_state',
         '_native_work_origin_tail', '_native_work_registration_tail',
         '_native_metadata_snapshot', '_require',
+        '_operation_result_family', '_capture_link_byte_count', '_retain_link_byte_failure',
     )
     _require(all(type(row) is tuple and len(row) == 7 and type(row[0]) is str
                  for row in origin[3])
@@ -318,10 +346,17 @@ def _opened_chain_tail(execution):
 
 
 def _lifetime_tail(owner, consumer):
-    _require(type(consumer) is _LinkMetadataConsumer)
+    _require(type(consumer) in (_LinkMetadataConsumer, _LinkBytesConsumer))
     execution = tuple.__getitem__(consumer, 0)
     _require(type(execution) is _LinkExecution and tuple.__getitem__(execution, 0) is owner)
     _engine_origin_tail(tuple.__getitem__(execution, 3))
+    binding_rows = tuple(row for row in execution.origin[2] if row[0] == '_resource_bindings')
+    _require(len(binding_rows) == 1)
+    binding_row = binding_rows[0]
+    bindings = binding_row[1]
+    record_rows = tuple(row for row in execution.origin[2] if row[0] == '_byte_record_tail')
+    _require(len(record_rows) == 1)
+    record_row, record_check = record_rows[0], record_rows[0][1]
     _execution_mirrors(execution)
     reg = execution.registration
     _native_work_registration_tail(owner, reg)
@@ -332,15 +367,33 @@ def _lifetime_tail(owner, consumer):
     _require(_execution_mirrors(execution) is execution
              and execution.pending[0] is consumer
              and consumer.operation.resource.execution is execution)
+    if type(consumer) is _LinkBytesConsumer:
+        if (record_check.__code__ is not record_row[2]
+                or record_check.__defaults__ is not record_row[4]
+                or record_check.__kwdefaults__ is not record_row[5]):
+            raise metadata.ArtifactObservationError from None
+        record_check(execution, consumer.operation.resource)
+    if (bindings.__code__ is not binding_row[2]
+            or bindings.__defaults__ is not binding_row[4]
+            or bindings.__kwdefaults__ is not binding_row[5]):
+        raise metadata.ArtifactObservationError from None
+    bindings(execution, consumer.operation.resource)
     return reg.scope
 
 
 def _resource_tail(owner, resource):
-    _require(type(resource) is _NativeLinkMetadataResource
+    _require(type(resource) in (_NativeLinkMetadataResource, _NativeLinkBytesResource)
              and tuple.__getitem__(resource, 0) is owner)
     execution = tuple.__getitem__(resource, 2)
     _require(type(execution) is _LinkExecution)
     _engine_origin_tail(tuple.__getitem__(execution, 3))
+    binding_rows = tuple(row for row in execution.origin[2] if row[0] == '_resource_bindings')
+    _require(len(binding_rows) == 1)
+    binding_row = binding_rows[0]
+    bindings = binding_row[1]
+    record_rows = tuple(row for row in execution.origin[2] if row[0] == '_byte_record_tail')
+    _require(len(record_rows) == 1)
+    record_row, record_check = record_rows[0], record_rows[0][1]
     _execution_mirrors(execution)
     _require(execution.owner is owner and execution.registration is resource.registration
              and execution.finished[0] is False and type(resource.ordinal) is int
@@ -348,7 +401,8 @@ def _resource_tail(owner, resource):
              and 0 <= resource.ordinal < len(execution.definitions)
              and execution.definitions[resource.ordinal] is resource.site
              and type(resource.site) is tuple and len(resource.site) == 3
-             and type(resource.site[0]) is int and resource.site[0] in (3, 4)
+             and type(resource.site[0]) is int
+             and resource.site[0] in ((5,) if type(resource) is _NativeLinkBytesResource else (3, 4))
              and type(resource.arguments) is tuple)
     _opened_chain_tail(execution)
     operation, name, parent = resource.site
@@ -357,6 +411,26 @@ def _resource_tail(owner, resource):
                  and parent is None and resource.descriptor is execution.opened[name]
                  and len(resource.arguments) == 1
                  and resource.arguments[0] is resource.descriptor.fd)
+    elif operation == 5:
+        _require(type(resource) is _NativeLinkBytesResource and type(name) is str
+                 and name is execution.policy.components[-1]
+                 and type(parent) is int and parent == len(execution.policy.components) - 2
+                 and 0 <= parent < len(execution.opened)
+                 and resource.descriptor is execution.opened[parent]
+                 and len(resource.arguments) == 2 and type(resource.arguments[0]) is bytes
+                 and resource.arguments[1] is resource.descriptor.fd)
+        origin = tuple.__getitem__(execution.blueprint, 4)
+        encoded = resource.encoded
+        _require(type(encoded) is origin[4][10][0]
+                 and tuple.__getitem__(encoded, 0) is origin
+                 and tuple.__getitem__(encoded, 1) is name
+                 and tuple.__getitem__(encoded, 2) is resource.arguments[0]
+                 and tuple.__getitem__(encoded, 3) is origin[0][3])
+        if (record_check.__code__ is not record_row[2]
+                or record_check.__defaults__ is not record_row[4]
+                or record_check.__kwdefaults__ is not record_row[5]):
+            raise metadata.ArtifactObservationError from None
+        record_check(execution, resource)
     else:
         _require(type(name) is str and len(resource.arguments) == 2
                  and resource.arguments[0] is name)
@@ -376,12 +450,26 @@ def _resource_tail(owner, resource):
              and execution.definitions[resource.ordinal] is resource.site
              and execution.cursor[0].position == resource.ordinal)
     _opened_chain_tail(execution)
+    if type(resource) is _NativeLinkBytesResource:
+        if (record_check.__code__ is not record_row[2]
+                or record_check.__defaults__ is not record_row[4]
+                or record_check.__kwdefaults__ is not record_row[5]):
+            raise metadata.ArtifactObservationError from None
+        record_check(execution, resource)
+    if (bindings.__code__ is not binding_row[2]
+            or bindings.__defaults__ is not binding_row[4]
+            or bindings.__kwdefaults__ is not binding_row[5]):
+        raise metadata.ArtifactObservationError from None
+    bindings(execution, resource)
     return resource
 
 
 def _prepare_shared_consumer(owner, operation, predecessor, baseline, eof, custody):
-    _require(type(operation) is metadata._MetadataOperation
-             and type(operation.resource) is _NativeLinkMetadataResource
+    _require(metadata._operation_result_family(operation)
+             and ((type(operation) is metadata._MetadataOperation
+                   and type(operation.resource) is _NativeLinkMetadataResource)
+                  or (type(operation) is metadata._LinkBytesOperation
+                      and type(operation.resource) is _NativeLinkBytesResource))
              and baseline is None and eof is None)
     resource = _resource_tail(owner, operation.resource)
     execution = resource.execution
@@ -390,10 +478,11 @@ def _prepare_shared_consumer(owner, operation, predecessor, baseline, eof, custo
              and type(operation.result.consumer) is list and len(operation.result.consumer) == 1
              and operation.result.consumer[0] is None)
     values = (execution, operation, predecessor, [None], custody, execution.cursor[0])
-    kind, _, _, constructor, _, _, _, _, _ = execution.origin[1][1]
+    index = 4 if type(operation) is metadata._LinkBytesOperation else 1
+    kind, _, _, constructor, _, _, _, _, _ = execution.origin[1][index]
     consumer = constructor(kind, *values)
     _engine_origin_tail(execution.origin)
-    _require(type(consumer) is _LinkMetadataConsumer
+    _require(type(consumer) is kind
              and all(tuple.__getitem__(consumer, i) is value for i, value in enumerate(values))
              and execution.pending[0] is None and operation.result.consumer[0] is None
              and execution.cursor[0] is values[-1])
@@ -402,10 +491,14 @@ def _prepare_shared_consumer(owner, operation, predecessor, baseline, eof, custo
 
 
 def _latch_shared_consumer(owner, consumer, rejoin=False):
-    _require(type(consumer) is _LinkMetadataConsumer
+    _require(type(consumer) in (_LinkMetadataConsumer, _LinkBytesConsumer)
              and type(tuple.__getitem__(consumer, 0)) is _LinkExecution
              and consumer.owner is owner
-             and type(consumer.operation) is metadata._MetadataOperation)
+             and metadata._operation_result_family(consumer.operation)
+             and ((type(consumer) is _LinkMetadataConsumer
+                   and type(consumer.operation) is metadata._MetadataOperation)
+                  or (type(consumer) is _LinkBytesConsumer
+                      and type(consumer.operation) is metadata._LinkBytesOperation)))
     execution, operation = consumer.execution, consumer.operation
     _require(operation.owner is owner and operation.resource.execution is execution
              and operation.resource.registration is execution.registration)
@@ -556,5 +649,221 @@ def _acked_shared_history(owner, consumer, commit):
              and ledger.failed[0] is False and ledger.failure[0] is None
              and phase.current[0] in (phase.idle, phase.active, phase.pending))
     # Historical DATA can survive later work. This function cannot admit it.
+    _native_work_registration_tail(owner, execution.registration)
+    return commit
+
+
+def _resource_bindings(execution, resource):
+    """Repeat exact argument/descriptor joins after callback-bearing guards."""
+    _require(type(execution) is _LinkExecution
+             and type(resource) in (_NativeLinkMetadataResource, _NativeLinkBytesResource))
+    definitions, cursors, opened = (tuple.__getitem__(execution, 5),
+                                    tuple.__getitem__(execution, 9),
+                                    tuple.__getitem__(execution, 12))
+    site, ordinal, arguments, descriptor = (tuple.__getitem__(resource, 3),
+        tuple.__getitem__(resource, 4), tuple.__getitem__(resource, 5),
+        tuple.__getitem__(resource, 6))
+    _require(tuple.__getitem__(resource, 2) is execution
+             and tuple.__getitem__(resource, 1) is tuple.__getitem__(execution, 1)
+             and type(definitions) is tuple and type(ordinal) is int
+             and 0 <= ordinal < len(definitions) and definitions[ordinal] is site
+             and type(cursors) is list and len(cursors) == 1
+             and type(cursors[0]) is policy._LinkPathCursor
+             and type(tuple.__getitem__(cursors[0], 1)) is int
+             and tuple.__getitem__(cursors[0], 1) == ordinal
+             and type(opened) is list and type(arguments) is tuple
+             and type(site) is tuple and len(site) == 3 and type(site[0]) is int)
+    operation, name, parent = site
+    if operation == 4:
+        _require(type(resource) is _NativeLinkMetadataResource
+                 and type(name) is int and 0 <= name < len(opened)
+                 and parent is None and descriptor is opened[name]
+                 and type(descriptor) is _NativeOpenedDescriptor
+                 and len(arguments) == 1
+                 and arguments[0] is tuple.__getitem__(descriptor, 1))
+    elif operation == 3:
+        _require(type(resource) is _NativeLinkMetadataResource and type(name) is str
+                 and len(arguments) == 2 and arguments[0] is name)
+        if parent is None:
+            _require(name == '/' and descriptor is arguments[1] is None)
+        else:
+            _require(type(parent) is int and 0 <= parent < len(opened)
+                     and descriptor is opened[parent] and type(descriptor) is _NativeOpenedDescriptor
+                     and arguments[1] is tuple.__getitem__(descriptor, 1))
+    else:
+        _require(operation == 5 and type(resource) is _NativeLinkBytesResource
+                 and type(name) is str and type(parent) is int
+                 and 0 <= parent < len(opened) and descriptor is opened[parent]
+                 and type(descriptor) is _NativeOpenedDescriptor and len(arguments) == 2
+                 and type(arguments[0]) is bytes
+                 and arguments[1] is tuple.__getitem__(descriptor, 1))
+        selected = tuple.__getitem__(execution, 4)
+        _require(type(selected) is policy._LinkPathPolicy)
+        components = tuple.__getitem__(selected, 7)
+        _require(type(components) is tuple and len(components) >= 2
+                 and name is components[-1] and parent == len(components) - 2)
+        blueprint = tuple.__getitem__(execution, 2)
+        _require(type(blueprint) is policy._LinkScopeBlueprint)
+        origin = tuple.__getitem__(blueprint, 4)
+        encoded = tuple.__getitem__(resource, 8)
+        _require(type(origin) is tuple and len(origin) == 5
+                 and type(origin[4]) is tuple and len(origin[4]) >= 11
+                 and type(origin[0]) is tuple and len(origin[0]) >= 4
+                 and type(encoded) is origin[4][10][0]
+                 and tuple.__getitem__(encoded, 0) is origin
+                 and tuple.__getitem__(encoded, 1) is name
+                 and tuple.__getitem__(encoded, 2) is arguments[0]
+                 and tuple.__getitem__(encoded, 3) is origin[0][3])
+    return resource
+
+
+def _byte_record_tail(execution, resource):
+    """Live owned byte-record/count joins; no missing-result interpretation."""
+    _require(type(execution) is _LinkExecution and type(resource) is _NativeLinkBytesResource
+             and resource.execution is execution and execution.policy.hop is not None
+             and execution.policy.phase in ('before', 'after')
+             and type(resource.record) is _LinkRead)
+    source = execution.blueprint.runtime
+    index = execution.policy.index
+    phase = 0 if execution.policy.phase == 'before' else 1
+    position = phase * len(source.link.hops) + index
+    record = resource.record
+    names = vars(record)
+    _require(type(names) is dict and all(type(k) is str for k in names)
+             and type(source.reads) is list and len(source.reads) == position + 1
+             and source.reads[position] is record and names.get('hop') is execution.policy.hop
+             and type(names.get('phase')) is int and names['phase'] == phase
+             and type(names.get('index')) is int and names['index'] == position
+             and names.get('data') is None and names.get('unknown') is False
+             and names.get('acknowledgement') is None
+             and type(names.get('attempted')) is bool and type(names.get('returned')) is bool)
+    result = names.get('native_result')
+    if result is None:
+        _require(names['attempted'] is False and names['returned'] is False
+                 and names.get('length') is names.get('after') is None
+                 and names.get('before') is execution.count[0])
+        return record
+    _require(type(result) is metadata._LinkBytesResult and result.record is record
+             and result.record_names is names and names.get('before') is result.before_count
+             and type(result.attempt) is list and len(result.attempt) == 1
+             and type(result.attempt[0]) is metadata._LinkBytesOperation
+             and result.attempt[0].resource is resource)
+    if names['returned'] is False:
+        _require(result.length[0] is result.counted[0] is None
+                 and names.get('length') is names.get('after') is None
+                 and execution.count[0] is result.before_count)
+    else:
+        after = result.counted[0]
+        _require(names['attempted'] is True and type(result.length[0]) is int
+                 and names.get('length') is result.length[0]
+                 and type(after) is tuple and len(after) == 3
+                 and names.get('after') is after is execution.count[0]
+                 and after[0] is execution.owner and after[1] is execution.registration.scope
+                 and type(after[2]) is int and after[2] == result.before_count[2] + result.length[0])
+    return record
+
+
+def _make_shared_bytes_commit(owner, consumer, actual):
+    _require(type(consumer) is _LinkBytesConsumer
+             and type(tuple.__getitem__(consumer, 0)) is _LinkExecution)
+    metadata._pending_directory_cohort_tail(owner, consumer, actual)
+    execution, before = consumer.execution, consumer.cursor
+    _require(execution.owner is owner and type(before) is policy._LinkPathCursor
+             and execution.cursor[0] is before and type(actual) is metadata._LinkBytesReturn
+             and type(actual.raw) is bytes and 0 < len(actual.raw) < execution.policy.bound
+             and actual.raw == execution.policy.hop.target
+             and actual.counted is actual.result.counted[0])
+    following = policy._advance(before, 'returned', actual.raw)
+    values = (consumer, len(execution.history), before.position, before, following,
+              actual.result.length[0], actual.result.before_count, actual.counted,
+              actual.result.record)
+    kind, _, _, constructor, _, _, _, _, _ = execution.origin[1][5]
+    commit = constructor(kind, *values)
+    _engine_origin_tail(execution.origin)
+    _require(type(commit) is _LinkBytesCommit
+             and all(tuple.__getitem__(commit, i) is value for i, value in enumerate(values))
+             and execution.cursor[0] is before)
+    return commit
+
+
+def _commit_shared_bytes_tail(owner, consumer, actual, commit):
+    _require(type(consumer) is _LinkBytesConsumer
+             and type(tuple.__getitem__(consumer, 0)) is _LinkExecution
+             and type(commit) is _LinkBytesCommit
+             and type(tuple.__getitem__(commit, 3)) is policy._LinkPathCursor
+             and type(tuple.__getitem__(commit, 4)) is policy._LinkPathCursor)
+    before, following = tuple.__getitem__(commit, 3), tuple.__getitem__(commit, 4)
+    _require(type(tuple.__getitem__(before, 1)) is int
+             and type(tuple.__getitem__(following, 1)) is int)
+    metadata._pending_directory_cohort_tail(owner, consumer, actual)
+    execution, result = consumer.execution, actual.result
+    _require(execution.owner is owner and commit.consumer is consumer
+             and consumer.commit[0] is commit and consumer.consumption[0] is actual
+             and commit.before is consumer.cursor is execution.cursor[0]
+             and type(commit.sequence) is int and commit.sequence == len(execution.history)
+             and type(commit.site) is int and commit.site == before.position
+             and execution.definitions[commit.site][0] == 5
+             and execution.policy.hop is not None and execution.policy.phase != 'recheck'
+             and type(actual.raw) is bytes and 0 < len(actual.raw) < execution.policy.bound
+             and actual.raw == execution.policy.hop.target
+             and type(commit.length) is int and commit.length == len(actual.raw)
+             and commit.length is result.length[0]
+             and commit.before_count is result.before_count
+             and commit.after_count is actual.counted is result.counted[0]
+             and commit.record is result.record
+             and following.predecessor is before and following.policy is before.policy
+             and following.position == before.position + 1
+             and following.directories is before.directories and following.leaf is before.leaf
+             and type(following.link_length) is int and following.link_length == commit.length)
+    policy._cursor_tail(following)
+    return commit
+
+
+def _publish_shared_bytes_ack(owner, consumer, commit):
+    _require(type(consumer) is _LinkBytesConsumer and type(commit) is _LinkBytesCommit)
+    _lifetime_tail(owner, consumer)
+    execution, result = consumer.execution, consumer.operation.result
+    names = result.record_names
+    _require(commit.consumer is consumer and execution.pending[0] is consumer
+             and execution.cursor[0] is commit.before
+             and consumer.commit[0] is result.acknowledged[0] is commit
+             and consumer.consumption[0] is commit
+             and commit.sequence == len(execution.history)
+             and commit.after_count is execution.count[0]
+             and names.get('native_result') is result and names.get('acknowledgement') is None)
+    names['acknowledgement'] = commit
+    execution.history.append(commit)
+    execution.cursor[0] = commit.cursor
+    execution.pending[0] = None
+
+
+def _acked_shared_bytes_history(owner, consumer, commit):
+    """Immediate raw-free ACK data; later path history needs its finish seal."""
+    _require(type(consumer) is _LinkBytesConsumer
+             and type(tuple.__getitem__(consumer, 0)) is _LinkExecution
+             and type(commit) is _LinkBytesCommit)
+    execution, operation = consumer.execution, consumer.operation
+    _engine_origin_tail(execution.origin)
+    _execution_mirrors(execution)
+    _require(execution.owner is owner and commit.consumer is consumer
+             and type(operation) is metadata._LinkBytesOperation
+             and type(operation.result) is metadata._LinkBytesResult)
+    result, ledger, phase = operation.result, operation.ledger, operation.phase
+    names = result.record_names
+    _require(type(commit.sequence) is int and 0 <= commit.sequence < len(execution.history)
+             and execution.history[commit.sequence] is commit and execution.pending[0] is None
+             and consumer.commit[0] is result.acknowledged[0] is commit
+             and result.attempt[0] is operation and result.consumer[0] is consumer
+             and commit.record is result.record and names.get('native_result') is result
+             and names.get('acknowledgement') is commit and names.get('data') is None
+             and names.get('returned') is True and names.get('unknown') is False
+             and names.get('length') is commit.length is result.length[0]
+             and names.get('before') is commit.before_count is result.before_count
+             and names.get('after') is commit.after_count is result.counted[0]
+             and type(operation.index) is int and 0 <= operation.index < len(ledger.attempts)
+             and ledger.attempts[operation.index] is operation
+             and ledger.counts is operation.budget[0] and ledger.counts[0] >= operation.budget[3]
+             and ledger.failed[0] is False and ledger.failure[0] is None
+             and phase.current[0] in (phase.idle, phase.active, phase.pending))
     _native_work_registration_tail(owner, execution.registration)
     return commit

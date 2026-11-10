@@ -1,5 +1,11 @@
 # November 9: native image traversal remains unfinished
 
+The disabled draft now includes distinct link-byte handling on the same operation
+lifecycle, with count auditing and raw-free ACK projections. Selected synthetic
+accounting and existing Directory compatibility pass on both Python versions;
+actual link-byte admission and complete traversal are not yet qualified. No image
+service, host or device was enabled by this work.
+
 The coupled branch now has a disabled Link metadata implementation on the shared
 operation kernel. Its early-engine gate stays closed; byte operations, complete
 traversal/finishes and runtime wiring are still required. Selected local guards
