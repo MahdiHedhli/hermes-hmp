@@ -116,7 +116,7 @@ def test_bootstrap_keyword_pairs_are_fenced_before_foreign_equality(monkeypatch)
     kernel_rows = tuple((*row[:6], Foreign(calls))
                         if row[0] == '_closed_link_engine_origin' else row
                         for row in original[3])
-    malformed = (*original[:3], kernel_rows)
+    malformed = (*original[:3], kernel_rows, *original[4:])
     parent = ((None, None, None, None, malformed), (), (), (), ())
     lineage = _NativeFileLineage(None, None, None, None, parent)
     owner = object.__new__(artifacts.StartupArtifactOwner)

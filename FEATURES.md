@@ -1,33 +1,32 @@
-# November 9: image traversal implementation remains unqualified
+# November 9: early native binding implemented; image delivery unqualified
 
-The disabled Link branch now includes the complete fixed-order path driver and
-finish draft: original pre-operation open allocation, shared metadata/readlink
-caller, literal ACK history, byte accounting, and reverse one-attempt cleanup.
-The driver retains the original open allocation before the file operation; it
-never recovers cleanup authority from a mutable holder or current ledger.
+The experimental entry now captures the Link engine before filesystem setting
+observations and joins it to the original entry/lineage and both Scope publication
+seals. Original module roots, class/property members, function code/defaults and
+closure cells are rechecked. Capture does not delegate to replaceable pin helpers
+or import callbacks. Read-record allocation uses the original native allocator
+and actual instance initialization; an admitted run exposed and helped repair
+an earlier class-as-instance mistake.
 
-The draft now also retains actual path finishes through raw-free snapshot/fact
-construction and metadata-only rechecks. Historical receipts can survive later
-healthy work without requiring the shared ledger to remain idle; torn phase
-states still refuse. This is source work: early-origin binding, complete
-lifecycle/property seals and admitted full-path causal qualification remain
-unfinished. Existing origins continue refusing the new
-Link family. No image route is enabled and no host or device was updated.
+The same 239 local capture/policy/encoding/accounting controls pass on current
+and minimum Python with unchanged source and identical case sets. They are not
+full native traversal, runtime or device qualification. The actual all-path test
+still times out at its unchanged 60-second deadline. A private measured run
+completed the before-hop and target with44/44 typed native observations, retired
+the first link-result capsule with GC disabled, and restored reserved close
+capacity. This subset does not establish complete snapshots/rechecks or startup.
 
-The previous 202-case source checkpoint remains historical evidence. The new
-snapshot composition adds historical phase, raw-free schema, fixed-dispatch and
-bootstrap-refusal controls. The same 227 selected cases pass on Python 3.14.9 and 3.11.15 with identical
-source footprints/case sets and verified logs/XML: 223 local controls, three
-actual original prepared-open/close cases, and one legacy Directory normal case.
-These checks do not qualify the admitted full Link driver, snapshots, runtime or
-phone display.
+Profiling recorded8,360 engine audits by the second completed path, plus repeated
+parent/runtime checks. Pure per-invocation namespace deduplication retains all
+original checks and improves a local benchmark, but does not resolve the full
+run. Next is a reviewed fusion of redundant audits while retaining complete
+fresh parent/actor/custody checks after actual callback boundaries. Deadlines
+and security gates are not relaxed. Earlier selected legacy-native passes are
+historical evidence, not a qualification transfer to this new entry composition.
 
-The actual-startup acceptance baseline remains deliberately red: current Python
-observed 129 untyped metadata calls, two untyped link reads and retained raw link
-bytes on the legacy caller. Minimum-Python observer timing remains unqualified.
-Local packet/accounting checks and isolated original open/close tests cannot
-substitute for the complete path, runtime or physical image acceptance.
-See [remaining work](specs/046-bot-presentation-integration/EXECUTABLE_LINK_NATIVE_LIFECYCLE.md).
+No image service is registered, no host/device/permission/provider/model/job or
+release changed, and desktop character/local chat images remain unfinished.
+See [contract and remaining work](specs/046-bot-presentation-integration/EXECUTABLE_LINK_NATIVE_LIFECYCLE.md).
 
 # November 8: shared original file lineage under source qualification
 

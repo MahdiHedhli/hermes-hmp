@@ -31,6 +31,46 @@ The earlier passing encoding/Scope suites do not satisfy these native tests.
 Package/entry enumeration and factory/service admission are separate unfinished
 boundaries. `PresentationNativeService` is not registered with routes.
 
+## Current experimental binding — November 9, 2026
+
+The same original entry capture now carries an env5 engine packet with17 fixed
+construction types and full retained module/class/property/function-code/default/
+closure dependencies. Exact system-module/namespace/registry identities join the
+engine to the parent, including both actual Scope publication primitive seals.
+Capture preholds originals before its first project helper, does not delegate to
+pin helpers or perform initialization imports, invokes only its authenticated
+held checker, and repeats the pure original-data checks afterward. Keyword-dict
+subclasses and foreign module aliases refuse before their protocols execute.
+
+Sixteen new local capture controls cover these boundaries, late checker-return
+export/code/property/closure/global-key changes, a self-consistent false system
+root, and the native record allocator. Actual execution exposed a real bug: the
+retained dataclass initializer was initially passed its class as self. The repair
+allocates the original instance first, retains it across init and reseals; a
+native assertion requires class authority to remain untouched.
+
+The same239 selected local cases pass on Python3.14.9 and3.11.15. They do not
+qualify the admitted whole path. The actual full contract remains FAILED at its
+unchanged60second deadline. A diagnostic run completed the before hop and target:
+44/44 native metadata/link observations typed, first raw capsule dead with GC
+disabled, work417→487 and reserved capacity restored to0. It recorded8,360 engine
+audits,5,022 runtime checks and2,862 owner guards by the second path return; the
+after phase began at52.6seconds in that run. No full-path finish or later phase
+pass is inferred from this subset.
+
+Within a fresh pure audit, namespace key scans are deduplicated by held exact-dict
+identity; every namespace entry, class/base/property, function code/default/kw/
+closure and fixed role/constructor/dispatch predicate remains. No project pin or
+require helper is invoked by that engine audit. Python tracing/monitoring can
+still intervene, and no fact is reused across separate calls or observations.
+A local timing improvement is not proof that this is the only bottleneck.
+
+Next is LP3-COUPLED-AUDIT-FUSION, with fresh complete mutable-parent/native-actor/
+resource/custody/budget checks after actual callback boundaries and causal
+coverage. Whole native/runtime/service/device acceptance remains open. No
+service, host, device or release was enabled. Older env4/legacy passing receipts
+below are historical; they are not transferred to this changed composition.
+
 ## Fixed traversal
 
 The original retained runtime source owns the exact `ExecutableLinkPlan`, its

@@ -1,4 +1,4 @@
-"""Unwired original metadata intent/result preparation; no syscall dispatcher."""
+"""Closed shared metadata/link operation lifecycle; no standalone work allowance."""
 from __future__ import annotations
 
 import sys
@@ -649,7 +649,7 @@ def _closed_link_engine_origin(owner, resource):
              and tuple.__getitem__(blueprint, 3) is lineage
              and tuple.__getitem__(blueprint, 4) is parent)
     origin = environment[4]
-    _require(type(origin) is tuple and len(origin) == 4
+    _require(type(origin) is tuple and len(origin) == 5
              and type(origin[0]) is ModuleType and type(origin[2]) is tuple
              and sys.modules.get('hmp_plugin.presentation_native_link') is origin[0])
     rows = tuple(row for row in origin[2]

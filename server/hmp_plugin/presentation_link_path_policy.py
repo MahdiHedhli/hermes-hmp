@@ -1,10 +1,9 @@
 """Closed executable-link ordering DATA, never native admission or a receipt.
 
-Not connected to the native caller. The future driver must independently retain
-original plans/callees/descriptors, debit actual work, consume the real result,
-retire raw data and hold literal ACK/finish returns across reserved cleanup.
-The plan must already be the independently validated original runtime plan;
-these consistency checks do not replace its path allowlist/lexical resolution.
+The experimental native entry uses this policy only through its held early
+engine. Original plans, actual producer returns, byte counts and literal ACKs
+remain distinct from these descriptors. Full path/runtime/device qualification
+is incomplete; no policy constructor or matching DATA permits image delivery.
 """
 from __future__ import annotations
 

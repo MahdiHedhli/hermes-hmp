@@ -9,6 +9,16 @@
 
 ## Executable leaf-link integration
 
+- [ ] **LP3-COUPLED-AUDIT-FUSION** Resolve the measured full-path60second timeout
+      after actual early binding. Before-hop/target44/44typed observations and
+      first raw-capsule retirement are subset evidence only. Retain all original
+      dependency/parent/actor/custody/operation/byte/close checks, performing fresh
+      complete audits after real callback boundaries; no reusable audit grant,
+      relaxed deadline, fake native receipt or lost-result retry. Finish actual
+      all-phase/constructor/return-loss/partial-store/finalizer causals and broad
+      startup checks before installation or image serving.
+
+
 - [ ] **LP3-NATIVE-ACCEPTANCE** Complete the coupled typed metadata/readlink path,
       raw retirement and literal finish/snapshot/recheck publication. The new
       actual-startup contract test is deliberately red on current Python;

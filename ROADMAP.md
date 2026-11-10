@@ -1,23 +1,24 @@
-## Native-link integration — November 9, 2026
+## Early native binding and measured full-path failure — November 9, 2026
 
-The distinct op5 family and fixed-order traversal/finish driver are written as a
-disabled draft. Original pre-C open allocation is held independently by the
-caller across lost returns and reserved reverse cleanup. All path metadata and
-link bytes use the same shared operation kernel in the draft; no parallel
-producer or permissive absence fallback was added.
+The experimental entry binds the original17-type engine, property/code/default/
+closure dependencies and system-module roots before observation callbacks, with
+both actual Scope publication seals retaining that same capture. The raw-free
+snapshot/fact/recheck composition is written; actual admitted execution now
+reaches typed metadata/readlink and reserved cleanup. This is not image serving.
 
-The draft also retains actual finishes through raw-free snapshots/fact/recheck.
-Historical span checks preserve earlier ACK/custody/close evidence during later
-healthy work; phase labels alone cannot satisfy result/inflight consistency.
-Next: complete original early core/property/lifecycle binding, then qualify the
-admitted full path and failure matrix before connecting it. Existing env4 admission remains
-closed. Packet/accounting and isolated original-open checks are narrower than
-that acceptance. The current actual-startup legacy baseline is deliberately red;
-minimum-Python instrumentation timeout remains unqualified.
+The full native contract still times out at the unchanged60-second deadline.
+Partial progress proves before-hop/target44typed observations and first-capsule
+retirement, not all phases, native startup, installation or device readiness.
+Current/minimum local capture controls pass239cases each; old legacy-native passes
+do not qualify this composition. No production activation follows.
 
-Host/runtime, authenticated service, broker and physical mobile image delivery
-remain required. No installed feature or upstream blocker is established by this
-draft. See [contract](specs/046-bot-presentation-integration/EXECUTABLE_LINK_NATIVE_LIFECYCLE.md).
+Next: **LP3-COUPLED-AUDIT-FUSION**: reduce measured duplicate full audits only
+across segments without project/weak/constructor dispatch; preserve a fresh full
+mutable-parent/actor/resource/custody/byte/budget audit after each real observation
+boundary. Retain code/global-key/closure/late-callback, partial-store and cleanup
+causals. Then complete all-path native and broader startup/runtime/service/broker/
+physical/release qualification. Do not extend deadlines, cache reusable grants,
+recreate the existing driver, or claim an upstream blocker.
 
 ## Integrated startup verification — November 8, 2026
 

@@ -88,38 +88,7 @@ def packet():
     """Local packet validation only; never an entry/Scope or native allowance."""
     from hmp_startup.link_factory_origin import _pin_function, _pin_type
 
-    names = ('_engine_origin_tail', '_execution_mirrors', '_opened_chain_tail',
-             '_lifetime_tail', '_resource_tail', '_prepare_shared_consumer',
-             '_latch_shared_consumer', '_make_shared_commit', '_commit_shared_tail',
-             '_publish_shared_ack', '_acked_shared_history', '_produce_shared',
-             '_consume_shared', '_ack_shared', '_attached_shared', '_retired_shared',
-             '_resource_bindings', '_byte_record_tail', '_make_shared_bytes_commit', '_commit_shared_bytes_tail',
-             '_publish_shared_bytes_ack', '_acked_shared_bytes_history',
-             '_effect_pin', '_new_execution', '_append_action', '_finish_mirrors',
-             '_finish_path', '_drive_native_path', '_open_shared', '_close_known_shared',
-             '_prepare_open_shared', '_path_history_mirrors', '_history_phase_mirrors', '_finish_history',
-             '_snapshot_history_mirrors', '_snapshot', '_make_fact', '_recheck')
-    functions = tuple(_pin_function(name, vars(link)[name], vars(link)[name].__globals__)
-                      for name in names)
-    kernel_functions = tuple(_pin_function(name, function, function.__globals__)
-                             for name, function in sorted(vars(kernel).items())
-                             if name.startswith('_') and type(function) is FunctionType)
-    types = tuple(_pin_type(kind) for kind in (
-        link._LinkExecution, kernel._LinkMetadataConsumer,
-        link._LinkMetadataCommit, _NativeLinkMetadataResource,
-        kernel._LinkBytesConsumer, link._LinkBytesCommit, link._NativeLinkBytesResource,
-        kernel._LinkBytesOperation, kernel._LinkBytesResult, kernel._LinkBytesReturn))
-    kind = link._LinkRead
-    namespace = vars(kind)
-    constructor = namespace['__init__']
-    record_pin = (kind, None, tuple(namespace.items()), constructor, constructor.__code__,
-                  constructor.__globals__, constructor.__defaults__, kind.__bases__,
-                  tuple((name, namespace.get(name)) for name in (
-                      '__getattribute__', '__getattr__', '__setattr__', '__delattr__')))
-    types = (*types, record_pin, _pin_type(link._LinkAction), _pin_type(link._LinkPathFinish),
-             _pin_type(link._NativeReadlinkObservation), _pin_type(link._LinkSnapshot),
-             _pin_type(link._LinkTargetObservation), _pin_type(link._LinkRecheck))
-    return sys.modules[link.__name__], types, functions, kernel_functions
+    return link._capture_engine()
 
 
 def test_local_packet_validator_returns_the_actual_packet_without_admitting_work():
@@ -257,7 +226,7 @@ def test_first_pin_pairs_are_fenced_before_any_equality_protocol():
     calls = []
     rows = tuple((row[:6] + (Foreign(calls),)) if row[0] == '_link_function_pin' else row
                  for row in original[3])
-    malformed = (*original[:3], rows)
+    malformed = (*original[:3], rows, *original[4:])
     with pytest.raises(ArtifactObservationError):
         link._engine_origin_tail(malformed)
     assert calls == []

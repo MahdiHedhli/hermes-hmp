@@ -16,13 +16,21 @@ def test_actual_native_link_traversal_contract(tmp_path, monkeypatch):
     assert script.count(marker) == 1
     script = script[:script.index(marker)]
     script += r'''
-import gc,weakref
+import gc,weakref,time
 retained=EntryFileSnapshotOwner.retain_runtime_link_files(entry,recipe,plugin)
 lineage=entry._scope.native_files
 ledger=lineage.ledger
 operations=lineage.native.operations
-path_code=a.StartupArtifactOwner._link_path.__code__
-observed=[];capsules=[]
+from hmp_plugin import presentation_native_link as native_link
+from hmp_startup import link_factory_origin as link_origin
+path_codes=(a.StartupArtifactOwner._link_path.__code__,native_link._drive_native_path.__code__)
+observed=[];capsules=[];refusals=[];progress=[]
+started=time.monotonic()
+tracked={native_link._engine_origin_tail.__code__:'engine_origin',
+         a._runtime_current.__code__:'runtime_current',
+         a.StartupArtifactOwner._guard.__code__:'owner_guard',
+         link_origin.current.__code__:'parent_origin'}
+guard_calls={name:0 for name in tracked.values()}
 
 def observe(frame,event,callee):
     if event!='c_call':return
@@ -35,7 +43,7 @@ def observe(frame,event,callee):
     parent=frame
     for _ in range(64):
         if parent is None:return
-        if parent.f_code is path_code:break
+        if parent.f_code in path_codes:break
         parent=parent.f_back
     else:return
     observed.append((opcode,ledger.inflight[0],ledger.counts[0],ledger.phase.current[0]))
@@ -68,7 +76,7 @@ if monitor is None:
             floor_path.append('returned')
         return floor_path_return
     def floor_trace(frame,event,value):
-        if event=='call' and frame.f_code is path_code and not floor_path:
+        if event=='call' and frame.f_code in path_codes and not floor_path:
             floor_path.append('entered')
             frame.f_trace_lines=False
             sys.setprofile(observe)
@@ -82,6 +90,40 @@ else:
         assert frame.f_code is code
         observe(frame,'c_call',callee)
     monitor.register_callback(5,monitor.events.CALL,local_call)
+    def refusal(code,offset,error):
+        if (type(error) is a.ArtifactObservationError or code.co_name=='_require'
+                or type(error) is RuntimeError) and len(refusals)<8:
+            current=sys._getframe(1)
+            stack=[]
+            for _ in range(16):
+                if current is None:break
+                stack.append((current.f_code.co_name,current.f_lineno))
+                current=current.f_back
+            refusals.append(stack)
+    monitor.register_callback(5,monitor.events.RAISE,refusal)
+    monitor.set_events(5,monitor.events.RAISE)
+    def path_progress(code,offset,*ignored):
+        if code in tracked:
+            guard_calls[tracked[code]]+=1
+            return
+        progress.append(dict(seconds=time.monotonic()-started,
+                             path_event=len(progress),observed=len(observed),
+                             typed=sum(type(row[1]) in (
+                                 presentation_native_metadata._MetadataOperation,
+                                 presentation_native_metadata._LinkBytesOperation)
+                                 and row[1].operation==row[0] for row in observed),
+                             dead_link_capsules=sum(reference() is None
+                                 for _,reference,_,_ in capsules),
+                             guard_calls=dict(guard_calls),
+                             work_used=ledger.counts[0],reserved=ledger.counts[1]))
+        destination=base/'native-link-private-progress.json'
+        destination.write_text(json.dumps(progress))
+        destination.chmod(0o600)
+    monitor.register_callback(5,monitor.events.PY_START,path_progress)
+    monitor.register_callback(5,monitor.events.PY_RETURN,path_progress)
+    monitor.set_local_events(5,native_link._drive_native_path.__code__,
+                            monitor.events.PY_START|monitor.events.PY_RETURN)
+    for code in tracked:monitor.set_local_events(5,code,monitor.events.PY_START)
     for code in codes:monitor.set_local_events(5,code,monitor.events.CALL)
 try:
     checked=EntryFileSnapshotOwner.complete(retained)
@@ -92,7 +134,17 @@ finally:
     else:
         for code in codes:monitor.set_local_events(5,code,0)
         monitor.register_callback(5,monitor.events.CALL,None)
+        monitor.set_events(5,0)
+        monitor.register_callback(5,monitor.events.RAISE,None)
+        monitor.set_local_events(5,native_link._drive_native_path.__code__,0)
+        for code in tracked:monitor.set_local_events(5,code,0)
+        monitor.register_callback(5,monitor.events.PY_START,None)
+        monitor.register_callback(5,monitor.events.PY_RETURN,None)
         monitor.free_tool_id(5)
+    if refusals:
+        diagnostic=base/'native-link-private-refusals.json'
+        diagnostic.write_text(json.dumps(refusals))
+        diagnostic.chmod(0o600)
 
 # Completion is asserted OUTSIDE any refusal handler: preflight rejection or
 # a swallowed callback exception must never make an admission test green.
@@ -102,6 +154,7 @@ runtime=owner._origin.runtime
 assert owner._ready and not owner._failed and not owner._unknown
 assert owner._origin.native_files is lineage
 assert owner._origin.native_link_blueprint is not None
+assert not any(name in vars(a._LinkRead) for name in ('hop','phase','index','before'))
 assert all(a._descriptor_closed_in_scope(row,owner._origin) for row in owner._origin.records)
 metadata=[row for row in observed if row[0] in (3,4)]
 links=[row for row in observed if row[0]==5]
