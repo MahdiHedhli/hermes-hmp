@@ -291,10 +291,14 @@ Original value identity, cardinality and required live-key checks remain. A
 changed dictionary iterator refuses without retry. The same body is synchronized
 at the parent and both final publication checks; no audit or permission is removed.
 
-All 440 selected regression cases pass on Python 3.14.9. Two targeted automatic-GC
-cases pass on Python 3.11.15; its broader matrix is pending. The component case
-proves mutation followed by exact refusal with zero foreign comparisons; the
-parent case exercises an earlier prefix guard. These are bounded observations,
-not whole-process GC atomicity or a new full native-startup pass. Other mutation
-windows remain outside this fix. Startup, character/media, service and physical
-qualification remain open; no new device build was installed.
+The same 440 selected cases pass on Python 3.14.9 and 3.11.15, with identical
+production hashes and case sets. The component GC case proves mutation followed
+by exact refusal with zero foreign comparisons; the parent case exercises an
+earlier prefix guard. These are bounded observations, not whole-process GC
+atomicity. Other mutation windows remain outside this fix.
+
+Fresh full native startup on this source still fails its original 60-second
+deadline: last checkpoint event4 at49.94seconds, work963/reserved0. This is a
+failed gate, not a measured speed improvement. Backend character/media, service
+and physical qualification remain open. The independent iPad app update above
+does not deploy or qualify this HMP backend.
