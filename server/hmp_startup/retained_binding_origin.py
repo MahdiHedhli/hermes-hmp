@@ -141,6 +141,13 @@ def current(packet):
           and type(classes) is tuple and len(classes) == len(_CLASSES)
           and type(functions) is tuple and len(functions) == len(_FUNCTIONS)) is not True:
         raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+    builtin_module = registry.get('builtins')
+    if type(builtin_module) is not ModuleType:
+        raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+    builtin_namespace = vars(builtin_module)
+    if (type(builtin_namespace) is dict
+          and all(type(key) is str for key in builtin_namespace)) is not True:
+        raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
     for row, name, live_keys in zip(modules, _MODULES, _LIVE_GLOBALS, strict=True):
         if (type(row) is tuple and len(row) == 3) is not True:
             raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
@@ -150,6 +157,8 @@ def current(packet):
               and all(type(key) is str for key in namespace)
               and registry.get(name) is module and vars(module) is namespace
               and type(namespace.get('__name__')) is str and namespace['__name__'] == name
+              and (namespace.get('__builtins__') is builtin_namespace
+                   or namespace.get('__builtins__') is builtin_module)
               and type(pairs) is tuple
               and all(key in namespace for key in live_keys)
               and len(namespace) == len(pairs) + len(live_keys)) is not True:
@@ -189,6 +198,7 @@ def current(packet):
         function, code, namespace, defaults, kw, pairs, closure, cells = row
         if (type(namespace) is dict and namespace is modules[index][1]
               and type(function) is FunctionType and function.__globals__ is namespace
+              and function.__builtins__ is builtin_namespace
               and function.__code__ is code and function.__defaults__ is defaults
               and (defaults is None or type(defaults) is tuple)
               and function.__kwdefaults__ is kw and function.__closure__ is closure

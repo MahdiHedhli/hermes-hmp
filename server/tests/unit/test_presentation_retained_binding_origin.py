@@ -381,3 +381,49 @@ def test_shared_retained_data_class_dispatch_cannot_change(monkeypatch, module, 
     with pytest.raises(origin.RetainedBindingOriginError):
         origin.current(captured)
     assert calls == []
+
+
+@pytest.mark.parametrize('owner,name', ((None, '_native_file_allocation_original'),
+                                       ('ArtifactObservationError', '__init__')))
+def test_identical_code_cannot_hide_a_different_execution_builtins_dictionary(
+        monkeypatch, owner, name):
+    import builtins
+    from types import FunctionType
+
+    selected = artifacts if owner is None else getattr(artifacts, owner)
+    original = getattr(selected, name)
+    namespace = original.__globals__
+    canonical = namespace['__builtins__']
+    calls = []
+
+    def foreign(*args, **kwargs):
+        calls.append(True)
+        raise AssertionError('hidden execution builtin dispatched')
+
+    hidden = dict(vars(builtins))
+    hidden['super'] = foreign
+    # Function.__builtins__ is fixed at creation, independently of the restored
+    # globals entry. Code/globals/defaults/closure remain otherwise identical.
+    namespace['__builtins__'] = hidden
+    try:
+        clone = FunctionType(original.__code__, namespace, original.__name__,
+                             original.__defaults__, original.__closure__)
+    finally:
+        namespace['__builtins__'] = canonical
+    clone.__kwdefaults__ = original.__kwdefaults__
+    assert clone.__globals__ is namespace and clone.__code__ is original.__code__
+    assert clone.__builtins__ is hidden and namespace['__builtins__'] is canonical
+    monkeypatch.setattr(selected, name, clone)
+    with pytest.raises(origin.RetainedBindingOriginError):
+        origin.capture()
+    assert calls == []
+
+
+@pytest.mark.parametrize('module', (package, artifacts))
+def test_canonical_builtin_module_globals_keep_actual_function_dictionary(monkeypatch, module):
+    import builtins
+
+    monkeypatch.setattr(module, '__builtins__', builtins)
+    captured = origin.capture()
+    assert origin.current(captured) is captured
+    assert all(row[0].__builtins__ is vars(builtins) for row in captured[5])

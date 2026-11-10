@@ -1,3 +1,17 @@
+## November 10: selected helper execution builtins
+
+Selected functions now require the actual canonical Function.__builtins__ dict,
+not merely a canonical-looking globals entry. Globals may use that dict or the
+actual canonical module. Original primitive bindings append8executed refs to12
+inspection refs;20names/order/values rejoin in4parent+2Scope prefixes, withfirst12
+indices stable. Hidden same-code/globals/default/closure clone controls and8global
+replacement controls failed before and nowrefuse withoutdispatch. Same258 cases
+pass on current/minimumPython (175local,52actual faults,1early-entry,30legacy),
+includingcanonical-module positives andpostchecker mutations.28native refusal
+witnesses and3inline DATA copies verified;closedsurface passes. No audit removed,
+module import, permission orhost/device change. Lateimport/entry/remaining
+builtin/exception/dispatch closure, fullnative deadline andimages remain open.
+
 ## November 10: shared descriptor/expectation original code binding
 
 The selected early helper record now covers5loaded modules/23classes/22functions.

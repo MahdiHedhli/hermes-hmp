@@ -24,6 +24,14 @@ Same238 selected cases pass on both runtimes;48actual publication faults preserv
 zero foreign calls/work/reservation/registration/retainer success. Entry/approval/
 builtin/remaining dispatch closure and complete normal/native deadline remain open.
 
+Selected execution dictionaries now join the canonical actual builtin dict,
+including the hidden-function-dictionary case that globals inspection misses.
+Twenty original primitive references (first12unchanged,8selected-body refs appended)
+are checked in all parent and Scope prefix copies. Same258 selected cases pass on
+both runtimes, including52actual publication faults and postchecker replacements.
+The late importer and remaining exception/entry/approval machinery are still
+prerequisites; this result does not permit audit consolidation by itself.
+
 The actual EntryFileSnapshotOwner._pure_lineage calls the recipe retained-binding
 validator directly and then the package retained-binding validator. For an exact
 recipe-derived package, the latter freshly invokes that same recipe validator and

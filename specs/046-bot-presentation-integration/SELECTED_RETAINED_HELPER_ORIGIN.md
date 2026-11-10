@@ -21,6 +21,22 @@ same defining objects. It reads no host profile, configuration, file or provider
 data, imports no new target module and executes none of those selected helpers.
 Namespace references are internal inspection DATA, never a public response.
 
+Selected functions now also require their actual readonly `Function.__builtins__`
+pointer to be the canonical dictionary. A globals entry alone cannot prove this:
+an identical-code/globals/defaults/closure clone can retain a different dictionary
+from creation after the globals entry is restored. Module globals may use the
+canonical dictionary or the actual canonical module at capture; original pair
+snapshots still reject changing that representation later.
+
+The actual capsule's primitive vector is now20: original12inspection references
+plus bool/int/list/bytes/bytearray/sum/ord/super held as native defaults. All four
+parent and two Scope prefix copies check the same20names/order/values; Scope uses
+the actual original capture-default pairs. First12positions, record5/23/22 and
+packet/env/engine formats stay unchanged. Same258 selected cases pass on both
+runtimes, including52actual publication faults/28native refusal witnesses,
+canonical-module positives, hidden dictionaries and postchecker replacements.
+Late import machinery and other builtin/exception closure remain separate.
+
 Activation's `_ENTRY_OWNER` and `_ENTRY_CELL` values legitimately change during
 allocation. The fixed original `_LIVE_GLOBALS` table excludes only those values:
 their keys must remain present; exact static-pair uniqueness, total namespace
@@ -76,7 +92,8 @@ the initial test cleanup ordering error is fixed, not a production incident.
 
 - RBH-02: initial early-parent integration implemented. The parent authenticates
   the component module/namespace, capture/current code/defaults, empty native-error
-  subclass and twelve builtin references before dispatch. Actual selected state
+  subclass and initially twelve builtin references before dispatch. The current
+  vector has twenty as described above. Actual selected state
   is resealed inline after the final engine callback and at both original Scope
   publication boundaries. Engine6 stays unchanged; its parent environment is7.
   The original RBH-02 composition passed120 selected cases on both runtimes:105local,14actual

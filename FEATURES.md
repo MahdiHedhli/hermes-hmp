@@ -1,46 +1,45 @@
-## November 10 — descriptor helpers bound to startup; image delivery remains open
+## November 10 — helper execution builtins bound; image delivery remains open
 
-The original early helper record now includes the already-loaded artifact module:
-the closed-descriptor → native-closed → native-opened → original-allocation chain,
-expectation/require helpers and artifact refusal-constructor metadata. Required
-field-access classes and missing recipe/package data classes are retained too.
-The record covers five modules, twenty-three classes and twenty-two function rows.
-Imported descriptor/expectation/type aliases must join their defining objects;
-activation's two existing live values remain the only static-value exclusions.
-No new target import, host setting, permission or availability gate was added.
+The selected helper checks now distinguish a function's actual execution builtins
+from its globals entry. All selected functions must use the canonical builtins
+dictionary; module globals may retain either that dictionary or the actual canonical
+module. This closes a same-code/globals/defaults/closure clone that could otherwise
+hide a different execution dictionary behind a restored globals entry.
 
-A before/after causal control demonstrates the ordering requirement: code changed
-after the earlier helper capture could be adopted by the later real engine
-capture on the preceding source. Both controls failed before the extension.
-They now require the earlier record to hold original code, the later engine to
-capture the changed code, and the actual parent to refuse without executing it.
-The parent final seal and both Scope seals inline the same extended predicates;
-the repaired native private-refusal path remains in use. No recipe/package audit
-was removed and no mutable permission/currentness result was cached.
+The original capsule now holds twenty primitive references: the existing twelve
+inspection references plus bool/int/list/bytes/bytearray/sum/ord/super used by the
+selected helper bodies. Native defaults bind these originals before callbacks;
+all parent and Scope prefix checks rejoin their names, values and order. The first
+twelve positions, five-module/twenty-three-class/twenty-two-function record, packet,
+parent and engine formats remain unchanged. All three final DATA seals use the same
+function-builtin checks and the existing native private-refusal path. No audit or
+validation condition was removed, and no mutable permission result was cached.
 
-The same **238 selected tests pass on Python 3.14.9 and 3.11.15**, with identical
-server source maps and case sets: 159 local controls, forty-eight actual publication
-faults, one early-entry control and thirty legacy artifact/constructor cases. All
-forty-eight fault witnesses retain zero foreign calls, new native work, reservation
-change, later registration or successful retainer return. Twenty-four artifact
-witnesses also verify native error/owner/fixed-message/failure/context state.
-The closed-plugin-surface check passes. Independent source/test review found no
-blocker within this extension; it did not run targets or independently audit XML.
-The offline dependency map now lists 33 functions across seven modules; its four
-causal checks pass on each runtime, but it remains source-only review evidence.
+Ten negative controls failed on the preceding source: hidden execution dictionaries
+were accepted, and replacing any of the eight execution references did not refuse.
+Those controls now pass without consuming a replacement. The same **258 selected
+tests pass on Python 3.14.9 and 3.11.15**, with identical server source maps and case
+sets: 175 local controls, fifty-two actual publication faults, one early-entry
+control and thirty legacy artifact/constructor cases. Positive canonical-module
+cases and post-component/engine-return replacements are included. All fifty-two
+fault witnesses retain zero foreign calls, new native work, reservation change,
+later registration or successful retainer return; twenty-eight also verify native
+refusal type/owner/message/failure/context state. Closed-plugin-surface passes.
+Independent source/test review found no blocker in this bounded extension; the
+reviewer did not run target code or independently audit reported test receipts.
 
-This is still partial transitive provenance. Entry-defined native types/ledger/
-IO references, the late approval import, mutable approval/entry state, builtin
-execution references and remaining dispatch/refusal paths need original binding
-before same-call recipe audit consolidation. No complete normal/native/service/
-route or phone image pass is claimed. The previous full native run exceeded its
-unchanged 60-second deadline on preceding source; it does not qualify this new
-composition. Desktop character display, host-local chat images and physical/
-release qualification remain open. No upstream-only image blocker is demonstrated.
+This does not close the late import machinery, entry-defined native type/ledger/IO
+references, mutable approval/entry state or remaining builtin/exception/dispatch
+paths. They still precede same-call recipe audit consolidation and complete normal/
+native startup qualification. The previous full native run exceeded its unchanged
+60-second deadline on preceding source, not this composition. No complete startup,
+service/route, desktop character, host-local image, physical-device or release pass
+is claimed. No upstream-only image blocker has been demonstrated.
 
-No host/device/provider/model/job/install/release changes occurred. LLY520's
-authorized update still needs an established connection. Android/iOS 2026110901
-were not newly installed or device-qualified by this work.
+No new target module import, host setting, permission, availability gate, host/device/
+provider/model/job/install/release change occurred. LLY520's authorized update still
+needs an established connection. Android/iOS 2026110901 were not newly installed or
+device-qualified by this work.
 
 # November 9: duplicate runtime checks removed; images still unqualified
 

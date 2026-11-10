@@ -241,6 +241,69 @@ def test_artifact_code_held_before_later_engine_capture_cannot_be_renominated(mo
     assert foreign_calls == [] and origins._CAPTURE_STARTED is True
 
 
+@pytest.mark.parametrize('name', ('bool', 'int', 'list', 'bytes', 'bytearray', 'sum', 'ord', 'super'))
+def test_original_execution_builtin_value_refuses_replacement_before_dispatch(captured, name):
+    import builtins
+
+    calls = []
+    original = getattr(builtins, name)
+    assign = setattr
+    refused = False
+
+    def foreign(*args, **kwargs):
+        calls.append(True)
+        raise AssertionError('changed execution builtin dispatched')
+
+    # Restore even when validation fails; pytest/stdlib itself needs these names.
+    assign(builtins, name, foreign)
+    try:
+        try:
+            origins.current(captured)
+        except RuntimeError:
+            refused = True
+    finally:
+        assign(builtins, name, original)
+    assert refused and calls == []
+
+
+@pytest.mark.parametrize('boundary', ('component', 'engine'))
+@pytest.mark.parametrize('name', ('sum', 'ord'))
+def test_execution_builtin_is_rejoined_after_checker_return(captured, boundary, name):
+    import builtins
+
+    helper = captured[0][6]
+    checker_code = (helper[3][1][2] if boundary == 'component' else
+                    next(row[2] for row in captured[0][4][2] if row[0] == '_engine_origin_tail'))
+    parent_code = origins.current.__code__
+    original = getattr(builtins, name)
+    assign = setattr
+    observed, calls = [], []
+    refused = False
+
+    def foreign(*args, **kwargs):
+        calls.append(True)
+        raise AssertionError('late execution builtin dispatched')
+
+    def observe(frame, event, value):
+        if (event == 'return' and frame.f_code is checker_code
+                and frame.f_back.f_code is parent_code and not observed):
+            assign(builtins, name, foreign)
+            observed.append(True)
+
+    previous = sys.getprofile()
+    assert previous is None
+    sys.setprofile(observe)
+    try:
+        try:
+            origins.current(captured)
+        except RuntimeError:
+            refused = True
+    finally:
+        sys.setprofile(previous)
+        assign(builtins, name, original)
+    assert observed == [True] and refused and calls == []
+
+
 @pytest.mark.parametrize('boundary', ('component', 'engine'))
 @pytest.mark.parametrize('fault', ('export', 'code'))
 def test_selected_helper_state_rejoined_after_final_checker_return(

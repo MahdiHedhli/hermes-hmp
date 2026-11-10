@@ -9,7 +9,7 @@ from .test_presentation_gateway_approval import operator_composed_script
 
 
 @pytest.mark.parametrize('publication', ('first', 'second'))
-@pytest.mark.parametrize('export', ('map', 'is_not', 'layout_graft', 'helper_graft', 'helper_checker', 'helper_projection_schema', 'selection_code', 'selection_error_code', 'activation_code', 'activation_error_code', 'artifact_error_code', 'artifact_error_new', 'artifact_error_getattribute', 'artifact_error_setattr', 'artifact_error_owner_property', 'artifact_owner_getattribute', 'artifact_owner_setattr', 'artifact_owner_dict_subclass', 'artifact_descriptor_code', 'artifact_allocation_code', 'artifact_expected_code', 'artifact_allocation_dispatch', 'entry_getattribute', 'entry_subclass_dict'))
+@pytest.mark.parametrize('export', ('map', 'is_not', 'layout_graft', 'helper_graft', 'helper_checker', 'helper_projection_schema', 'selection_code', 'selection_error_code', 'activation_code', 'activation_error_code', 'artifact_error_code', 'artifact_error_new', 'artifact_error_getattribute', 'artifact_error_setattr', 'artifact_error_owner_property', 'artifact_owner_getattribute', 'artifact_owner_setattr', 'artifact_owner_dict_subclass', 'artifact_descriptor_code', 'artifact_allocation_code', 'artifact_expected_code', 'artifact_allocation_dispatch', 'execution_sum', 'execution_ord', 'entry_getattribute', 'entry_subclass_dict'))
 def test_scope_publication_rejects_changed_primitive_or_layout_root(
         tmp_path, monkeypatch, request, publication, export):
     tree = ast.parse((base.SERVER / 'hmp_plugin/presentation_startup_artifacts.py').read_text())
@@ -45,7 +45,7 @@ assign=setattr
 observed=[];mutated=[];foreign_calls=[];held=[];registrations=[];successful_returns=[]
 hook_restore=[];class_restore=[];helper_restore=[];missing=object()
 helper_code_restore=[];late_helper_code=None
-member_restore=[];refusal_records=[]
+member_restore=[];refusal_records=[];builtin_restore=[]
 artifact_error_kind=a.ArtifactObservationError
 artifact_owner_kind=a.StartupArtifactOwner
 native_error_dict=BaseException.__dict__['__dict__'].__get__
@@ -67,7 +67,8 @@ def observe(frame,event,value):
             registrations.append(True)
         if event=='return' and frame.f_code is retain_code and value is held[0][0]:
             successful_returns.append(True)
-        if event=='return' and frame.f_code is retain_code and export.startswith('artifact_'):
+        if (event=='return' and frame.f_code is retain_code
+                and export.startswith(('artifact_','execution_'))):
             error=frame.f_locals.get('refusal')
             assert error is not None
             values=native_error_dict(error,artifact_error_kind)
@@ -113,6 +114,12 @@ def observe(frame,event,value):
             helper_restore.append((component,'_LIVE_GLOBALS',previous))
             assign(component,'_LIVE_GLOBALS',((),(),(),()))
             assert component._LIVE_GLOBALS is not previous
+        elif export in ('execution_sum','execution_ord'):
+            name=export.split('_',1)[1]
+            builtin_restore.append((name,getattr(builtins,name)))
+            late_helper_code=foreign.__code__
+            assign(builtins,name,foreign)
+            assert vars(builtins)[name] is foreign
         elif export=='artifact_owner_dict_subclass':
             class ChangedOwner(artifact_owner_kind):
                 __slots__=()
@@ -227,6 +234,7 @@ except EntryFilesError as caught:
     failed=True
 finally:
     sys.setprofile(prior);sys.settrace(None)
+    for name,previous in builtin_restore:assign(builtins,name,previous)
     for component,name,previous in helper_restore:assign(component,name,previous)
     for function,previous in helper_code_restore:assign(function,'__code__',previous)
     for selected,name,previous in member_restore:
@@ -244,7 +252,7 @@ finally:
         monitor.free_tool_id(5)
 assert mutated==[True] and len(observed)==1 and failed
 assert foreign_calls==[]
-if export.startswith('artifact_'):
+if export.startswith(('artifact_','execution_')):
     assert len(refusal_records)==1 and all(refusal_records[0].values()),refusal_records
 assert registrations==[] and successful_returns==[]
 assert retained._failed and not retained._ready and retained._fact_cell is None
@@ -259,7 +267,7 @@ evidence=dict(publication=publication,export=export,mutation_completed=True,
               refused=True,foreign_calls=0,new_work=0,reserve_change=0,
               registration_calls_after_mutation=0,successful_retainer_returns=0,
               scope_published_before_refusal=publication=='second')
-if export.startswith('artifact_'):evidence['private_refusal']=refusal_records[0]
+if export.startswith(('artifact_','execution_')):evidence['private_refusal']=refusal_records[0]
 destination=base/'scope-native-primitive-refusal.json'
 destination.write_text(json.dumps(evidence,sort_keys=True));destination.chmod(0o600)
 assert sys.getprofile() is None and sys.gettrace() is None

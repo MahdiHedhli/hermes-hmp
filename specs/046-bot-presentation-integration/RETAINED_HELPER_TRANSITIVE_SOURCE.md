@@ -4,8 +4,8 @@ Status: source inventory, selection helpers, activation static projection and
 shared artifact descriptor/expectation code origins are implemented. Complete
 transitive custody and audit consolidation remain open.
 These changes add runtime integrity checks, not availability gates. The actual
-record covers five modules, twenty-three classes and twenty-two functions; same238
-selected cases pass on both runtimes, including48actual publication faults.
+record covers five modules, twenty-three classes and twenty-two functions; same258
+selected cases pass on both runtimes, including52actual publication faults.
 Source review found no blocker in the bounded extension. Later approval/import,
 mutable approval/entry state and entry-defined descriptor/dispatch/primitive closure are not
 qualified by that result. No audit has been removed or new target module imported.
@@ -98,6 +98,39 @@ review found no blocker in this bounded extension; reviewer did not run targets
 or independently hash/XML-audit test receipts. Complete entry native-type, late
 approval/import, builtin execution and remaining refusal/dispatch closure remain
 open. No retained audit was omitted or new module imported.
+
+## Selected execution builtins
+
+The module globals entry and a function's readonly execution dictionary are distinct.
+The actual selected checker now binds the canonical builtin module/dictionary from
+the held system registry, requires module globals to use that actual module or
+dictionary, and requires each selected function's actual `__builtins__` to be the
+dictionary. Hidden dictionaries cannot be nominated through an otherwise identical
+code/globals/default/closure function clone. The module-form positive cases cover
+legitimate canonical globals at capture; later representation drift still refuses
+through the existing original namespace pairs.
+
+The actual root's primitive vector appends bool/int/list/bytes/bytearray/sum/ord/super
+to the original twelve inspection references. Native capture/current defaults hold
+the originals; all four parent prefix copies and both final Scope prefixes rejoin
+the same20names/order/values. Scope derives expectations from the original held
+capture-default pairs. The original first12positions remain; no record dimensions,
+callback nomination input, module import or public capability changed.
+
+Before-extension ten controls failed: two hidden dictionaries were accepted and
+none of eight execution-reference replacements caused refusal. Current controls
+pass without consuming a replacement. Same258 cases pass on both runtimes with
+matching server maps/case sets:175local,52actual publication faults,1early-entry,
+30legacy cases. Positive canonical-module globals, component/engine-return
+replacement and both actual publication boundaries are included.28native private
+refusal witnesses and three final inline DATA copies retain their original checks.
+Closed-plugin-surface passes. Review was source/test only, not independent receipt
+audit or runtime execution by the reviewer.
+
+This covers the named selected-body references only. `__import__`, BaseException/
+other exception machinery, parent/policy functions outside this selected set and
+remaining entry/approval/dispatch closure are not certified by this result. No
+recipe/package audit was removed and no currentness/permission verdict cached.
 
 ## Source-confirmed retained path
 

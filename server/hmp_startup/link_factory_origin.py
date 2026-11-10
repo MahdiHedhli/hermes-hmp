@@ -74,7 +74,9 @@ def current(origin, *, _type=type, _vars=vars, _tuple=tuple, _len=len,
             _function=FunctionType, _module=ModuleType, _staticmethod=staticmethod,
             _any=any, _zip=zip, _builtin=BuiltinFunctionType,
             _descriptor=MethodDescriptorType, _str=str, _dict=dict,
-            _all=all, _set=set, _value_error=ValueError, _cell=CellType, _error=RuntimeError):
+            _all=all, _set=set, _value_error=ValueError, _cell=CellType,
+            _bool=bool, _int=int, _list=list, _bytes=bytes, _bytearray=bytearray,
+            _sum=sum, _ord=ord, _super=super, _error=RuntimeError):
     """Seal captured references; never nominate a current exported helper.
 
     Critical inspection primitives are actual function defaults. The independent
@@ -191,7 +193,8 @@ def current(origin, *, _type=type, _vars=vars, _tuple=tuple, _len=len,
     helper_capsule = environment[6]
     helper_system, helper_registry = environment[0], environment[2]
     helper_expected_builtins = (_type, _vars, _tuple, _len, _dict, _str, _any, _zip,
-                                _all, _set, _error, _value_error)
+                                _all, _set, _error, _value_error,
+                                _bool, _int, _list, _bytes, _bytearray, _sum, _ord, _super)
     # Authenticate the component before dispatch; the actual parent holds this DATA.
     if (_type(helper_capsule) is not _tuple or _len(helper_capsule) != 7
             or _type(helper_capsule[0]) is not _module
@@ -216,7 +219,7 @@ def current(origin, *, _type=type, _vars=vars, _tuple=tuple, _len=len,
             or _any(_type(k) is not _str for k in helper_builtin_namespace)
             or helper_namespace.get('__builtins__') is not helper_builtin_namespace
             or _type(helper_primitive_pairs) is not _tuple
-            or _len(helper_primitive_pairs) != 12):
+            or _len(helper_primitive_pairs) != 20):
         raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
     helper_seen = {}
     for helper_pair in helper_pairs:
@@ -231,7 +234,8 @@ def current(origin, *, _type=type, _vars=vars, _tuple=tuple, _len=len,
     for helper_pair, helper_name, helper_expected in _zip(
             helper_primitive_pairs,
             ('type', 'vars', 'tuple', 'len', 'dict', 'str', 'any', 'zip', 'all', 'set',
-             'RuntimeError', 'ValueError'), helper_expected_builtins, strict=True):
+             'RuntimeError', 'ValueError', 'bool', 'int', 'list', 'bytes', 'bytearray',
+             'sum', 'ord', 'super'), helper_expected_builtins, strict=True):
         if (_type(helper_pair) is not _tuple or _len(helper_pair) != 2
                 or _type(helper_pair[0]) is not _str or helper_pair[0] != helper_name
                 or helper_pair[1] is not helper_expected
@@ -327,7 +331,7 @@ def current(origin, *, _type=type, _vars=vars, _tuple=tuple, _len=len,
             or _any(_type(k) is not _str for k in helper_builtin_namespace)
             or helper_namespace.get('__builtins__') is not helper_builtin_namespace
             or _type(helper_primitive_pairs) is not _tuple
-            or _len(helper_primitive_pairs) != 12):
+            or _len(helper_primitive_pairs) != 20):
         raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
     helper_seen = {}
     for helper_pair in helper_pairs:
@@ -342,7 +346,8 @@ def current(origin, *, _type=type, _vars=vars, _tuple=tuple, _len=len,
     for helper_pair, helper_name, helper_expected in _zip(
             helper_primitive_pairs,
             ('type', 'vars', 'tuple', 'len', 'dict', 'str', 'any', 'zip', 'all', 'set',
-             'RuntimeError', 'ValueError'), helper_expected_builtins, strict=True):
+             'RuntimeError', 'ValueError', 'bool', 'int', 'list', 'bytes', 'bytearray',
+             'sum', 'ord', 'super'), helper_expected_builtins, strict=True):
         if (_type(helper_pair) is not _tuple or _len(helper_pair) != 2
                 or _type(helper_pair[0]) is not _str or helper_pair[0] != helper_name
                 or helper_pair[1] is not helper_expected
@@ -460,7 +465,7 @@ def current(origin, *, _type=type, _vars=vars, _tuple=tuple, _len=len,
             or _any(_type(k) is not _str for k in helper_builtin_namespace)
             or helper_namespace.get('__builtins__') is not helper_builtin_namespace
             or _type(helper_primitive_pairs) is not _tuple
-            or _len(helper_primitive_pairs) != 12):
+            or _len(helper_primitive_pairs) != 20):
         raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
     helper_seen = {}
     for helper_pair in helper_pairs:
@@ -475,7 +480,8 @@ def current(origin, *, _type=type, _vars=vars, _tuple=tuple, _len=len,
     for helper_pair, helper_name, helper_expected in _zip(
             helper_primitive_pairs,
             ('type', 'vars', 'tuple', 'len', 'dict', 'str', 'any', 'zip', 'all', 'set',
-             'RuntimeError', 'ValueError'), helper_expected_builtins, strict=True):
+             'RuntimeError', 'ValueError', 'bool', 'int', 'list', 'bytes', 'bytearray',
+             'sum', 'ord', 'super'), helper_expected_builtins, strict=True):
         if (_type(helper_pair) is not _tuple or _len(helper_pair) != 2
                 or _type(helper_pair[0]) is not _str or helper_pair[0] != helper_name
                 or helper_pair[1] is not helper_expected
@@ -545,11 +551,17 @@ def current(origin, *, _type=type, _vars=vars, _tuple=tuple, _len=len,
     helper_final_system, helper_final_system_names, helper_final_registry, helper_final_modules, helper_final_classes, helper_final_functions = helper_final_packet
     if (_type(helper_final_system) is _module and _type(helper_final_system_names) is _dict and (_vars(helper_final_system) is helper_final_system_names) and _all((_type(helper_final_key) is _str for helper_final_key in helper_final_system_names)) and (_type(helper_final_registry) is _dict) and _all((_type(helper_final_key) is _str for helper_final_key in helper_final_registry)) and (helper_final_system_names.get('modules') is helper_final_registry) and (_type(helper_final_modules) is _tuple) and (_len(helper_final_modules) == _len(helper_data_modules)) and (_type(helper_final_classes) is _tuple) and (_len(helper_final_classes) == _len(helper_data_classes)) and (_type(helper_final_functions) is _tuple) and (_len(helper_final_functions) == _len(helper_data_functions))) is not True:
         raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+    helper_final_builtin_module = helper_final_registry.get('builtins')
+    if _type(helper_final_builtin_module) is not _module:
+        raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+    helper_final_builtin_namespace = _vars(helper_final_builtin_module)
+    if (_type(helper_final_builtin_namespace) is _dict and _all((_type(helper_final_key) is _str for helper_final_key in helper_final_builtin_namespace))) is not True:
+        raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
     for helper_final_row, helper_final_name, helper_final_live_keys in _zip(helper_final_modules, helper_data_modules, helper_data_live_globals, strict=True):
         if (_type(helper_final_row) is _tuple and _len(helper_final_row) == 3) is not True:
             raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
         helper_final_module, helper_final_namespace, helper_final_pairs = helper_final_row
-        if (_type(helper_final_module) is _module and _type(helper_final_namespace) is _dict and _all((_type(helper_final_key) is _str for helper_final_key in helper_final_registry)) and _all((_type(helper_final_key) is _str for helper_final_key in helper_final_namespace)) and (helper_final_registry.get(helper_final_name) is helper_final_module) and (_vars(helper_final_module) is helper_final_namespace) and (_type(helper_final_namespace.get('__name__')) is _str) and (helper_final_namespace['__name__'] == helper_final_name) and (_type(helper_final_pairs) is _tuple) and _all((helper_final_key in helper_final_namespace for helper_final_key in helper_final_live_keys)) and (_len(helper_final_namespace) == _len(helper_final_pairs) + _len(helper_final_live_keys))) is not True:
+        if (_type(helper_final_module) is _module and _type(helper_final_namespace) is _dict and _all((_type(helper_final_key) is _str for helper_final_key in helper_final_registry)) and _all((_type(helper_final_key) is _str for helper_final_key in helper_final_namespace)) and (helper_final_registry.get(helper_final_name) is helper_final_module) and (_vars(helper_final_module) is helper_final_namespace) and (_type(helper_final_namespace.get('__name__')) is _str) and (helper_final_namespace['__name__'] == helper_final_name) and (helper_final_namespace.get('__builtins__') is helper_final_builtin_namespace or helper_final_namespace.get('__builtins__') is helper_final_builtin_module) and (_type(helper_final_pairs) is _tuple) and _all((helper_final_key in helper_final_namespace for helper_final_key in helper_final_live_keys)) and (_len(helper_final_namespace) == _len(helper_final_pairs) + _len(helper_final_live_keys))) is not True:
             raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
         helper_final_seen = _set()
         for helper_final_pair in helper_final_pairs:
@@ -580,7 +592,7 @@ def current(origin, *, _type=type, _vars=vars, _tuple=tuple, _len=len,
         if (_type(helper_final_row) is _tuple and _len(helper_final_row) == 8) is not True:
             raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
         helper_final_function, helper_final_code, helper_final_namespace, helper_final_defaults, helper_final_kw, helper_final_pairs, helper_final_closure, helper_final_cells = helper_final_row
-        if (_type(helper_final_namespace) is _dict and helper_final_namespace is helper_final_modules[helper_final_index][1] and (_type(helper_final_function) is _function) and (helper_final_function.__globals__ is helper_final_namespace) and (helper_final_function.__code__ is helper_final_code) and (helper_final_function.__defaults__ is helper_final_defaults) and (helper_final_defaults is None or _type(helper_final_defaults) is _tuple) and (helper_final_function.__kwdefaults__ is helper_final_kw) and (helper_final_function.__closure__ is helper_final_closure) and (_type(helper_final_pairs) is _tuple) and (_type(helper_final_cells) is _tuple)) is not True:
+        if (_type(helper_final_namespace) is _dict and helper_final_namespace is helper_final_modules[helper_final_index][1] and (_type(helper_final_function) is _function) and (helper_final_function.__globals__ is helper_final_namespace) and (helper_final_function.__builtins__ is helper_final_builtin_namespace) and (helper_final_function.__code__ is helper_final_code) and (helper_final_function.__defaults__ is helper_final_defaults) and (helper_final_defaults is None or _type(helper_final_defaults) is _tuple) and (helper_final_function.__kwdefaults__ is helper_final_kw) and (helper_final_function.__closure__ is helper_final_closure) and (_type(helper_final_pairs) is _tuple) and (_type(helper_final_cells) is _tuple)) is not True:
             raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
         helper_final_names = helper_final_namespace
         if _all((_type(helper_final_key) is _str for helper_final_key in helper_final_namespace)) is not True:
@@ -656,6 +668,8 @@ def capture(*,
             _all=all,
             _set=set,
             _value_error=ValueError,
+            _bool=bool, _int=int, _list=list, _bytes=bytes, _bytearray=bytearray,
+            _sum=sum, _ord=ord, _super=super,
             _error=RuntimeError):
     """Capture once at the future trusted entry boundary, before callbacks."""
     global _CAPTURE_STARTED
@@ -701,7 +715,8 @@ def capture(*,
     # Hold the component's original exports before invoking its capture callback.
     helper_system, helper_registry = _sys, registry
     helper_expected_builtins = (_type, _vars, _tuple, _len, _dict, _str, _any, _zip,
-                                _all, _set, _error, _value_error)
+                                _all, _set, _error, _value_error,
+                                _bool, _int, _list, _bytes, _bytearray, _sum, _ord, _super)
     helper_builtin_module = registry.get('builtins')
     if _type(helper_builtin_module) is not _module:
         raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
@@ -711,7 +726,8 @@ def capture(*,
         raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
     helper_primitive_pairs = _tuple(_zip(
         ('type', 'vars', 'tuple', 'len', 'dict', 'str', 'any', 'zip', 'all', 'set',
-         'RuntimeError', 'ValueError'), helper_expected_builtins, strict=True))
+         'RuntimeError', 'ValueError', 'bool', 'int', 'list', 'bytes', 'bytearray',
+             'sum', 'ord', 'super'), helper_expected_builtins, strict=True))
     if _any(helper_builtin_namespace.get(name) is not value
             for name, value in helper_primitive_pairs):
         raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
@@ -773,7 +789,7 @@ def capture(*,
             or _any(_type(k) is not _str for k in helper_builtin_namespace)
             or helper_namespace.get('__builtins__') is not helper_builtin_namespace
             or _type(helper_primitive_pairs) is not _tuple
-            or _len(helper_primitive_pairs) != 12):
+            or _len(helper_primitive_pairs) != 20):
         raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
     helper_seen = {}
     for helper_pair in helper_pairs:
@@ -788,7 +804,8 @@ def capture(*,
     for helper_pair, helper_name, helper_expected in _zip(
             helper_primitive_pairs,
             ('type', 'vars', 'tuple', 'len', 'dict', 'str', 'any', 'zip', 'all', 'set',
-             'RuntimeError', 'ValueError'), helper_expected_builtins, strict=True):
+             'RuntimeError', 'ValueError', 'bool', 'int', 'list', 'bytes', 'bytearray',
+             'sum', 'ord', 'super'), helper_expected_builtins, strict=True):
         if (_type(helper_pair) is not _tuple or _len(helper_pair) != 2
                 or _type(helper_pair[0]) is not _str or helper_pair[0] != helper_name
                 or helper_pair[1] is not helper_expected
