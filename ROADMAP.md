@@ -1,3 +1,30 @@
+## November 10 — image-path audit changes verified; delivery remains open
+
+The experimental Link audit now indexes exact namespace identities within each call
+and checks all current key types with authenticated native primitives. Original
+checker values and unique names are joined before those primitives run, including
+both actual Scope publication seals. No access verdict survives a callback.
+
+The same **281 focused checks pass on Python 3.14.9 and 3.11.15**: 265 local
+controls, 12 actual runtime refusals and four actual Scope publication refusals.
+The latter require completed mutation, no foreign execution, no registration or
+successful publication after mutation, and unchanged native work/reservation.
+These source-bound results do not establish full native or device acceptance.
+
+The full native contract still fails its unchanged 60-second deadline. Its retained
+subset contains 65 typed observations and two retired raw capsules; snapshots,
+all rechecks, startup/service delivery and physical images remain unqualified.
+The immutable expected-layout design is not implemented. Next work must resolve
+the actual delivery contract, including a bounded presentation metadata interface,
+without bypassing per-device/profile authority, confined reads or resource custody.
+No upstream-only blocker has been demonstrated.
+
+The isolated test environment was rebuilt from independently pinned artifacts and
+locked dependencies; fresh results above bind the new environment. No installed
+host/device, grants, providers, models, jobs or releases changed. LLY520 is absent
+from the refreshed established remote inventory; its authorized update is pending
+connection. Prepared Android/iOS 2026110901 are not new physical qualification.
+
 ## Link audit reduction; full native acceptance remains open — November 9, 2026
 
 Two duplicate runtime audits have been removed from the experimental Link

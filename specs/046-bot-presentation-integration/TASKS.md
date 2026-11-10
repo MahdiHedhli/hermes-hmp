@@ -1,5 +1,18 @@
 # BI1 integration tasks
 
+## November 10 finite audit increment
+
+- [x] **LP3-NATIVE-KEY-PRIMITIVES** Fresh per-call namespace identity index;
+      original checker-pair and native primitive binding in capture, parent and
+      both actual Scope seals. Independently reviewed; 281 current and minimum
+      Python cases pass on unchanged source. This finite task does not close
+      LP3-COUPLED-AUDIT-FUSION, full native, service or physical acceptance.
+- [ ] **BI1-PRESENTATION-INTERFACE-REVALIDATION** Inspect current pinned upstream
+      presentation read contracts and update the existing integration plan before
+      selecting a metadata delivery route. Do not call broad profile/config/asset
+      discovery then label filtered results a narrow read. Preserve full character
+      and image requirements; optional/null metadata is not proof of absent asset.
+
 ## Native interface reuse audit
 
 - [x] Inspect exact Desktop asset reader and canonical roster; record why neither

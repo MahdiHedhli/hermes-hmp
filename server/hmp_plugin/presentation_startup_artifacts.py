@@ -3645,6 +3645,50 @@ class StartupArtifactOwner:
                                 raise error_type(owner) from None
                         elif link_raw_type(link_engine_closure) is not link_raw_tuple or link_raw_len(link_engine_closure) != link_raw_len(link_engine_cells) or link_raw_any((link_raw_type(link_engine_cell) is not link_raw_cell or link_engine_cell.cell_contents is not link_engine_value for link_engine_cell, link_engine_value in link_raw_zip(link_engine_closure, link_engine_cells, strict=True))):
                             raise error_type(owner) from None
+                link_primitive_audit_rows = link_raw_tuple((row for row in link_engine_origin[2] if link_raw_type(row) is link_raw_tuple and link_raw_len(row) == 7 and (link_raw_type(row[0]) is link_raw_str) and (row[0] == '_engine_origin_tail')))
+                if link_raw_len(link_primitive_audit_rows) != 1:
+                    raise error_type(owner) from None
+                link_primitive_audit_checker, link_primitive_audit_kw = (link_primitive_audit_rows[0][1], link_primitive_audit_rows[0][5])
+                if link_raw_type(link_primitive_audit_checker) is not link_raw_function or link_raw_type(link_primitive_audit_kw) is not link_raw_dict or link_primitive_audit_checker.__kwdefaults__ is not link_primitive_audit_kw or link_raw_any((link_raw_type(k) is not link_raw_str for k in link_primitive_audit_kw)):
+                    raise error_type(owner) from None
+                link_primitive_audit_pairs = link_primitive_audit_rows[0][6]
+                if (link_raw_type(link_primitive_audit_pairs) is not link_raw_tuple
+                        or link_raw_len(link_primitive_audit_kw) != link_raw_len(link_primitive_audit_pairs)):
+                    raise error_type(owner) from None
+                link_primitive_audit_originals = {}
+                for link_primitive_audit_pair in link_primitive_audit_pairs:
+                    if (link_raw_type(link_primitive_audit_pair) is not link_raw_tuple
+                            or link_raw_len(link_primitive_audit_pair) != 2
+                            or link_raw_type(link_primitive_audit_pair[0]) is not link_raw_str):
+                        raise error_type(owner) from None
+                    link_primitive_audit_name, link_primitive_audit_expected = link_primitive_audit_pair
+                    if (link_primitive_audit_name in link_primitive_audit_originals
+                            or link_primitive_audit_name not in link_primitive_audit_kw
+                            or link_primitive_audit_kw[link_primitive_audit_name] is not link_primitive_audit_expected):
+                        raise error_type(owner) from None
+                    link_primitive_audit_originals[link_primitive_audit_name] = link_primitive_audit_expected
+                link_primitive_audit_id = link_primitive_audit_originals.get('_id')
+                link_primitive_audit_map = link_primitive_audit_originals.get('_map')
+                link_primitive_audit_not = link_primitive_audit_originals.get('_not_identity')
+                if link_raw_type(link_primitive_audit_id) is not link_raw_builtin or link_primitive_audit_id.__name__ != 'id' or link_raw_type(link_primitive_audit_id.__self__) is not link_raw_module or (link_engine_dependencies[2].get('builtins') is not link_primitive_audit_id.__self__):
+                    raise error_type(owner) from None
+                link_primitive_audit_builtins = link_raw_vars(link_primitive_audit_id.__self__)
+                if link_raw_any((link_raw_type(k) is not link_raw_str for k in link_primitive_audit_builtins)) or link_primitive_audit_checker.__builtins__ is not link_primitive_audit_builtins:
+                    raise error_type(owner) from None
+                for link_primitive_audit_name, link_primitive_audit_value in (('type', link_raw_type), ('tuple', link_raw_tuple), ('dict', link_raw_dict), ('str', link_raw_str), ('len', link_raw_len), ('vars', link_raw_vars), ('any', link_raw_any), ('zip', link_raw_zip), ('id', link_primitive_audit_id), ('map', link_primitive_audit_map)):
+                    if link_primitive_audit_builtins.get(link_primitive_audit_name) is not link_primitive_audit_value or link_primitive_audit_originals.get('_' + link_primitive_audit_name) is not link_primitive_audit_value:
+                        raise error_type(owner) from None
+                if link_raw_type(link_primitive_audit_map) is not link_raw_type:
+                    raise error_type(owner) from None
+                link_primitive_audit_map_names = link_raw_vars(link_primitive_audit_map)
+                if link_raw_any((link_raw_type(k) is not link_raw_str for k in link_primitive_audit_map_names)):
+                    raise error_type(owner) from None
+                link_primitive_audit_new = link_primitive_audit_map_names.get('__new__')
+                if link_raw_type(link_primitive_audit_new) is not link_raw_builtin or link_primitive_audit_new.__self__ is not link_primitive_audit_map or link_primitive_audit_new.__name__ != '__new__' or (link_primitive_audit_map.__name__ != 'map') or (link_primitive_audit_map.__module__ != 'builtins') or (link_raw_type(link_primitive_audit_not) is not link_raw_builtin) or (link_primitive_audit_not.__name__ != 'is_not') or (link_raw_type(link_primitive_audit_not.__self__) is not link_raw_module) or (link_engine_dependencies[2].get('_operator') is not link_primitive_audit_not.__self__):
+                    raise error_type(owner) from None
+                link_primitive_audit_operator = link_raw_vars(link_primitive_audit_not.__self__)
+                if link_raw_any((link_raw_type(k) is not link_raw_str for k in link_primitive_audit_operator)) or link_primitive_audit_operator.get('is_not') is not link_primitive_audit_not:
+                    raise error_type(owner) from None
                 # LAST pure publication seal: no origin/tail/cohort helper
                 # is called after this block before assigning actual scope slots.
                 if (_Scope is not kind or type(s) is not kind
@@ -3853,6 +3897,50 @@ class StartupArtifactOwner:
                                 raise error_type(owner) from None
                         elif link_raw_type(link_engine_closure) is not link_raw_tuple or link_raw_len(link_engine_closure) != link_raw_len(link_engine_cells) or link_raw_any((link_raw_type(link_engine_cell) is not link_raw_cell or link_engine_cell.cell_contents is not link_engine_value for link_engine_cell, link_engine_value in link_raw_zip(link_engine_closure, link_engine_cells, strict=True))):
                             raise error_type(owner) from None
+                link_primitive_audit_rows = link_raw_tuple((row for row in link_engine_origin[2] if link_raw_type(row) is link_raw_tuple and link_raw_len(row) == 7 and (link_raw_type(row[0]) is link_raw_str) and (row[0] == '_engine_origin_tail')))
+                if link_raw_len(link_primitive_audit_rows) != 1:
+                    raise error_type(owner) from None
+                link_primitive_audit_checker, link_primitive_audit_kw = (link_primitive_audit_rows[0][1], link_primitive_audit_rows[0][5])
+                if link_raw_type(link_primitive_audit_checker) is not link_raw_function or link_raw_type(link_primitive_audit_kw) is not link_raw_dict or link_primitive_audit_checker.__kwdefaults__ is not link_primitive_audit_kw or link_raw_any((link_raw_type(k) is not link_raw_str for k in link_primitive_audit_kw)):
+                    raise error_type(owner) from None
+                link_primitive_audit_pairs = link_primitive_audit_rows[0][6]
+                if (link_raw_type(link_primitive_audit_pairs) is not link_raw_tuple
+                        or link_raw_len(link_primitive_audit_kw) != link_raw_len(link_primitive_audit_pairs)):
+                    raise error_type(owner) from None
+                link_primitive_audit_originals = {}
+                for link_primitive_audit_pair in link_primitive_audit_pairs:
+                    if (link_raw_type(link_primitive_audit_pair) is not link_raw_tuple
+                            or link_raw_len(link_primitive_audit_pair) != 2
+                            or link_raw_type(link_primitive_audit_pair[0]) is not link_raw_str):
+                        raise error_type(owner) from None
+                    link_primitive_audit_name, link_primitive_audit_expected = link_primitive_audit_pair
+                    if (link_primitive_audit_name in link_primitive_audit_originals
+                            or link_primitive_audit_name not in link_primitive_audit_kw
+                            or link_primitive_audit_kw[link_primitive_audit_name] is not link_primitive_audit_expected):
+                        raise error_type(owner) from None
+                    link_primitive_audit_originals[link_primitive_audit_name] = link_primitive_audit_expected
+                link_primitive_audit_id = link_primitive_audit_originals.get('_id')
+                link_primitive_audit_map = link_primitive_audit_originals.get('_map')
+                link_primitive_audit_not = link_primitive_audit_originals.get('_not_identity')
+                if link_raw_type(link_primitive_audit_id) is not link_raw_builtin or link_primitive_audit_id.__name__ != 'id' or link_raw_type(link_primitive_audit_id.__self__) is not link_raw_module or (link_engine_dependencies[2].get('builtins') is not link_primitive_audit_id.__self__):
+                    raise error_type(owner) from None
+                link_primitive_audit_builtins = link_raw_vars(link_primitive_audit_id.__self__)
+                if link_raw_any((link_raw_type(k) is not link_raw_str for k in link_primitive_audit_builtins)) or link_primitive_audit_checker.__builtins__ is not link_primitive_audit_builtins:
+                    raise error_type(owner) from None
+                for link_primitive_audit_name, link_primitive_audit_value in (('type', link_raw_type), ('tuple', link_raw_tuple), ('dict', link_raw_dict), ('str', link_raw_str), ('len', link_raw_len), ('vars', link_raw_vars), ('any', link_raw_any), ('zip', link_raw_zip), ('id', link_primitive_audit_id), ('map', link_primitive_audit_map)):
+                    if link_primitive_audit_builtins.get(link_primitive_audit_name) is not link_primitive_audit_value or link_primitive_audit_originals.get('_' + link_primitive_audit_name) is not link_primitive_audit_value:
+                        raise error_type(owner) from None
+                if link_raw_type(link_primitive_audit_map) is not link_raw_type:
+                    raise error_type(owner) from None
+                link_primitive_audit_map_names = link_raw_vars(link_primitive_audit_map)
+                if link_raw_any((link_raw_type(k) is not link_raw_str for k in link_primitive_audit_map_names)):
+                    raise error_type(owner) from None
+                link_primitive_audit_new = link_primitive_audit_map_names.get('__new__')
+                if link_raw_type(link_primitive_audit_new) is not link_raw_builtin or link_primitive_audit_new.__self__ is not link_primitive_audit_map or link_primitive_audit_new.__name__ != '__new__' or (link_primitive_audit_map.__name__ != 'map') or (link_primitive_audit_map.__module__ != 'builtins') or (link_raw_type(link_primitive_audit_not) is not link_raw_builtin) or (link_primitive_audit_not.__name__ != 'is_not') or (link_raw_type(link_primitive_audit_not.__self__) is not link_raw_module) or (link_engine_dependencies[2].get('_operator') is not link_primitive_audit_not.__self__):
+                    raise error_type(owner) from None
+                link_primitive_audit_operator = link_raw_vars(link_primitive_audit_not.__self__)
+                if link_raw_any((link_raw_type(k) is not link_raw_str for k in link_primitive_audit_operator)) or link_primitive_audit_operator.get('is_not') is not link_primitive_audit_not:
+                    raise error_type(owner) from None
                 if (owner_namespace.get('StartupArtifactOwner') is not owner_kind
                         or type(owner) is not owner_kind or _Scope is not kind or type(s) is not kind
                         or tuple.__getitem__(s, 17) is not link_blueprint

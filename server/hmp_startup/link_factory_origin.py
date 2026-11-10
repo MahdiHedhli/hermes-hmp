@@ -294,7 +294,7 @@ def capture(*,
     engine_capture_code = engine_capture.__code__
     expected_capture_defaults = dict(_type=_type, _tuple=_tuple, _dict=_dict, _str=_str,
                                      _len=_len, _vars=_vars, _any=_any, _zip=_zip,
-                                     _module=_module, _function=_function, _cell=_cell, _error=_error)
+                                     _module=_module, _function=_function, _cell=_cell, _builtin=_builtin, _error=_error)
     capture_kw = engine_capture.__kwdefaults__
     if (type(capture_kw) is not dict or any(type(k) is not str for k in capture_kw)
             or len(capture_kw) != len(expected_capture_defaults)
