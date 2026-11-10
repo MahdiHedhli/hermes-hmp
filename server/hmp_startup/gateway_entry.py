@@ -884,6 +884,78 @@ def _capture_origin():
                     or not all_of(k in namespace and namespace[k] is v for k, v in items)):
                 raise refused('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
 
+    # Prepare the approval sibling before helper capture. Approval-first imports
+    # reach this point with all definitions complete and only the final alias
+    # import pending. Never repair an absent alias in an initialized module.
+    getframe = sys_namespace.get('_getframe')
+    if (type_of(getframe) is not BuiltinFunctionType
+            or getframe.__self__ is not sys_module or getframe.__name__ != '_getframe'):
+        raise refused('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+    from . import gateway_approval
+    seal()
+    approval_name = 'hmp_startup.gateway_approval'
+    if (type_of(gateway_approval) is not module_kind
+            or registry.get(approval_name) is not gateway_approval):
+        raise refused('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+    approval_values = vars_of(gateway_approval)
+    approval_file = file.rsplit('/', 1)[0] + '/gateway_approval.py'
+    if not all_of(type_of(k) is str for k in approval_values):
+        raise refused('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+    approval_label = approval_values.get('__name__')
+    if (type_of(approval_label) is not str or approval_label != approval_name
+            or type_of(approval_values.get('__file__')) is not str
+            or approval_values['__file__'] != approval_file):
+        raise refused('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+    for name in ('GatewayApprovalOwner', 'GatewayApprovalError', '_RootSource',
+                 'GatewayOperatorApproval'):
+        kind = approval_values.get(name)
+        if type_of(kind) is not type_of:
+            raise refused('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+        label = vars_of(kind).get('__module__')
+        if type_of(label) is not str or label != approval_name:
+            raise refused('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+    for name in ('_require', '_path', '_pairs', '_decode', '_same_entry', '_api_state'):
+        helper = approval_values.get(name)
+        if (type_of(helper) is not FunctionType or helper.__globals__ is not approval_values
+                or helper.__code__.co_filename != approval_file):
+            raise refused('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+    if 'GatewayEntryOwner' not in approval_values:
+        approval_spec = approval_values.get('__spec__')
+        if type_of(approval_spec) is not ModuleSpec:
+            raise refused('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+        approval_spec_values = vars_of(approval_spec)
+        if (not all_of(type_of(k) is str for k in approval_spec_values)
+                or approval_spec_values.get('_initializing') is not True):
+            raise refused('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+        frame = getframe()
+        initializing_frame = False
+        for _ in range(128):
+            if frame is None:
+                break
+            if (frame.f_globals is approval_values and frame.f_code.co_name == '<module>'
+                    and frame.f_code.co_filename == approval_file):
+                initializing_frame = True
+                break
+            frame = frame.f_back
+        del frame
+        if initializing_frame is not True:
+            raise refused('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+        approval_values['GatewayEntryOwner'] = owner_kind
+    if approval_values['GatewayEntryOwner'] is not owner_kind:
+        raise refused('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+    approval_items = tuple_of(approval_values.items())
+    entry_seal = seal
+
+    def seal():
+        entry_seal()
+        if (registry.get(approval_name) is not gateway_approval
+                or vars_of(gateway_approval) is not approval_values
+                or len_of(approval_values) != len_of(approval_items)
+                or not all_of(type_of(k) is str for k in approval_values)
+                or not all_of(k in approval_values and approval_values[k] is v
+                              for k, v in approval_items)):
+            raise refused('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+
     from . import link_factory_origin
 
     seal()  # never call a helper nominated by changes to this entry module

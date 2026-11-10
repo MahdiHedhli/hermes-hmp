@@ -1,3 +1,24 @@
+## November 10 — approval import-order preparation
+
+Both supported import orders now finish the approval definitions and bind the
+original entry-owner alias before the selected-helper capture. Approval-first
+initialization may insert that alias only while the real sibling module frame is
+still initializing; an initialized module with a deleted alias is refused. A
+present None or foreign alias is never repaired. Entry and approval namespace
+identities are checked again across helper capture and constructor callbacks.
+Exact string-key/value checks precede metadata lookup and comparison.
+
+Final source passes the same **56 focused cases on Python 3.14.9 and 3.11.15**:
+12 isolated import/metadata/alias controls and 44 operator-approval cases. The
+preceding preflight passed 260 selected regression cases before the final
+metadata fences and negative controls; that is not a final-source 260-case claim.
+Closed-plugin-surface and whitespace checks pass.
+
+This is initialization preparation, not persistent approval-code provenance or a
+permission grant. No operator file is loaded and no bootstrap, host restart,
+deployment or device test occurs. The broader startup closure, normal/native
+qualification, bot character delivery and host-local images remain open.
+
 ## November 10: selected helper execution builtins
 
 Selected functions now require the actual canonical Function.__builtins__ dict,

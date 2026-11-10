@@ -26,8 +26,6 @@ from hmp_plugin.presentation_startup_artifacts import (
     _Scope,
 )
 
-from .gateway_entry import GatewayEntryOwner
-
 _OWNER = _CELL = _ROOT = _FACT = None
 
 _SUFFIX = "/plugin-data/hmp/presentation/gateway-startup"
@@ -356,3 +354,8 @@ class GatewayApprovalOwner:
         bytearray.extend(buffer, data)
         _require(GatewayApprovalOwner._guard(self) is s
                  and self._root_cell is root and self._buffer is buffer)
+
+
+# Complete definitions before the cycle enters gateway_entry._capture_origin.
+# The entry binds this same class during approval-first initialization.
+from .gateway_entry import GatewayEntryOwner
