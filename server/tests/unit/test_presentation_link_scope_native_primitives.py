@@ -9,7 +9,7 @@ from .test_presentation_gateway_approval import operator_composed_script
 
 
 @pytest.mark.parametrize('publication', ('first', 'second'))
-@pytest.mark.parametrize('export', ('map', 'is_not', 'layout_graft', 'helper_graft', 'helper_checker', 'helper_projection_schema', 'api_spec_dict_default', 'record_path_dispatch', 'record_receipt_dispatch', 'record_read_effect_dispatch', 'selection_approval_alias', 'selection_code', 'selection_error_code', 'activation_code', 'activation_error_code', 'artifact_error_code', 'artifact_error_new', 'artifact_error_getattribute', 'artifact_error_setattr', 'artifact_error_owner_property', 'artifact_owner_getattribute', 'artifact_owner_setattr', 'artifact_owner_dict_subclass', 'artifact_descriptor_code', 'artifact_allocation_code', 'artifact_expected_code', 'artifact_allocation_dispatch', 'execution_sum', 'execution_ord', 'entry_getattribute', 'entry_subclass_dict'))
+@pytest.mark.parametrize('export', ('map', 'is_not', 'layout_graft', 'audit_graft', 'helper_graft', 'helper_checker', 'helper_projection_schema', 'api_spec_dict_default', 'record_path_dispatch', 'record_receipt_dispatch', 'record_read_effect_dispatch', 'selection_approval_alias', 'selection_code', 'selection_error_code', 'activation_code', 'activation_error_code', 'artifact_error_code', 'artifact_error_new', 'artifact_error_getattribute', 'artifact_error_setattr', 'artifact_error_owner_property', 'artifact_owner_getattribute', 'artifact_owner_setattr', 'artifact_owner_dict_subclass', 'artifact_descriptor_code', 'artifact_allocation_code', 'artifact_expected_code', 'artifact_allocation_dispatch', 'execution_sum', 'execution_ord', 'entry_getattribute', 'entry_subclass_dict'))
 def test_scope_publication_rejects_changed_primitive_or_layout_root(
         tmp_path, monkeypatch, request, publication, export):
     tree = ast.parse((base.SERVER / 'hmp_plugin/presentation_startup_artifacts.py').read_text())
@@ -198,23 +198,28 @@ def observe(frame,event,value):
             helper_code_restore.append((function,function.__code__))
             assign(function,'__code__',late_helper_code)
             assert function.__code__ is late_helper_code
-        elif export in ('layout_graft','helper_graft'):
+        elif export in ('layout_graft','audit_graft','helper_graft'):
             parent=context['link_origin']
             engine=parent[0][4]
             layout=engine[5]
             if export=='layout_graft':
                 copied_layout=tuple(list(layout))
                 copied_engine=(*engine[:5],copied_layout)
-                copied_environment=(*parent[0][:4],copied_engine,copied_layout,*parent[0][6:])
+                copied_record=(copied_engine,copied_layout,parent[0][7][2])
+                copied_environment=(*parent[0][:4],copied_engine,copied_layout,parent[0][6],copied_record)
+            elif export=='audit_graft':
+                copied_record=tuple(list(parent[0][7]))
+                assert copied_record is not parent[0][7]
+                copied_environment=(*parent[0][:7],copied_record)
             else:
                 helper=parent[0][6]
                 copied_packet=tuple(list(helper[6]))
                 copied_helper=(*helper[:6],copied_packet)
-                copied_environment=(*parent[0][:6],copied_helper)
+                copied_environment=(*parent[0][:6],copied_helper,*parent[0][7:])
                 assert copied_packet is not helper[6] and copied_helper is not helper
             copied_parent=(copied_environment,*parent[1:])
             lineage=context['native_files']
-            copied_lineage=lineage._replace(link_policy=copied_parent)
+            copied_lineage=lineage._replace(link_policy=copied_parent, audit_record=copied_environment[7])
             entry_owner=source.inputs.entry
             invocation=entry_owner._scope
             copied_invocation=invocation._replace(native_files=copied_lineage)
@@ -222,6 +227,9 @@ def observe(frame,event,value):
             if export=='layout_graft':assert copied_layout is not layout
             assert copied_parent[0][4][5] is copied_parent[0][5]
             assert copied_lineage.link_policy is copied_parent
+            assert copied_lineage.audit_record is copied_parent[0][7]
+            assert copied_parent[0][7][0] is copied_parent[0][4]
+            assert copied_parent[0][7][1] is copied_parent[0][5]
             assign(entry_owner,'_scope',copied_invocation)
             assert entry_owner._scope is copied_invocation
         else:

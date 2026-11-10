@@ -400,6 +400,7 @@ class _Scope(NamedTuple):
     native_probe_engine_origin: object = None
     native_startup_probe_origin: object = None
     native_link_blueprint: object = None
+    native_link_audit: object = None
 
     def __repr__(self):
         return "<StartupArtifactScope redacted>"
@@ -567,8 +568,8 @@ def _has_native_link_engine(registration):
              and type(registration.lineage) is registration.type_pins[0])
     parent = tuple.__getitem__(registration.lineage, 4)
     _require(type(parent) is tuple and len(parent) == 5
-             and type(parent[0]) is tuple and len(parent[0]) in (4, 7))
-    return len(parent[0]) == 7
+             and type(parent[0]) is tuple and len(parent[0]) in (4, 8))
+    return len(parent[0]) == 8
 
 
 def _native_link_function(owner, registration, name):
@@ -579,6 +580,11 @@ def _native_link_function(owner, registration, name):
     _native_work_registration_tail(owner, registration)
     parent = tuple.__getitem__(registration.lineage, 4)
     origin = parent[0][4]
+    audit_record = parent[0][7]
+    _require(type(audit_record) is tuple and len(audit_record) == 3
+             and tuple.__getitem__(registration.lineage, 5) is audit_record
+             and tuple.__getitem__(registration.scope, 18) is audit_record
+             and audit_record[0] is origin and audit_record[1] is parent[0][5])
     _require(type(origin) is tuple and len(origin) == 6 and type(origin[3]) is tuple
              and parent[0][5] is origin[5])
     rows = tuple(row for row in origin[3]
@@ -604,7 +610,9 @@ def _native_link_function(owner, registration, name):
              and row[1].__globals__ is row[3] and vars(origin[0]) is row[3]
              and row[3].get(name) is row[1]
              and row[1].__defaults__ is row[4] and row[1].__kwdefaults__ is row[5]
-             and parent[0][4] is origin)
+             and parent[0][4] is origin and parent[0][7] is audit_record
+             and tuple.__getitem__(registration.lineage, 5) is audit_record
+             and tuple.__getitem__(registration.scope, 18) is audit_record)
     return row[1]
 
 
@@ -1414,6 +1422,26 @@ def _native_work_registration_tail(owner, registration):
     modules = vars(sys).get('modules')
     _require(type(modules) is dict and type(registration.entry_module) is ModuleType
              and modules.get('hmp_startup.gateway_entry') is registration.entry_module)
+    audit_record = tuple.__getitem__(s, 18)
+    if audit_record is not None:
+        entry_names = vars(registration.entry_module)
+        _require(type(entry_names) is dict and all(type(k) is str for k in entry_names))
+        entry_origin, started = entry_names.get('_ENTRY_ORIGIN'), entry_names.get('_STARTED')
+        _require(type(entry_origin) is entry_names.get('_EntryOrigin')
+                 and tuple.__len__(entry_origin) == 12)
+        _require(type(audit_record) is tuple and len(audit_record) == 3
+                 and tuple.__len__(registration.lineage) == 6
+                 and tuple.__getitem__(registration.lineage, 5) is audit_record
+                 and type(started) is tuple and len(started) == 7
+                 and started[5] is entry_origin
+                 and tuple.__len__(entry_origin) == 12
+                 and tuple.__getitem__(entry_origin, 11) is audit_record
+                 and tuple.__getitem__(entry_origin, 10) is tuple.__getitem__(registration.lineage, 4)
+                 and started[0] is registration.lineage.entry
+                 and started[1] is s.source_digest.binding[0]
+                 and started[2] is entry_names.get('_CELL')
+                 and started is s.source_digest.binding[2]
+                 and entry_names.get('_OWNER') is started[0])
 
 
 def _capture_native_work_origin(owner, registration):
@@ -3339,6 +3367,7 @@ class StartupArtifactOwner:
                 raise refusal from None
             link_blueprint = None
             link_origin = None
+            link_audit_record = None
             link_tail = link_tail_code = None
             link_cohort = None
             if runtime is not None and native_files is not None:
@@ -3355,8 +3384,8 @@ class StartupArtifactOwner:
                      and started[0] is digest_context.entry) is not True:
                     raise refusal from None
                 entry_origin = tuple.__getitem__(started, 5)
-                if (tuple.__len__(entry_origin) == 11
-                     and tuple.__len__(native_files) == 5
+                if (tuple.__len__(entry_origin) == 12
+                     and tuple.__len__(native_files) == 6
                      and tuple.__len__(invocation) == 11) is not True:
                     raise refusal from None
                 link_origin = tuple.__getitem__(entry_origin, 10)
@@ -3365,10 +3394,17 @@ class StartupArtifactOwner:
                      and tuple.__getitem__(native_files, 4) is link_origin
                      and type(link_origin) is tuple and len(link_origin) == 5) is not True:
                     raise refusal from None
-                if (type(link_origin[0]) is tuple and len(link_origin[0]) == 7) is not True:
+                if (type(link_origin[0]) is tuple and len(link_origin[0]) == 8) is not True:
                     raise refusal from None
                 link_helper_origin = link_origin[0][6]
                 link_engine_origin = link_origin[0][4]
+                link_audit_record = tuple.__getitem__(entry_origin, 11)
+                if (type(link_audit_record) is tuple and len(link_audit_record) == 3
+                     and tuple.__getitem__(native_files, 5) is link_audit_record
+                     and link_origin[0][7] is link_audit_record
+                     and link_audit_record[0] is link_engine_origin
+                     and link_audit_record[1] is link_origin[0][5]) is not True:
+                    raise refusal from None
                 # Raw pointer joins above derive the actual origin. Its fixed
                 # early current row is independently code/default pinned below.
                 current_row = link_origin[2][3]
@@ -3475,6 +3511,9 @@ class StartupArtifactOwner:
                          and tuple.__getitem__(invocation, 9) is native_files
                          and tuple.__getitem__(native_files, 4) is link_origin
                          and tuple.__getitem__(entry_origin, 10) is link_origin
+                         and tuple.__getitem__(entry_origin, 11) is link_audit_record
+                         and tuple.__getitem__(native_files, 5) is link_audit_record
+                         and link_origin[0][7] is link_audit_record
                          and origin_entry_names.get('_ENTRY_ORIGIN') is entry_origin
                          and origin_entry_names.get('GatewayEntryOwner') is tuple.__getitem__(entry_origin, 7)
                          and tuple.__getitem__(runtime, 0) is runtime_entry
@@ -3552,7 +3591,7 @@ class StartupArtifactOwner:
                     raise refusal from None
             values = (activation, activation._scope, expected, context, records,
                       source, runtime, reads, cache, digest_context, native_files,
-                      slot, None, None, None, None, startup_origin, link_blueprint)
+                      slot, None, None, None, None, startup_origin, link_blueprint, link_audit_record)
             s = constructor(kind, *values)
             if _require is not need or need.__code__ is not need_code:
                 raise refusal from None
@@ -3635,6 +3674,10 @@ class StartupArtifactOwner:
                         or tuple.__getitem__(started, 5) is not entry_origin
                         or tuple.__getitem__(native_files, 4) is not link_origin
                         or tuple.__getitem__(entry_origin, 10) is not link_origin
+                        or tuple.__getitem__(entry_origin, 11) is not link_audit_record
+                        or tuple.__getitem__(native_files, 5) is not link_audit_record
+                        or tuple.__getitem__(s, 18) is not link_audit_record
+                        or link_origin[0][7] is not link_audit_record
                         or origin_entry_names.get('_ENTRY_ORIGIN') is not entry_origin
                         or origin_entry_names.get('_STARTED') is not started
                         or origin_entry_names.get('_OWNER') is not tuple.__getitem__(digest_context, 0)
@@ -3645,7 +3688,7 @@ class StartupArtifactOwner:
                 if link_raw_type(link_origin) is not link_raw_tuple or link_raw_len(link_origin) != 5:
                     raise refusal from None
                 link_pin_environment, link_pin_modules, link_pin_own_functions, link_pin_policy_functions, link_pin_types = link_origin
-                if link_raw_type(link_pin_environment) is not link_raw_tuple or link_raw_len(link_pin_environment) != 7 or link_raw_type(link_pin_environment[0]) is not link_raw_module or (link_raw_type(link_pin_environment[1]) is not link_raw_dict) or (link_raw_vars(link_pin_environment[0]) is not link_pin_environment[1]) or link_raw_any((link_raw_type(link_pin_k) is not link_raw_str for link_pin_k in link_pin_environment[1])) or (link_raw_type(link_pin_environment[2]) is not link_raw_dict) or link_raw_any((link_raw_type(link_pin_k) is not link_raw_str for link_pin_k in link_pin_environment[2])) or (link_pin_environment[1].get('modules') is not link_pin_environment[2]) or (link_raw_type(link_pin_modules) is not link_raw_tuple) or (link_raw_len(link_pin_modules) != 4) or (link_raw_type(link_pin_own_functions) is not link_raw_tuple) or (link_raw_type(link_pin_policy_functions) is not link_raw_tuple) or (link_raw_type(link_pin_types) is not link_raw_tuple) or (link_raw_len(link_pin_types) != 11):
+                if link_raw_type(link_pin_environment) is not link_raw_tuple or link_raw_len(link_pin_environment) != 8 or link_raw_type(link_pin_environment[0]) is not link_raw_module or (link_raw_type(link_pin_environment[1]) is not link_raw_dict) or (link_raw_vars(link_pin_environment[0]) is not link_pin_environment[1]) or link_raw_any((link_raw_type(link_pin_k) is not link_raw_str for link_pin_k in link_pin_environment[1])) or (link_raw_type(link_pin_environment[2]) is not link_raw_dict) or link_raw_any((link_raw_type(link_pin_k) is not link_raw_str for link_pin_k in link_pin_environment[2])) or (link_pin_environment[1].get('modules') is not link_pin_environment[2]) or (link_raw_type(link_pin_modules) is not link_raw_tuple) or (link_raw_len(link_pin_modules) != 4) or (link_raw_type(link_pin_own_functions) is not link_raw_tuple) or (link_raw_type(link_pin_policy_functions) is not link_raw_tuple) or (link_raw_type(link_pin_types) is not link_raw_tuple) or (link_raw_len(link_pin_types) != 11):
                     raise refusal from None
                 link_pin_names = ('hmp_startup.link_factory_origin', 'hmp_plugin.presentation_link_path_policy', 'hmp_plugin.presentation_startup_artifacts', 'hmp_startup.runtime_files')
                 for link_pin_row, link_pin_name in link_raw_zip(link_pin_modules, link_pin_names, strict=True):
@@ -3887,7 +3930,10 @@ class StartupArtifactOwner:
                 if (link_raw_type(link_engine_origin) is not link_raw_tuple
                         or link_raw_len(link_engine_origin) != 6
                         or link_pin_environment[4] is not link_engine_origin
-                        or link_pin_environment[5] is not link_engine_origin[5]):
+                        or link_pin_environment[5] is not link_engine_origin[5]
+                        or link_pin_environment[7] is not link_audit_record
+                        or link_audit_record[0] is not link_engine_origin
+                        or link_audit_record[1] is not link_engine_origin[5]):
                     raise refusal from None
                 link_engine_dependencies = link_engine_origin[4]
                 if (link_raw_type(link_engine_dependencies) is not link_raw_tuple
@@ -3967,7 +4013,8 @@ class StartupArtifactOwner:
                         elif link_raw_type(link_engine_closure) is not link_raw_tuple or link_raw_len(link_engine_closure) != link_raw_len(link_engine_cells) or link_raw_any((link_raw_type(link_engine_cell) is not link_raw_cell or link_engine_cell.cell_contents is not link_engine_value for link_engine_cell, link_engine_value in link_raw_zip(link_engine_closure, link_engine_cells, strict=True))):
                             raise refusal from None
                 link_primitive_audit_rows = link_raw_tuple((row for row in link_engine_origin[2] if link_raw_type(row) is link_raw_tuple and link_raw_len(row) == 7 and (link_raw_type(row[0]) is link_raw_str) and (row[0] == '_engine_origin_tail')))
-                if link_raw_len(link_primitive_audit_rows) != 1:
+                if (link_raw_len(link_primitive_audit_rows) != 1
+                        or link_primitive_audit_rows[0] is not link_audit_record[2]):
                     raise refusal from None
                 link_primitive_audit_checker, link_primitive_audit_kw = (link_primitive_audit_rows[0][1], link_primitive_audit_rows[0][5])
                 if link_raw_type(link_primitive_audit_checker) is not link_raw_function or link_raw_type(link_primitive_audit_kw) is not link_raw_dict or link_primitive_audit_checker.__kwdefaults__ is not link_primitive_audit_kw or link_raw_any((link_raw_type(k) is not link_raw_str for k in link_primitive_audit_kw)):
@@ -4135,6 +4182,10 @@ class StartupArtifactOwner:
                         or tuple.__getitem__(started, 5) is not entry_origin
                         or tuple.__getitem__(native_files, 4) is not link_origin
                         or tuple.__getitem__(entry_origin, 10) is not link_origin
+                        or tuple.__getitem__(entry_origin, 11) is not link_audit_record
+                        or tuple.__getitem__(native_files, 5) is not link_audit_record
+                        or tuple.__getitem__(s, 18) is not link_audit_record
+                        or link_origin[0][7] is not link_audit_record
                         or origin_entry_names.get('_ENTRY_ORIGIN') is not entry_origin
                         or origin_entry_names.get('_STARTED') is not started
                         or origin_entry_names.get('_OWNER') is not tuple.__getitem__(digest_context, 0)
@@ -4143,7 +4194,7 @@ class StartupArtifactOwner:
                 if link_raw_type(link_origin) is not link_raw_tuple or link_raw_len(link_origin) != 5:
                     raise refusal from None
                 link_pin_environment, link_pin_modules, link_pin_own_functions, link_pin_policy_functions, link_pin_types = link_origin
-                if link_raw_type(link_pin_environment) is not link_raw_tuple or link_raw_len(link_pin_environment) != 7 or link_raw_type(link_pin_environment[0]) is not link_raw_module or (link_raw_type(link_pin_environment[1]) is not link_raw_dict) or (link_raw_vars(link_pin_environment[0]) is not link_pin_environment[1]) or link_raw_any((link_raw_type(link_pin_k) is not link_raw_str for link_pin_k in link_pin_environment[1])) or (link_raw_type(link_pin_environment[2]) is not link_raw_dict) or link_raw_any((link_raw_type(link_pin_k) is not link_raw_str for link_pin_k in link_pin_environment[2])) or (link_pin_environment[1].get('modules') is not link_pin_environment[2]) or (link_raw_type(link_pin_modules) is not link_raw_tuple) or (link_raw_len(link_pin_modules) != 4) or (link_raw_type(link_pin_own_functions) is not link_raw_tuple) or (link_raw_type(link_pin_policy_functions) is not link_raw_tuple) or (link_raw_type(link_pin_types) is not link_raw_tuple) or (link_raw_len(link_pin_types) != 11):
+                if link_raw_type(link_pin_environment) is not link_raw_tuple or link_raw_len(link_pin_environment) != 8 or link_raw_type(link_pin_environment[0]) is not link_raw_module or (link_raw_type(link_pin_environment[1]) is not link_raw_dict) or (link_raw_vars(link_pin_environment[0]) is not link_pin_environment[1]) or link_raw_any((link_raw_type(link_pin_k) is not link_raw_str for link_pin_k in link_pin_environment[1])) or (link_raw_type(link_pin_environment[2]) is not link_raw_dict) or link_raw_any((link_raw_type(link_pin_k) is not link_raw_str for link_pin_k in link_pin_environment[2])) or (link_pin_environment[1].get('modules') is not link_pin_environment[2]) or (link_raw_type(link_pin_modules) is not link_raw_tuple) or (link_raw_len(link_pin_modules) != 4) or (link_raw_type(link_pin_own_functions) is not link_raw_tuple) or (link_raw_type(link_pin_policy_functions) is not link_raw_tuple) or (link_raw_type(link_pin_types) is not link_raw_tuple) or (link_raw_len(link_pin_types) != 11):
                     raise refusal from None
                 link_pin_names = ('hmp_startup.link_factory_origin', 'hmp_plugin.presentation_link_path_policy', 'hmp_plugin.presentation_startup_artifacts', 'hmp_startup.runtime_files')
                 for link_pin_row, link_pin_name in link_raw_zip(link_pin_modules, link_pin_names, strict=True):
@@ -4385,7 +4436,10 @@ class StartupArtifactOwner:
                 if (link_raw_type(link_engine_origin) is not link_raw_tuple
                         or link_raw_len(link_engine_origin) != 6
                         or link_pin_environment[4] is not link_engine_origin
-                        or link_pin_environment[5] is not link_engine_origin[5]):
+                        or link_pin_environment[5] is not link_engine_origin[5]
+                        or link_pin_environment[7] is not link_audit_record
+                        or link_audit_record[0] is not link_engine_origin
+                        or link_audit_record[1] is not link_engine_origin[5]):
                     raise refusal from None
                 link_engine_dependencies = link_engine_origin[4]
                 if (link_raw_type(link_engine_dependencies) is not link_raw_tuple
@@ -4465,7 +4519,8 @@ class StartupArtifactOwner:
                         elif link_raw_type(link_engine_closure) is not link_raw_tuple or link_raw_len(link_engine_closure) != link_raw_len(link_engine_cells) or link_raw_any((link_raw_type(link_engine_cell) is not link_raw_cell or link_engine_cell.cell_contents is not link_engine_value for link_engine_cell, link_engine_value in link_raw_zip(link_engine_closure, link_engine_cells, strict=True))):
                             raise refusal from None
                 link_primitive_audit_rows = link_raw_tuple((row for row in link_engine_origin[2] if link_raw_type(row) is link_raw_tuple and link_raw_len(row) == 7 and (link_raw_type(row[0]) is link_raw_str) and (row[0] == '_engine_origin_tail')))
-                if link_raw_len(link_primitive_audit_rows) != 1:
+                if (link_raw_len(link_primitive_audit_rows) != 1
+                        or link_primitive_audit_rows[0] is not link_audit_record[2]):
                     raise refusal from None
                 link_primitive_audit_checker, link_primitive_audit_kw = (link_primitive_audit_rows[0][1], link_primitive_audit_rows[0][5])
                 if link_raw_type(link_primitive_audit_checker) is not link_raw_function or link_raw_type(link_primitive_audit_kw) is not link_raw_dict or link_primitive_audit_checker.__kwdefaults__ is not link_primitive_audit_kw or link_raw_any((link_raw_type(k) is not link_raw_str for k in link_primitive_audit_kw)):

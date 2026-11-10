@@ -1061,3 +1061,12 @@ Twenty focused cases passed on each supported interpreter, independent bounded
 production-source review found no introduced issue. Real-child lineage test
 extended but not executed here. Scope, both final publication seals and selectors
 remain incomplete; BA2 and deployment stay unqualified.
+
+BA2 Scope/selector wiring (2026-11-10 draft): append Scope18, preserve blueprint17,
+join original record at both publication seals and selectors; generic full audit
+unchanged. 115 regression cases pass each runtime, actual coherent-record graft
+refusal both publication windows (2 each) and actual selector late-key/malformed
+refusal (3 each) pass current/minimum. Review-found dictionary fences and fresh-
+probe field-count regression repaired. Original full normal publication/native
+traversal and unobserved Scope normal still timeout60s, real fresh-probe normal
+remains pending. No BA2 completion/BA3 fast dispatch/deployment acceptance.

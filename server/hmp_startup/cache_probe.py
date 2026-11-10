@@ -119,7 +119,7 @@ class RuntimeCacheProbeOwner:
             native_files, slot = root[2].entry_binding[0].native_files, [None]
             values = (activation, activation_scope, expected, context, records, parent,
                       None, None, None, None, native_files, slot, None, plan,
-                      plan.resource_origin, plan.engine_origin, None, None)
+                      plan.resource_origin, plan.engine_origin, None, None, None)
             tuple_item, tuple_length = tuple.__getitem__, tuple.__len__
             scope = scope_kind(activation, activation_scope, expected, context, records,
                                parent=parent, native_files=native_files,

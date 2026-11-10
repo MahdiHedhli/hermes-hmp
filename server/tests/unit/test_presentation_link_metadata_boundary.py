@@ -88,7 +88,7 @@ def packet():
     """Local packet validation only; never an entry/Scope or native allowance."""
     from hmp_startup.link_factory_origin import _pin_function, _pin_type
 
-    return link._capture_engine()
+    return link._capture_engine()[0]
 
 
 def test_local_packet_validator_returns_the_actual_packet_without_admitting_work():

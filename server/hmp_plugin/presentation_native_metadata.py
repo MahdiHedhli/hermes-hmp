@@ -609,12 +609,26 @@ def _closed_link_engine_origin(owner, resource):
     _native_work_registration_tail(owner, registration)
     lineage = registration.lineage
     _require(type(lineage) is registration.type_pins[0]
-             and tuple.__len__(lineage) == 5)
+             and tuple.__len__(lineage) == 6)
     parent = tuple.__getitem__(lineage, 4)
     _require(type(parent) is tuple and len(parent) == 5)
     environment, own = parent[0], parent[2]
-    _require(type(environment) is tuple and len(environment) == 7
+    _require(type(environment) is tuple and len(environment) == 8
              and type(own) is tuple and len(own) == 7)
+    audit_record = tuple.__getitem__(lineage, 5)
+    scope = registration.scope
+    _require(type(registration.entry_module) is ModuleType)
+    entry_names = vars(registration.entry_module)
+    _require(type(entry_names) is dict and all(type(k) is str for k in entry_names))
+    entry_origin = entry_names.get('_ENTRY_ORIGIN')
+    _require(type(entry_origin) is entry_names.get('_EntryOrigin')
+             and tuple.__len__(entry_origin) == 12)
+    _require(type(audit_record) is tuple and len(audit_record) == 3
+             and environment[7] is audit_record
+             and tuple.__getitem__(scope, 18) is audit_record
+             and tuple.__getitem__(entry_origin, 11) is audit_record
+             and audit_record[0] is environment[4]
+             and audit_record[1] is environment[5])
     current_row = own[3]
     _require(type(current_row) is tuple and len(current_row) == 7)
     # Authenticate the first retained validator with primitives. Calling the
@@ -658,6 +672,7 @@ def _closed_link_engine_origin(owner, resource):
                  and type(row[0]) is str and row[0] == '_engine_origin_tail')
     _require(len(rows) == 1)
     row, namespace = rows[0], vars(origin[0])
+    _require(row is audit_record[2])
     _require(all(type(k) is str for k in namespace)
              and type(row[1]) is FunctionType and row[3] is namespace
              and namespace.get('_engine_origin_tail') is row[1]
@@ -674,9 +689,17 @@ def _closed_link_engine_origin(owner, resource):
             or check.__kwdefaults__ is not kw):
         raise ArtifactObservationError from None
     _require(check(origin) is origin)
+    _require(type(registration.entry_module) is ModuleType
+             and vars(registration.entry_module) is entry_names
+             and all(type(k) is str for k in entry_names))
     _require(tuple.__getitem__(registration.scope, 17) is blueprint
              and tuple.__getitem__(registration.lineage, 4) is parent
-             and parent[0] is environment and environment[4] is origin)
+             and parent[0] is environment and environment[4] is origin
+             and environment[7] is audit_record
+             and tuple.__getitem__(registration.scope, 18) is audit_record
+             and tuple.__getitem__(registration.lineage, 5) is audit_record
+             and entry_names.get('_ENTRY_ORIGIN') is entry_origin
+             and tuple.__getitem__(entry_origin, 11) is audit_record)
     return origin
 
 

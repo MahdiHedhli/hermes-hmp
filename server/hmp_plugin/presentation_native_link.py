@@ -895,9 +895,15 @@ def _execution_mirrors(execution):
     _require(type(parent) is tuple and len(parent) == 5
              and type(parent[4]) is tuple and len(parent[4]) >= 11
              and type(blueprint) is parent[4][6][0]
-             and type(parent[0]) is tuple and len(parent[0]) == 7
+             and type(parent[0]) is tuple and len(parent[0]) == 8
              and parent[0][4] is execution.origin
              and parent[0][5] is execution.origin[5]
+             and type(parent[0][7]) is tuple and len(parent[0][7]) == 3
+             and tuple.__len__(reg.lineage) == 6
+             and tuple.__getitem__(reg.lineage, 5) is parent[0][7]
+             and tuple.__getitem__(reg.scope, 18) is parent[0][7]
+             and parent[0][7][0] is execution.origin
+             and parent[0][7][1] is execution.origin[5]
              and tuple.__getitem__(execution.blueprint, 4) is parent
              and tuple.__getitem__(execution.blueprint, 0) is owner
              and tuple.__getitem__(execution.blueprint, 3) is reg.lineage

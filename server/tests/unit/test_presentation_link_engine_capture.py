@@ -94,7 +94,6 @@ def test_capture_reseals_originals_after_held_checker_return(monkeypatch, fault)
 def test_parent_refuses_self_consistent_foreign_sys_root(monkeypatch):
     fake = ModuleType('sys')
     fake.modules = dict(sys.modules)
-    monkeypatch.setattr(link, 'sys', fake)
     monkeypatch.setattr(origins, '_CAPTURE_STARTED', False)
     seen = []
     code = link._capture_engine.__code__
@@ -103,8 +102,15 @@ def test_parent_refuses_self_consistent_foreign_sys_root(monkeypatch):
         if frame.f_code is not code:
             return None
         frame.f_trace_lines = False
-        if event == 'return' and type(returned) is tuple:
-            seen.append(returned[4][0] is fake and returned[4][2] is fake.modules)
+        if event == 'call':
+            # Inject at the intended engine boundary, after the earlier retained-
+            # helper capture; changing it before that capture tests another guard.
+            monkeypatch.setattr(link, 'sys', fake)
+        if event == 'return':
+            if type(returned) is tuple:
+                engine = returned[0]
+                seen.append(engine[4][0] is fake and engine[4][2] is fake.modules)
+            monkeypatch.setattr(link, 'sys', sys)
         return observe
 
     prior = sys.gettrace()
@@ -127,7 +133,7 @@ def test_engine_capture_never_delegates_to_pin_helpers(monkeypatch):
 
     monkeypatch.setattr(origins, '_pin_function', foreign)
     monkeypatch.setattr(origins, '_pin_type', foreign)
-    packet = link._capture_engine()
+    packet = link._capture_engine()[0]
     assert link._engine_origin_tail(packet) is packet and calls == []
 
 
@@ -140,7 +146,7 @@ def test_engine_capture_has_no_initialization_import_callback(monkeypatch):
 
     with monkeypatch.context() as context:
         context.setattr(builtins, '__import__', foreign)
-        packet = link._capture_engine()
+        packet = link._capture_engine()[0]
     assert link._engine_origin_tail(packet) is packet and calls == []
 
 

@@ -13,7 +13,7 @@ from hmp_plugin import presentation_native_link as link
 @pytest.mark.parametrize('slot', ('_id', '_map', '_not_identity'))
 @pytest.mark.parametrize('drift', ('entry', 'dictionary'))
 def test_replaced_native_primitive_default_refuses_before_dispatch(monkeypatch, slot, drift):
-    original = link._capture_engine()
+    original = link._capture_engine()[0]
     calls = []
 
     def foreign(*args, **kwargs):
@@ -32,7 +32,7 @@ def test_replaced_native_primitive_default_refuses_before_dispatch(monkeypatch, 
 
 
 def test_python_map_imitation_cannot_supply_a_native_constructor(monkeypatch):
-    original = link._capture_engine()
+    original = link._capture_engine()[0]
     calls = []
 
     class map:
@@ -59,7 +59,7 @@ def test_python_map_imitation_cannot_supply_a_native_constructor(monkeypatch):
 @pytest.mark.parametrize('slot', ('_id', '_map', '_not_identity'))
 @pytest.mark.parametrize('fault', ('value', 'duplicate_and_omitted'))
 def test_original_keyword_pairs_are_rejoined_before_native_index_use(slot, fault):
-    original = link._capture_engine()
+    original = link._capture_engine()[0]
     rows = list(original[2])
     position = next(i for i, row in enumerate(rows) if row[0] == '_engine_origin_tail')
     row = rows[position]
@@ -128,7 +128,7 @@ def test_capture_rechecks_native_exports_after_checker_return(export):
 
 @pytest.mark.parametrize('namespace', ('module', 'constructor'))
 def test_another_call_rescans_foreign_keys_without_metaclass_protocols(monkeypatch, namespace):
-    original = link._capture_engine()
+    original = link._capture_engine()[0]
     assert link._engine_origin_tail(original) is original
     calls = []
 
@@ -168,7 +168,7 @@ def test_another_call_rescans_foreign_keys_without_metaclass_protocols(monkeypat
 
 
 def test_reordered_equivalent_namespace_keeps_original_identity_semantics():
-    original = link._capture_engine()
+    original = link._capture_engine()[0]
     names = vars(link)
     value = names.pop('_ENGINE_FUNCTIONS')
     names['_ENGINE_FUNCTIONS'] = value
@@ -179,7 +179,7 @@ def test_reordered_equivalent_namespace_keeps_original_identity_semantics():
 @pytest.mark.parametrize('entries', ({}, {'synthetic_unused_keyword': True}))
 def test_empty_and_nonempty_keyword_snapshots_remain_fresh(monkeypatch, entries):
     monkeypatch.setattr(link.policy._need, '__kwdefaults__', entries)
-    original = link._capture_engine()
+    original = link._capture_engine()[0]
     assert link._engine_origin_tail(original) is original
     entries['changed_after_capture'] = object()
     with pytest.raises(link.ArtifactObservationError):
@@ -187,7 +187,7 @@ def test_empty_and_nonempty_keyword_snapshots_remain_fresh(monkeypatch, entries)
 
 
 def test_equal_copied_function_namespace_cannot_replace_original_reference():
-    original = link._capture_engine()
+    original = link._capture_engine()[0]
     dependencies = original[4]
     modules = list(dependencies[3])
     row = modules[0]

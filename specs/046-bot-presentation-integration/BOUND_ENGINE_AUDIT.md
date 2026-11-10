@@ -222,3 +222,60 @@ lineage production delta. Reported test receipts were not independently rehashed
 by that reviewer. The real-child lineage assertions were extended but that child
 was NOT executed in this tranche. Scope, both final publication windows and
 selectors still require migration, so full BA2/startup/deployment remain pending.
+
+
+### BA2 retained-Scope/selector draft — November 10, validation ongoing
+
+Scope appends native_link_audit at index18, preserving blueprint17. Original
+entry/lineage/parent record joins now reach both final publication windows and
+native metadata/link selectors; the exact generic checker row is joined to the
+record in both inline final audits. The common registration tail rejoins actual
+ENTRY_ORIGIN, STARTED/CELL and source invocation for linked scopes. Legacy
+non-link scopes retain None; fresh-probe constructor expected values explicitly
+include that nineteenth nonadmitting field. All full generic and mutable audits
+remain; no BA3 optimization or fast dispatch is enabled.
+
+Independent review found two draft issues: new mutable entry-namespace lookups
+needed fresh string-key fences before reads and after validator callbacks; the
+fresh-probe exact constructor seal needed the appended None. Both source fixes
+are present and received bounded re-review. No draft was deployed. Their causal
+boundary tests and real fresh-probe acceptance remain pending.
+
+The 115-case regression selection passes on Python3.14.9 and3.11.15 with unchanged
+source maps/no failures/errors/skips, receipts hq-v69cplt4 and hq-mhy7nt02. An
+existing foreign-sys-root control initially failed on both draft and unchanged
+baseline (hq-9gaypkjk/hq-6_xgxxj5 versus hq-kbtcrffe): it injected before retained-
+helper capture and therefore hit that earlier refusal. Its injection now occurs
+at the actual engine capture call; it observes the returned record field0 and
+restores the alias before the parent resumes, preserving the original specific
+factory-refusal assertion. No production guard was weakened to make it pass.
+
+The original instrumented publication normal + native traversal contracts both
+still time out at their unchanged60-second deadlines (hq-pyrvx267). Publication
+stage evidence reached actual Scope construction and last selected return by
+2.71seconds, so early negative boundary tests remain feasible even though full
+normal traversal is blocked. The separately unobserved normal Scope completion
+also times out on current Python (hq-l7uz7m32); minimum Python3.11.15 run also timed out (hq-vbejtxtl). None of this establishes BA2 completion, startup/image delivery or
+deployment acceptance. Preserve failures rather than widening deadlines.
+
+
+### BA2 actual negative-boundary results — November 10
+
+Both original publication-window coherent audit-record grafts pass on both
+runtimes: hq-3muu5aa2 / hq-6owt7lpp, two cases each. The synthetic actual-root
+journey keeps independent EntryOrigin/STARTED roots while grafting a coherent
+copied record/environment/parent/lineage into the current invocation. Real
+publication refuses, no registration/success return occurs, and original ledger,
+no-replay and failure checks remain. Existing layout/helper graft fixtures now
+preserve the appended environment field rather than relying on a truncated schema.
+
+Late entry-key collision at the actual selector's registration-tail and generic-
+checker returns, plus malformed entry DATA, pass on both runtimes:
+hq-elaz3d9x / hq-e0r7dk9n, three cases each. The actual original Scope/record/
+STARTED/CELL witnesses are asserted outside production handlers. No foreign
+attribute/equality hook, new selected native effect, ledger charge/attempt or
+inflight work survives. These are full early-boundary negative journey tests,
+not fabricated registrations or fake authorization. Profiling costs about50s
+per case but each meets its unchanged60s deadline. No runtime timing improvement
+is inferred. Real normal fresh-probe flow and full normal traversal are still
+unqualified; BA2 remains open pending complete review/coverage.

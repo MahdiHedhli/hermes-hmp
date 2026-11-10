@@ -6,7 +6,7 @@ from .test_presentation_link_metadata_boundary import Foreign
 
 
 def test_capture_retains_original_rows_and_columns_without_live_state_cache():
-    origin = link._capture_engine()
+    origin = link._capture_engine()[0]
     assert len(origin) == 6 and origin[5][0] is origin[4]
     for (module, classes), original in zip(origin[5][1], origin[4][3], strict=True):
         assert module is original
@@ -21,7 +21,7 @@ def test_capture_retains_original_rows_and_columns_without_live_state_cache():
 @pytest.mark.parametrize('slot', ('layout', 'modules', 'module_row', 'classes',
                                   'class_row', 'keys', 'values', 'key'))
 def test_layout_fences_foreign_protocols_before_correspondence_use(slot):
-    origin = link._capture_engine()
+    origin = link._capture_engine()[0]
     calls = []
     foreign = Foreign(calls)
     layout = origin[5]
@@ -58,7 +58,7 @@ def test_layout_fences_foreign_protocols_before_correspondence_use(slot):
 @pytest.mark.parametrize('fault', ('dependency_copy', 'module_copy', 'class_copy',
                                    'missing_key', 'duplicate_key', 'value'))
 def test_layout_rejects_copied_rows_and_noncorresponding_columns(fault):
-    origin = link._capture_engine()
+    origin = link._capture_engine()[0]
     layout = origin[5]
     modules = list(layout[1])
     index = next(i for i, row in enumerate(modules)
@@ -98,7 +98,7 @@ def test_live_class_columns_compare_keys_before_none_values(monkeypatch, fault):
     kind = custody._DirectoryPayload
     name = '_synthetic_none_column'
     monkeypatch.setattr(kind, name, None, raising=False)
-    original = link._capture_engine()
+    original = link._capture_engine()[0]
     assert link._engine_origin_tail(original) is original
     calls = []
     if fault == 'value':

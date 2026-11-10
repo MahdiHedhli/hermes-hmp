@@ -178,3 +178,4 @@ def test_legacy_scope_has_no_blueprint_or_new_authority():
 
     scope = _Scope(object(), object(), (), (), [])
     assert scope.native_link_blueprint is None
+    assert scope.native_link_audit is None
