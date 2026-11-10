@@ -1,3 +1,17 @@
+## November 10: activation helper static projection
+
+The original helper record now covers4 loaded modules/13classes/15function rows.
+Activation's two actual allocation values may change; their keys are required,
+all other namespace values remain pinned, and static expected pairs cannot be
+replaced with excluded live keys. The actual original retained-scope body still
+freshly validates owner/cell/scope. Parent and both final Scope seals match the
+same projection. Same159 selected tests pass on Python3.14.9/3.11.15 (134local,
+24actual publication faults,1early-entry); independent source review found no
+blocker within this scope. No audit removal, new import, host change or gate.
+Late approval/import, mutable entry state and remaining descriptor/dispatch/
+primitive closure still precede consolidation and complete normal/native tests.
+Image/service/device/release qualification remains open.
+
 ## November 10: selection helper original-root extension
 
 The retained-helper record now covers three loaded modules, ten classes and

@@ -2,8 +2,10 @@
 
 Status: RBH-01 selected-helper DATA and RBH-02 early-parent/scope binding are
 implemented with bounded source qualification. The already-loaded selection
-helpers and package/recipe/selection refusal constructors now have original-root
-code/closure checks, with same139 selected tests passing on both runtimes.
+helpers, activation's fixed static projection and all four refusal constructors
+now have original-root code/closure checks, with same159 selected tests passing
+on both runtimes. Activation live values remain fresh original-validator inputs,
+not immutable authority or cached verdicts.
 Complete transitive coverage and audit consolidation remain open. This is not an
 authorization shortcut. See SELECTED_RETAINED_HELPER_ORIGIN.md.
 

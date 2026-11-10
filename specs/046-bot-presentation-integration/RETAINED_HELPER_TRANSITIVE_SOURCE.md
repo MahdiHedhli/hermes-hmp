@@ -1,12 +1,12 @@
 # RBH-03: retained-only source dependency review
 
-Status: source inventory and the already-loaded selection-helper custody layer
+Status: source inventory, selection helpers and activation static projection
 are implemented. Complete transitive custody and audit consolidation remain open.
-The selection extension changes runtime integrity checks, not availability gates.
-The actual record now covers three modules, ten classes and twelve functions;
-same139 selected cases pass on both runtimes, including18actual publication faults.
-Source review found no blocker in that bounded extension. Later approval/import,
-mutable activation/entry state and remaining descriptor/dispatch closure are not
+These changes add runtime integrity checks, not availability gates. The actual
+record now covers four modules, thirteen classes and fifteen functions; same159
+selected cases pass on both runtimes, including24actual publication faults.
+Source review found no blocker in the bounded extension. Later approval/import,
+mutable approval/entry state and remaining descriptor/dispatch/primitive closure are not
 qualified by that result. No audit has been removed or new target module imported.
 
 Reproduce without importing HMP or reading host configuration:
@@ -62,7 +62,15 @@ owners allocate. Entry `_ENTRY_ORIGIN` is assigned after the early capture call
 returns. Freezing their early values or namespace cardinality would reject normal
 startup; simply ignoring their semantics would weaken the original live joins.
 
-The candidate contract is a fixed static-export projection for these modules:
+Activation now implements the fixed static-export projection for exactly its two
+live values. Their keys and full namespace cardinality remain checked; every other
+value stays pinned. Original `_retained_scope` and refusal-constructor code/defaults/
+closures, class/member/base snapshots and defining aliases are held. It does not
+freeze live allocation values or treat DATA currentness as an owner verdict. Actual
+normal-entry and operator/publication paths pass; a unit causal accepts changed
+DATA yet freshly refuses a mismatched cell through the original validator.
+
+The remaining candidate contract for approval/entry is a fixed static projection:
 hold exact original module/registry/namespace identity, function metadata,
 referenced static aliases/constants and class/member/base dispatch provenance.
 Keep the existing original retained bodies responsible for fresh mutable-cell
@@ -82,6 +90,11 @@ import back to entry must not introduce an initialization callback or native IO.
 1. Review an explicit function/class/static-export list and mutable/late-key table
    against the exact pinned source. Resolve artifact descriptor subcalls separately;
    the 22-function inventory is a review boundary, not an exhaustive closure.
+   Artifact's native closed path specifically continues through
+   `_native_descriptor_closed` → `_native_descriptor_opened` →
+   `_native_file_allocation_original`; the last two are absent from that inventory.
+   Refusal-path constructor dispatch must remain safe even when the constructor
+   itself is the changed object detected by a final seal.
 2. Bind that projection to the actual early original root, before callbacks. Rejoin
    literal identity after callbacks and inline at final publication. No cached
    currentness verdict, per-call result or tuple shape grants an omitted audit.

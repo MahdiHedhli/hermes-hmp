@@ -1,40 +1,43 @@
-## November 10 — selection helper binding verified; image delivery remains open
+## November 10 — activation helper binding verified; image delivery remains open
 
-The actual early startup record now also holds the already-loaded selection
-module, its owner/scope/data classes, four retained-path helpers and the three
-package/recipe/selection refusal constructors. The record covers three module
-namespaces, ten classes and twelve function/code/default/closure rows. Imported
-selection owners, shared scope/data types and the approved-recipe alias must join
-the same defining objects. The actual parent and both final Scope seals apply
-the same new checks inline. Parent env7 and engine6 formats are unchanged.
+The original early startup record now includes the already-loaded activation
+module, its owner/scope/error classes and retained-scope/require/error-constructor
+code. It covers four modules, thirteen classes and fifteen function metadata rows.
+Only the two actual activation allocation values are excluded from static value
+snapshots; both keys remain required, all other namespace keys/values stay checked,
+and expected pairs cannot disguise a static export as a live key. The exclusion
+list is fixed in the original component, not supplied by callers.
 
-The same **139 selected tests pass on Python 3.14.9 and 3.11.15**, with identical
-server source maps and case sets: 120 local controls, eighteen actual publication
-faults and one actual early-entry control. New cases cover code-only changes to
-selection helpers and refusal constructors, export/dispatch/default changes and
-inconsistent imported aliases already present before capture. At both actual
-publication points, changed selection helper/constructor code refuses without
-foreign dispatch, new native work, reservation change, subsequent registration
-or a successful retainer return. Independent source review found no blocker in
-this bounded extension; it did not perform runtime tests.
+The original retained-scope validator still freshly joins the actual owner,
+allocation cell and scope. An unchanged inspection record is not a live-state
+verdict: tests accept changed allocation DATA and then require the original guard
+to refuse a mismatched cell. Parent env7, engine6 and the helper packet formats
+remain unchanged. The actual parent and both final Scope seals enforce the same
+projection and defining-alias checks inline; no audit has been removed.
 
-This is partial transitive provenance, not complete closure or image-serving
-authority. The later approval import, mutable approval/activation/entry state,
-remaining descriptor subcalls and wider dispatch/primitive closure still need
-original binding. No direct or nested recipe audit has been removed, no mutable
-verdict is cached, and no new module import, host setting or feature gate was
-introduced. The source-only dependency inventory remains review evidence only.
+The same **159 selected tests pass on Python 3.14.9 and 3.11.15**, with unchanged
+server source maps and identical case sets: 134 local controls, twenty-four actual
+publication faults and one actual early-entry control. New cases cover live-key
+presence and static-pair forgery, namespace growth, activation code/dispatch/error
+changes, defining aliases and replacement of the projection schema itself. At
+both actual publication points, late activation/helper-error code or schema drift
+refuses with zero foreign dispatch, new native work, reservation change, later
+registration or successful retainer return. Independent source review found no
+blocker within this bounded extension; it performed no runtime testing.
 
-The previous full native run on the preceding env7 source exceeded its unchanged
-60-second deadline after 44 typed observations and one retired raw capsule. It is
-not a full-native result for this new composition. No startup speed improvement,
-complete native/service/route pass, desktop character display or host-local image
-delivery is claimed. Complete integration and physical/release qualification
-remain open; no upstream-only image blocker has been demonstrated.
+This remains partial transitive provenance. The late approval import, mutable
+approval/entry state and remaining descriptor/dispatch/primitive closure still
+precede same-call recipe audit consolidation. No new target module import, setting,
+permission, runtime availability gate or cached mutable verdict was introduced.
 
-No host, device, permission, provider, model, job, installation or release changed.
-LLY520's authorized update still needs an established connection. Prepared
-Android/iOS 2026110901 are not newly installed or device-qualified by this work.
+The preceding full native run exceeded its unchanged 60-second deadline after
+44 typed observations and one retired raw capsule; it does not qualify this new
+composition. No startup speed improvement or complete native/service/route pass
+is claimed. Desktop character display, host-local images and physical/release
+qualification remain open; no upstream-only image blocker has been demonstrated.
+No host/device/provider/model/job/install/release changes occurred. LLY520's
+authorized update still needs an established connection; prepared Android/iOS
+2026110901 were not newly installed or device-qualified by this work.
 
 # November 9: duplicate runtime checks removed; images still unqualified
 

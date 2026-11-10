@@ -9,7 +9,7 @@ from .test_presentation_gateway_approval import operator_composed_script
 
 
 @pytest.mark.parametrize('publication', ('first', 'second'))
-@pytest.mark.parametrize('export', ('map', 'is_not', 'layout_graft', 'helper_graft', 'helper_checker', 'selection_code', 'selection_error_code', 'entry_getattribute', 'entry_subclass_dict'))
+@pytest.mark.parametrize('export', ('map', 'is_not', 'layout_graft', 'helper_graft', 'helper_checker', 'helper_projection_schema', 'selection_code', 'selection_error_code', 'activation_code', 'activation_error_code', 'entry_getattribute', 'entry_subclass_dict'))
 def test_scope_publication_rejects_changed_primitive_or_layout_root(
         tmp_path, monkeypatch, request, publication, export):
     tree = ast.parse((base.SERVER / 'hmp_plugin/presentation_startup_artifacts.py').read_text())
@@ -86,20 +86,29 @@ def observe(frame,event,value):
                 assert type(entry_owner) is ChangedEntry
         elif export=='helper_checker':
             component=context['link_helper_origin'][0]
-            helper_restore.append((component,component.current))
+            helper_restore.append((component,'current',component.current))
             assign(component,'current',foreign)
             assert component.current is foreign
-        elif export in ('selection_code','selection_error_code'):
-            selected=sys.modules['hmp_plugin.presentation_startup_selection']
-            if export=='selection_code':
-                function=selected._approved_recipe
+        elif export=='helper_projection_schema':
+            component=context['link_helper_origin'][0]
+            previous=component._LIVE_GLOBALS
+            helper_restore.append((component,'_LIVE_GLOBALS',previous))
+            assign(component,'_LIVE_GLOBALS',((),(),(),()))
+            assert component._LIVE_GLOBALS is not previous
+        elif export in ('selection_code','selection_error_code','activation_code','activation_error_code'):
+            selected=sys.modules['hmp_plugin.presentation_gateway_activation'
+                if export.startswith('activation') else 'hmp_plugin.presentation_startup_selection']
+            if export in ('selection_code','activation_code'):
+                function=(selected.GatewayActivationOwner._retained_scope
+                    if export=='activation_code' else selected._approved_recipe)
                 late_helper_code=foreign.__code__
             else:
                 class ChangedError(Exception):
                     def __init__(self,*args,**kwargs):
                         __class__
                         raise AssertionError('changed selection error dispatched')
-                function=selected.SelectionLoadError.__init__
+                function=(selected.ActivationCaptureError.__init__
+                    if export=='activation_error_code' else selected.SelectionLoadError.__init__)
                 late_helper_code=ChangedError.__init__.__code__
             assert len(function.__code__.co_freevars)==len(late_helper_code.co_freevars)
             helper_code_restore.append((function,function.__code__))
@@ -162,7 +171,7 @@ except EntryFilesError as caught:
     failed=True
 finally:
     sys.setprofile(prior);sys.settrace(None)
-    for component,previous in helper_restore:assign(component,'current',previous)
+    for component,name,previous in helper_restore:assign(component,name,previous)
     for function,previous in helper_code_restore:assign(function,'__code__',previous)
     for instance,entry_kind in class_restore:
         object.__setattr__(instance,'__class__',entry_kind)

@@ -11,12 +11,18 @@ from types import CellType, FunctionType, ModuleType
 
 _MODULES = ('hmp_plugin.presentation_gateway_package',
             'hmp_plugin.presentation_gateway_recipe',
-            'hmp_plugin.presentation_startup_selection')
+            'hmp_plugin.presentation_startup_selection',
+            'hmp_plugin.presentation_gateway_activation')
+# Only these two values legitimately change during activation allocation. Their
+# keys remain required; the original retained-scope body freshly joins their
+# values to its actual owner/scope. This DATA checker supplies no such authority.
+_LIVE_GLOBALS = ((), (), (), ('_ENTRY_OWNER', '_ENTRY_CELL'))
 _CLASSES = ((0, 'GatewayPackageOwner'), (0, '_Manifest'), (1, 'GatewayRecipeOwner'),
             (2, 'StartupSelectionOwner'), (2, '_Scope'),
             (2, '_ApprovedSelectionSource'), (2, 'GatewayStartupSelection'),
             (2, 'SelectionLoadError'), (0, 'PackageInventoryError'),
-            (1, 'GatewayRecipeError'))
+            (1, 'GatewayRecipeError'), (3, 'GatewayActivationOwner'),
+            (3, '_ActivationScope'), (3, 'ActivationCaptureError'))
 _FUNCTIONS = ((0, 'GatewayPackageOwner', '_retained_binding'),
               (1, 'GatewayRecipeOwner', '_retained_binding'),
               (0, None, '_require'), (1, None, '_require'),
@@ -25,7 +31,9 @@ _FUNCTIONS = ((0, 'GatewayPackageOwner', '_retained_binding'),
               (2, None, '_approved_recipe'), (2, None, '_approval_binding'),
               (2, None, '_require'), (2, 'SelectionLoadError', '__init__'),
               (0, 'PackageInventoryError', '__init__'),
-              (1, 'GatewayRecipeError', '__init__'))
+              (1, 'GatewayRecipeError', '__init__'),
+              (3, 'GatewayActivationOwner', '_retained_scope'),
+              (3, None, '_require'), (3, 'ActivationCaptureError', '__init__'))
 
 
 class RetainedBindingOriginError(RuntimeError):
@@ -39,15 +47,17 @@ def capture():
     if type(registry) is not dict or not all(type(key) is str for key in registry):
         raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
     modules = []
-    for name in _MODULES:
+    for name, live_keys in zip(_MODULES, _LIVE_GLOBALS, strict=True):
         module = registry.get(name)
         if type(module) is not ModuleType:
             raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
         namespace = vars(module)
         if (type(namespace) is not dict or not all(type(key) is str for key in namespace)
-                or type(namespace.get('__name__')) is not str or namespace['__name__'] != name):
+                or type(namespace.get('__name__')) is not str or namespace['__name__'] != name
+                or not all(key in namespace for key in live_keys)):
             raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
-        modules.append((module, namespace, tuple(namespace.items())))
+        modules.append((module, namespace, tuple((key, value)
+            for key, value in namespace.items() if key not in live_keys)))
     modules = tuple(modules)
     classes = []
     for index, name in _CLASSES:
@@ -119,7 +129,7 @@ def current(packet):
           and type(classes) is tuple and len(classes) == len(_CLASSES)
           and type(functions) is tuple and len(functions) == len(_FUNCTIONS)) is not True:
         raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
-    for row, name in zip(modules, _MODULES, strict=True):
+    for row, name, live_keys in zip(modules, _MODULES, _LIVE_GLOBALS, strict=True):
         if (type(row) is tuple and len(row) == 3) is not True:
             raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
         module, namespace, pairs = row
@@ -128,14 +138,17 @@ def current(packet):
               and all(type(key) is str for key in namespace)
               and registry.get(name) is module and vars(module) is namespace
               and type(namespace.get('__name__')) is str and namespace['__name__'] == name
-              and type(pairs) is tuple and len(namespace) == len(pairs)) is not True:
+              and type(pairs) is tuple
+              and all(key in namespace for key in live_keys)
+              and len(namespace) == len(pairs) + len(live_keys)) is not True:
             raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
         seen = set()
         for pair in pairs:
             if (type(pair) is tuple and len(pair) == 2 and type(pair[0]) is str) is not True:
                 raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
             key, value = pair
-            if (key not in seen and key in namespace and namespace[key] is value) is not True:
+            if (key not in live_keys and key not in seen
+                  and key in namespace and namespace[key] is value) is not True:
                 raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
             seen.add(key)
     for row, (index, name) in zip(classes, _CLASSES, strict=True):
@@ -228,5 +241,14 @@ def current(packet):
           and modules[0][1].get('IoScope') is classes[4][0]
           and modules[1][1].get('_Scope') is classes[4][0]
           and modules[1][1].get('_approved_recipe') is functions[6][0]) is not True:
+        raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+    if (all(type(key) is str for key in modules[0][1])
+          and all(type(key) is str for key in modules[1][1])
+          and all(type(key) is str for key in modules[2][1])
+          and all(type(key) is str for key in modules[3][1])
+          and modules[0][1].get('GatewayActivationOwner') is classes[10][0]
+          and modules[1][1].get('GatewayActivationOwner') is classes[10][0]
+          and modules[2][1].get('GatewayActivationOwner') is classes[10][0]
+          and modules[2][1].get('_LATE_MODULES') is modules[3][1].get('_LATE_MODULES')) is not True:
         raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
     return packet

@@ -4,6 +4,7 @@ import pytest
 from hmp_plugin import presentation_gateway_package as package
 from hmp_plugin import presentation_gateway_recipe as recipe
 from hmp_plugin import presentation_startup_selection as selection
+from hmp_plugin import presentation_gateway_activation as activation
 from hmp_startup import retained_binding_origin as origin
 
 
@@ -215,6 +216,9 @@ def test_checker_callback_cannot_adopt_replacement_or_copy(monkeypatch, change):
     (selection, 'SelectionLoadError', '__init__'),
     (package, 'PackageInventoryError', '__init__'),
     (recipe, 'GatewayRecipeError', '__init__'),
+    (activation, 'GatewayActivationOwner', '_retained_scope'),
+    (activation, None, '_require'),
+    (activation, 'ActivationCaptureError', '__init__'),
 ))
 def test_selected_code_only_drift_refuses_before_helper_or_error_dispatch(
         monkeypatch, module, owner, name):
@@ -267,7 +271,9 @@ def test_selection_exports_dispatch_and_metadata_refuse(monkeypatch, drift):
 
 @pytest.mark.parametrize('module,name', ((recipe, '_approved_recipe'),
                                        (recipe, 'StartupSelectionOwner'),
-                                       (package, 'StartupSelectionOwner')))
+                                       (package, 'StartupSelectionOwner'),
+                                       (recipe, 'GatewayActivationOwner'),
+                                       (selection, '_LATE_MODULES')))
 def test_initial_import_alias_must_join_its_actual_defining_object(monkeypatch, module, name):
     calls = []
 
@@ -281,3 +287,63 @@ def test_initial_import_alias_must_join_its_actual_defining_object(monkeypatch, 
     with pytest.raises(origin.RetainedBindingOriginError):
         origin.capture()
     assert calls == []
+
+
+def test_activation_projection_is_not_a_live_owner_or_scope_verdict(monkeypatch):
+    captured = origin.capture()
+    owner = object.__new__(activation.GatewayActivationOwner)
+    scope = activation._ActivationScope(*(None for _ in range(11)))
+    owner._scope = scope
+    monkeypatch.setattr(activation, '_ENTRY_OWNER', owner)
+    monkeypatch.setattr(activation, '_ENTRY_CELL', (owner, scope))
+    assert origin.current(captured) is captured  # Legitimate allocation changes values.
+    assert activation.GatewayActivationOwner._retained_scope(owner) is scope
+    # The projection is still current, but the ORIGINAL validator freshly refuses
+    # a different live cell; its previous DATA result never authorizes this state.
+    monkeypatch.setattr(activation, '_ENTRY_CELL', (owner, None))
+    assert origin.current(captured) is captured
+    with pytest.raises(activation.ActivationCaptureError):
+        activation.GatewayActivationOwner._retained_scope(owner)
+
+
+@pytest.mark.parametrize('key', ('_ENTRY_OWNER', '_ENTRY_CELL'))
+def test_activation_projection_requires_live_keys_even_without_pinning_values(monkeypatch, key):
+    captured = origin.capture()
+    monkeypatch.delattr(activation, key)
+    with pytest.raises(origin.RetainedBindingOriginError):
+        origin.current(captured)
+
+
+@pytest.mark.parametrize('key', ('_ENTRY_OWNER', '_ENTRY_CELL'))
+def test_expected_static_pair_cannot_be_replaced_with_an_excluded_live_key(key):
+    packet = list(origin.capture())
+    rows = list(packet[3])
+    module, namespace, pairs = rows[3]
+    rows[3] = (module, namespace, ((key, namespace[key]), *pairs[1:]))
+    packet[3] = tuple(rows)
+    with pytest.raises(origin.RetainedBindingOriginError):
+        origin.current(tuple(packet))
+
+
+@pytest.mark.parametrize('kind', ('owner', 'scope'))
+def test_activation_class_dispatch_drift_refuses_before_foreign_getter(monkeypatch, kind):
+    captured = origin.capture()
+    calls = []
+
+    def foreign(*args):
+        calls.append(True)
+        raise AssertionError('activation dispatch changed')
+
+    selected = (activation.GatewayActivationOwner if kind == 'owner'
+                else activation._ActivationScope)
+    monkeypatch.setattr(selected, '__getattribute__', foreign, raising=False)
+    with pytest.raises(origin.RetainedBindingOriginError):
+        origin.current(captured)
+    assert calls == []
+
+
+def test_activation_projection_does_not_allow_other_namespace_growth(monkeypatch):
+    captured = origin.capture()
+    monkeypatch.setattr(activation, '_synthetic_new_static_export', None, raising=False)
+    with pytest.raises(origin.RetainedBindingOriginError):
+        origin.current(captured)

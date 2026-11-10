@@ -33,7 +33,7 @@ def test_capture_is_one_attempt_and_cannot_recover_a_lost_return(captured):
     'factory_export', 'parts_export', 'need_code', 'current_export',
     'pin_helper_export', 'validator_default', 'validator_extra_default',
     'policy_module', 'native_module', 'policy_dispatch', 'policy_member',
-    'native_type_export', 'constructor_globals', 'capture_marker',
+    'native_type_export', 'constructor_globals', 'capture_marker', 'helper_projection_schema',
 ))
 def test_changed_original_bindings_refuse_before_foreign_calls(captured, monkeypatch, fault):
     from hmp_startup import runtime_files
@@ -76,6 +76,9 @@ def test_changed_original_bindings_refuse_before_foreign_calls(captured, monkeyp
         monkeypatch.setitem(policy._LinkPathPolicy.__new__.__globals__, '_tuple_new', foreign)
     elif fault == 'capture_marker':
         monkeypatch.setattr(origins, '_CAPTURE_STARTED', False)
+    elif fault == 'helper_projection_schema':
+        from hmp_startup import retained_binding_origin
+        monkeypatch.setattr(retained_binding_origin, '_LIVE_GLOBALS', ((), (), (), ()))
     else:
         raise AssertionError('unhandled causal fault')
     with pytest.raises(RuntimeError, match='BI1_LINK_FACTORY_ORIGIN_REFUSED'):

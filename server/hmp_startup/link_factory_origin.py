@@ -539,23 +539,24 @@ def current(origin, *, _type=type, _vars=vars, _tuple=tuple, _len=len,
     helper_data_modules = helper_namespace['_MODULES']
     helper_data_classes = helper_namespace['_CLASSES']
     helper_data_functions = helper_namespace['_FUNCTIONS']
+    helper_data_live_globals = helper_namespace['_LIVE_GLOBALS']
     if (_type(helper_final_packet) is _tuple and _len(helper_final_packet) == 6) is not True:
         raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
     helper_final_system, helper_final_system_names, helper_final_registry, helper_final_modules, helper_final_classes, helper_final_functions = helper_final_packet
     if (_type(helper_final_system) is _module and _type(helper_final_system_names) is _dict and (_vars(helper_final_system) is helper_final_system_names) and _all((_type(helper_final_key) is _str for helper_final_key in helper_final_system_names)) and (_type(helper_final_registry) is _dict) and _all((_type(helper_final_key) is _str for helper_final_key in helper_final_registry)) and (helper_final_system_names.get('modules') is helper_final_registry) and (_type(helper_final_modules) is _tuple) and (_len(helper_final_modules) == _len(helper_data_modules)) and (_type(helper_final_classes) is _tuple) and (_len(helper_final_classes) == _len(helper_data_classes)) and (_type(helper_final_functions) is _tuple) and (_len(helper_final_functions) == _len(helper_data_functions))) is not True:
         raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
-    for helper_final_row, helper_final_name in _zip(helper_final_modules, helper_data_modules, strict=True):
+    for helper_final_row, helper_final_name, helper_final_live_keys in _zip(helper_final_modules, helper_data_modules, helper_data_live_globals, strict=True):
         if (_type(helper_final_row) is _tuple and _len(helper_final_row) == 3) is not True:
             raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
         helper_final_module, helper_final_namespace, helper_final_pairs = helper_final_row
-        if (_type(helper_final_module) is _module and _type(helper_final_namespace) is _dict and _all((_type(helper_final_key) is _str for helper_final_key in helper_final_registry)) and _all((_type(helper_final_key) is _str for helper_final_key in helper_final_namespace)) and (helper_final_registry.get(helper_final_name) is helper_final_module) and (_vars(helper_final_module) is helper_final_namespace) and (_type(helper_final_namespace.get('__name__')) is _str) and (helper_final_namespace['__name__'] == helper_final_name) and (_type(helper_final_pairs) is _tuple) and (_len(helper_final_namespace) == _len(helper_final_pairs))) is not True:
+        if (_type(helper_final_module) is _module and _type(helper_final_namespace) is _dict and _all((_type(helper_final_key) is _str for helper_final_key in helper_final_registry)) and _all((_type(helper_final_key) is _str for helper_final_key in helper_final_namespace)) and (helper_final_registry.get(helper_final_name) is helper_final_module) and (_vars(helper_final_module) is helper_final_namespace) and (_type(helper_final_namespace.get('__name__')) is _str) and (helper_final_namespace['__name__'] == helper_final_name) and (_type(helper_final_pairs) is _tuple) and _all((helper_final_key in helper_final_namespace for helper_final_key in helper_final_live_keys)) and (_len(helper_final_namespace) == _len(helper_final_pairs) + _len(helper_final_live_keys))) is not True:
             raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
         helper_final_seen = _set()
         for helper_final_pair in helper_final_pairs:
             if (_type(helper_final_pair) is _tuple and _len(helper_final_pair) == 2 and (_type(helper_final_pair[0]) is _str)) is not True:
                 raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
             helper_final_key, helper_final_value = helper_final_pair
-            if (helper_final_key not in helper_final_seen and helper_final_key in helper_final_namespace and (helper_final_namespace[helper_final_key] is helper_final_value)) is not True:
+            if (helper_final_key not in helper_final_live_keys and helper_final_key not in helper_final_seen and (helper_final_key in helper_final_namespace) and (helper_final_namespace[helper_final_key] is helper_final_value)) is not True:
                 raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
             helper_final_seen.add(helper_final_key)
     for helper_final_row, (helper_final_index, helper_final_name) in _zip(helper_final_classes, helper_data_classes, strict=True):
@@ -623,6 +624,8 @@ def current(origin, *, _type=type, _vars=vars, _tuple=tuple, _len=len,
     if (_all((_type(helper_final_key) is _str for helper_final_key in helper_final_modules[0][1])) and helper_final_modules[0][1].get('GatewayRecipeOwner') is helper_final_classes[2][0] and (helper_final_modules[0][1].get('_same_recipe_binding') is helper_final_functions[4][0])) is not True:
         raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
     if (_all((_type(helper_final_key) is _str for helper_final_key in helper_final_modules[0][1])) and _all((_type(helper_final_key) is _str for helper_final_key in helper_final_modules[1][1])) and (helper_final_modules[0][1].get('StartupSelectionOwner') is helper_final_classes[3][0]) and (helper_final_modules[1][1].get('StartupSelectionOwner') is helper_final_classes[3][0]) and (helper_final_modules[0][1].get('GatewayStartupSelection') is helper_final_classes[6][0]) and (helper_final_modules[1][1].get('GatewayStartupSelection') is helper_final_classes[6][0]) and (helper_final_modules[0][1].get('IoScope') is helper_final_classes[4][0]) and (helper_final_modules[1][1].get('_Scope') is helper_final_classes[4][0]) and (helper_final_modules[1][1].get('_approved_recipe') is helper_final_functions[6][0])) is not True:
+        raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+    if (_all((_type(helper_final_key) is _str for helper_final_key in helper_final_modules[0][1])) and _all((_type(helper_final_key) is _str for helper_final_key in helper_final_modules[1][1])) and _all((_type(helper_final_key) is _str for helper_final_key in helper_final_modules[2][1])) and _all((_type(helper_final_key) is _str for helper_final_key in helper_final_modules[3][1])) and (helper_final_modules[0][1].get('GatewayActivationOwner') is helper_final_classes[10][0]) and (helper_final_modules[1][1].get('GatewayActivationOwner') is helper_final_classes[10][0]) and (helper_final_modules[2][1].get('GatewayActivationOwner') is helper_final_classes[10][0]) and (helper_final_modules[2][1].get('_LATE_MODULES') is helper_final_modules[3][1].get('_LATE_MODULES'))) is not True:
         raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
     return origin
 
