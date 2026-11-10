@@ -1,9 +1,12 @@
 # Immutable expected layout for native Link audits
 
-Design only, November 9, 2026. Part of the open LP3 performance/acceptance task,
-not a new access grant, installed feature, accepted implementation or substitute
-for native traversal. Independent read-only review accepted the constraints
-below; a concrete implementation still requires review and causal qualification.
+Original custody increment implemented November 10, 2026: engine6/env6 retain
+expected class columns and literal identity joins through the parent, native
+selector, execution and both Scope seals. Independent bounded review and the same
+302 current/minimum Python cases pass. All previous live audits remain; fast
+schema interpretation, other role partitions and full native/service/device
+acceptance remain open. This is not an access grant or working image feature.
+The design constraints below continue to apply to subsequent optimization.
 
 ## Evidence and choice
 

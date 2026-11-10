@@ -13,7 +13,7 @@ import stat
 import sys
 import threading
 from dataclasses import dataclass
-from types import BuiltinFunctionType, CodeType, FunctionType, MethodDescriptorType, ModuleType, CellType
+from types import BuiltinFunctionType, CodeType, FunctionType, MethodDescriptorType, ModuleType, CellType, GetSetDescriptorType, MethodWrapperType
 from typing import NamedTuple
 
 from .presentation_gateway_activation import GatewayActivationOwner
@@ -567,8 +567,8 @@ def _has_native_link_engine(registration):
              and type(registration.lineage) is registration.type_pins[0])
     parent = tuple.__getitem__(registration.lineage, 4)
     _require(type(parent) is tuple and len(parent) == 5
-             and type(parent[0]) is tuple and len(parent[0]) in (4, 5))
-    return len(parent[0]) == 5
+             and type(parent[0]) is tuple and len(parent[0]) in (4, 6))
+    return len(parent[0]) == 6
 
 
 def _native_link_function(owner, registration, name):
@@ -579,7 +579,8 @@ def _native_link_function(owner, registration, name):
     _native_work_registration_tail(owner, registration)
     parent = tuple.__getitem__(registration.lineage, 4)
     origin = parent[0][4]
-    _require(type(origin) is tuple and len(origin) == 5 and type(origin[3]) is tuple)
+    _require(type(origin) is tuple and len(origin) == 6 and type(origin[3]) is tuple
+             and parent[0][5] is origin[5])
     rows = tuple(row for row in origin[3]
                  if type(row) is tuple and len(row) == 7
                  and type(row[0]) is str and row[0] == '_closed_link_engine_origin')
@@ -3337,6 +3338,22 @@ class StartupArtifactOwner:
                 origin_entry_names = tuple.__getitem__(entry_origin, 2)
                 need(type(origin_entry_names) is dict
                      and all(type(k) is str for k in origin_entry_names))
+                origin_invocation_owner = tuple.__getitem__(digest_context, 0)
+                origin_invocation_kind = tuple.__getitem__(entry_origin, 7)
+                need(link_raw_type(origin_invocation_owner) is origin_invocation_kind
+                     and link_raw_type(origin_invocation_kind) is link_raw_type)
+                origin_dict_descriptor = link_raw_vars(origin_invocation_kind).get('__dict__')
+                need(link_raw_type(origin_dict_descriptor) is GetSetDescriptorType
+                     and origin_dict_descriptor.__objclass__ is origin_invocation_kind)
+                origin_dict_get = origin_dict_descriptor.__get__
+                need(link_raw_type(origin_dict_get) is MethodWrapperType
+                     and origin_dict_get.__self__ is origin_dict_descriptor
+                     and origin_dict_get.__name__ == '__get__')
+                origin_invocation_names = origin_dict_get(origin_invocation_owner, origin_invocation_kind)
+                need(link_raw_type(origin_invocation_names) is link_raw_dict
+                     and not link_raw_any(link_raw_type(k) is not link_raw_str
+                                          for k in origin_invocation_names)
+                     and origin_invocation_names.get('_scope') is invocation)
                 runtime_guard, runtime_code = runtime.guard, runtime.code
                 need(type(runtime_guard) is FunctionType and runtime_guard.__code__ is runtime_code
                      and runtime.entry_type._pure_current is runtime_guard)
@@ -3540,7 +3557,13 @@ class StartupArtifactOwner:
                     raise error_type(owner) from None
                 # Rejoin actual source/entry pointer identities without calling
                 # a current getter after the last callback-bearing origin seal.
-                if (tuple.__getitem__(digest_context, 1) is not digest_binding
+                if (tuple.__getitem__(digest_context, 0) is not origin_invocation_owner
+                        or link_raw_type(origin_invocation_owner) is not origin_invocation_kind
+                        or origin_dict_get(origin_invocation_owner, origin_invocation_kind) is not origin_invocation_names
+                        or link_raw_any(link_raw_type(k) is not link_raw_str
+                                        for k in origin_invocation_names)
+                        or origin_invocation_names.get('_scope') is not invocation
+                        or tuple.__getitem__(digest_context, 1) is not digest_binding
                         or tuple.__getitem__(digest_context, 5) is not native_files
                         or tuple.__getitem__(invocation, 9) is not native_files
                         or tuple.__getitem__(started, 5) is not entry_origin
@@ -3556,7 +3579,7 @@ class StartupArtifactOwner:
                 if link_raw_type(link_origin) is not link_raw_tuple or link_raw_len(link_origin) != 5:
                     raise error_type(owner) from None
                 link_pin_environment, link_pin_modules, link_pin_own_functions, link_pin_policy_functions, link_pin_types = link_origin
-                if link_raw_type(link_pin_environment) is not link_raw_tuple or link_raw_len(link_pin_environment) != 5 or link_raw_type(link_pin_environment[0]) is not link_raw_module or (link_raw_type(link_pin_environment[1]) is not link_raw_dict) or (link_raw_vars(link_pin_environment[0]) is not link_pin_environment[1]) or link_raw_any((link_raw_type(link_pin_k) is not link_raw_str for link_pin_k in link_pin_environment[1])) or (link_raw_type(link_pin_environment[2]) is not link_raw_dict) or link_raw_any((link_raw_type(link_pin_k) is not link_raw_str for link_pin_k in link_pin_environment[2])) or (link_pin_environment[1].get('modules') is not link_pin_environment[2]) or (link_raw_type(link_pin_modules) is not link_raw_tuple) or (link_raw_len(link_pin_modules) != 4) or (link_raw_type(link_pin_own_functions) is not link_raw_tuple) or (link_raw_type(link_pin_policy_functions) is not link_raw_tuple) or (link_raw_type(link_pin_types) is not link_raw_tuple) or (link_raw_len(link_pin_types) != 11):
+                if link_raw_type(link_pin_environment) is not link_raw_tuple or link_raw_len(link_pin_environment) != 6 or link_raw_type(link_pin_environment[0]) is not link_raw_module or (link_raw_type(link_pin_environment[1]) is not link_raw_dict) or (link_raw_vars(link_pin_environment[0]) is not link_pin_environment[1]) or link_raw_any((link_raw_type(link_pin_k) is not link_raw_str for link_pin_k in link_pin_environment[1])) or (link_raw_type(link_pin_environment[2]) is not link_raw_dict) or link_raw_any((link_raw_type(link_pin_k) is not link_raw_str for link_pin_k in link_pin_environment[2])) or (link_pin_environment[1].get('modules') is not link_pin_environment[2]) or (link_raw_type(link_pin_modules) is not link_raw_tuple) or (link_raw_len(link_pin_modules) != 4) or (link_raw_type(link_pin_own_functions) is not link_raw_tuple) or (link_raw_type(link_pin_policy_functions) is not link_raw_tuple) or (link_raw_type(link_pin_types) is not link_raw_tuple) or (link_raw_len(link_pin_types) != 11):
                     raise error_type(owner) from None
                 link_pin_names = ('hmp_startup.link_factory_origin', 'hmp_plugin.presentation_link_path_policy', 'hmp_plugin.presentation_startup_artifacts', 'hmp_startup.runtime_files')
                 for link_pin_row, link_pin_name in link_raw_zip(link_pin_modules, link_pin_names, strict=True):
@@ -3598,8 +3621,9 @@ class StartupArtifactOwner:
                 if link_pin_encoded_module is not link_pin_environment[0] or link_pin_encoded_namespace is not link_pin_environment[1] or link_raw_type(link_pin_get_encoding) is not link_raw_builtin or (link_raw_type(link_pin_get_errors) is not link_raw_builtin) or (link_pin_get_encoding.__self__ is not link_pin_encoded_module) or (link_pin_get_errors.__self__ is not link_pin_encoded_module) or (link_pin_get_encoding.__name__ != 'getfilesystemencoding') or (link_pin_get_errors.__name__ != 'getfilesystemencodeerrors') or (link_pin_encoded_namespace.get('getfilesystemencoding') is not link_pin_get_encoding) or (link_pin_encoded_namespace.get('getfilesystemencodeerrors') is not link_pin_get_errors) or (link_raw_type(link_pin_encode) is not link_raw_descriptor) or (link_pin_encode.__objclass__ is not link_raw_str) or (link_pin_encode.__name__ != 'encode') or (link_raw_vars(link_raw_str).get('encode') is not link_pin_encode) or (link_raw_type(link_pin_encoding) is not link_raw_str) or (link_raw_type(link_pin_errors) is not link_raw_str) or (not 1 <= link_raw_len(link_pin_encoding) <= 64) or (not 1 <= link_raw_len(link_pin_errors) <= 64) or link_raw_any((not (link_pin_c.isascii() and (link_pin_c.isalnum() or link_pin_c in '._-')) for link_pin_c in link_pin_encoding + link_pin_errors)):
                     raise error_type(owner) from None
                 if (link_raw_type(link_engine_origin) is not link_raw_tuple
-                        or link_raw_len(link_engine_origin) != 5
-                        or link_pin_environment[4] is not link_engine_origin):
+                        or link_raw_len(link_engine_origin) != 6
+                        or link_pin_environment[4] is not link_engine_origin
+                        or link_pin_environment[5] is not link_engine_origin[5]):
                     raise error_type(owner) from None
                 link_engine_dependencies = link_engine_origin[4]
                 if (link_raw_type(link_engine_dependencies) is not link_raw_tuple
@@ -3610,6 +3634,39 @@ class StartupArtifactOwner:
                     raise error_type(owner) from None
                 if link_raw_type(link_engine_dependencies) is not link_raw_tuple or link_raw_len(link_engine_dependencies) != 4 or link_raw_type(link_engine_dependencies[0]) is not link_raw_module or (link_raw_type(link_engine_dependencies[1]) is not link_raw_dict) or (link_raw_vars(link_engine_dependencies[0]) is not link_engine_dependencies[1]) or link_raw_any((link_raw_type(link_engine_k) is not link_raw_str for link_engine_k in link_engine_dependencies[1])) or (link_raw_type(link_engine_dependencies[2]) is not link_raw_dict) or (link_engine_dependencies[1].get('modules') is not link_engine_dependencies[2]) or link_raw_any((link_raw_type(link_engine_k) is not link_raw_str for link_engine_k in link_engine_dependencies[2])) or (link_raw_type(link_engine_dependencies[3]) is not link_raw_tuple) or (link_raw_len(link_engine_dependencies[3]) != 5):
                     raise error_type(owner) from None
+                layout = link_engine_origin[5]
+                if (link_raw_type(layout) is not link_raw_tuple or link_raw_len(layout) != 2
+                        or layout[0] is not link_engine_dependencies or link_raw_type(layout[1]) is not link_raw_tuple
+                        or link_raw_len(layout[1]) != link_raw_len(link_engine_dependencies[3])):
+                    raise error_type(owner) from None
+                for layout_row, layout_module in link_raw_zip(layout[1], link_engine_dependencies[3], strict=True):
+                    if (link_raw_type(layout_row) is not link_raw_tuple or link_raw_len(layout_row) != 2
+                            or layout_row[0] is not layout_module
+                            or link_raw_type(layout_module) is not link_raw_tuple or link_raw_len(layout_module) != 6
+                            or link_raw_type(layout_module[4]) is not link_raw_tuple
+                            or link_raw_type(layout_row[1]) is not link_raw_tuple
+                            or link_raw_len(layout_row[1]) != link_raw_len(layout_module[4])):
+                        raise error_type(owner) from None
+                    for layout_class_row, layout_class in link_raw_zip(layout_row[1], layout_module[4], strict=True):
+                        if (link_raw_type(layout_class_row) is not link_raw_tuple or link_raw_len(layout_class_row) != 3
+                                or layout_class_row[0] is not layout_class
+                                or link_raw_type(layout_class) is not link_raw_tuple or link_raw_len(layout_class) != 3
+                                or link_raw_type(layout_class[2]) is not link_raw_tuple
+                                or link_raw_type(layout_class_row[1]) is not link_raw_tuple
+                                or link_raw_type(layout_class_row[2]) is not link_raw_tuple
+                                or link_raw_len(layout_class_row[1]) != link_raw_len(layout_class[2])
+                                or link_raw_len(layout_class_row[2]) != link_raw_len(layout_class[2])):
+                            raise error_type(owner) from None
+                        layout_seen = {}
+                        for layout_pair, layout_key, layout_value in link_raw_zip(
+                                layout_class[2], layout_class_row[1], layout_class_row[2], strict=True):
+                            if (link_raw_type(layout_pair) is not link_raw_tuple or link_raw_len(layout_pair) != 2
+                                    or link_raw_type(layout_key) is not link_raw_str
+                                    or layout_pair[0] is not layout_key
+                                    or layout_pair[1] is not layout_value
+                                    or layout_key in layout_seen):
+                                raise error_type(owner) from None
+                            layout_seen[layout_key] = layout_value
                 link_engine_checked_namespaces = []
                 link_engine_expected_modules = ('hmp_plugin.presentation_native_link', 'hmp_plugin.presentation_native_metadata', 'hmp_plugin.presentation_startup_artifacts', 'hmp_plugin.presentation_metadata_custody', 'hmp_plugin.presentation_link_path_policy')
                 for link_engine_row, link_engine_expected_name in link_raw_zip(link_engine_dependencies[3], link_engine_expected_modules, strict=True):
@@ -3794,7 +3851,13 @@ class StartupArtifactOwner:
                     raise error_type(owner) from None
                 # Rejoin actual source/entry pointer identities without calling
                 # a current getter after the last callback-bearing origin seal.
-                if (tuple.__getitem__(digest_context, 1) is not digest_binding
+                if (tuple.__getitem__(digest_context, 0) is not origin_invocation_owner
+                        or link_raw_type(origin_invocation_owner) is not origin_invocation_kind
+                        or origin_dict_get(origin_invocation_owner, origin_invocation_kind) is not origin_invocation_names
+                        or link_raw_any(link_raw_type(k) is not link_raw_str
+                                        for k in origin_invocation_names)
+                        or origin_invocation_names.get('_scope') is not invocation
+                        or tuple.__getitem__(digest_context, 1) is not digest_binding
                         or tuple.__getitem__(digest_context, 5) is not native_files
                         or tuple.__getitem__(invocation, 9) is not native_files
                         or tuple.__getitem__(started, 5) is not entry_origin
@@ -3808,7 +3871,7 @@ class StartupArtifactOwner:
                 if link_raw_type(link_origin) is not link_raw_tuple or link_raw_len(link_origin) != 5:
                     raise error_type(owner) from None
                 link_pin_environment, link_pin_modules, link_pin_own_functions, link_pin_policy_functions, link_pin_types = link_origin
-                if link_raw_type(link_pin_environment) is not link_raw_tuple or link_raw_len(link_pin_environment) != 5 or link_raw_type(link_pin_environment[0]) is not link_raw_module or (link_raw_type(link_pin_environment[1]) is not link_raw_dict) or (link_raw_vars(link_pin_environment[0]) is not link_pin_environment[1]) or link_raw_any((link_raw_type(link_pin_k) is not link_raw_str for link_pin_k in link_pin_environment[1])) or (link_raw_type(link_pin_environment[2]) is not link_raw_dict) or link_raw_any((link_raw_type(link_pin_k) is not link_raw_str for link_pin_k in link_pin_environment[2])) or (link_pin_environment[1].get('modules') is not link_pin_environment[2]) or (link_raw_type(link_pin_modules) is not link_raw_tuple) or (link_raw_len(link_pin_modules) != 4) or (link_raw_type(link_pin_own_functions) is not link_raw_tuple) or (link_raw_type(link_pin_policy_functions) is not link_raw_tuple) or (link_raw_type(link_pin_types) is not link_raw_tuple) or (link_raw_len(link_pin_types) != 11):
+                if link_raw_type(link_pin_environment) is not link_raw_tuple or link_raw_len(link_pin_environment) != 6 or link_raw_type(link_pin_environment[0]) is not link_raw_module or (link_raw_type(link_pin_environment[1]) is not link_raw_dict) or (link_raw_vars(link_pin_environment[0]) is not link_pin_environment[1]) or link_raw_any((link_raw_type(link_pin_k) is not link_raw_str for link_pin_k in link_pin_environment[1])) or (link_raw_type(link_pin_environment[2]) is not link_raw_dict) or link_raw_any((link_raw_type(link_pin_k) is not link_raw_str for link_pin_k in link_pin_environment[2])) or (link_pin_environment[1].get('modules') is not link_pin_environment[2]) or (link_raw_type(link_pin_modules) is not link_raw_tuple) or (link_raw_len(link_pin_modules) != 4) or (link_raw_type(link_pin_own_functions) is not link_raw_tuple) or (link_raw_type(link_pin_policy_functions) is not link_raw_tuple) or (link_raw_type(link_pin_types) is not link_raw_tuple) or (link_raw_len(link_pin_types) != 11):
                     raise error_type(owner) from None
                 link_pin_names = ('hmp_startup.link_factory_origin', 'hmp_plugin.presentation_link_path_policy', 'hmp_plugin.presentation_startup_artifacts', 'hmp_startup.runtime_files')
                 for link_pin_row, link_pin_name in link_raw_zip(link_pin_modules, link_pin_names, strict=True):
@@ -3850,8 +3913,9 @@ class StartupArtifactOwner:
                 if link_pin_encoded_module is not link_pin_environment[0] or link_pin_encoded_namespace is not link_pin_environment[1] or link_raw_type(link_pin_get_encoding) is not link_raw_builtin or (link_raw_type(link_pin_get_errors) is not link_raw_builtin) or (link_pin_get_encoding.__self__ is not link_pin_encoded_module) or (link_pin_get_errors.__self__ is not link_pin_encoded_module) or (link_pin_get_encoding.__name__ != 'getfilesystemencoding') or (link_pin_get_errors.__name__ != 'getfilesystemencodeerrors') or (link_pin_encoded_namespace.get('getfilesystemencoding') is not link_pin_get_encoding) or (link_pin_encoded_namespace.get('getfilesystemencodeerrors') is not link_pin_get_errors) or (link_raw_type(link_pin_encode) is not link_raw_descriptor) or (link_pin_encode.__objclass__ is not link_raw_str) or (link_pin_encode.__name__ != 'encode') or (link_raw_vars(link_raw_str).get('encode') is not link_pin_encode) or (link_raw_type(link_pin_encoding) is not link_raw_str) or (link_raw_type(link_pin_errors) is not link_raw_str) or (not 1 <= link_raw_len(link_pin_encoding) <= 64) or (not 1 <= link_raw_len(link_pin_errors) <= 64) or link_raw_any((not (link_pin_c.isascii() and (link_pin_c.isalnum() or link_pin_c in '._-')) for link_pin_c in link_pin_encoding + link_pin_errors)):
                     raise error_type(owner) from None
                 if (link_raw_type(link_engine_origin) is not link_raw_tuple
-                        or link_raw_len(link_engine_origin) != 5
-                        or link_pin_environment[4] is not link_engine_origin):
+                        or link_raw_len(link_engine_origin) != 6
+                        or link_pin_environment[4] is not link_engine_origin
+                        or link_pin_environment[5] is not link_engine_origin[5]):
                     raise error_type(owner) from None
                 link_engine_dependencies = link_engine_origin[4]
                 if (link_raw_type(link_engine_dependencies) is not link_raw_tuple
@@ -3862,6 +3926,39 @@ class StartupArtifactOwner:
                     raise error_type(owner) from None
                 if link_raw_type(link_engine_dependencies) is not link_raw_tuple or link_raw_len(link_engine_dependencies) != 4 or link_raw_type(link_engine_dependencies[0]) is not link_raw_module or (link_raw_type(link_engine_dependencies[1]) is not link_raw_dict) or (link_raw_vars(link_engine_dependencies[0]) is not link_engine_dependencies[1]) or link_raw_any((link_raw_type(link_engine_k) is not link_raw_str for link_engine_k in link_engine_dependencies[1])) or (link_raw_type(link_engine_dependencies[2]) is not link_raw_dict) or (link_engine_dependencies[1].get('modules') is not link_engine_dependencies[2]) or link_raw_any((link_raw_type(link_engine_k) is not link_raw_str for link_engine_k in link_engine_dependencies[2])) or (link_raw_type(link_engine_dependencies[3]) is not link_raw_tuple) or (link_raw_len(link_engine_dependencies[3]) != 5):
                     raise error_type(owner) from None
+                layout = link_engine_origin[5]
+                if (link_raw_type(layout) is not link_raw_tuple or link_raw_len(layout) != 2
+                        or layout[0] is not link_engine_dependencies or link_raw_type(layout[1]) is not link_raw_tuple
+                        or link_raw_len(layout[1]) != link_raw_len(link_engine_dependencies[3])):
+                    raise error_type(owner) from None
+                for layout_row, layout_module in link_raw_zip(layout[1], link_engine_dependencies[3], strict=True):
+                    if (link_raw_type(layout_row) is not link_raw_tuple or link_raw_len(layout_row) != 2
+                            or layout_row[0] is not layout_module
+                            or link_raw_type(layout_module) is not link_raw_tuple or link_raw_len(layout_module) != 6
+                            or link_raw_type(layout_module[4]) is not link_raw_tuple
+                            or link_raw_type(layout_row[1]) is not link_raw_tuple
+                            or link_raw_len(layout_row[1]) != link_raw_len(layout_module[4])):
+                        raise error_type(owner) from None
+                    for layout_class_row, layout_class in link_raw_zip(layout_row[1], layout_module[4], strict=True):
+                        if (link_raw_type(layout_class_row) is not link_raw_tuple or link_raw_len(layout_class_row) != 3
+                                or layout_class_row[0] is not layout_class
+                                or link_raw_type(layout_class) is not link_raw_tuple or link_raw_len(layout_class) != 3
+                                or link_raw_type(layout_class[2]) is not link_raw_tuple
+                                or link_raw_type(layout_class_row[1]) is not link_raw_tuple
+                                or link_raw_type(layout_class_row[2]) is not link_raw_tuple
+                                or link_raw_len(layout_class_row[1]) != link_raw_len(layout_class[2])
+                                or link_raw_len(layout_class_row[2]) != link_raw_len(layout_class[2])):
+                            raise error_type(owner) from None
+                        layout_seen = {}
+                        for layout_pair, layout_key, layout_value in link_raw_zip(
+                                layout_class[2], layout_class_row[1], layout_class_row[2], strict=True):
+                            if (link_raw_type(layout_pair) is not link_raw_tuple or link_raw_len(layout_pair) != 2
+                                    or link_raw_type(layout_key) is not link_raw_str
+                                    or layout_pair[0] is not layout_key
+                                    or layout_pair[1] is not layout_value
+                                    or layout_key in layout_seen):
+                                raise error_type(owner) from None
+                            layout_seen[layout_key] = layout_value
                 link_engine_checked_namespaces = []
                 link_engine_expected_modules = ('hmp_plugin.presentation_native_link', 'hmp_plugin.presentation_native_metadata', 'hmp_plugin.presentation_startup_artifacts', 'hmp_plugin.presentation_metadata_custody', 'hmp_plugin.presentation_link_path_policy')
                 for link_engine_row, link_engine_expected_name in link_raw_zip(link_engine_dependencies[3], link_engine_expected_modules, strict=True):

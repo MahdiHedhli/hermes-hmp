@@ -1,4 +1,4 @@
-"""Actual late native-primitive drift at both Scope publication seals."""
+"""Actual primitive and coherent layout-root drift at both publication seals."""
 import ast
 import json
 
@@ -9,8 +9,8 @@ from .test_presentation_gateway_approval import operator_composed_script
 
 
 @pytest.mark.parametrize('publication', ('first', 'second'))
-@pytest.mark.parametrize('export', ('map', 'is_not'))
-def test_scope_publication_rejects_changed_native_export(
+@pytest.mark.parametrize('export', ('map', 'is_not', 'layout_graft', 'entry_getattribute', 'entry_subclass_dict'))
+def test_scope_publication_rejects_changed_primitive_or_layout_root(
         tmp_path, monkeypatch, request, publication, export):
     tree = ast.parse((base.SERVER / 'hmp_plugin/presentation_startup_artifacts.py').read_text())
     owner = next(n for n in tree.body if isinstance(n, ast.ClassDef)
@@ -39,9 +39,11 @@ register_code=a._register_native_scope.__code__
 rejoin_code=next(c for c in retain_code.co_consts
                  if type(c) is type(retain_code) and c.co_name=='link_rejoin')
 module=sys.modules['_operator'] if export=='is_not' else builtins
-original=getattr(module,export)
+export_name=export if export in ('map','is_not') else 'map'
+original=getattr(module,export_name)
 assign=setattr
 observed=[];mutated=[];foreign_calls=[];held=[];registrations=[];successful_returns=[]
+hook_restore=[];class_restore=[];missing=object()
 
 def foreign(*args,**kwargs):
     foreign_calls.append(True)
@@ -64,8 +66,41 @@ def observe(frame,event,value):
             assert owner._scope is scope and source.inputs.io_slot[0] is owner
         held.append((owner,source))
         observed.append((ledger.counts[0],ledger.counts[1],len(ledger.attempts)))
-        assign(module,export,foreign)
-        assert getattr(module,export) is foreign
+        if export in ('entry_getattribute','entry_subclass_dict'):
+            entry_owner=source.inputs.entry
+            entry_kind=type(entry_owner)
+            if export=='entry_getattribute':
+                previous=vars(entry_kind).get('__getattribute__',missing)
+                hook_restore.append((entry_kind,previous))
+                assign(entry_kind,'__getattribute__',foreign)
+                assert vars(entry_kind)['__getattribute__'] is foreign
+            else:
+                class ChangedEntry(entry_kind):
+                    __dict__=property(foreign)
+                class_restore.append((entry_owner,entry_kind))
+                object.__setattr__(entry_owner,'__class__',ChangedEntry)
+                assert type(entry_owner) is ChangedEntry
+        elif export=='layout_graft':
+            parent=context['link_origin']
+            engine=parent[0][4]
+            layout=engine[5]
+            copied_layout=tuple(list(layout))
+            copied_engine=(*engine[:5],copied_layout)
+            copied_environment=(*parent[0][:4],copied_engine,copied_layout)
+            copied_parent=(copied_environment,*parent[1:])
+            lineage=context['native_files']
+            copied_lineage=lineage._replace(link_policy=copied_parent)
+            entry_owner=source.inputs.entry
+            invocation=entry_owner._scope
+            copied_invocation=invocation._replace(native_files=copied_lineage)
+            assert copied_layout is not layout and copied_parent is not parent
+            assert copied_parent[0][4][5] is copied_parent[0][5]
+            assert copied_lineage.link_policy is copied_parent
+            assign(entry_owner,'_scope',copied_invocation)
+            assert entry_owner._scope is copied_invocation
+        else:
+            assign(module,export,foreign)
+            assert getattr(module,export) is foreign
         mutated.append(True)
 
 prior=sys.getprofile()
@@ -94,7 +129,12 @@ except EntryFilesError as caught:
     failed=True
 finally:
     sys.setprofile(prior);sys.settrace(None)
-    assign(module,export,original)
+    for instance,entry_kind in class_restore:
+        object.__setattr__(instance,'__class__',entry_kind)
+    for entry_kind,previous in hook_restore:
+        if previous is missing:delattr(entry_kind,'__getattribute__')
+        else:assign(entry_kind,'__getattribute__',previous)
+    assign(module,export_name,original)
     if monitor is not None:
         monitor.set_local_events(5,retain_code,0)
         monitor.register_callback(5,monitor.events.PY_START,None)

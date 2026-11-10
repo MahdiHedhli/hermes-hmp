@@ -429,7 +429,19 @@ def _capture_engine(*, _type=type, _tuple=tuple, _dict=dict, _str=str,
         types.append((kind, fields, members, constructor, constructor.__code__,
                       constructor.__globals__, constructor.__defaults__, kind.__bases__, dispatch))
     types = tuple(types)
-    origin = (modules[0], types, functions, kernel, dependencies)
+    # Immutable expected DATA derived only from the already held original rows.
+    # It does not cache a mutable-state audit or authorize a native effect.
+    layout_modules = []
+    for layout_module in dependencies[3]:
+        layout_classes = []
+        for layout_class in layout_module[4]:
+            layout_members = layout_class[2]
+            layout_classes.append((layout_class,
+                _tuple(pair[0] for pair in layout_members),
+                _tuple(pair[1] for pair in layout_members)))
+        layout_modules.append((layout_module, _tuple(layout_classes)))
+    layout = (dependencies, _tuple(layout_modules))
+    origin = (modules[0], types, functions, kernel, dependencies, layout)
     if (globals().get('_engine_origin_tail') is not checker
             or checker.__code__ is not checker_code or checker.__defaults__ is not checker_defaults
             or checker.__kwdefaults__ is not checker_kw
@@ -437,6 +449,39 @@ def _capture_engine(*, _type=type, _tuple=tuple, _dict=dict, _str=str,
             or len(checker_kw) != len(checker_pairs)
             or any(k not in checker_kw or checker_kw[k] is not value for k, value in checker_pairs)):
         raise _error from None
+    layout = origin[5]
+    if (_type(layout) is not _tuple or _len(layout) != 2
+            or layout[0] is not dependencies or _type(layout[1]) is not _tuple
+            or _len(layout[1]) != _len(dependencies[3])):
+        raise _error from None
+    for layout_row, layout_module in _zip(layout[1], dependencies[3], strict=True):
+        if (_type(layout_row) is not _tuple or _len(layout_row) != 2
+                or layout_row[0] is not layout_module
+                or _type(layout_module) is not _tuple or _len(layout_module) != 6
+                or _type(layout_module[4]) is not _tuple
+                or _type(layout_row[1]) is not _tuple
+                or _len(layout_row[1]) != _len(layout_module[4])):
+            raise _error from None
+        for layout_class_row, layout_class in _zip(layout_row[1], layout_module[4], strict=True):
+            if (_type(layout_class_row) is not _tuple or _len(layout_class_row) != 3
+                    or layout_class_row[0] is not layout_class
+                    or _type(layout_class) is not _tuple or _len(layout_class) != 3
+                    or _type(layout_class[2]) is not _tuple
+                    or _type(layout_class_row[1]) is not _tuple
+                    or _type(layout_class_row[2]) is not _tuple
+                    or _len(layout_class_row[1]) != _len(layout_class[2])
+                    or _len(layout_class_row[2]) != _len(layout_class[2])):
+                raise _error from None
+            layout_seen = {}
+            for layout_pair, layout_key, layout_value in _zip(
+                    layout_class[2], layout_class_row[1], layout_class_row[2], strict=True):
+                if (_type(layout_pair) is not _tuple or _len(layout_pair) != 2
+                        or _type(layout_key) is not _str
+                        or layout_pair[0] is not layout_key
+                        or layout_pair[1] is not layout_value
+                        or layout_key in layout_seen):
+                    raise _error from None
+                layout_seen[layout_key] = layout_value
     if checker(origin) is not origin:
         raise _error from None
     if _type(dependencies) is not _tuple or _len(dependencies) != 4 or _type(dependencies[0]) is not _module or (_type(dependencies[1]) is not _dict) or (_vars(dependencies[0]) is not dependencies[1]) or _any((_type(k) is not _str for k in dependencies[1])) or (_type(dependencies[2]) is not _dict) or (dependencies[1].get('modules') is not dependencies[2]) or _any((_type(k) is not _str for k in dependencies[2])) or (_type(dependencies[3]) is not _tuple) or (_len(dependencies[3]) != 5):
@@ -527,15 +572,81 @@ def _capture_engine(*, _type=type, _tuple=tuple, _dict=dict, _str=str,
     if (_any(_type(k) is not _str for k in audit_operator)
             or audit_operator.get('is_not') is not audit_not):
         raise _error from None
+    layout = origin[5]
+    if (_type(layout) is not _tuple or _len(layout) != 2
+            or layout[0] is not dependencies or _type(layout[1]) is not _tuple
+            or _len(layout[1]) != _len(dependencies[3])):
+        raise _error from None
+    for layout_row, layout_module in _zip(layout[1], dependencies[3], strict=True):
+        if (_type(layout_row) is not _tuple or _len(layout_row) != 2
+                or layout_row[0] is not layout_module
+                or _type(layout_module) is not _tuple or _len(layout_module) != 6
+                or _type(layout_module[4]) is not _tuple
+                or _type(layout_row[1]) is not _tuple
+                or _len(layout_row[1]) != _len(layout_module[4])):
+            raise _error from None
+        for layout_class_row, layout_class in _zip(layout_row[1], layout_module[4], strict=True):
+            if (_type(layout_class_row) is not _tuple or _len(layout_class_row) != 3
+                    or layout_class_row[0] is not layout_class
+                    or _type(layout_class) is not _tuple or _len(layout_class) != 3
+                    or _type(layout_class[2]) is not _tuple
+                    or _type(layout_class_row[1]) is not _tuple
+                    or _type(layout_class_row[2]) is not _tuple
+                    or _len(layout_class_row[1]) != _len(layout_class[2])
+                    or _len(layout_class_row[2]) != _len(layout_class[2])):
+                raise _error from None
+            layout_seen = {}
+            for layout_pair, layout_key, layout_value in _zip(
+                    layout_class[2], layout_class_row[1], layout_class_row[2], strict=True):
+                if (_type(layout_pair) is not _tuple or _len(layout_pair) != 2
+                        or _type(layout_key) is not _str
+                        or layout_pair[0] is not layout_key
+                        or layout_pair[1] is not layout_value
+                        or layout_key in layout_seen):
+                    raise _error from None
+                layout_seen[layout_key] = layout_value
     return origin
 
 def _engine_origin_tail(origin, *, _type=type, _tuple=tuple, _dict=dict, _str=str, _len=len, _vars=vars, _any=any, _zip=zip, _module=ModuleType, _function=FunctionType, _cell=CellType, _id=id, _builtin=BuiltinFunctionType, _map=map, _not_identity=_native_identity_is_not, _error=ArtifactObservationError):
     """Validate the actual early packet; never capture a current replacement."""
-    if _type(origin) is not _tuple or _len(origin) != 5:
+    if _type(origin) is not _tuple or _len(origin) != 6:
         raise _error from None
     dependencies = origin[4]
     if _type(dependencies) is not _tuple or _len(dependencies) != 4 or _type(dependencies[0]) is not _module or (_type(dependencies[1]) is not _dict) or (_vars(dependencies[0]) is not dependencies[1]) or _any((_type(k) is not _str for k in dependencies[1])) or (_type(dependencies[2]) is not _dict) or (dependencies[1].get('modules') is not dependencies[2]) or _any((_type(k) is not _str for k in dependencies[2])) or (_type(dependencies[3]) is not _tuple) or (_len(dependencies[3]) != 5):
         raise _error from None
+    layout = origin[5]
+    if (_type(layout) is not _tuple or _len(layout) != 2
+            or layout[0] is not dependencies or _type(layout[1]) is not _tuple
+            or _len(layout[1]) != _len(dependencies[3])):
+        raise _error from None
+    for layout_row, layout_module in _zip(layout[1], dependencies[3], strict=True):
+        if (_type(layout_row) is not _tuple or _len(layout_row) != 2
+                or layout_row[0] is not layout_module
+                or _type(layout_module) is not _tuple or _len(layout_module) != 6
+                or _type(layout_module[4]) is not _tuple
+                or _type(layout_row[1]) is not _tuple
+                or _len(layout_row[1]) != _len(layout_module[4])):
+            raise _error from None
+        for layout_class_row, layout_class in _zip(layout_row[1], layout_module[4], strict=True):
+            if (_type(layout_class_row) is not _tuple or _len(layout_class_row) != 3
+                    or layout_class_row[0] is not layout_class
+                    or _type(layout_class) is not _tuple or _len(layout_class) != 3
+                    or _type(layout_class[2]) is not _tuple
+                    or _type(layout_class_row[1]) is not _tuple
+                    or _type(layout_class_row[2]) is not _tuple
+                    or _len(layout_class_row[1]) != _len(layout_class[2])
+                    or _len(layout_class_row[2]) != _len(layout_class[2])):
+                raise _error from None
+            layout_seen = {}
+            for layout_pair, layout_key, layout_value in _zip(
+                    layout_class[2], layout_class_row[1], layout_class_row[2], strict=True):
+                if (_type(layout_pair) is not _tuple or _len(layout_pair) != 2
+                        or _type(layout_key) is not _str
+                        or layout_pair[0] is not layout_key
+                        or layout_pair[1] is not layout_value
+                        or layout_key in layout_seen):
+                    raise _error from None
+                layout_seen[layout_key] = layout_value
     if _type(origin[2]) is not _tuple:
         raise _error from None
     audit_rows = _tuple(row for row in origin[2]
@@ -631,7 +742,7 @@ def _engine_origin_tail(origin, *, _type=type, _tuple=tuple, _dict=dict, _str=st
                     raise _error from None
             elif _type(closure) is not _tuple or _len(closure) != _len(cells) or _any((_type(cell) is not _cell or cell.cell_contents is not value for cell, value in _zip(closure, cells, strict=True))):
                 raise _error from None
-    if not (type(origin) is tuple and len(origin) == 5 and (type(origin[0]) is ModuleType) and (sys.modules.get('hmp_plugin.presentation_native_link') is origin[0]) and (vars(origin[0]) is globals()) and (type(origin[1]) is tuple) and (type(origin[2]) is tuple) and (type(origin[3]) is tuple)):
+    if not (type(origin) is tuple and len(origin) == 6 and (type(origin[0]) is ModuleType) and (sys.modules.get('hmp_plugin.presentation_native_link') is origin[0]) and (vars(origin[0]) is globals()) and (type(origin[1]) is tuple) and (type(origin[2]) is tuple) and (type(origin[3]) is tuple)):
         raise _error from None
     if not (type(metadata) is ModuleType and sys.modules.get('hmp_plugin.presentation_native_metadata') is metadata):
         raise _error from None
@@ -758,14 +869,15 @@ def _execution_mirrors(execution):
              and vars(owner).get('_cell') is reg.cell
              and vars(owner).get('_root_cell') is reg.root
              and tuple.__getitem__(reg.scope, 17) is execution.blueprint
-             and type(execution.origin) is tuple and len(execution.origin) == 5)
+             and type(execution.origin) is tuple and len(execution.origin) == 6)
     parent = tuple.__getitem__(reg.lineage, 4)
     blueprint = tuple.__getitem__(execution, 2)
     _require(type(parent) is tuple and len(parent) == 5
              and type(parent[4]) is tuple and len(parent[4]) >= 11
              and type(blueprint) is parent[4][6][0]
-             and type(parent[0]) is tuple and len(parent[0]) == 5
+             and type(parent[0]) is tuple and len(parent[0]) == 6
              and parent[0][4] is execution.origin
+             and parent[0][5] is execution.origin[5]
              and tuple.__getitem__(execution.blueprint, 4) is parent
              and tuple.__getitem__(execution.blueprint, 0) is owner
              and tuple.__getitem__(execution.blueprint, 3) is reg.lineage

@@ -613,7 +613,7 @@ def _closed_link_engine_origin(owner, resource):
     parent = tuple.__getitem__(lineage, 4)
     _require(type(parent) is tuple and len(parent) == 5)
     environment, own = parent[0], parent[2]
-    _require(type(environment) is tuple and len(environment) == 5
+    _require(type(environment) is tuple and len(environment) == 6
              and type(own) is tuple and len(own) == 7)
     current_row = own[3]
     _require(type(current_row) is tuple and len(current_row) == 7)
@@ -649,7 +649,8 @@ def _closed_link_engine_origin(owner, resource):
              and tuple.__getitem__(blueprint, 3) is lineage
              and tuple.__getitem__(blueprint, 4) is parent)
     origin = environment[4]
-    _require(type(origin) is tuple and len(origin) == 5
+    _require(type(origin) is tuple and len(origin) == 6
+             and origin[5] is environment[5]
              and type(origin[0]) is ModuleType and type(origin[2]) is tuple
              and sys.modules.get('hmp_plugin.presentation_native_link') is origin[0])
     rows = tuple(row for row in origin[2]

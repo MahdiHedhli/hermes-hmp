@@ -1,29 +1,27 @@
-## November 10 — image-path audit changes verified; delivery remains open
+## November 10 — original layout binding verified; image delivery remains open
 
-The experimental Link audit now indexes exact namespace identities within each call
-and checks all current key types with authenticated native primitives. Original
-checker values and unique names are joined before those primitives run, including
-both actual Scope publication seals. No access verdict survives a callback.
+The experimental image startup path now retains immutable expected class-member
+columns from its original captured rows. The same literal layout is bound through
+the engine, parent environment, native selector, execution and both publication
+seals. Existing fresh module/class/function/default/closure and native/resource/
+byte/custody audits remain. Fast schema use is not implemented; this increment
+makes no full-path speed claim and enables no presentation route.
 
-The same **281 focused checks pass on Python 3.14.9 and 3.11.15**: 265 local
-controls, 12 actual runtime refusals and four actual Scope publication refusals.
-The latter require completed mutation, no foreign execution, no registration or
-successful publication after mutation, and unchanged native work/reservation.
-These source-bound results do not establish full native or device acceptance.
+The same **302 checks pass on Python 3.14.9 and 3.11.15**, with unchanged source
+and matching case sets: 280 local controls, 12 actual runtime refusal controls and
+10 actual publication controls. New controls exposed and corrected late original
+invocation/getter ordering. The actual mutation cases require zero foreign calls,
+new native work, registration after mutation or successful retainer returns, with
+unchanged close reservation. These are bounded source proofs, not physical or
+release acceptance.
 
-The full native contract still fails its unchanged 60-second deadline. Its retained
-subset contains 65 typed observations and two retired raw capsules; snapshots,
-all rechecks, startup/service delivery and physical images remain unqualified.
-The immutable expected-layout design is not implemented. Next work must resolve
-the actual delivery contract, including a bounded presentation metadata interface,
-without bypassing per-device/profile authority, confined reads or resource custody.
-No upstream-only blocker has been demonstrated.
-
-The isolated test environment was rebuilt from independently pinned artifacts and
-locked dependencies; fresh results above bind the new environment. No installed
-host/device, grants, providers, models, jobs or releases changed. LLY520 is absent
-from the refreshed established remote inventory; its authorized update is pending
-connection. Prepared Android/iOS 2026110901 are not new physical qualification.
+The last complete-path attempt still exceeded its unchanged 60-second deadline;
+that older result does not qualify this changed layout composition. The full
+native flow, startup/service/route integration, desktop character/avatar display
+and host-local chat images remain unfinished. No upstream-only image blocker has
+been demonstrated. No host, device, permission, provider, model, job, installation
+or release changed; LLY520's authorized update still needs its established
+connection. Prepared Android/iOS 2026110901 are not new device qualification.
 
 # November 9: duplicate runtime checks removed; images still unqualified
 

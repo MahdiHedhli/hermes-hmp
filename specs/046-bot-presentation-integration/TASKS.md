@@ -22,6 +22,13 @@
 
 ## Executable leaf-link integration
 
+- [x] **LP3-IMMUTABLE-LAYOUT-CUSTODY** Retain original expected class columns
+      with engine6/env6 and exact parent/selector/execution/two Scope joins.
+      Repair late invocation/getter ordering discovered by actual graft controls.
+      Same302 current/minimum cases pass, including22 actual refusal cases.
+      This finite custody task does not close LP3-IMMUTABLE-EXPECTED-LAYOUT's
+      fast audit use, full native traversal, service, physical or release gates.
+
 Current diagnostic priority: [actual inclusive audit cost](LINK_AUDIT_COST.md).
 The owner/package/activation chain dominates the observed completed-call time;
 do not assume a local class-column benchmark resolves the full native deadline.
@@ -48,7 +55,7 @@ do not assume a local class-column benchmark resolves the full native deadline.
       both Scope seals. Precompute immutable schema, never current authority;
       preserve every mutable check and full native qualification. See
       [reviewed design constraints](IMMUTABLE_LINK_AUDIT_LAYOUT.md). The two vector
-      prototypes were slower and withheld; this layout is not yet implemented.
+      prototypes were slower and withheld; fast use of the retained layout is not yet implemented.
 
 - [ ] **LP3-NATIVE-ACCEPTANCE** Complete the coupled typed metadata/readlink path,
       raw retirement and literal finish/snapshot/recheck publication. The new

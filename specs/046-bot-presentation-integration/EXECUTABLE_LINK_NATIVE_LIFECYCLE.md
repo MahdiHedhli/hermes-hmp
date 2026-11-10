@@ -1,5 +1,31 @@
 # Complete executable-link native lifecycle
 
+## November 10 — original layout binding verified; image delivery remains open
+
+The experimental image startup path now retains immutable expected class-member
+columns from its original captured rows. The same literal layout is bound through
+the engine, parent environment, native selector, execution and both publication
+seals. Existing fresh module/class/function/default/closure and native/resource/
+byte/custody audits remain. Fast schema use is not implemented; this increment
+makes no full-path speed claim and enables no presentation route.
+
+The same **302 checks pass on Python 3.14.9 and 3.11.15**, with unchanged source
+and matching case sets: 280 local controls, 12 actual runtime refusal controls and
+10 actual publication controls. New controls exposed and corrected late original
+invocation/getter ordering. The actual mutation cases require zero foreign calls,
+new native work, registration after mutation or successful retainer returns, with
+unchanged close reservation. These are bounded source proofs, not physical or
+release acceptance.
+
+The last complete-path attempt still exceeded its unchanged 60-second deadline;
+that older result does not qualify this changed layout composition. The full
+native flow, startup/service/route integration, desktop character/avatar display
+and host-local chat images remain unfinished. No upstream-only image blocker has
+been demonstrated. No host, device, permission, provider, model, job, installation
+or release changed; LLY520's authorized update still needs its established
+connection. Prepared Android/iOS 2026110901 are not new device qualification.
+
+
 November 9, 2026. Source prerequisite for desktop character delivery, not a new
 public API, permission, installed feature or upstream dependency. The current
 production baseline is `c37925523f9ab7410c656b0bfd4fda383126c2f1`

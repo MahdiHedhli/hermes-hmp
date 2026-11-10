@@ -83,7 +83,7 @@ def current(origin, *, _type=type, _vars=vars, _tuple=tuple, _len=len,
     if _type(origin) is not _tuple or _len(origin) != 5:
         raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
     environment, modules, own_functions, policy_functions, types = origin
-    if (_type(environment) is not _tuple or _len(environment) != 5
+    if (_type(environment) is not _tuple or _len(environment) != 6
             or _type(environment[0]) is not _module or _type(environment[1]) is not dict
             or _vars(environment[0]) is not environment[1]
             or _any(_type(k) is not str for k in environment[1])
@@ -188,12 +188,13 @@ def current(origin, *, _type=type, _vars=vars, _tuple=tuple, _len=len,
         raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
 
     engine = environment[4]
-    if (_type(engine) is not _tuple or _len(engine) != 5
+    if (_type(engine) is not _tuple or _len(engine) != 6
             or _type(engine[0]) is not _module or _type(engine[2]) is not _tuple
             or _type(engine[4]) is not _tuple or _len(engine[4]) != 4
             or engine[4][0] is not environment[0] or engine[4][1] is not environment[1]
             or engine[4][2] is not environment[2]
-            or environment[2].get('hmp_plugin.presentation_native_link') is not engine[0]):
+            or environment[2].get('hmp_plugin.presentation_native_link') is not engine[0]
+            or engine[5] is not environment[5]):
         raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
     selected = _tuple(row for row in engine[2]
                       if _type(row) is _tuple and _len(row) == 7
@@ -302,7 +303,7 @@ def capture(*,
                    for k, value in expected_capture_defaults.items())):
         raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
     engine_origin = engine_capture()
-    if (_type(engine_origin) is not _tuple or _len(engine_origin) != 5
+    if (_type(engine_origin) is not _tuple or _len(engine_origin) != 6
             or _type(engine_origin[4]) is not _tuple or _len(engine_origin[4]) != 4
             or engine_origin[4][0] is not _sys or engine_origin[4][1] is not sys_namespace
             or engine_origin[4][2] is not registry):
@@ -310,6 +311,7 @@ def capture(*,
     if (engine._capture_engine is not engine_capture
             or engine_capture.__code__ is not engine_capture_code):
         raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+    engine_layout = engine_origin[5]
     engine_check = next(row for row in engine_origin[2] if row[0] == '_engine_origin_tail')
     policy_namespace = modules[1][2]
     policy_names = ('_need', '_parts', '_policy_tail', '_new_policy', '_sites', '_directory', '_leaf', '_cursor_tail', '_start', '_action', '_advance', '_outcome', '_scope_blueprint_guard', '_scope_blueprint_cohort', '_scope_blueprint_tail', '_new_scope_blueprint')
@@ -376,8 +378,9 @@ def capture(*,
                     or _any((names.get(n) is not member for n, member in dispatch))):
                 raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
         if (engine_capture.__code__ is not engine_capture_code
-                or _type(engine_origin) is not _tuple or _len(engine_origin) != 5
-                or engine_origin[0] is not engine or engine_check[1].__code__ is not engine_check[2]
+                or _type(engine_origin) is not _tuple or _len(engine_origin) != 6
+                or engine_origin[0] is not engine or engine_origin[5] is not engine_layout
+                or engine_check[1].__code__ is not engine_check[2]
                 or engine_check[1].__defaults__ is not engine_check[4]
                 or engine_check[1].__kwdefaults__ is not engine_check[5]):
             raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
@@ -426,7 +429,7 @@ def capture(*,
             or _tuple.__len__(encoding_origin) != _len(values)
             or _any((_tuple.__getitem__(encoding_origin, i) is not value for i, value in _enumerate(values)))):
         raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
-    result = ((_sys, sys_namespace, registry, encoding_origin, engine_origin), modules, own_functions, functions, kinds)
+    result = ((_sys, sys_namespace, registry, encoding_origin, engine_origin, engine_layout), modules, own_functions, functions, kinds)
     if (_type(_sys) is not _module or _any(_type(k) is not _str for k in registry)
             or _any(_type(row[1]) is not _module or _vars(row[1]) is not row[2]
                     or _any(_type(k) is not _str for k in row[2])
