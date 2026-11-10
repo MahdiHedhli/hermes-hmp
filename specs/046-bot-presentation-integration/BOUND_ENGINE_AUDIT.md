@@ -516,3 +516,46 @@ new started/live helpers are not separately instrumented. This is not full nativ
 or startup acceptance and does not justify deleting any owner/parent/recipe audit.
 The next selected-helper immutable-layout proposal remains unimplemented; full
 fresh-probe, service, routes, character rendering, device and release gates stay open.
+
+
+### Selected-helper construction contract and unwired factory — November 10
+
+Keep `capture()` returning packet6 and `current(packet)` complete. The new fixed
+`capture_bound()` independently collects candidates, preholds generic/live function
+code/default/keyword/global/builtin/role provenance before checker callbacks,
+validates packet6 generically, builds original immutable columns, validates again
+and returns literal record3 `(packet,layout,live_row)`. Layout4 is `(packet,
+module_columns,class_columns,function_columns)`; each column row retains its actual
+packet row plus immutable original key/value tuples (function columns concern
+keyword pairs). The live row exists before the first checker callback; the record
+exists before the second, and its literal return is retained without reconstruction.
+
+`current_live(packet,bound_layout)` currently retains the ENTIRE generic body plus
+an exact layout-shape/packet-identity precheck. No immutable parsing is omitted yet.
+Neither new factory nor target is selected by a parent/Scope/native caller. This
+is construction DATA, not original root authority, live currentness cached across
+a callback, optimization or startup acceptance. Independent AST/source review
+accepted that bounded stage and callback fixture fidelity; receipt rehashing was
+not independently performed by that reviewer.
+
+The parent integration contract remains to implement: append the actual bound
+record at helper-capsule7 while keeping packet6 at capsule6 and old fields intact;
+retain original capture/current roles0/1 and append capture_bound/current_live.
+Prehold actual factory and expected live-function provenance before calling it.
+After return, authenticate the literal returned live row against those original
+held components and retain that actual row, not a newly equivalent tuple. Original
+parent/EntryOrigin/STARTED/CELL/lineage/Scope must join the actual capsule/layout
+record before selecting immutable-only live audit. Standalone generic DATA stays
+complete; missing/torn roots refuse rather than using a generic fallback.
+
+Initial hq-laxm439e/hq-qzm5uc6v runs had12 failures before callbacks: the collector
+shadowed the held checker-provenance namespace. Only collector locals were renamed
+to candidate_namespace; provenance references remain separately held. Earlier
+review missed that shadowing and later finite re-review confirmed the correction.
+Final hq-pymlf1yp/hq-5mzec9mu pass240 selected cases each Python3.14.9/3.11.15,
+sources unchanged, no failures/errors/skips. These cover the existing helper and
+factory suites plus12 new cases: packet/column/literal-return/preheld-row checks and10
+first/second checker-return code/export/keyword mutation controls with external
+mutation/reach/zero-foreign-call assertions. The earlier failed cases are not
+construction proof. No full native rerun or timeout fix is claimed for this
+unwired construction addition; all original qualification gates remain open.

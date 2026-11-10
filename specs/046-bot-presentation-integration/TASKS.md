@@ -1106,3 +1106,10 @@ source unchanged. Finalsource originalnative run alone still60stimeout,44typed /
 event4/work963/reserved0; BA3/full startup/feature delivery remain unchecked.
 No live deploy or media6796 rollback; next immutableselected-helper layout needs
 its original capsule/root binding and complete causal acceptance.
+
+Selected-helper layout construction (2026-11-10): original capture6/current
+unchanged; new independent capture_bound returns literal packet/layout/checker
+record, target current_live stillfullgeneric.240 helper/factory/construction cases
+pass both runtimes after correcting collector/provenance namespace shadowing;
+bounded independent review accepted. Parentcapsule append/actualroot wiring and
+immutable-only omission not implemented; no startup or performance acceptance.

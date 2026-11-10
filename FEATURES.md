@@ -24,12 +24,20 @@ reserved0. Generic engine calls fall to2810 from the earlier8383, but this is no
 a demonstrated end-to-end speedup. Inclusive timings overlap; no intrinsic speedup is inferred from reduced counts. Other direct generic engine calls
 and repeated selected-helper audits remain; their mutable checks cannot be removed.
 A source-backed selected-helper immutable-layout extension needs its own reviewed
-original-capsule/root binding before implementation. No full BA3, startup,
+original-capsule/root binding before activation. No full BA3, startup,
 character delivery, physical-device, release or deployment pass is claimed.
 
 The separately qualified working HMP `6796bfbb` media candidate must retain its
 later runtime and schema4 protections. Do not deploy this older character draft
 over it without coherent integration and complete acceptance.
+
+The next selected-helper layout factory is now staged in this local draft.
+It retains the actual packet, immutable columns and fixed checker row;240 selected
+helper/factory/construction cases pass on both runtimes. Its target still performs
+full generic validation, and no startup caller uses the new factory or layout yet.
+Original parent-capsule/root wiring and actual immutable-only optimization remain
+next. The preceding native timeout is still an open gate, not a fresh test of this
+unwired addition. No working media deployment or phone build was changed.
 
 ## November 10 — iPad development update installed; LB1 device checks remain
 
