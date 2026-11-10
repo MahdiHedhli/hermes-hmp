@@ -266,3 +266,13 @@ zero. Single-run checkpoints and helper timings do not establish a repeatable
 startup improvement or completion. Bot characters, host-local images, service,
 physical-device and release qualification remain open. No host update, restart
 or device install occurred. LLY520 has no currently established access route.
+
+A later experiment hoisted the immutable legacy/native scope branch outside
+three retained descriptor scans, preserving each live row check and all native
+ledger validation. Real-owner state comparisons passed, but the original native
+run still stopped at the same stage and deadline. The experiment was withheld;
+its extra branches and aliases are absent from production. Periodic diagnostic
+samples show repeated approval, package, recipe and selection scans; monitoring
+substantially perturbs timing. The next design must reduce demonstrated duplicate
+work through an authenticated original-caller boundary, not cached validity or
+weaker close proofs. No inexpensive safe consolidation is established yet.
