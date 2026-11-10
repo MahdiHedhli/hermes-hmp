@@ -9,6 +9,13 @@
 
 ## Executable leaf-link integration
 
+- [x] **LP3-OWNER-GUARD-RUNTIME** Remove only the two runtime audits duplicated
+      by the original owner guard, retaining immediate original runtime joins,
+      fresh guard validation and all later native/resource/byte/custody checks.
+      Independent source review accepted; 243 local plus 12 real startup refusal
+      cases pass on both Python versions. This closes the finite reduction only,
+      not LP3 native-path/image/service/device acceptance.
+
 - [ ] **LP3-COUPLED-AUDIT-FUSION** Resolve the measured full-path 60-second timeout
       after actual early binding. Before-hop/target 44/44 typed observations and
       first raw-capsule retirement are subset evidence only. Retain all original
@@ -18,6 +25,13 @@
       all-phase/constructor/return-loss/partial-store/finalizer causals and broad
       startup checks before installation or image serving.
 
+
+- [ ] **LP3-IMMUTABLE-EXPECTED-LAYOUT** Implement the original-bootstrap layout
+      only if it retains actual early identity through EntryOrigin, lineage and
+      both Scope seals. Precompute immutable schema, never current authority;
+      preserve every mutable check and full native qualification. See
+      [reviewed design constraints](IMMUTABLE_LINK_AUDIT_LAYOUT.md). The two vector
+      prototypes were slower and withheld; this layout is not yet implemented.
 
 - [ ] **LP3-NATIVE-ACCEPTANCE** Complete the coupled typed metadata/readlink path,
       raw retirement and literal finish/snapshot/recheck publication. The new

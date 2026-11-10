@@ -79,6 +79,36 @@ coverage. Whole native/runtime/service/device acceptance remains open. No
 service, host, device or release was enabled. Older env4/legacy passing receipts
 below are historical; they are not transferred to this changed composition.
 
+## Original owner-guard audit reuse
+
+The resource and consumer lifetime checks bind the same non-null immutable
+Scope.runtime and blueprint.runtime before invoking the original owner guard.
+That guard performs the complete fresh runtime check itself. The two preceding
+explicit calls were removed; the original guard, its package/activation/fact
+checks, and every later native/origin/resource/record/byte/custody check remain.
+This removes duplicate observation, not the final current authority check, and
+never reuses a verdict from a previous helper return.
+
+The actual isolated startup causals distinguish earlier package-history or
+activation refusal from the runtime parent's completion-attempt identity,
+copied runtime plan and entry-root refusals. Both resource/lifetime sites are
+covered, including copied-plan corruption after the final native actor sample
+on the actual link-byte path. No granting mock replaces a current-state check.
+Each case requires a completed mutation, exact retained failure/no-fact state,
+no later selected metadata/readlink C call, unchanged operation attempts and
+only original reserved closes with literal successful receipts. Observed case
+values are retained in JUnit properties before successful fixture cleanup.
+
+The same 255 checks passed on Python 3.14.9 and 3.11.15, including
+12 actual isolated startup refusals (ten metadata-boundary and two link-byte
+final-actor cases). The full traversal still exceeds 60 seconds:
+it reached 44 typed observations and the after-phase entry, with runtime-current
+calls reduced from 7,346 to 5,192 at that checkpoint, while engine audit calls
+remained 8,383. These counts identify the remaining work; they do not establish
+complete-path speed, native acceptance or image delivery. See the
+[immutable expected-layout design](IMMUTABLE_LINK_AUDIT_LAYOUT.md); it is not yet
+implemented and cannot cache current mutable authority.
+
 ## Audit fusion decision — withheld shortcut
 
 An attempted stage-rejoin fusion was not retained. The initial original-validator

@@ -758,7 +758,11 @@ def _lifetime_tail(owner, consumer):
     _execution_mirrors(execution)
     reg = execution.registration
     _native_work_registration_tail(owner, reg)
-    _runtime_current(execution.blueprint.runtime, owner)
+    # The original guard performs the complete fresh runtime audit itself.
+    # Join the same immutable runtime here; do not audit it twice across an
+    # extra helper-return boundary or reuse a verdict from an earlier call.
+    _require(reg.scope.runtime is execution.blueprint.runtime
+             and reg.scope.runtime is not None)
     _require(StartupArtifactOwner._guard(owner) is reg.scope)
     _opened_chain_tail(execution)
     _native_work_origin_tail(owner, reg, reg.native_origin)
@@ -841,7 +845,8 @@ def _resource_tail(owner, resource):
                      and resource.arguments[1] is resource.descriptor.fd)
     reg = execution.registration
     _native_work_registration_tail(owner, reg)
-    _runtime_current(execution.blueprint.runtime, owner)
+    _require(reg.scope.runtime is execution.blueprint.runtime
+             and reg.scope.runtime is not None)
     _require(StartupArtifactOwner._guard(owner) is reg.scope)
     _native_work_origin_tail(owner, reg, reg.native_origin)
     _require(_execution_mirrors(execution) is execution

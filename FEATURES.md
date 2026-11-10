@@ -1,34 +1,31 @@
-# November 9: early native binding implemented; image delivery unqualified
+# November 9: duplicate runtime checks removed; images still unqualified
 
-The experimental entry now captures the Link engine before filesystem setting
-observations and joins it to the original entry/lineage and both Scope publication
-seals. Original module roots, class/property members, function code/defaults and
-closure cells are rechecked. Capture does not delegate to replaceable pin helpers
-or import callbacks. Read-record allocation uses the original native allocator
-and actual instance initialization; an admitted run exposed and helped repair
-an earlier class-as-instance mistake.
+The experimental Link resource/lifetime checks now bind the same non-null
+Scope/blueprint runtime and use the original owner guard's complete fresh runtime
+audit, removing two earlier duplicate calls. All original guard and later native,
+resource, byte, custody and cleanup checks remain. Independent source review
+accepted this narrow change; no authority verdict is cached across callbacks.
 
-The same 243 local capture/policy/encoding/accounting controls pass on current
-and minimum Python with unchanged source and identical case sets. They are not
-full native traversal, runtime or device qualification. The actual all-path test
-still times out at its unchanged 60-second deadline. A private measured run
-completed the before-hop and target with 44/44 typed native observations, retired
-the first link-result capsule with GC disabled, and restored reserved close
-capacity. This subset does not establish complete snapshots/rechecks or startup.
+The same **255 checks pass on Python 3.14.9 and 3.11.15**: 243 local controls and
+12 real isolated-startup refusals, including ten metadata-boundary cases and two
+link-byte cases after the final native actor sample. The tests require completed
+mutations, exact retained failure/no-fact state, no subsequent selected native
+call, unchanged operation attempts and only original reserved close receipts.
+They distinguish earlier package/activation refusal from the nested runtime
+parent audit. These are bounded source checks, not full native acceptance.
 
-Profiling recorded 8,360 engine audits by the second completed path, plus repeated
-parent/runtime checks. Pure per-invocation namespace deduplication retains all
-original checks and improves a local benchmark, but does not resolve the full
-run. A proposed stage shortcut was withheld because it could dispatch changed
-helpers before its final reseal. Kernel role names are safely projected once
-per fresh audit, preserving all duplicate/required-role/function checks.
-Next is a reviewed fusion of redundant audits while retaining complete
-fresh parent/actor/custody checks after actual callback boundaries. Deadlines
-and security gates are not relaxed. Earlier selected legacy-native passes are
-historical evidence, not a qualification transfer to this new entry composition.
+The full native traversal still exceeds its unchanged 60-second deadline. At the
+after-phase entry it retained 44/44 typed observations and first-capsule retirement;
+runtime-current calls fell from 7,346 to 5,192 while engine audits remained 8,383.
+This subset does not establish all phases, snapshots/rechecks, startup or image
+serving. Slower vector prototypes were discarded. Next is the reviewed design for
+an independently rooted immutable expected layout, preserving every fresh mutable
+check; that layout is not yet implemented and cannot cache access authority.
 
-No image service is registered, no host/device/permission/provider/model/job or
-release changed, and desktop character/local chat images remain unfinished.
+Desktop character and host-local chat images remain unfinished at runtime. No
+image service, host/device/permission/provider/model/job, installation or release
+was changed. Prepared Android/iOS 2026110901 remain uninstalled and physically/
+release unqualified. No upstream image-feature blocker has been demonstrated.
 See [contract and remaining work](specs/046-bot-presentation-integration/EXECUTABLE_LINK_NATIVE_LIFECYCLE.md).
 
 # November 8: shared original file lineage under source qualification

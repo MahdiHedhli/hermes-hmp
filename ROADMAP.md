@@ -1,24 +1,24 @@
-## Early native binding and measured full-path failure — November 9, 2026
+## Link audit reduction; full native acceptance remains open — November 9, 2026
 
-The experimental entry binds the original17-type engine, property/code/default/
-closure dependencies and system-module roots before observation callbacks, with
-both actual Scope publication seals retaining that same capture. The raw-free
-snapshot/fact/recheck composition is written; actual admitted execution now
-reaches typed metadata/readlink and reserved cleanup. This is not image serving.
+Two duplicate runtime audits have been removed from the experimental Link
+resource/lifetime paths. Immediate original runtime identity/non-null joins and
+the owner guard's complete fresh runtime validation remain, together with all
+later native/resource/byte/custody/cleanup checks. The same 255 cases pass on
+current and minimum Python, including twelve actual startup refusal causals.
+This is bounded source verification, not an installed feature.
 
-The full native contract still times out at the unchanged60-second deadline.
-Partial progress proves before-hop/target44typed observations and first-capsule
-retirement, not all phases, native startup, installation or device readiness.
-Current/minimum local capture controls pass243cases each; old legacy-native passes
-do not qualify this composition. No production activation follows.
+The actual full traversal still times out at its unchanged 60-second deadline.
+Before-hop/target 44 typed observations and first-capsule retirement are subset
+evidence only. Engine audits remain the measured repeated work. Slower vector
+prototypes and an unsafe stage shortcut were withheld.
 
-Next: **LP3-COUPLED-AUDIT-FUSION**: reduce measured duplicate full audits only
-across segments without project/weak/constructor dispatch; preserve a fresh full
-mutable-parent/actor/resource/custody/byte/budget audit after each real observation
-boundary. Retain code/global-key/closure/late-callback, partial-store and cleanup
-causals. Then complete all-path native and broader startup/runtime/service/broker/
-physical/release qualification. Do not extend deadlines, cache reusable grants,
-recreate the existing driver, or claim an upstream blocker.
+Next: **LP3-IMMUTABLE-EXPECTED-LAYOUT**, under the open
+**LP3-COUPLED-AUDIT-FUSION** acceptance task. Anchor the literal immutable schema
+in the actual original entry/lineage/Scope chain; preserve every fresh mutable
+parent/actor/resource/custody/byte/budget audit and native fault causals. The design
+is reviewed but not implemented. Do not cache a reusable grant, relax deadlines
+or recreate existing driver/snapshot helpers. All-path native, broader startup/
+runtime/service/broker, physical and release qualification remain required.
 
 ## Integrated startup verification — November 8, 2026
 
