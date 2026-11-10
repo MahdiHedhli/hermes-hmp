@@ -232,6 +232,28 @@ def test_first_pin_pairs_are_fenced_before_any_equality_protocol():
     assert calls == []
 
 
+@pytest.mark.parametrize('fault', ('missing_role', 'duplicate_role', 'foreign_name', 'foreign_row'))
+def test_kernel_role_projection_preserves_required_unique_and_primitive_rows(fault):
+    """Local origin DATA refusal; no startup, native work or access grant."""
+    original = packet()
+    calls = []
+    rows = list(original[3])
+    position = next(i for i, row in enumerate(rows)
+                    if row[0] == '_rejoin_link_stages')
+    if fault == 'missing_role':
+        rows.pop(position)
+    elif fault == 'duplicate_role':
+        rows.append(rows[position])
+    elif fault == 'foreign_name':
+        rows[position] = (Foreign(calls), *rows[position][1:])
+    else:
+        rows[position] = Foreign(calls)
+    malformed = (*original[:3], tuple(rows), original[4])
+    with pytest.raises(ArtifactObservationError):
+        link._engine_origin_tail(malformed)
+    assert calls == []
+
+
 @pytest.mark.parametrize('position', ('before', 'after'))
 def test_cursor_positions_are_fenced_before_pending_policy_dispatch(monkeypatch, position):
     from .test_presentation_link_path_policy import _at

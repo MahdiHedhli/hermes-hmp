@@ -5,6 +5,11 @@ public API, permission, installed feature or upstream dependency. The current
 production baseline is `c37925523f9ab7410c656b0bfd4fda383126c2f1`
 (documentation successor `b5990a2`).
 
+## Historical pre-binding baseline
+
+The following findings describe the earlier production/legacy path, not the
+current env5 experimental composition in the next section.
+
 The existing complete runtime/cache file metadata walk and fresh/startup absence
 drivers must remain intact. Do not replace them with another implementation.
 The next incomplete native boundary is `StartupArtifactOwner._link_path` and
@@ -49,11 +54,14 @@ retained dataclass initializer was initially passed its class as self. The repai
 allocates the original instance first, retains it across init and reseals; a
 native assertion requires class authority to remain untouched.
 
-The same239 selected local cases pass on Python3.14.9 and3.11.15. They do not
+The same 243 selected local cases pass on Python 3.14.9 and 3.11.15.
+Four added controls reject missing/duplicate kernel roles and foreign row/name
+objects before protocol dispatch. Kernel role names are projected once within
+each fresh audit; duplicate, required-role and per-function checks are retained. They do not
 qualify the admitted whole path. The actual full contract remains FAILED at its
-unchanged60second deadline. A diagnostic run completed the before hop and target:
+unchanged 60-second deadline. A diagnostic run completed the before hop and target:
 44/44 native metadata/link observations typed, first raw capsule dead with GC
-disabled, work417→487 and reserved capacity restored to0. It recorded8,360 engine
+disabled, work417→487 and reserved capacity restored to0. It recorded 8,360 engine
 audits,5,022 runtime checks and2,862 owner guards by the second path return; the
 after phase began at52.6seconds in that run. No full-path finish or later phase
 pass is inferred from this subset.
@@ -70,6 +78,23 @@ resource/custody/budget checks after actual callback boundaries and causal
 coverage. Whole native/runtime/service/device acceptance remains open. No
 service, host, device or release was enabled. Older env4/legacy passing receipts
 below are historical; they are not transferred to this changed composition.
+
+## Audit fusion decision — withheld shortcut
+
+An attempted stage-rejoin fusion was not retained. The initial original-validator
+return is a mutation boundary: selecting current helpers afterward can execute
+foreign code before a final reseal notices it. Even holding the final validator's
+own code is insufficient if its first action invokes mutable project dependencies.
+Likewise, namespace lookups must follow fresh exact-dict/string-key fences, since
+a colliding foreign key can invoke equality before refusal. No proposed shortcut
+is treated as native authority or a passing performance fix.
+
+The next implementation must combine complete parent and engine validation into
+a primitive, independently held closure that makes no project-helper dispatch
+between its checks, then revalidate actor/resource/custody/budget after every real
+callback. It must preserve every original check rather than cache a reusable
+verdict. Keep all-stage native acceptance and late mutation/refusal causals in the
+same review; a local speed measurement or malformed-packet pass is insufficient.
 
 ## Fixed traversal
 

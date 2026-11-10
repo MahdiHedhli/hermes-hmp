@@ -9,8 +9,8 @@
 
 ## Executable leaf-link integration
 
-- [ ] **LP3-COUPLED-AUDIT-FUSION** Resolve the measured full-path60second timeout
-      after actual early binding. Before-hop/target44/44typed observations and
+- [ ] **LP3-COUPLED-AUDIT-FUSION** Resolve the measured full-path 60-second timeout
+      after actual early binding. Before-hop/target 44/44 typed observations and
       first raw-capsule retirement are subset evidence only. Retain all original
       dependency/parent/actor/custody/operation/byte/close checks, performing fresh
       complete audits after real callback boundaries; no reusable audit grant,
@@ -24,7 +24,9 @@
       actual-startup contract test is deliberately red on current Python;
       minimum-Python instrumentation timed out, not a causal pass. No native
       path/service/physical image completion follows from earlier DATA checks.
-      The Link metadata/kernel/policy draft is written but early admission is
+      The following draft history predates the current env5 binding; the early
+      binding now exists but full-path qualification still fails the deadline.
+      The Link metadata/kernel/policy draft was written while early admission was
       deliberately unavailable. Its local/bootstrap tests and existing Directory
       compatibility do not close this task. Add op5, full driver/finishes and
       actual early property/core bindings before connecting the native caller.
@@ -37,9 +39,9 @@
       including a lost open return. Review caught and corrected mutable-holder
       adoption and finish exception-context retention. Full actual Link
       history/snapshot/recheck and callback/constructor causals remain required;
-      this task is still open and the early engine remains disabled.
+      this task is still open; later env5 binding is not an acceptance pass.
       Raw-free snapshot/fact construction and metadata-only recheck are now
-      written behind that unchanged gate. Snapshot constructors retain every
+      written before the later env5 binding. Snapshot constructors retain every
       literal hop/target finish; final mirrors join adjacent native work spans
       and byte-count cells. Historical validation permits later healthy work
       while rejecting torn result/inflight states. Complete early binding and

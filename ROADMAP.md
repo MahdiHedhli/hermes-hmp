@@ -9,7 +9,7 @@ reaches typed metadata/readlink and reserved cleanup. This is not image serving.
 The full native contract still times out at the unchanged60-second deadline.
 Partial progress proves before-hop/target44typed observations and first-capsule
 retirement, not all phases, native startup, installation or device readiness.
-Current/minimum local capture controls pass239cases each; old legacy-native passes
+Current/minimum local capture controls pass243cases each; old legacy-native passes
 do not qualify this composition. No production activation follows.
 
 Next: **LP3-COUPLED-AUDIT-FUSION**: reduce measured duplicate full audits only

@@ -563,7 +563,12 @@ def _engine_origin_tail(origin, *, _type=type, _tuple=tuple, _dict=dict, _str=st
             elif not (type(held_pin_row[5]) is dict and len(held_pin_row[5]) == len(held_pin_row[6]) and all((type(k) is str for k in held_pin_row[5])) and all((type(pair) is tuple and len(pair) == 2 and (type(pair[0]) is str) and (pair[0] in held_pin_row[5]) and (held_pin_row[5][pair[0]] is pair[1]) for pair in held_pin_row[6]))):
                 raise _error from None
     required_kernel = ('_link_function_pin', '_closed_link_engine_origin', '_link_policy_helper', '_link_stage_functions', '_rejoin_link_stages', '_link_current_lifetime_tail', '_resource_tail', '_prepare_metadata_operation_with_custody', '_undebited_directory_cells_tail', '_unspent_directory_cells_tail', '_unused_directory_cells_tail', '_unused_directory_intent_tail', '_latched_directory_resource_tail', '_charged_directory_history_tail', '_charged_directory_operation_tail', '_active_directory_operation_tail', '_directory_admission_preparation_tail', '_admit_directory_operation', '_returned_directory_operation_tail', '_pending_directory_cohort_tail', '_pending_directory_return_tail', '_produce_directory_metadata', '_consuming_directory_return_tail', '_directory_commit_cohort_tail', '_prepared_directory_commit_tail', '_consume_directory_policy', '_directory_ack_preparation_tail', '_acked_directory_history_tail', '_acked_directory_commit_tail', '_retired_directory_commit_tail', '_ack_directory_policy', '_run_directory_observation', '_capture_payload_origin', '_allocate_directory_custody', '_origin_tail', '_directory_payload_cells', '_marker_tail', '_payload_state_is_clear', '_native_actor_context', '_native_pre_actor_state', '_native_post_actor_state', '_native_work_origin_tail', '_native_work_registration_tail', '_native_metadata_snapshot', '_require', '_operation_result_family', '_capture_link_byte_count', '_retain_link_byte_failure')
-    if not (all((type(row) is tuple and len(row) == 7 and (type(row[0]) is str) for row in origin[3])) and len({row[0] for row in origin[3]}) == len(origin[3]) and all((name in tuple((row[0] for row in origin[3])) for name in required_kernel))):
+    if not all(type(row) is tuple and len(row) == 7 and type(row[0]) is str
+               for row in origin[3]):
+        raise _error from None
+    kernel_roles = tuple(row[0] for row in origin[3])
+    if not (len(set(kernel_roles)) == len(kernel_roles)
+            and all(name in kernel_roles for name in required_kernel)):
         raise _error from None
     for row in origin[3]:
         if not kernel_names.get(row[0]) is row[1]:

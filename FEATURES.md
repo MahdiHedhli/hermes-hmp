@@ -8,18 +8,21 @@ or import callbacks. Read-record allocation uses the original native allocator
 and actual instance initialization; an admitted run exposed and helped repair
 an earlier class-as-instance mistake.
 
-The same 239 local capture/policy/encoding/accounting controls pass on current
+The same 243 local capture/policy/encoding/accounting controls pass on current
 and minimum Python with unchanged source and identical case sets. They are not
 full native traversal, runtime or device qualification. The actual all-path test
 still times out at its unchanged 60-second deadline. A private measured run
-completed the before-hop and target with44/44 typed native observations, retired
+completed the before-hop and target with 44/44 typed native observations, retired
 the first link-result capsule with GC disabled, and restored reserved close
 capacity. This subset does not establish complete snapshots/rechecks or startup.
 
-Profiling recorded8,360 engine audits by the second completed path, plus repeated
+Profiling recorded 8,360 engine audits by the second completed path, plus repeated
 parent/runtime checks. Pure per-invocation namespace deduplication retains all
 original checks and improves a local benchmark, but does not resolve the full
-run. Next is a reviewed fusion of redundant audits while retaining complete
+run. A proposed stage shortcut was withheld because it could dispatch changed
+helpers before its final reseal. Kernel role names are safely projected once
+per fresh audit, preserving all duplicate/required-role/function checks.
+Next is a reviewed fusion of redundant audits while retaining complete
 fresh parent/actor/custody checks after actual callback boundaries. Deadlines
 and security gates are not relaxed. Earlier selected legacy-native passes are
 historical evidence, not a qualification transfer to this new entry composition.
