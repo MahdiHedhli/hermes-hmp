@@ -1024,3 +1024,25 @@ historical, not an alternative live authorization path or resolved incident.
       source unchanged; bounded source review accepted corrected0ebe76e.
       Existing modified inheritance assertions and broader affected regression
       remain required. No operation/effect authority is implemented.
+
+## BI1-BA original bound-audit implementation boundary — November 10
+
+See [BOUND_ENGINE_AUDIT.md](BOUND_ENGINE_AUDIT.md). The full desktop-character
+feature and unchanged native 60-second gate remain required; this does not replace
+them with a carrier probe or faster subset. The nine representation facts pass on
+actual Python 3.14.9/3.11.15: partial's direct attributes are read-only, but native
+`__setstate__` replaces their state. Fresh original func/args/keyword identity and
+function provenance would remain mandatory even on the same partial object. The
+selected implementation instead uses an exact immutable tuple DATA record plus
+held fixed dispatch, independently retained through original root custody; no
+partial/callable carrier is introduced. Mutable contained values stay freshly checked.
+
+- [x] BI1-BA1: source-backed coherent implementation contract and actual-runtime
+  carrier facts; independent architecture review accepted the boundary.
+- [ ] BI1-BA2: actual factory-return/root custody through EntryOrigin, STARTED/CELL,
+  lineage, Scope, both final publication windows and all selectors.
+- [ ] BI1-BA3: fixed live-audit body with immutable-only parsing omitted.
+- [ ] BI1-BA4: current/minimum causals/differential tests and exact independent review.
+- [ ] BI1-BA5: original native 60-second completion, then full startup acceptance.
+- [ ] BI1-BA6/7: current-media-safe service/route/character integration and physical,
+  native-storage/accessibility/security-release acceptance.
