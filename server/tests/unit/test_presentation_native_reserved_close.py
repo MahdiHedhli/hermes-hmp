@@ -8,7 +8,9 @@ import pytest
 
 @pytest.mark.parametrize('change', ('normal', 'close_alias', 'actor_alias',
                                     'root_retired', 'copied_row', 'malformed_allocation',
-                                    'malformed_scope', 'wrong_thread', 'duplicate'))
+                                    'malformed_scope', 'wrong_thread', 'duplicate',
+                                    'foreign_state0', 'foreign_state1',
+                                    'integer_state0', 'integer_state1'))
 def test_original_reserved_close(tmp_path, monkeypatch, change):
     from . import test_presentation_cache_observation as cache
     from . import test_presentation_entry_files as runner
@@ -22,6 +24,8 @@ class Finished(Exception):pass
 class Foreign:
     def __getattr__(self,name):
         foreign_calls.append('get');raise AssertionError('foreign allocation getter')
+    def __bool__(self):foreign_calls.append('bool');raise AssertionError('foreign bool')
+    def __eq__(self,other):foreign_calls.append('eq');raise AssertionError('foreign equality')
 def foreign(*args,**kwargs):
     foreign_calls.append(True);raise AssertionError('late alias invoked')
 def native_observed(frame):
@@ -67,6 +71,15 @@ def checked_open(target,name,parent,directory,native_registration=None):
         except a.ArtifactObservationError:pass
         else:raise AssertionError('copied actual result accepted')
         assert close_calls==[] and tuple(ledger.counts)==before
+    if CHANGE in ('foreign_state0','foreign_state1','integer_state0','integer_state1'):
+        index=int(CHANGE[-1]);original=row.close.state[index]
+        row.close.state[index]=Foreign() if CHANGE.startswith('foreign') else 0
+        try:
+            try:actual_close(target,row,fd,target._origin,target._root_cell)
+            except a.ArtifactObservationError:pass
+            else:raise AssertionError('non-boolean close state accepted')
+            assert close_calls==[] and tuple(ledger.counts)==before
+        finally:row.close.state[index]=original
     actual_close(target,row,fd,target._origin,target._root_cell)
     assert len(close_calls)==1 and close_calls[0] is fd
     assert ledger.counts==[before[0]+1,before[1]-1]

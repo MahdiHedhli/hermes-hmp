@@ -1,3 +1,18 @@
+## November 10: fixed-width audit checks
+
+Claim and closed-descriptor checks use direct indexed predicates after the same
+exact tuple3/list2 fences. Every original type, identity, live ledger and cleanup
+check remains; no mutable verdict is retained. Independent bounded implementation
+and test review accepted the change. Same source and matching case sets pass
+302 regression plus25 close/status checks on both actual Python3.14.9 and3.11.15.
+Four added actual pending-close cases reject integer/foreign state slots before
+Cclose or ledger debit, then restore and close exactly once.
+
+An actual original-claim helper benchmark is about20percent faster; it is not
+whole-startup evidence. Fresh current normal-artifact completion still times out
+at60seconds with checked._ready unchanged. No full native/service/route/image,
+physical-device or release acceptance; no host/device/settings/install changes.
+
 # BI1 integration tasks
 
 ## November 10 finite audit increment

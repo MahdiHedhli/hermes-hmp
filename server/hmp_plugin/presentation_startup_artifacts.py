@@ -1575,7 +1575,9 @@ def _native_file_allocation_original(allocation, original_ledger):
     registration, ledger, close = allocation.registration, allocation.ledger, allocation.close
     _require(type(registration) is _NativeScopeRegistration
              and type(registration.type_pins) is tuple and len(registration.type_pins) == 3
-             and all(type(pin) is type for pin in registration.type_pins)
+             and (type(registration.type_pins[0]) is type
+                  and type(registration.type_pins[1]) is type
+                  and type(registration.type_pins[2]) is type)
              and type(ledger) is registration.type_pins[1]
              and type(allocation.native) is registration.type_pins[2])
     _require(registration.owner is allocation.owner and registration.scope is allocation.scope
@@ -1603,7 +1605,7 @@ def _native_file_allocation_original(allocation, original_ledger):
              and type(allocation.refused) is list and len(allocation.refused) == 1
              and type(allocation.refused[0]) is bool
              and type(close.state) is list and len(close.state) == 2
-             and all(type(value) is bool for value in close.state)
+             and type(close.state[0]) is bool and type(close.state[1]) is bool
              and type(close.raw) is list and len(close.raw) == 1
              and type(close.result) is list and len(close.result) == 1)
     return close
@@ -1671,7 +1673,9 @@ def _descriptor_closed_in_scope(row, scope):
         registration = slot[0]
         _require(registration.scope is scope and registration.lineage is scope.native_files
                  and type(registration.type_pins) is tuple and len(registration.type_pins) == 3
-                 and all(type(pin) is type for pin in registration.type_pins)
+                 and (type(registration.type_pins[0]) is type
+                  and type(registration.type_pins[1]) is type
+                  and type(registration.type_pins[2]) is type)
                  and type(registration.lineage) is registration.type_pins[0]
                  and type(registration.native_ledger) is registration.type_pins[1]
                  and registration.lineage.ledger is registration.native_ledger

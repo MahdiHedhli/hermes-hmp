@@ -7,13 +7,22 @@ seals. Existing fresh module/class/function/default/closure and native/resource/
 byte/custody audits remain. Fast schema use is not implemented; this increment
 makes no full-path speed claim and enables no presentation route.
 
-The same **302 checks pass on Python 3.14.9 and 3.11.15**, with unchanged source
-and matching case sets: 280 local controls, 12 actual runtime refusal controls and
+Current source passes the same **327 checks on Python 3.14.9 and 3.11.15**: the
+302 regression checks plus 25 original-close/status controls. All runs retained unchanged source and matching case sets. The 302 include: 280 local controls, 12 actual runtime refusal controls and
 10 actual publication controls. New controls exposed and corrected late original
 invocation/getter ordering. The actual mutation cases require zero foreign calls,
 new native work, registration after mutation or successful retainer returns, with
 unchanged close reservation. These are bounded source proofs, not physical or
 release acceptance.
+
+The production claim/closed-descriptor audit now directly checks its already
+shape-fenced three type pins and two boolean state values, avoiding generator
+allocation without caching authority or omitting fresh checks. Four new actual
+close cases reject foreign and integer state slots before native close/debit,
+then restore valid state and prove one original cleanup. Independent bounded
+review accepted the implementation and tests. The actual-claim helper benchmark
+is about 20 percent faster locally; fresh normal artifact completion still exceeds
+its unchanged 60-second limit. This is not full-path performance acceptance.
 
 Before the fixture repair, a broader 110-case open/close selection passed 93
 and failed 17; a withheld optimization had the exact same outcomes. The repaired
@@ -22,16 +31,16 @@ including original native-close proof. Its two full normal-completion controls
 still time out at 60 seconds. The broader gate has not been freshly rerun and
 remains unqualified.
 
-The declared-file fixture now injects copied, unlisted and foreign declarations
+On the preceding source, the declared-file fixture injects copied, unlisted and foreign declarations
 into the original method frame instead of replacing its canonical method. Three
-package refusal cases pass on Python3.11.15; all six package/artifact refusal
-cases pass on Python3.14.9 with source unchanged. Current Python now uses local
+package refusal cases pass on Python 3.11.15; all six package/artifact refusal
+cases pass on Python 3.14.9 with source unchanged. Current Python now uses local
 method monitoring and arms exception/native observation only at the selected
 negative interval. Independent review accepted writeback, exact failed-owner and
 no-effect assertions. Older Python retains tracing; artifact floor coverage is
 not claimed. Normal completion still times out; no broader aggregate pass is inferred.
 
-A fresh complete-path attempt on this composition still exceeded its unchanged
+An earlier complete native-path attempt exceeded its unchanged
 60-second deadline. Its last retained checkpoint contains 44 typed native
 observations and one retired raw capsule; this subset is not full native
 acceptance or a speed improvement. The full native flow, startup/service/route
