@@ -1,5 +1,19 @@
 # Native binding fixture migration — qualification repair
 
+## November 10: original declared-file observations
+
+The declared-file fixture now injects copied, unlisted and foreign declarations
+into the original method frame instead of replacing its canonical method. Three
+package refusal cases pass on Python3.14.9 and3.11.15 with source unchanged;
+independent review accepted their writeback, exact failed-owner and no-effect
+assertions. The current four-case run still fails its artifact case at60seconds.
+Artifact and normal completion remain unqualified; no aggregate pass is inferred.
+
+The current strict4 receipt has3passes/1timeout; minimum strict3 has3passes.
+Normal checked._ready remains unchanged; production source is untouched.
+Native-open observation covers the canonical selected open boundary, not every
+possible filesystem effect. Monitoring is diagnostic, not a timing proof.
+
 ## November 10: original open-registration observations
 
 The open-registration fixture now traces actual method frames and profiles the

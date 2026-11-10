@@ -22,6 +22,13 @@ including original native-close proof. Its two full normal-completion controls
 still time out at 60 seconds. The broader gate has not been freshly rerun and
 remains unqualified.
 
+The declared-file fixture now injects copied, unlisted and foreign declarations
+into the original method frame instead of replacing its canonical method. Three
+package refusal cases pass on Python3.14.9 and3.11.15 with source unchanged;
+independent review accepted their writeback, exact failed-owner and no-effect
+assertions. The current four-case run still fails its artifact case at60seconds.
+Artifact and normal completion remain unqualified; no aggregate pass is inferred.
+
 A fresh complete-path attempt on this composition still exceeded its unchanged
 60-second deadline. Its last retained checkpoint contains 44 typed native
 observations and one retired raw capsule; this subset is not full native
