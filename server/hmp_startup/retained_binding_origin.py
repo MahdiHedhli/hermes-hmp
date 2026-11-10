@@ -180,18 +180,37 @@ def current(packet):
               and (namespace.get('__builtins__') is builtin_namespace
                    or namespace.get('__builtins__') is builtin_module)
               and type(pairs) is tuple
-              and all(key in namespace for key in live_keys)
               and len(namespace) == len(pairs) + len(live_keys)) is not True:
             raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
-        seen = set()
+        # Compare in the live-to-private direction. Allocations may run GC
+        # callbacks after the initial key fence; never hash an expected name
+        # into that subsequently mutable dictionary. The private index contains
+        # only exact strings from the original packet, not live foreign keys.
+        expected_pairs = {}
         for pair in pairs:
             if (type(pair) is tuple and len(pair) == 2 and type(pair[0]) is str) is not True:
                 raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
             key, value = pair
-            if (key not in live_keys and key not in seen
-                  and key in namespace and namespace[key] is value) is not True:
+            if key in live_keys or key in expected_pairs:
                 raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
-            seen.add(key)
+            expected_pairs[key] = value
+        valid, observed, live_seen = True, 0, 0
+        try:
+            for key, value in namespace.items():
+                if type(key) is not str:
+                    valid = False
+                    break
+                observed += 1
+                if key in live_keys:
+                    live_seen += 1
+                elif key not in expected_pairs or expected_pairs[key] is not value:
+                    valid = False
+                    break
+        except RuntimeError:
+            valid = False  # A changed-size/key iterator is refusal, not retry.
+        if (valid is True and observed == len(pairs) + len(live_keys)
+                and live_seen == len(live_keys)) is not True:
+            raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
     for row, (index, name) in zip(classes, _CLASSES, strict=True):
         if (type(row) is tuple and len(row) == 3) is not True:
             raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None

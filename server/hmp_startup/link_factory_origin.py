@@ -561,16 +561,32 @@ def current(origin, *, _type=type, _vars=vars, _tuple=tuple, _len=len,
         if (_type(helper_final_row) is _tuple and _len(helper_final_row) == 3) is not True:
             raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
         helper_final_module, helper_final_namespace, helper_final_pairs = helper_final_row
-        if (_type(helper_final_module) is _module and _type(helper_final_namespace) is _dict and _all((_type(helper_final_key) is _str for helper_final_key in helper_final_registry)) and _all((_type(helper_final_key) is _str for helper_final_key in helper_final_namespace)) and (helper_final_registry.get(helper_final_name) is helper_final_module) and (_vars(helper_final_module) is helper_final_namespace) and (_type(helper_final_namespace.get('__name__')) is _str) and (helper_final_namespace['__name__'] == helper_final_name) and (helper_final_namespace.get('__builtins__') is helper_final_builtin_namespace or helper_final_namespace.get('__builtins__') is helper_final_builtin_module) and (_type(helper_final_pairs) is _tuple) and _all((helper_final_key in helper_final_namespace for helper_final_key in helper_final_live_keys)) and (_len(helper_final_namespace) == _len(helper_final_pairs) + _len(helper_final_live_keys))) is not True:
+        if (_type(helper_final_module) is _module and _type(helper_final_namespace) is _dict and _all((_type(helper_final_key) is _str for helper_final_key in helper_final_registry)) and _all((_type(helper_final_key) is _str for helper_final_key in helper_final_namespace)) and (helper_final_registry.get(helper_final_name) is helper_final_module) and (_vars(helper_final_module) is helper_final_namespace) and (_type(helper_final_namespace.get('__name__')) is _str) and (helper_final_namespace['__name__'] == helper_final_name) and (helper_final_namespace.get('__builtins__') is helper_final_builtin_namespace or helper_final_namespace.get('__builtins__') is helper_final_builtin_module) and (_type(helper_final_pairs) is _tuple) and (_len(helper_final_namespace) == _len(helper_final_pairs) + _len(helper_final_live_keys))) is not True:
             raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
-        helper_final_seen = _set()
+        helper_final_expected_pairs = {}
         for helper_final_pair in helper_final_pairs:
             if (_type(helper_final_pair) is _tuple and _len(helper_final_pair) == 2 and (_type(helper_final_pair[0]) is _str)) is not True:
                 raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
             helper_final_key, helper_final_value = helper_final_pair
-            if (helper_final_key not in helper_final_live_keys and helper_final_key not in helper_final_seen and (helper_final_key in helper_final_namespace) and (helper_final_namespace[helper_final_key] is helper_final_value)) is not True:
+            if helper_final_key in helper_final_live_keys or helper_final_key in helper_final_expected_pairs:
                 raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
-            helper_final_seen.add(helper_final_key)
+            helper_final_expected_pairs[helper_final_key] = helper_final_value
+        helper_final_valid, helper_final_observed, helper_final_live_seen = (True, 0, 0)
+        try:
+            for helper_final_key, helper_final_value in helper_final_namespace.items():
+                if _type(helper_final_key) is not _str:
+                    helper_final_valid = False
+                    break
+                helper_final_observed += 1
+                if helper_final_key in helper_final_live_keys:
+                    helper_final_live_seen += 1
+                elif helper_final_key not in helper_final_expected_pairs or helper_final_expected_pairs[helper_final_key] is not helper_final_value:
+                    helper_final_valid = False
+                    break
+        except _error:
+            helper_final_valid = False
+        if (helper_final_valid is True and helper_final_observed == _len(helper_final_pairs) + _len(helper_final_live_keys) and (helper_final_live_seen == _len(helper_final_live_keys))) is not True:
+            raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
     for helper_final_row, (helper_final_index, helper_final_name) in _zip(helper_final_classes, helper_data_classes, strict=True):
         if (_type(helper_final_row) is _tuple and _len(helper_final_row) == 3) is not True:
             raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None

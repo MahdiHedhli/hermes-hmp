@@ -276,3 +276,25 @@ samples show repeated approval, package, recipe and selection scans; monitoring
 substantially perturbs timing. The next design must reduce demonstrated duplicate
 work through an authenticated original-caller boundary, not cached validity or
 weaker close proofs. No inexpensive safe consolidation is established yet.
+
+## November 10 — bounded GC dictionary-comparison hardening
+
+An automatic garbage-collection callback reproduced an internal candidate gap:
+after a key-type scan, it substituted a colliding foreign key, and a later
+module-dictionary membership check invoked that key's comparison method. This
+requires Python already running in the process; no external privilege bypass,
+affected deployed host or incident is established.
+
+The selected metadata checker now walks live module entries, checks each key's
+exact string type, and compares values against a private original-string index.
+Original value identity, cardinality and required live-key checks remain. A
+changed dictionary iterator refuses without retry. The same body is synchronized
+at the parent and both final publication checks; no audit or permission is removed.
+
+All 440 selected regression cases pass on Python 3.14.9. Two targeted automatic-GC
+cases pass on Python 3.11.15; its broader matrix is pending. The component case
+proves mutation followed by exact refusal with zero foreign comparisons; the
+parent case exercises an earlier prefix guard. These are bounded observations,
+not whole-process GC atomicity or a new full native-startup pass. Other mutation
+windows remain outside this fix. Startup, character/media, service and physical
+qualification remain open; no new device build was installed.

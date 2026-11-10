@@ -3752,6 +3752,7 @@ class StartupArtifactOwner:
                 link_hdata_packet = link_helper_origin[6]
                 link_helper_all = link_helper_expected_builtins[8]
                 link_helper_set = link_helper_expected_builtins[9]
+                link_helper_runtime_error = link_helper_expected_builtins[10]
                 link_helper_value_error = link_helper_expected_builtins[11]
                 link_helper_modules = link_helper_origin[1]['_MODULES']
                 link_helper_classes = link_helper_origin[1]['_CLASSES']
@@ -3772,16 +3773,32 @@ class StartupArtifactOwner:
                     if (link_raw_type(link_hdata_row) is link_raw_tuple and link_raw_len(link_hdata_row) == 3) is not True:
                         raise refusal from None
                     link_hdata_module, link_hdata_namespace, link_hdata_pairs = link_hdata_row
-                    if (link_raw_type(link_hdata_module) is link_raw_module and link_raw_type(link_hdata_namespace) is link_raw_dict and link_helper_all((link_raw_type(link_hdata_key) is link_raw_str for link_hdata_key in link_hdata_registry)) and link_helper_all((link_raw_type(link_hdata_key) is link_raw_str for link_hdata_key in link_hdata_namespace)) and (link_hdata_registry.get(link_hdata_name) is link_hdata_module) and (link_raw_vars(link_hdata_module) is link_hdata_namespace) and (link_raw_type(link_hdata_namespace.get('__name__')) is link_raw_str) and (link_hdata_namespace['__name__'] == link_hdata_name) and (link_hdata_namespace.get('__builtins__') is link_hdata_builtin_namespace or link_hdata_namespace.get('__builtins__') is link_hdata_builtin_module) and (link_raw_type(link_hdata_pairs) is link_raw_tuple) and link_helper_all((link_hdata_key in link_hdata_namespace for link_hdata_key in link_hdata_live_keys)) and (link_raw_len(link_hdata_namespace) == link_raw_len(link_hdata_pairs) + link_raw_len(link_hdata_live_keys))) is not True:
+                    if (link_raw_type(link_hdata_module) is link_raw_module and link_raw_type(link_hdata_namespace) is link_raw_dict and link_helper_all((link_raw_type(link_hdata_key) is link_raw_str for link_hdata_key in link_hdata_registry)) and link_helper_all((link_raw_type(link_hdata_key) is link_raw_str for link_hdata_key in link_hdata_namespace)) and (link_hdata_registry.get(link_hdata_name) is link_hdata_module) and (link_raw_vars(link_hdata_module) is link_hdata_namespace) and (link_raw_type(link_hdata_namespace.get('__name__')) is link_raw_str) and (link_hdata_namespace['__name__'] == link_hdata_name) and (link_hdata_namespace.get('__builtins__') is link_hdata_builtin_namespace or link_hdata_namespace.get('__builtins__') is link_hdata_builtin_module) and (link_raw_type(link_hdata_pairs) is link_raw_tuple) and (link_raw_len(link_hdata_namespace) == link_raw_len(link_hdata_pairs) + link_raw_len(link_hdata_live_keys))) is not True:
                         raise refusal from None
-                    link_hdata_seen = link_helper_set()
+                    link_hdata_expected_pairs = {}
                     for link_hdata_pair in link_hdata_pairs:
                         if (link_raw_type(link_hdata_pair) is link_raw_tuple and link_raw_len(link_hdata_pair) == 2 and (link_raw_type(link_hdata_pair[0]) is link_raw_str)) is not True:
                             raise refusal from None
                         link_hdata_key, link_hdata_value = link_hdata_pair
-                        if (link_hdata_key not in link_hdata_live_keys and link_hdata_key not in link_hdata_seen and (link_hdata_key in link_hdata_namespace) and (link_hdata_namespace[link_hdata_key] is link_hdata_value)) is not True:
+                        if link_hdata_key in link_hdata_live_keys or link_hdata_key in link_hdata_expected_pairs:
                             raise refusal from None
-                        link_hdata_seen.add(link_hdata_key)
+                        link_hdata_expected_pairs[link_hdata_key] = link_hdata_value
+                    link_hdata_valid, link_hdata_observed, link_hdata_live_seen = (True, 0, 0)
+                    try:
+                        for link_hdata_key, link_hdata_value in link_hdata_namespace.items():
+                            if link_raw_type(link_hdata_key) is not link_raw_str:
+                                link_hdata_valid = False
+                                break
+                            link_hdata_observed += 1
+                            if link_hdata_key in link_hdata_live_keys:
+                                link_hdata_live_seen += 1
+                            elif link_hdata_key not in link_hdata_expected_pairs or link_hdata_expected_pairs[link_hdata_key] is not link_hdata_value:
+                                link_hdata_valid = False
+                                break
+                    except link_helper_runtime_error:
+                        link_hdata_valid = False
+                    if (link_hdata_valid is True and link_hdata_observed == link_raw_len(link_hdata_pairs) + link_raw_len(link_hdata_live_keys) and (link_hdata_live_seen == link_raw_len(link_hdata_live_keys))) is not True:
+                        raise refusal from None
                 for link_hdata_row, (link_hdata_index, link_hdata_name) in link_raw_zip(link_hdata_classes, link_helper_classes, strict=True):
                     if (link_raw_type(link_hdata_row) is link_raw_tuple and link_raw_len(link_hdata_row) == 3) is not True:
                         raise refusal from None
@@ -4233,6 +4250,7 @@ class StartupArtifactOwner:
                 link_hdata_packet = link_helper_origin[6]
                 link_helper_all = link_helper_expected_builtins[8]
                 link_helper_set = link_helper_expected_builtins[9]
+                link_helper_runtime_error = link_helper_expected_builtins[10]
                 link_helper_value_error = link_helper_expected_builtins[11]
                 link_helper_modules = link_helper_origin[1]['_MODULES']
                 link_helper_classes = link_helper_origin[1]['_CLASSES']
@@ -4253,16 +4271,32 @@ class StartupArtifactOwner:
                     if (link_raw_type(link_hdata_row) is link_raw_tuple and link_raw_len(link_hdata_row) == 3) is not True:
                         raise refusal from None
                     link_hdata_module, link_hdata_namespace, link_hdata_pairs = link_hdata_row
-                    if (link_raw_type(link_hdata_module) is link_raw_module and link_raw_type(link_hdata_namespace) is link_raw_dict and link_helper_all((link_raw_type(link_hdata_key) is link_raw_str for link_hdata_key in link_hdata_registry)) and link_helper_all((link_raw_type(link_hdata_key) is link_raw_str for link_hdata_key in link_hdata_namespace)) and (link_hdata_registry.get(link_hdata_name) is link_hdata_module) and (link_raw_vars(link_hdata_module) is link_hdata_namespace) and (link_raw_type(link_hdata_namespace.get('__name__')) is link_raw_str) and (link_hdata_namespace['__name__'] == link_hdata_name) and (link_hdata_namespace.get('__builtins__') is link_hdata_builtin_namespace or link_hdata_namespace.get('__builtins__') is link_hdata_builtin_module) and (link_raw_type(link_hdata_pairs) is link_raw_tuple) and link_helper_all((link_hdata_key in link_hdata_namespace for link_hdata_key in link_hdata_live_keys)) and (link_raw_len(link_hdata_namespace) == link_raw_len(link_hdata_pairs) + link_raw_len(link_hdata_live_keys))) is not True:
+                    if (link_raw_type(link_hdata_module) is link_raw_module and link_raw_type(link_hdata_namespace) is link_raw_dict and link_helper_all((link_raw_type(link_hdata_key) is link_raw_str for link_hdata_key in link_hdata_registry)) and link_helper_all((link_raw_type(link_hdata_key) is link_raw_str for link_hdata_key in link_hdata_namespace)) and (link_hdata_registry.get(link_hdata_name) is link_hdata_module) and (link_raw_vars(link_hdata_module) is link_hdata_namespace) and (link_raw_type(link_hdata_namespace.get('__name__')) is link_raw_str) and (link_hdata_namespace['__name__'] == link_hdata_name) and (link_hdata_namespace.get('__builtins__') is link_hdata_builtin_namespace or link_hdata_namespace.get('__builtins__') is link_hdata_builtin_module) and (link_raw_type(link_hdata_pairs) is link_raw_tuple) and (link_raw_len(link_hdata_namespace) == link_raw_len(link_hdata_pairs) + link_raw_len(link_hdata_live_keys))) is not True:
                         raise refusal from None
-                    link_hdata_seen = link_helper_set()
+                    link_hdata_expected_pairs = {}
                     for link_hdata_pair in link_hdata_pairs:
                         if (link_raw_type(link_hdata_pair) is link_raw_tuple and link_raw_len(link_hdata_pair) == 2 and (link_raw_type(link_hdata_pair[0]) is link_raw_str)) is not True:
                             raise refusal from None
                         link_hdata_key, link_hdata_value = link_hdata_pair
-                        if (link_hdata_key not in link_hdata_live_keys and link_hdata_key not in link_hdata_seen and (link_hdata_key in link_hdata_namespace) and (link_hdata_namespace[link_hdata_key] is link_hdata_value)) is not True:
+                        if link_hdata_key in link_hdata_live_keys or link_hdata_key in link_hdata_expected_pairs:
                             raise refusal from None
-                        link_hdata_seen.add(link_hdata_key)
+                        link_hdata_expected_pairs[link_hdata_key] = link_hdata_value
+                    link_hdata_valid, link_hdata_observed, link_hdata_live_seen = (True, 0, 0)
+                    try:
+                        for link_hdata_key, link_hdata_value in link_hdata_namespace.items():
+                            if link_raw_type(link_hdata_key) is not link_raw_str:
+                                link_hdata_valid = False
+                                break
+                            link_hdata_observed += 1
+                            if link_hdata_key in link_hdata_live_keys:
+                                link_hdata_live_seen += 1
+                            elif link_hdata_key not in link_hdata_expected_pairs or link_hdata_expected_pairs[link_hdata_key] is not link_hdata_value:
+                                link_hdata_valid = False
+                                break
+                    except link_helper_runtime_error:
+                        link_hdata_valid = False
+                    if (link_hdata_valid is True and link_hdata_observed == link_raw_len(link_hdata_pairs) + link_raw_len(link_hdata_live_keys) and (link_hdata_live_seen == link_raw_len(link_hdata_live_keys))) is not True:
+                        raise refusal from None
                 for link_hdata_row, (link_hdata_index, link_hdata_name) in link_raw_zip(link_hdata_classes, link_helper_classes, strict=True):
                     if (link_raw_type(link_hdata_row) is link_raw_tuple and link_raw_len(link_hdata_row) == 3) is not True:
                         raise refusal from None
