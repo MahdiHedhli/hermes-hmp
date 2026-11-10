@@ -130,3 +130,12 @@ returned bytes separately from the original declared target. Keep full current
 parent/actor audits, real count/debit deltas, sticky uncertainty and no replay.
 Remaining package/entry enumeration, other typed owners and full factory/service
 admission remain separate requirements after this path is connected.
+
+## Original encoding prerequisite
+
+`c379255` adds early original filesystem encoding preparation and updates the
+actual entry/Scope origin schema consistently. The full 203 current / 202 selected
+minimum checks pass with verified artifacts and common cases. See
+FILESYSTEM_ENCODING_ORIGIN.md. The enclosing link driver still uses its legacy
+path until full LP3 connection; this helper is not native admission or image
+availability. No source or native permission is recovered from copied DATA.
