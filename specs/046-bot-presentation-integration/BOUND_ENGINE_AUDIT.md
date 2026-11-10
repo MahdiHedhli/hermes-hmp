@@ -155,3 +155,25 @@ The same-size missing-None-key and GC-mutated-key refusals remain mandatory.
 - [ ] BI1-BA5: actual original native 60-second completion and full startup acceptance.
 - [ ] BI1-BA6: integrate current media/runtime source, service/route/character journey.
 - [ ] BI1-BA7: physical-device, native-storage, accessibility and release acceptance.
+
+## BA2 construction checkpoint — isolated draft, November 10
+
+The original `_capture_engine` now preholds its literal generic-checker row before
+helper callbacks, reuses that exact row in engine functions, constructs the
+three-field immutable audit record before the generic checker, retains all full
+generic/post-callback checks, and returns the literal record with final identity
+joins. A distinct future fast checker still needs its own independently preheld
+row. No immutable-schema parsing has been removed.
+
+Three construction-only DATA controls pass on actual Python 3.14.9 and 3.11.15
+with the same source maps and no skips. They prove literal engine/layout/checker
+joins, presence of the actual record before the validator callback, tuple
+immutability, and the distinction between an original record and a coherent DATA
+copy. Independent bounded source review found no concrete issue in that subset.
+
+**This draft is not an integrated candidate.** Parent consumers still expect the
+old engine-six return and must migrate; original EntryOrigin/STARTED/CELL/lineage/
+Scope root custody, both publication windows and selectors remain incomplete.
+No lost-return/copy refusal, fast dispatch, startup, feature or deployment pass is
+claimed. BA2 stays unchecked. Do not deploy or merge this draft into the working
+media candidate until the coherent integration and its causal review are complete.

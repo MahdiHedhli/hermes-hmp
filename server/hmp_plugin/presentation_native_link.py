@@ -241,6 +241,10 @@ def _capture_engine(*, _type=type, _tuple=tuple, _dict=dict, _str=str,
                                   or _any(_type(k) is not _str for k in checker_kw)):
         raise _error from None
     checker_pairs = () if checker_kw is None else tuple(checker_kw.items())
+    # Hold this literal row before helper callbacks. A later equivalent row is DATA,
+    # not the original audit input retained by the actual capture return.
+    checker_row = ('_engine_origin_tail', checker, checker_code, globals(),
+                   checker_defaults, checker_kw, checker_pairs)
     if (_type(sys) is not _module or _type(sys.modules) is not _dict
             or _any(_type(k) is not _str for k in sys.modules)):
         raise _error from None
@@ -391,8 +395,15 @@ def _capture_engine(*, _type=type, _tuple=tuple, _dict=dict, _str=str,
         kw = function.__kwdefaults__
         if kw is not None and (_type(kw) is not _dict or _any(_type(k) is not _str for k in kw)):
             raise _error from None
-        functions.append((name, function, function.__code__, function.__globals__,
-                          function.__defaults__, kw, () if kw is None else tuple(kw.items())))
+        if name == '_engine_origin_tail':
+            if (function is not checker or function.__code__ is not checker_code
+                    or function.__globals__ is not checker_row[3]
+                    or function.__defaults__ is not checker_defaults or kw is not checker_kw):
+                raise _error from None
+            functions.append(checker_row)
+        else:
+            functions.append((name, function, function.__code__, function.__globals__,
+                              function.__defaults__, kw, () if kw is None else tuple(kw.items())))
     functions = tuple(functions)
     kernel = []
     for name, function in sorted(vars(metadata).items()):
@@ -442,6 +453,9 @@ def _capture_engine(*, _type=type, _tuple=tuple, _dict=dict, _str=str,
         layout_modules.append((layout_module, _tuple(layout_classes)))
     layout = (dependencies, _tuple(layout_modules))
     origin = (modules[0], types, functions, kernel, dependencies, layout)
+    # Immutable DATA only. Parent/root custody must retain this literal return before
+    # any fast dispatch can be eligible; generic validation is still complete below.
+    audit_record = (origin, layout, checker_row)
     if (globals().get('_engine_origin_tail') is not checker
             or checker.__code__ is not checker_code or checker.__defaults__ is not checker_defaults
             or checker.__kwdefaults__ is not checker_kw
@@ -605,7 +619,13 @@ def _capture_engine(*, _type=type, _tuple=tuple, _dict=dict, _str=str,
                         or layout_key in layout_seen):
                     raise _error from None
                 layout_seen[layout_key] = layout_value
-    return origin
+    if (_type(audit_record) is not _tuple or _len(audit_record) != 3
+            or audit_record[0] is not origin or audit_record[1] is not layout
+            or origin[5] is not layout or audit_record[2] is not checker_row
+            or _len(_tuple(row for row in origin[2] if row is checker_row)) != 1
+            or checker_row[1] is not checker or checker_row[2] is not checker_code):
+        raise _error from None
+    return audit_record
 
 def _engine_origin_tail(origin, *, _type=type, _tuple=tuple, _dict=dict, _str=str, _len=len, _vars=vars, _any=any, _zip=zip, _module=ModuleType, _function=FunctionType, _cell=CellType, _id=id, _builtin=BuiltinFunctionType, _map=map, _not_identity=_native_identity_is_not, _error=ArtifactObservationError):
     """Validate the actual early packet; never capture a current replacement."""
