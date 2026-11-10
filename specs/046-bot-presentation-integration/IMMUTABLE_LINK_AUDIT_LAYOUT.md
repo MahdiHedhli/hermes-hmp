@@ -10,6 +10,15 @@ The design constraints below continue to apply to subsequent optimization.
 
 ## Evidence and choice
 
+The new engine6/env6 composition's actual native baseline also times out at the
+original60-second deadline. Last retained path event4 at50.93seconds has44typed
+observations, one retired capsule and zero close reservation. Completed inclusive
+engine audit time is9.82seconds; owner guard31.64seconds (overlapping categories).
+No native/service/image acceptance or speed improvement is claimed. Fast schema
+use requires independently rooted bound-audit identity, not trusting engine[5]
+merely because a caller supplied it. The generic unbound DATA checker remains
+fully validating until a concrete trusted-entry implementation is reviewed.
+
 The current actual full traversal exceeds its unchanged 60-second child limit.
 Its first completed hop and target account for thousands of complete engine
 audits. One isolated capture contains 441 module entries, 1,680 class members

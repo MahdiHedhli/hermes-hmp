@@ -17,10 +17,12 @@ new native work, registration after mutation or successful retainer returns, wit
 unchanged close reservation. These are bounded source proofs, not physical or
 release acceptance.
 
-The last complete-path attempt still exceeded its unchanged 60-second deadline;
-that older result does not qualify this changed layout composition. The full
-native flow, startup/service/route integration, desktop character/avatar display
-and host-local chat images remain unfinished. No upstream-only image blocker has
+A fresh complete-path attempt on this composition still exceeded its unchanged
+60-second deadline. Its last retained checkpoint contains 44 typed native
+observations and one retired raw capsule; this subset is not full native
+acceptance or a speed improvement. The full native flow, startup/service/route
+integration, desktop character/avatar display and host-local chat images remain
+unfinished. No upstream-only image blocker has
 been demonstrated. No host, device, permission, provider, model, job, installation
 or release changed; LLY520's authorized update still needs its established
 connection. Prepared Android/iOS 2026110901 are not new device qualification.
