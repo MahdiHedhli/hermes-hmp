@@ -15,10 +15,12 @@ new native work, registration after mutation or successful retainer returns, wit
 unchanged close reservation. These are bounded source proofs, not physical or
 release acceptance.
 
-A broader 110-case open/close selection passes 93 and fails 17 on the restored
-baseline. A withheld optimization had the exact same per-case outcomes. Those
-17 intended causal observations remain unqualified; their earlier refusal
-requires diagnosis before any claim of broader source acceptance.
+Before the fixture repair, a broader 110-case open/close selection passed 93
+and failed 17; a withheld optimization had the exact same outcomes. The repaired
+open-registration fixture now has six fault cases passing on both versions,
+including original native-close proof. Its two full normal-completion controls
+still time out at 60 seconds. The broader gate has not been freshly rerun and
+remains unqualified.
 
 A fresh complete-path attempt on this composition still exceeded its unchanged
 60-second deadline. Its last retained checkpoint contains 44 typed native
