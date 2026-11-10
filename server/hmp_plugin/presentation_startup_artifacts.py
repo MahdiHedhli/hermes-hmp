@@ -460,6 +460,18 @@ class _ReadlinkObservation(NamedTuple):
         return "<OriginalReadlinkObservation DATA redacted>"
 
 
+class _NativeReadlinkObservation(NamedTuple):
+    record: _LinkRead
+    before: tuple
+    after: tuple
+    length: int
+    acknowledgement: object
+    finish: object
+
+    def __repr__(self):
+        return "<NativeReadlinkObservation raw-free original handoff redacted>"
+
+
 class _LinkSnapshot(NamedTuple):
     source: _RuntimeSource
     phase: int
@@ -467,6 +479,7 @@ class _LinkSnapshot(NamedTuple):
     target: tuple
     reads: tuple
     count: tuple
+    finishes: tuple = ()
 
     def __repr__(self):
         return "<OriginalExecutableLinkSnapshot DATA redacted>"
@@ -545,11 +558,70 @@ def _runtime_current(source, owner):
     _require(_runtime_seal(source, owner) is count)
 
 
+def _has_native_link_engine(registration):
+    """Schema selection only, never a work or permission verdict."""
+    if registration is None:
+        return False
+    _require(type(registration) is _NativeScopeRegistration
+             and type(registration.type_pins) is tuple and len(registration.type_pins) == 3
+             and type(registration.lineage) is registration.type_pins[0])
+    parent = tuple.__getitem__(registration.lineage, 4)
+    _require(type(parent) is tuple and len(parent) == 5
+             and type(parent[0]) is tuple and len(parent[0]) in (4, 5))
+    return len(parent[0]) == 5
+
+
+def _native_link_function(owner, registration, name):
+    """Select only a retained fixed engine dependency; no late export capture."""
+    _require(type(owner) is StartupArtifactOwner and type(name) is str
+             and name in ('_snapshot', '_snapshot_history_mirrors', '_make_fact', '_recheck')
+             and _has_native_link_engine(registration))
+    _native_work_registration_tail(owner, registration)
+    parent = tuple.__getitem__(registration.lineage, 4)
+    origin = parent[0][4]
+    _require(type(origin) is tuple and len(origin) == 4 and type(origin[3]) is tuple)
+    rows = tuple(row for row in origin[3]
+                 if type(row) is tuple and len(row) == 7
+                 and type(row[0]) is str and row[0] == '_closed_link_engine_origin')
+    _require(len(rows) == 1)
+    held = rows[0]
+    namespace = held[3]
+    module = sys.modules.get('hmp_plugin.presentation_native_metadata')
+    _require(type(namespace) is dict and all(type(k) is str for k in namespace)
+             and type(module) is ModuleType and vars(module) is namespace
+             and type(held[1]) is FunctionType and held[1].__globals__ is namespace
+             and namespace.get(held[0]) is held[1] and held[1].__code__ is held[2]
+             and held[1].__defaults__ is held[4] is None
+             and held[1].__kwdefaults__ is held[5] is None
+             and type(held[6]) is tuple and len(held[6]) == 0)
+    lookup = _NativeLinkMetadataResource(owner, registration, None, None, None, (), None)
+    _require(held[1](owner, lookup) is origin)
+    rows = tuple(row for row in origin[2] if row[0] == name)
+    _require(len(rows) == 1)
+    row = rows[0]
+    _require(type(row[1]) is FunctionType and row[1].__code__ is row[2]
+             and row[1].__globals__ is row[3] and vars(origin[0]) is row[3]
+             and row[3].get(name) is row[1]
+             and row[1].__defaults__ is row[4] and row[1].__kwdefaults__ is row[5]
+             and parent[0][4] is origin)
+    return row[1]
+
+
 def _link_reads_current(source, snapshot):
     _require(type(snapshot) is _LinkSnapshot and snapshot.source is source
              and type(snapshot.phase) is int and snapshot.phase in (0, 1)
              and type(snapshot.reads) is tuple
              and len(snapshot.reads) == len(source.link.hops))
+    _require(type(source.count) is list and len(source.count) == 1
+             and type(source.count[0]) is tuple and len(source.count[0]) == 3)
+    owner = source.count[0][0]
+    _require(type(owner) is StartupArtifactOwner)
+    registration = vars(owner).get('_native_scope_registration')
+    if _has_native_link_engine(registration):
+        check = _native_link_function(owner, registration, '_snapshot_history_mirrors')
+        _require(check(owner, registration, source, snapshot) is snapshot)
+        return
+    _require(type(snapshot.finishes) is tuple and len(snapshot.finishes) == 0)
     for i, (observation, hop) in enumerate(zip(snapshot.reads, source.link.hops, strict=True)):
         _require(type(observation) is _ReadlinkObservation)
         row = observation.record
@@ -3772,8 +3844,13 @@ class StartupArtifactOwner:
                 _require(len(targets) == 1 and targets[0].identity == after.target[0]
                          and targets[0].identity[3] == runtime.link.uid
                          and stat.S_IMODE(targets[0].identity[2]) == runtime.link.mode)
-                link_fact = _LinkTargetObservation(owner, s, runtime, before, after,
-                                                   targets[0], owner._count_cell)
+                if _has_native_link_engine(native_registration):
+                    make_fact = _native_link_function(owner, native_registration, '_make_fact')
+                    link_fact = make_fact(owner, native_registration, runtime, before, after,
+                                          targets[0], owner._count_cell)
+                else:
+                    link_fact = _LinkTargetObservation(owner, s, runtime, before, after,
+                                                       targets[0], owner._count_cell)
             if s.cache is not None:
                 from .presentation_startup_cache import seal
                 cache_after = observe_pass(s.cache, owner, 1, cache_before, native_registration)
@@ -4290,6 +4367,7 @@ class StartupArtifactOwner:
 
     def _readlink(self, name, parent, hop, phase, index, before_state, start,
                   native_registration=None):
+        _require(not _has_native_link_engine(native_registration))
         native = _capture_native_work_origin(self, native_registration)
         readlink_call = None if native is None else native.operations[5]
         s = _native_walk_scope(self, native_registration)
@@ -4369,6 +4447,7 @@ class StartupArtifactOwner:
 
     def _link_path(self, path, hop, phase, index, before_state, start, observe=True,
                    native_registration=None):
+        _require(not _has_native_link_engine(native_registration))
         s = _native_walk_scope(self, native_registration)
         runtime = s.runtime
         _require(type(runtime) is _RuntimeSource and self._count_cell is start
@@ -4445,6 +4524,14 @@ class StartupArtifactOwner:
 
     def _link_snapshot(self, phase, before_state, native_registration=None):
         s = _native_walk_scope(self, native_registration)
+        if _has_native_link_engine(native_registration):
+            snapshot_call = _native_link_function(self, native_registration, '_snapshot')
+            snapshot = snapshot_call(self, native_registration, phase, before_state)
+            _link_reads_current(s.runtime, snapshot)
+            _require(_native_walk_scope(self, native_registration) is s
+                     and s.runtime.count[0] is self._count_cell is snapshot.count)
+            _link_reads_current(s.runtime, snapshot)
+            return snapshot
         root, owner_cell = self._root_cell, self._cell
         native_registry = (None if native_registration is None
                            else native_registration.lineage.ledger.scopes)
@@ -4499,6 +4586,15 @@ class StartupArtifactOwner:
                  and len(self._fact_cell) == 5)
         fact = self._fact_cell[4]
         runtime = s.runtime
+        if _has_native_link_engine(native_registration):
+            recheck = _native_link_function(self, native_registration, '_recheck')
+            actual = recheck(self, native_registration, fact)
+            _require(vars(self).get('_native_link_recheck') is actual
+                     and actual.owner is self and actual.registration is native_registration
+                     and actual.fact is fact and actual.count is fact.count
+                     and self._fact_cell is held_fact)
+            _require(StartupArtifactOwner.seal_link_observation(self, held_fact) is fact)
+            return fact
         progress = self._count_cell
         for index, (hop, previous) in enumerate(fact.after.links):
             metadata, _, progress = StartupArtifactOwner._link_path(

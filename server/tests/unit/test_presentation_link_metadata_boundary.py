@@ -97,7 +97,8 @@ def packet():
              '_publish_shared_bytes_ack', '_acked_shared_bytes_history',
              '_effect_pin', '_new_execution', '_append_action', '_finish_mirrors',
              '_finish_path', '_drive_native_path', '_open_shared', '_close_known_shared',
-             '_prepare_open_shared')
+             '_prepare_open_shared', '_path_history_mirrors', '_history_phase_mirrors', '_finish_history',
+             '_snapshot_history_mirrors', '_snapshot', '_make_fact', '_recheck')
     functions = tuple(_pin_function(name, vars(link)[name], vars(link)[name].__globals__)
                       for name in names)
     kernel_functions = tuple(_pin_function(name, function, function.__globals__)
@@ -115,7 +116,9 @@ def packet():
                   constructor.__globals__, constructor.__defaults__, kind.__bases__,
                   tuple((name, namespace.get(name)) for name in (
                       '__getattribute__', '__getattr__', '__setattr__', '__delattr__')))
-    types = (*types, record_pin, _pin_type(link._LinkAction), _pin_type(link._LinkPathFinish))
+    types = (*types, record_pin, _pin_type(link._LinkAction), _pin_type(link._LinkPathFinish),
+             _pin_type(link._NativeReadlinkObservation), _pin_type(link._LinkSnapshot),
+             _pin_type(link._LinkTargetObservation), _pin_type(link._LinkRecheck))
     return sys.modules[link.__name__], types, functions, kernel_functions
 
 

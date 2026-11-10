@@ -154,6 +154,45 @@ finish checks that survive later healthy work, and actual all-phase native
 Link/partial-store/return-loss/constructor/finalizer causals. The existing env4
 gate remains unchanged and rejects new Link resources. No service is enabled.
 
+### Raw-free publication and historical finish draft
+
+The disabled composition now carries every literal hop and target finish through
+`_snapshot`, `_make_fact` and metadata-only `_recheck`. A native read observation
+retains the original record/count/length/ACK/finish, with no raw-result field.
+`_LinkSnapshot` retains the actual finishes; its empty default preserves legacy
+construction, and the registered engine schema selects the native path without
+falling back from a malformed native observation to legacy bytes. Direct legacy
+link-path/readlink entry is refused for that future native engine schema.
+
+The fixed entry helper selects only retained snapshot/history/fact/recheck
+functions. It authenticates the original bootstrap row before calling it and
+fences malformed keyword-pair DATA before equality or foreign protocols.
+The actual current env4 origin is unchanged; none of these new branches is
+admitted yet. Complete original early dependency/property/core bindings remain
+a prerequisite for env5 capture and full execution qualification.
+
+Live finish checks still require exact current counts, attempt span and restored
+reserve. Historical checks instead preserve the closed original span and ACK/
+marker/close evidence while permitting later healthy idle/active/pending work.
+They check each phase's result/inflight shape, not just its label, and never
+grant work. Snapshot mirrors join adjacent span budgets and count-cell handoffs;
+recheck repeats every held finish's pure mirrors after all weak observations and
+constructors. This is a receipt-validation draft, not an installed runtime grant.
+
+Bounded source review found and corrected unfenced bootstrap keyword pairs and
+an initially incomplete historical phase check. Twenty-five new DATA controls
+cover healthy/torn phase combinations, foreign hooks, schema separation and
+closed dispatch. They do not reproduce admitted native snapshot construction or
+lost-return/finalizer faults. Those actual all-phase tests remain required, along
+with complete historical closure under the coupled original native engine.
+
+The same 227 selected cases pass on current Python 3.14.9 and minimum 3.11.15,
+with unchanged full source footprints, identical case sets and verified log/XML
+hashes. These comprise 223 local controls plus three original native prepared-
+open/close controls and one existing Directory normal case. The native cases
+exercise the preserved env4 path, not the new admitted snapshot/recheck cohort.
+No passing result is transferred to that still-unqualified cohort.
+
 Capture code/type/member/dispatch and all original immutable policy inputs in the
 pre-Scope factory, then seal actual constructor returns. Use a distinct fixed
 link resource/consumer on the canonical shared kernel; do not broaden the

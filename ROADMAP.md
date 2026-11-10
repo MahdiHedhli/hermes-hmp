@@ -6,9 +6,11 @@ caller across lost returns and reserved reverse cleanup. All path metadata and
 link bytes use the same shared operation kernel in the draft; no parallel
 producer or permissive absence fallback was added.
 
-Next: retain actual finishes through raw-free snapshots/fact/recheck, complete
-original early core/property/lifecycle binding, then qualify the admitted full
-path and failure matrix before connecting it. Existing env4 admission remains
+The draft also retains actual finishes through raw-free snapshots/fact/recheck.
+Historical span checks preserve earlier ACK/custody/close evidence during later
+healthy work; phase labels alone cannot satisfy result/inflight consistency.
+Next: complete original early core/property/lifecycle binding, then qualify the
+admitted full path and failure matrix before connecting it. Existing env4 admission remains
 closed. Packet/accounting and isolated original-open checks are narrower than
 that acceptance. The current actual-startup legacy baseline is deliberately red;
 minimum-Python instrumentation timeout remains unqualified.

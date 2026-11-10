@@ -16,8 +16,8 @@ from . import presentation_link_path_policy as policy
 from . import presentation_native_metadata as metadata
 from .presentation_startup_artifacts import (
     StartupArtifactOwner, _NativeLinkMetadataResource, _NativeOpenedDescriptor,
-    _NativeOpenAllocation, _LinkSnapshot, _LinkTargetObservation,
-    _NativeLinkBytesResource, _LinkRead,
+    _NativeOpenAllocation, _LinkSnapshot, _LinkTargetObservation, _HashedArtifact, _RuntimeSource,
+    _NativeLinkBytesResource, _LinkRead, _NativeReadlinkObservation,
     _NativeScopeRegistration, _Scope, _native_descriptor_opened,
     _native_work_origin_tail, _native_work_registration_tail, _require,
     _runtime_current,
@@ -106,6 +106,17 @@ class _LinkPathFinish(NamedTuple):
     def __repr__(self):
         return '<LinkPathFinish original closed traversal return redacted>'
 
+
+class _LinkRecheck(NamedTuple):
+    owner: object
+    registration: object
+    fact: object
+    finishes: tuple
+    count: tuple
+
+    def __repr__(self):
+        return '<LinkRecheck original closed metadata-only handoffs redacted>'
+
 # Only these five aliases may use the shared module's namespace. The stage
 # selector validates both their retained kernel exports and these aliases.
 _produce_shared = metadata._produce_directory_metadata
@@ -151,7 +162,8 @@ def _engine_origin_tail(origin):
                 _NativeLinkMetadataResource, _LinkBytesConsumer, _LinkBytesCommit,
                 _NativeLinkBytesResource, metadata._LinkBytesOperation,
                 metadata._LinkBytesResult, metadata._LinkBytesReturn, _LinkRead,
-                _LinkAction, _LinkPathFinish)
+                _LinkAction, _LinkPathFinish, _NativeReadlinkObservation, _LinkSnapshot,
+                _LinkTargetObservation, _LinkRecheck)
     _require(len(origin[1]) == len(expected))
     for row, selected in zip(origin[1], expected, strict=True):
         _require(type(row) is tuple and len(row) == 9 and row[0] is selected)
@@ -187,7 +199,8 @@ def _engine_origin_tail(origin):
         '_commit_shared_bytes_tail', '_publish_shared_bytes_ack',
         '_acked_shared_bytes_history', *shared,
         '_effect_pin', '_new_execution', '_append_action', '_finish_mirrors',
-        '_finish_path', '_drive_native_path', *effects,
+        '_finish_path', '_drive_native_path', '_path_history_mirrors', '_history_phase_mirrors',
+        '_finish_history', '_snapshot_history_mirrors', '_snapshot', '_make_fact', '_recheck', *effects,
     )
     _require(all(type(row) is tuple and len(row) == 7 and type(row[0]) is str
                  for row in origin[2])
@@ -1094,9 +1107,61 @@ def _finish_mirrors(execution, outcome, actions, history, closed, count, budget)
              and execution.budget is budget and ledger.counts is budget[0]
              and ledger.counts[0] == budget[1] + len(actions) + len(closed)
              and ledger.counts[1] == budget[2]
+             and len(ledger.attempts) == len(budget[3]) + len(actions)
              and ledger.inflight[0] is None and ledger.failed[0] is False
              and ledger.failure[0] is None and ledger.phase.current[0] is ledger.phase.idle
              and ledger.phase.result[0] is None)
+    return _path_history_mirrors(execution, outcome, actions, history, closed, count, budget)
+
+
+def _path_history_mirrors(execution, outcome, actions, history, closed, count, budget):
+    """Historical original DATA; neither a live path nor an effect allowance.
+
+    A later healthy path can own the current count/execution/phase. Validate the
+    retained closed span and its actual ACKs, not a permanently idle ledger.
+    The independently held finish must still come from its actual caller.
+    """
+    _require(type(execution) is _LinkExecution
+             and type(execution.registration) is _NativeScopeRegistration
+             and execution.registration.owner is execution.owner
+             and type(execution.policy) is policy._LinkPathPolicy
+             and type(execution.definitions) is tuple
+             and type(actions) is type(history) is type(closed) is tuple
+             and type(execution.actions) is type(execution.history) is type(execution.opened) is list
+             and type(execution.closed) is list
+             and type(execution.cursor) is list and len(execution.cursor) == 1
+             and type(execution.cursor[0]) is policy._LinkPathCursor
+             and type(execution.cursor[0].position) is int
+             and type(execution.failed) is list and len(execution.failed) == 1
+             and execution.failed[0] is False
+             and type(execution.count) is list and len(execution.count) == 1
+             and execution.count[0] is count
+             and type(execution.pending) is list and len(execution.pending) == 1
+             and execution.pending[0] is None
+             and type(count) is tuple and len(count) == 3
+             and count[0] is execution.owner and count[1] is execution.registration.scope
+             and type(count[2]) is int
+             and type(budget) is tuple and len(budget) == 4
+             and budget is execution.budget and type(budget[0]) is list
+             and len(budget[0]) == 2 and all(type(v) is int for v in budget[0])
+             and type(budget[1]) is type(budget[2]) is int and type(budget[3]) is tuple
+             and type(outcome) is tuple and len(outcome) == 3
+             and len(actions) == len(execution.definitions) == execution.cursor[0].position
+             and len(execution.actions) == len(actions)
+             and all(a is b for a, b in zip(actions, execution.actions, strict=True))
+             and len(execution.history) == len(history)
+             and all(a is b for a, b in zip(history, execution.history, strict=True))
+             and len(closed) == len(execution.closed) == len(execution.opened)
+             and all(a is b for a, b in zip(closed, execution.closed, strict=True)))
+    ledger = execution.registration.native_ledger
+    _history_phase_mirrors(execution.registration)
+    _require(ledger.counts is budget[0] and ledger.counts[0] >= budget[1] + len(actions) + len(closed)
+             and type(ledger.attempts) is list
+             and ledger.failed[0] is False and ledger.failure[0] is None
+             and ledger.phase is execution.registration.native_phase
+             and (ledger.phase.current[0] is ledger.phase.idle
+                  or ledger.phase.current[0] is ledger.phase.active
+                  or ledger.phase.current[0] is ledger.phase.pending))
     actual_attempts = []
     prior = None
     sequence = 0
@@ -1143,6 +1208,9 @@ def _finish_mirrors(execution, outcome, actions, history, closed, count, budget)
                      and operation.result.consumer[0] is consumer
                      and operation.resource.site is action.site
                      and operation.resource.execution is execution
+                     and operation.ledger is ledger and operation.attempts is ledger.attempts
+                     and type(operation.index) is int
+                     and operation.index == len(budget[3]) + ordinal
                      and consumer.predecessor is (None if sequence == 0 else history[sequence - 1]))
             _require(type(consumer.custody) is tuple and len(consumer.custody) == 6
                      and type(operation.state) is list and len(operation.state) == 3
@@ -1188,7 +1256,7 @@ def _finish_mirrors(execution, outcome, actions, history, closed, count, budget)
     expected_delta = (0 if execution.policy.hop is None or execution.policy.phase == 'recheck'
                       else len(execution.policy.hop.target))
     _require(byte_delta == expected_delta and count[2] == initial_count[2] + byte_delta
-             and len(ledger.attempts) == len(budget[3]) + len(actual_attempts)
+             and len(ledger.attempts) >= len(budget[3]) + len(actual_attempts)
              and all(ledger.attempts[i] is row for i, row in enumerate(budget[3]))
              and all(ledger.attempts[len(budget[3]) + i] is row
                      for i, row in enumerate(actual_attempts)))
@@ -1200,6 +1268,33 @@ def _finish_mirrors(execution, outcome, actions, history, closed, count, budget)
                  and close.result[0] is receipt and close.state[0] is True
                  and close.state[1] is False and close.raw[0] is None)
     return execution
+
+
+def _history_phase_mirrors(registration):
+    """Canonical healthy shared-phase DATA, with no latest-work allowance."""
+    _require(type(registration) is _NativeScopeRegistration
+             and type(registration.type_pins) is tuple and len(registration.type_pins) == 3
+             and type(registration.type_pins[1]) is type
+             and type(registration.native_ledger) is registration.type_pins[1]
+             and type(registration.phase_type) is type
+             and type(registration.native_phase) is registration.phase_type)
+    ledger, phase = registration.native_ledger, registration.native_phase
+    _require(ledger.phase is phase and type(ledger.inflight) is list and len(ledger.inflight) == 1
+             and type(phase.current) is list and len(phase.current) == 1
+             and type(phase.result) is list and len(phase.result) == 1
+             and type(ledger.failed) is list and len(ledger.failed) == 1
+             and ledger.failed[0] is False
+             and type(ledger.failure) is list and len(ledger.failure) == 1
+             and ledger.failure[0] is None)
+    current = phase.current[0]
+    if current is phase.idle:
+        _require(ledger.inflight[0] is None and phase.result[0] is None)
+    elif current is phase.active:
+        _require(ledger.inflight[0] is not None and phase.result[0] is ledger.inflight[0])
+    else:
+        _require(current is phase.pending and ledger.inflight[0] is None
+                 and phase.result[0] is not None)
+    return phase
 
 
 def _finish_path(execution):
@@ -1375,4 +1470,286 @@ def _drive_native_path(owner, registration, path, hop, phase, index, before_stat
     # Raising outside the handler avoids retaining a foreign exception (and
     # its traceback/data) as __context__ on this public refusal.
     finish = None
+    raise ArtifactObservationError(owner) from None
+
+
+def _finish_history(owner, registration, finish):
+    """Verify a held old finish while later healthy work owns current state."""
+    _require(type(owner) is StartupArtifactOwner
+             and type(registration) is _NativeScopeRegistration
+             and type(finish) is _LinkPathFinish
+             and type(finish.execution) is _LinkExecution)
+    execution = finish.execution
+    _engine_origin_tail(execution.origin)
+    _require(execution.owner is owner and execution.registration is registration
+             and type(execution.finished) is list and len(execution.finished) == 1
+             and execution.finished[0] is True
+             and registration.scope.runtime is execution.blueprint.runtime
+             and tuple.__getitem__(registration.scope, 17) is execution.blueprint
+             and execution.blueprint.owner is owner
+             and execution.blueprint.lineage is registration.lineage
+             and execution.blueprint.origin is tuple.__getitem__(registration.lineage, 4)
+             and execution.blueprint.origin[0][4] is execution.origin
+             and any(row is execution.policy for row in execution.blueprint.rows))
+    arguments = (execution, finish.outcome, finish.actions, finish.history,
+                 finish.closed, finish.count, finish.budget)
+    _path_history_mirrors(*arguments)
+    check = _effect_pin(execution.origin, '_origin_tail')
+    for commit in finish.history:
+        payload_origin, _, _, _, _, reference = commit.consumer.custody
+        check(payload_origin)
+        _require(payload_origin.reference_callback.__get__(reference, payload_origin.reference_type) is None
+                 and payload_origin.reference_call(reference) is None)
+    _native_work_registration_tail(owner, registration)
+    _runtime_current(execution.blueprint.runtime, owner)
+    _engine_origin_tail(execution.origin)
+    _path_history_mirrors(*arguments)
+    _require(type(vars(owner).get('_count_cell')) is tuple
+             and vars(owner)['_count_cell'][0] is owner
+             and vars(owner)['_count_cell'][1] is registration.scope
+             and type(vars(owner)['_count_cell'][2]) is int
+             and vars(owner)['_count_cell'][2] >= finish.count[2])
+    return finish
+
+
+def _snapshot_history_mirrors(owner, registration, source, snapshot):
+    """Raw-free snapshot joins only; safe inside the existing owner guard.
+
+    Never observes weak references, recurses through owner/runtime current, or
+    grants work. The publication caller retains actual finishes independently.
+    """
+    _require(type(owner) is StartupArtifactOwner
+             and type(registration) is _NativeScopeRegistration
+             and type(registration.scope) is _Scope and type(source) is _RuntimeSource
+             and registration.owner is owner and registration.scope.runtime is source
+             and type(snapshot) is _LinkSnapshot and snapshot.source is source
+             and type(snapshot.phase) is int and snapshot.phase in (0, 1)
+             and type(snapshot.finishes) is tuple
+             and len(snapshot.finishes) == len(source.link.hops) + 1
+             and type(snapshot.links) is type(snapshot.reads) is tuple
+             and len(snapshot.links) == len(snapshot.reads) == len(source.link.hops)
+             and type(snapshot.count) is tuple and len(snapshot.count) == 3
+             and snapshot.count[0] is owner and snapshot.count[1] is registration.scope
+             and type(snapshot.count[2]) is int)
+    for index, finish in enumerate(snapshot.finishes):
+        _require(type(finish) is _LinkPathFinish and type(finish.execution) is _LinkExecution)
+        execution = finish.execution
+        _require(execution.owner is owner and execution.registration is registration
+                 and execution.blueprint is tuple.__getitem__(registration.scope, 17)
+                 and execution.blueprint.runtime is source
+                 and any(row is execution.policy for row in execution.blueprint.rows)
+                 and type(execution.finished) is list and len(execution.finished) == 1
+                 and execution.finished[0] is True
+                 and execution.policy.phase == ('before' if snapshot.phase == 0 else 'after')
+                 and type(execution.policy.index) is int and execution.policy.index == index)
+        _path_history_mirrors(execution, finish.outcome, finish.actions, finish.history,
+                              finish.closed, finish.count, finish.budget)
+        if index:
+            previous = snapshot.finishes[index - 1]
+            _require(finish.budget[1] == previous.budget[1] + len(previous.actions) + len(previous.closed)
+                     and finish.budget[2] == previous.budget[2]
+                     and len(finish.budget[3]) == len(previous.budget[3]) + len(previous.actions))
+        if index == len(source.link.hops):
+            _require(execution.policy.hop is None and type(snapshot.target) is tuple
+                     and len(snapshot.target) == 2
+                     and snapshot.target[0] is finish.outcome[0]
+                     and snapshot.target[1] is finish.outcome[1]
+                     and finish.count is snapshot.count is snapshot.finishes[index - 1].count)
+            continue
+        hop = source.link.hops[index]
+        row, observation = snapshot.links[index], snapshot.reads[index]
+        _require(type(row) is tuple and len(row) == 2 and row[0] is hop
+                 and type(row[1]) is tuple and len(row[1]) == 2
+                 and row[1][0] is finish.outcome[0] and row[1][1] is finish.outcome[1]
+                 and execution.policy.hop is hop
+                 and type(observation) is _NativeReadlinkObservation
+                 and observation.finish is finish and type(observation.record) is _LinkRead
+                 and type(observation.acknowledgement) is _LinkBytesCommit)
+        commit, record = observation.acknowledgement, observation.record
+        position = snapshot.phase * len(source.link.hops) + index
+        _require(position < len(source.reads) and source.reads[position] is record
+                 and record.hop is hop and type(record.phase) is int
+                 and record.phase == snapshot.phase and type(record.index) is int
+                 and record.index == position and record.attempted is record.returned is True
+                 and record.unknown is False and record.data is None
+                 and type(record.length) is int and record.length == len(hop.target)
+                 and observation.length is record.length is commit.length
+                 and record.acknowledgement is commit and commit.record is record
+                 and record.native_result is commit.consumer.operation.result
+                 and commit.consumer.execution is execution
+                 and any(actual is commit for actual in finish.history)
+                 and observation.before is record.before is commit.before_count
+                 and observation.after is record.after is commit.after_count is finish.count)
+        if index:
+            _require(observation.before is snapshot.finishes[index - 1].count)
+    return snapshot
+
+
+def _snapshot(owner, registration, phase, before_state):
+    """Retain literal full path returns through raw-free snapshot allocation."""
+    _require(type(owner) is StartupArtifactOwner and type(registration) is _NativeScopeRegistration
+             and type(phase) is int and phase in (0, 1))
+    scope = _native_walk_scope(owner, registration)
+    source = scope.runtime
+    lookup = _NativeLinkMetadataResource(owner, registration, None, None, None, (), None)
+    origin = metadata._closed_link_engine_origin(owner, lookup)
+    drive = _effect_pin(origin, '_drive_native_path')
+    finish_check = _effect_pin(origin, '_finish_history')
+    progress = vars(owner)['_count_cell']
+    links, reads, finishes = [], [], []
+    failed = False
+    result = None
+    try:
+        for index, hop in enumerate((*source.link.hops, None)):
+            path = source.link.target.path if hop is None else hop.path
+            finish = drive(owner, registration, path, hop, phase, index, before_state, progress)
+            _require(type(finish) is _LinkPathFinish and finish.execution.owner is owner
+                     and finish.execution.registration is registration
+                     and finish.execution.policy.hop is hop
+                     and finish.execution.policy.path is path)
+            finish_check(owner, registration, finish)
+            finishes.append(finish)
+            progress = finish.count
+            projected = (finish.outcome[0], finish.outcome[1])
+            if hop is None:
+                target = projected
+                continue
+            byte_commits = tuple(row for row in finish.history if type(row) is _LinkBytesCommit)
+            _require(len(byte_commits) == 1)
+            actual = byte_commits[0]
+            values = (actual.record, actual.before_count, actual.after_count,
+                      actual.length, actual, finish)
+            kind, _, _, constructor, _, _, _, _, _ = origin[1][13]
+            observation = constructor(kind, *values)
+            _engine_origin_tail(origin)
+            finish_check(owner, registration, finish)
+            _require(type(observation) is kind
+                     and all(tuple.__getitem__(observation, i) is value for i, value in enumerate(values)))
+            links.append((hop, projected))
+            reads.append(observation)
+        # Capture all literal path finishes before the snapshot constructor.
+        held_finishes, held_links, held_reads = tuple(finishes), tuple(links), tuple(reads)
+        values = (source, phase, held_links, target, held_reads, progress, held_finishes)
+        kind, _, _, constructor, _, _, _, _, _ = origin[1][14]
+        result = constructor(kind, *values)
+        _engine_origin_tail(origin)
+        _require(type(result) is kind and tuple.__len__(result) == len(values)
+                 and all(tuple.__getitem__(result, i) is value for i, value in enumerate(values)))
+        for finish in held_finishes:
+            finish_check(owner, registration, finish)
+        _require(_native_walk_scope(owner, registration) is scope)
+        _runtime_current(source, owner)
+        _engine_origin_tail(origin)
+        _snapshot_history_mirrors(owner, registration, source, result)
+        _require(vars(owner)['_count_cell'] is source.count[0] is progress
+                 and source.before[0] is before_state
+                 and source.after[0] is None)
+        return result
+    except BaseException:
+        failed = True
+    if failed:
+        result = None
+        vars(owner)['_unknown'] = True
+    raise ArtifactObservationError(owner) from None
+
+
+def _make_fact(owner, registration, source, before, after, receipt, count):
+    """Seal original before/after returns and actual target hash through ctor."""
+    _require(type(owner) is StartupArtifactOwner and type(registration) is _NativeScopeRegistration
+             and type(receipt) is _HashedArtifact
+             and type(source) is _RuntimeSource
+             and type(before) is _LinkSnapshot and type(after) is _LinkSnapshot
+             and type(before.finishes) is tuple and len(before.finishes) > 0
+             and type(after.finishes) is tuple and len(after.finishes) > 0
+             and before.source is after.source is source
+             and before.phase == 0 and after.phase == 1
+             and source.before[0] is before and source.after[0] is after
+             and vars(owner).get('_count_cell') is count is after.count)
+    origin = before.finishes[0].execution.origin
+    _engine_origin_tail(origin)
+    for snapshot in (before, after):
+        _snapshot_history_mirrors(owner, registration, source, snapshot)
+        for finish in snapshot.finishes:
+            _finish_history(owner, registration, finish)
+    _require(before.links == after.links and before.target == after.target
+             and receipt.expected is source.link.target and receipt.identity == after.target[0])
+    values = (owner, registration.scope, source, before, after, receipt, count)
+    kind, _, _, constructor, _, _, _, _, _ = origin[1][15]
+    fact = constructor(kind, *values)
+    _engine_origin_tail(origin)
+    for snapshot in (before, after):
+        for finish in snapshot.finishes:
+            _finish_history(owner, registration, finish)
+    _require(_native_walk_scope(owner, registration) is values[1])
+    _runtime_current(source, owner)
+    _engine_origin_tail(origin)
+    for snapshot in (before, after):
+        _snapshot_history_mirrors(owner, registration, source, snapshot)
+    _require(type(fact) is kind and tuple.__len__(fact) == len(values)
+             and all(tuple.__getitem__(fact, i) is value for i, value in enumerate(values))
+             and source.before[0] is before and source.after[0] is after
+             and vars(owner).get('_count_cell') is source.count[0] is count)
+    return fact
+
+
+def _recheck(owner, registration, fact):
+    """Metadata-only full traversal; never re-read or re-charge link bytes."""
+    _require(type(owner) is StartupArtifactOwner and type(registration) is _NativeScopeRegistration
+             and type(fact) is _LinkTargetObservation and fact.owner is owner
+             and type(fact.source) is _RuntimeSource
+             and type(fact.before) is type(fact.after) is _LinkSnapshot
+             and type(fact.after.finishes) is tuple and len(fact.after.finishes) > 0
+             and fact.scope is registration.scope and vars(owner).get('_ready') is True
+             and type(vars(owner).get('_fact_cell')) is tuple
+             and vars(owner)['_fact_cell'][4] is fact)
+    source, count = fact.source, fact.count
+    origin = fact.after.finishes[0].execution.origin
+    _engine_origin_tail(origin)
+    drive = _effect_pin(origin, '_drive_native_path')
+    finishes = []
+    failed = False
+    result = None
+    try:
+        for index, hop in enumerate((*source.link.hops, None)):
+            path = source.link.target.path if hop is None else hop.path
+            finish = drive(owner, registration, path, hop, 1, index, fact.before, count, False)
+            _require(type(finish) is _LinkPathFinish and finish.count is count
+                     and finish.execution.policy.phase == 'recheck'
+                     and finish.execution.policy.hop is hop)
+            _finish_history(owner, registration, finish)
+            finishes.append(finish)
+        held = tuple(finishes)
+        values = (owner, registration, fact, held, count)
+        kind, _, _, constructor, _, _, _, _, _ = origin[1][16]
+        result = constructor(kind, *values)
+        _engine_origin_tail(origin)
+        for finish in held:
+            _finish_history(owner, registration, finish)
+        _require(_native_walk_scope(owner, registration) is registration.scope)
+        _runtime_current(source, owner)
+        _engine_origin_tail(origin)
+        for snapshot in (fact.before, fact.after):
+            _snapshot_history_mirrors(owner, registration, source, snapshot)
+        for index, finish in enumerate(held):
+            _require(type(finish) is _LinkPathFinish and finish.count is count
+                     and finish.execution.owner is owner
+                     and finish.execution.registration is registration
+                     and finish.execution.policy.phase == 'recheck'
+                     and finish.execution.policy.index == index
+                     and finish.execution.policy.hop is (source.link.hops[index]
+                         if index < len(source.link.hops) else None)
+                     and finish.execution.finished[0] is True)
+            _path_history_mirrors(finish.execution, finish.outcome, finish.actions,
+                                  finish.history, finish.closed, finish.count, finish.budget)
+        _require(type(result) is kind and tuple.__len__(result) == len(values)
+                 and all(tuple.__getitem__(result, i) is value for i, value in enumerate(values))
+                 and vars(owner)['_count_cell'] is source.count[0] is count
+                 and vars(owner)['_fact_cell'][4] is fact)
+        vars(owner)['_native_link_recheck'] = result
+        return result
+    except BaseException:
+        failed = True
+    if failed:
+        result = None
+        vars(owner)['_unknown'] = True
     raise ArtifactObservationError(owner) from None

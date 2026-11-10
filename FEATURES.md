@@ -6,15 +6,21 @@ caller, literal ACK history, byte accounting, and reverse one-attempt cleanup.
 The driver retains the original open allocation before the file operation; it
 never recovers cleanup authority from a mutable holder or current ledger.
 
-This is still source work. Early-origin binding, raw-free snapshot/fact/recheck
-publication, complete lifecycle/property seals and admitted full-path causal
-qualification remain unfinished. Existing origins continue refusing the new
+The draft now also retains actual path finishes through raw-free snapshot/fact
+construction and metadata-only rechecks. Historical receipts can survive later
+healthy work without requiring the shared ledger to remain idle; torn phase
+states still refuse. This is source work: early-origin binding, complete
+lifecycle/property seals and admitted full-path causal qualification remain
+unfinished. Existing origins continue refusing the new
 Link family. No image route is enabled and no host or device was updated.
 
-The same 202 selected checks pass on Python 3.14.9 and 3.11.15 with matching
-source and case sets: 198 local controls, three actual prepared-open/cleanup
-cases and one existing Directory normal case. These do not qualify the full
-Link driver, snapshots, runtime or phone display.
+The previous 202-case source checkpoint remains historical evidence. The new
+snapshot composition adds historical phase, raw-free schema, fixed-dispatch and
+bootstrap-refusal controls. The same 227 selected cases pass on Python 3.14.9 and 3.11.15 with identical
+source footprints/case sets and verified logs/XML: 223 local controls, three
+actual original prepared-open/close cases, and one legacy Directory normal case.
+These checks do not qualify the admitted full Link driver, snapshots, runtime or
+phone display.
 
 The actual-startup acceptance baseline remains deliberately red: current Python
 observed 129 untyped metadata calls, two untyped link reads and retained raw link
