@@ -95,3 +95,13 @@ Loading never creates identity, directories, approval records or credentials, an
 never mutates native selection, grants or configuration. This source decision
 is not permission to read/modify installed private files. PS1-ANCHOR source and isolated fixtures are complete; runtime/loader/listener
 admission remains open.
+
+## Original-read source-hash integration
+
+[Source digest custody](SOURCE_DIGESTS.md) now provides an explicit original-entry
+package hash path and carries the same context into pending file reads. Immutable
+receipt facts retain actual chunk/EOF observations and are resealed by
+selected_source_hashes through original continuation. Legacy receipts without
+this evidence refuse that consumer; there is no completed-owner reread or implicit
+upgrade. Cache source/header relationship, actual loader selection and
+listener/native/key/broker/physical admission remain separate unfinished work.

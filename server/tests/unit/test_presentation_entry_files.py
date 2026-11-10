@@ -27,6 +27,7 @@ from hmp_plugin import presentation_startup_artifacts as a
 from hmp_plugin.presentation_startup_selection import StartupSelectionOwner
 from hmp_plugin.presentation_gateway_recipe import GatewayRecipeOwner
 from hmp_plugin.presentation_gateway_package import GatewayPackageOwner
+from hmp_plugin import presentation_startup_cache, presentation_source_digest
 sys.path.insert(0, str(base / "native"))
 entry = GatewayEntryOwner.start()
 namespace.__path__ = []
@@ -214,10 +215,14 @@ def test_actual_entry_and_wrapper_files(tmp_path, mutation):
         (tmp_path / name).mkdir(parents=True, mode=0o700)
     for name in ("presentation_gateway_activation.py", "presentation_startup_artifacts.py",
                  "presentation_startup_selection.py", "presentation_gateway_recipe.py",
-                 "presentation_gateway_package.py"):
+                 "presentation_gateway_package.py", "presentation_startup_cache.py",
+                 "presentation_source_digest.py"):
         shutil.copyfile(SERVER / "hmp_plugin" / name, tmp_path / "hmp_plugin" / name)
     for name in ("__init__.py", "gateway_entry.py", "entry_files.py", "runtime_files.py",
-                 "gateway_approval.py", "gateway_continuation.py"):
+                 "gateway_approval.py", "gateway_continuation.py", "bytecode_headers.py",
+                 "cache_candidates.py", "cache_context.py", "cache_selection.py",
+                 "runtime_reader.py", "source_compiler.py", "cache_probe.py",
+                 "cache_reader.py", "cache_decoder.py"):
         shutil.copyfile(SERVER / "hmp_startup" / name, tmp_path / "hmp_startup" / name)
     (tmp_path / "hmp_startup/unused.py").write_text("# SYNTHETIC UNUSED\n")
     (tmp_path / "outside.py").write_text("# SYNTHETIC OUTSIDE\n")

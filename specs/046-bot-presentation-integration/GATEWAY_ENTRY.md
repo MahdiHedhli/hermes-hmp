@@ -180,3 +180,8 @@ child fixtures and 89 surface checks are distinct evidence, not installed accept
 The early invocation guard still rejects late native/listener modules. Separate
 private invocation-value checks support only the explicitly retained original
 [continuation DATA](STARTUP_CONTINUATION.md); they do not admit late entry startup.
+
+The interpreter origin retains effective bytecode cache settings and original
+magic observations in addition to the original recipe-facing runtime DATA.
+See [bytecode observation scope](BYTECODE_HEADERS.md). Their continuity checks
+add no live setting writes or runtime-admission claim.

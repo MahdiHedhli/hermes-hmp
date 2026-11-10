@@ -77,6 +77,7 @@ class _ContinuationSource(NamedTuple):
     io_root: tuple
     resources: tuple
     native: tuple
+    cache_context_fact: tuple
 
     def __repr__(self):
         return "<OriginalCompletedStartupContinuation DATA not-admission redacted>"
@@ -131,7 +132,7 @@ def _native_current(source):
 
 
 def _runtime_fact(fact, snapshot, inputs):
-    _require(type(fact) is tuple and len(fact) == 7 and fact[0] is snapshot
+    _require(type(fact) is tuple and len(fact) == 8 and fact[0] is snapshot
              and fact[1] is inputs and type(inputs) is _Inputs
              and type(inputs.runtime_plan) is RuntimeFilePlan)
     pending = inputs.runtime_plan.pending
@@ -155,6 +156,10 @@ def _runtime_fact(fact, snapshot, inputs):
                      and type(row.sha256) is str and row.sha256 == expected.sha256
                      for row, expected in zip(
                          file_fact[2], pending, strict=True)))
+    _require(type(fact[7]) is tuple and len(fact[7]) == 6
+             and io._cache_fact is fact[7] and fact[7][0] is io
+             and fact[7][1] is io._origin and fact[7][2] is io._origin.cache
+             and StartupArtifactOwner.seal_cache_observation(io) is fact[7])
     return io
 
 
@@ -186,7 +191,9 @@ class GatewayContinuationOwner:
             inputs = snapshot._inputs
             _require(type(inputs) is _Inputs and inputs.entry is entry and inputs.recipe is recipe
                      and type(inputs.runtime_plan) is RuntimeFilePlan
-                     and type(snapshot._fact_cell) is tuple and len(snapshot._fact_cell) == 7
+                     and type(inputs.cache_context_slot) is list
+                     and len(inputs.cache_context_slot) == 1
+                     and type(snapshot._fact_cell) is tuple and len(snapshot._fact_cell) == 8
                      and snapshot._ready is True and snapshot._completing is True
                      and rb[0].expected.configuration._origin.parent.owner is approval
                      and ab[0].activation is activation is rb[0].activation
@@ -201,7 +208,7 @@ class GatewayContinuationOwner:
                 entry, eb, approval, ab, recipe, rb, snapshot, snapshot._root_cell,
                 snapshot._fact_cell, inputs, io._origin, io._cell, io._root_cell,
                 tuple((items, tuple(items)) for items in rows),
-                _native_origins(rb[0].activation_scope))
+                _native_origins(rb[0].activation_scope), inputs.cache_context_slot[0])
             owner._source = source
             root = (owner, activation, source)
             owner._root = _ROOT = activation._continuation_cell = root
@@ -269,6 +276,7 @@ class GatewayContinuationOwner:
                              and held.closed is True and held.close_attempted is True
                              and held.unknown is False
                              for actual, held in zip(items, originals, strict=True)))
+        _require(s.inputs.cache_context_slot[0] is s.cache_context_fact)
         _native_current(s)
         _api_state(s.approval_binding[0].parent)
         _require(_origin_current(s.entry_binding[2][5]) is s.entry_binding[2][5]

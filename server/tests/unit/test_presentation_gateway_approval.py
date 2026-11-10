@@ -8,10 +8,11 @@ from pathlib import Path
 
 import pytest
 
+from .io_trace_fixture import TRACE_HELPERS
 from .test_presentation_gateway_entry import BOOTSTRAP, PACKAGE
 from .test_presentation_gateway_entry import SCRIPT as ENTRY_SCRIPT
 
-BODY = r'''
+BODY = TRACE_HELPERS + r'''
 from pathlib import Path
 import hashlib, os, threading
 from hmp_startup.gateway_approval import GatewayApprovalOwner, GatewayApprovalError
@@ -57,10 +58,10 @@ if case=='hardlink':os.link(path,directory/'alias.json')
 if case=='ancestor_link':
     directory.rename(directory.parent/'renamed');directory.symlink_to(directory.parent/'renamed')
 actual_read,actual_close=artifacts.os.read,artifacts.os.close
-actual_open=artifacts.os.open;open_calls=[]
-def observed_open(*args,**kwargs):
-    open_calls.append(True);return actual_open(*args,**kwargs)
-artifacts.os.open=observed_open
+actual_native_open=artifacts.os.open;open_calls=[]
+def observed_native_open(frame):open_calls.append(True)
+observe_synthetic_native(actual_native_open,artifacts.StartupArtifactOwner._open.__code__,
+                         observed_native_open)
 if case=='lookalike':
     constants.__file__=str(default/'untrusted/hermes_constants.py')
     constants.__spec__.origin=constants.__file__
@@ -72,9 +73,9 @@ if case=='function_origin':
 read_calls=[];close_calls=[];foreign_counter=None;foreign_fact=object();foreign_root=object()
 old_function=constants.get_default_hermes_root
 if case in ('root_read','function_read','read_unknown','count_copy','read_retire','reads_copy'):
-    def read_callback(fd,count):
+    def read_callback(frame):
         global foreign_counter
-        data=actual_read(fd,count);read_calls.append(len(data))
+        data=frame.f_locals['data'];read_calls.append(len(data))
         active=owner._activation._approval_owner
         if case=='root_read':constants.ROOT += '-changed'
         if case=='function_read':constants.get_default_hermes_root=lambda:default
@@ -86,12 +87,21 @@ if case in ('root_read','function_read','read_unknown','count_copy','read_retire
             effect=active._origin.reads[-1]
             active._origin.reads[-1]=artifacts._ReadEffect(effect.before)
         return data
-    artifacts.os.read=read_callback
+    trace_synthetic_boundary(artifacts.StartupArtifactOwner._read.__code__,
+                             '_require(type(data) is bytes)',read_callback)
 if case=='close_unknown':
-    def close_callback(fd):
-        actual_close(fd);close_calls.append(fd)
-        if len(close_calls)==1:raise OSError('synthetic close outcome unknown')
-    artifacts.os.close=close_callback
+    close_fault=False
+    def observed_native_close(frame):
+        close_calls.append((frame.f_locals['row'],frame.f_locals['fd']))
+    observe_synthetic_native(actual_close,artifacts.StartupArtifactOwner._close.__code__,
+                             observed_native_close)
+    def close_callback(frame):
+        global close_fault
+        if not close_fault:
+            close_fault=True
+            raise OSError('synthetic lost close acknowledgement')
+    trace_synthetic_boundary(artifacts.StartupArtifactOwner._close.__code__,
+                             'row.closed = True',close_callback)
 original_decode=approval_module._decode
 if case in ('fact_replaced','root_replaced','closed_changed','ledger_copy'):
     def decode_callback(raw,directory):
@@ -125,7 +135,12 @@ except GatewayApprovalError as error:
         assert active._origin.reads[0].after[2]==len(raw)
     if case=='read_unknown':assert len(read_calls)==1 and active._unknown
     if case=='close_unknown':
-        assert len(close_calls)==len(set(close_calls)) and active._unknown
+        assert close_fault and active._unknown
+        assert len(close_calls)==len({id(row) for row,fd in close_calls})
+        assert all(row.fd is fd for row,fd in close_calls)
+        assert len(close_calls)==len(active._origin.records)>1
+        assert sum(row.unknown for row in active._origin.records)==1
+        assert all(row.close_attempted for row in active._origin.records)
     if case=='closed_changed':
         assert not active._origin.records[0].closed
         assert all(r.close_attempted for r in active._origin.records)
@@ -316,7 +331,7 @@ assert configuration._bytes_read==len(operator_raw)+len(selection)
             "assert recipe._bytes_read==len(operator_raw)+len(selection)"
             "+recipe_module._TOTAL_LIMIT")
     mutation = {"runtime": "runtime_normal", "links": "link_absolute"}.get(variant, "normal")
-    return script, mutation
+    return TRACE_HELPERS + script.replace(TRACE_HELPERS, ""), mutation
 
 
 @pytest.mark.parametrize("variant", ["entry", "runtime", "links", "document_boundary"])

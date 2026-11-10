@@ -257,7 +257,23 @@ class GatewayPackageOwner:
         return GatewayPackageOwner._verify(configuration, raw, recipe, binding)
 
     @classmethod
-    def _verify(cls, configuration, raw, recipe, binding):
+    def verify_recipe_source_hashes(cls, recipe, entry):
+        """Explicit original-entry source hashing; legacy snapshots stay distinct."""
+        _require(cls is GatewayPackageOwner and type(recipe) is GatewayRecipeOwner
+                 and entry is not None)
+        try:
+            original = GatewayRecipeOwner._retained_binding(recipe)
+            configuration = original[0].expected.configuration
+            _vacant(configuration)
+            binding = GatewayRecipeOwner._loaded_binding(recipe)
+            _require(_same_recipe_binding(original, binding))
+            raw = binding[4][3][1][1]
+        except BaseException:
+            raise PackageInventoryError from None
+        return GatewayPackageOwner._verify(configuration, raw, recipe, binding, entry)
+
+    @classmethod
+    def _verify(cls, configuration, raw, recipe, binding, source_entry=None):
         _require(cls is GatewayPackageOwner)
         _vacant(configuration)
         activation, configuration_scope, fact, selected = _selection(configuration, recipe, binding)
@@ -293,8 +309,16 @@ class GatewayPackageOwner:
                           + tuple(row[0] for row in binding[4][3]) + files)
             meta = _Manifest(configuration, configuration_scope, fact, selected, raw,
                              root, entries, files, [], recipe, binding)
+            digest_context = None
+            if source_entry is not None:
+                from .presentation_source_digest import retain
+                _require(recipe is not None)
+                digest_context = retain(source_entry, activation)
             s = IoScope(activation, activation._scope, meta,
-                        (os.getpid(), os.geteuid(), threading.get_ident()), [])
+                        (os.getpid(), os.geteuid(), threading.get_ident()), [],
+                        reads=None if digest_context is None else [], source_digest=digest_context,
+                        native_files=(None if digest_context is None
+                                      else digest_context.native_files))
             owner._scope = owner._origin = s
             owner._cell = (owner, s)
             owner._root_cell = (activation, owner, s)

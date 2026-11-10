@@ -77,6 +77,10 @@ class _HashedArtifact(NamedTuple):
     expected: ExpectedArtifact
     identity: tuple
     sha256: str
+    bytecode_header: bytes
+    source_hash: bytes = b""
+    source_digest: object = None
+    source_mtime: int | None = None
 
     def __repr__(self):
         return "<HashedArtifact original-descriptor DATA redacted>"
@@ -100,6 +104,9 @@ class _Scope(NamedTuple):
     parent: object = None
     runtime: object = None
     reads: object = None
+    cache: object = None
+    source_digest: object = None
+    native_files: object = None
 
     def __repr__(self):
         return "<StartupArtifactScope redacted>"
@@ -326,8 +333,17 @@ def _configuration(owner):
     if type(owner) is GatewayRecipeOwner:
         return True
     from hmp_startup.gateway_approval import GatewayApprovalOwner
-    _require(type(owner) is GatewayApprovalOwner)
-    return True
+    if type(owner) is GatewayApprovalOwner:
+        return True
+    from hmp_startup.runtime_reader import RuntimeSourceReadOwner
+    if type(owner) is RuntimeSourceReadOwner:
+        return False
+    from hmp_startup.cache_probe import RuntimeCacheProbeOwner
+    if type(owner) is RuntimeCacheProbeOwner:
+        return False
+    from hmp_startup.cache_reader import DeclaredCacheReadOwner
+    _require(type(owner) is DeclaredCacheReadOwner)
+    return False
 
 
 def _owner_guard(owner):
@@ -343,8 +359,17 @@ def _owner_guard(owner):
     if type(owner) is GatewayRecipeOwner:
         return GatewayRecipeOwner._guard(owner)
     from hmp_startup.gateway_approval import GatewayApprovalOwner
-    _require(type(owner) is GatewayApprovalOwner)
-    return GatewayApprovalOwner._guard(owner)
+    if type(owner) is GatewayApprovalOwner:
+        return GatewayApprovalOwner._guard(owner)
+    from hmp_startup.runtime_reader import RuntimeSourceReadOwner
+    if type(owner) is RuntimeSourceReadOwner:
+        return RuntimeSourceReadOwner._guard(owner)
+    from hmp_startup.cache_probe import RuntimeCacheProbeOwner
+    if type(owner) is RuntimeCacheProbeOwner:
+        return RuntimeCacheProbeOwner._guard(owner)
+    from hmp_startup.cache_reader import DeclaredCacheReadOwner
+    _require(type(owner) is DeclaredCacheReadOwner)
+    return DeclaredCacheReadOwner._guard(owner)
 
 
 def _root(owner, activation):
@@ -360,8 +385,17 @@ def _root(owner, activation):
     if type(owner) is GatewayRecipeOwner:
         return activation._recipe_cell
     from hmp_startup.gateway_approval import GatewayApprovalOwner
-    _require(type(owner) is GatewayApprovalOwner)
-    return activation._approval_cell
+    if type(owner) is GatewayApprovalOwner:
+        return activation._approval_cell
+    from hmp_startup.runtime_reader import RuntimeSourceReadOwner
+    if type(owner) is RuntimeSourceReadOwner:
+        return activation._runtime_read_cell
+    from hmp_startup.cache_probe import RuntimeCacheProbeOwner
+    if type(owner) is RuntimeCacheProbeOwner:
+        return activation._runtime_cache_probe_cell
+    from hmp_startup.cache_reader import DeclaredCacheReadOwner
+    _require(type(owner) is DeclaredCacheReadOwner)
+    return activation._cache_read_cell
 
 
 def _append_configuration(owner, data):
@@ -377,6 +411,16 @@ def _append_configuration(owner, data):
                 from hmp_startup.gateway_approval import GatewayApprovalOwner
                 _require(type(owner) is GatewayApprovalOwner)
                 GatewayApprovalOwner._append(owner, data)
+    elif type(owner) is not StartupArtifactOwner:
+        from .presentation_gateway_package import GatewayPackageOwner
+        if type(owner) is not GatewayPackageOwner:
+            from hmp_startup.runtime_reader import RuntimeSourceReadOwner
+            if type(owner) is RuntimeSourceReadOwner:
+                RuntimeSourceReadOwner._append(owner, data)
+            else:
+                from hmp_startup.cache_reader import DeclaredCacheReadOwner
+                _require(type(owner) is DeclaredCacheReadOwner)
+                DeclaredCacheReadOwner._append(owner, data)
 
 
 class StartupArtifactOwner:
@@ -405,7 +449,17 @@ class StartupArtifactOwner:
                                            runtime.plan.pending, source, runtime)
 
     @classmethod
-    def _retain(cls, activation, expected, source, runtime=None):
+    def retain_from_cache_entry(cls, entry):
+        from .presentation_startup_cache import source_from_entry
+        _require(cls is StartupArtifactOwner)
+        cache = source_from_entry(entry)
+        runtime = (_runtime_source(entry) if cache.plan.executable_link is not None else None)
+        source = _package_source(cache.inputs.plugin)
+        return StartupArtifactOwner._retain(source.binding[0].activation,
+                                           cache.plan.pending, source, runtime, cache)
+
+    @classmethod
+    def _retain(cls, activation, expected, source, runtime=None, cache=None):
         _require(cls is StartupArtifactOwner and type(activation) is GatewayActivationOwner
                  and activation._artifact_owner is None and activation._artifact_cell is None
                  and activation._artifact_attempt_cell is None
@@ -419,13 +473,17 @@ class StartupArtifactOwner:
         owner._facts = owner._hashes = owner._attempt_cell = owner._fact_cell = None
         owner._scope = owner._origin = owner._cell = owner._root_cell = None
         owner._count_cell = owner._initial_count_cell = None
+        owner._cache_fact = None
         owner._bytes_read = 0
         try:
             if source is not None:
                 _require(type(source) is _PackageSource)
                 owner._bytes_read = source.count_cell[2]
+            digest_context = None if source is None else source.owner._origin.source_digest
             s = _Scope(activation, activation._scope, expected,
-                       (os.getpid(), os.geteuid(), threading.get_ident()), [], source, runtime)
+                       (os.getpid(), os.geteuid(), threading.get_ident()), [], source, runtime,
+                       None if digest_context is None else [], cache, digest_context,
+                       None if digest_context is None else digest_context.native_files)
             owner._scope = owner._origin = s
             owner._cell = (owner, s)
             owner._root_cell = (activation, owner, s)
@@ -442,6 +500,14 @@ class StartupArtifactOwner:
                 _require(len(source.expected) + len(expected) + len(runtime.link.hops) <= _MAX_FILES
                          and owner._bytes_read + sum(row.size for row in expected)
                          + 2 * runtime.link.text_bytes <= _MAX_TOTAL)
+            if cache is not None:
+                from .presentation_startup_cache import source_current
+                source_current(cache)
+                _require(cache.plan.pending is expected
+                         and (cache.inputs.io_slot[0] is None or cache.inputs.io_slot[0] is owner)
+                         and len(source.expected) + len(expected) + len(cache.paths)
+                         + (0 if runtime is None else len(runtime.link.hops)) <= _MAX_FILES)
+                cache.inputs.io_slot[0] = owner
             _expected(expected)
             if source is not None:
                 _source_current(source)
@@ -474,6 +540,10 @@ class StartupArtifactOwner:
                              and row.unknown is False and row.close_attempted is True
                              for row in s.records))
             runtime = s.runtime
+            cache_before = cache_after = None
+            if s.cache is not None:
+                from .presentation_startup_cache import observe_pass
+                cache_before = observe_pass(s.cache, owner, 0, None)
             before = after = link_fact = None
             if runtime is not None:
                 _require(runtime.before[0] is None and runtime.after[0] is None
@@ -504,6 +574,10 @@ class StartupArtifactOwner:
                          and stat.S_IMODE(targets[0].identity[2]) == runtime.link.mode)
                 link_fact = _LinkTargetObservation(owner, s, runtime, before, after,
                                                    targets[0], owner._count_cell)
+            if s.cache is not None:
+                from .presentation_startup_cache import seal
+                cache_after = observe_pass(s.cache, owner, 1, cache_before)
+                _require(seal(s.cache, owner, cache_before, cache_after) is s.cache)
             count = owner._count_cell
             _require(StartupArtifactOwner._guard(owner) is s
                      and owner._root_cell is root and owner._attempt_cell is attempt
@@ -528,6 +602,10 @@ class StartupArtifactOwner:
                          and link_fact.count is count)
             fact = ((owner, s, hashes, count) if runtime is None
                     else (owner, s, hashes, count, link_fact))
+            if s.cache is not None:
+                _require(seal(s.cache, owner, cache_before, cache_after) is s.cache
+                         and owner._cache_fact is None)
+                owner._cache_fact = (owner, s, s.cache, cache_before, cache_after, count)
             owner._facts = tuple(row.expected for row in hashes)
             owner._hashes = hashes
             owner._fact_cell = activation._artifact_fact_cell = fact
@@ -570,6 +648,11 @@ class StartupArtifactOwner:
             _source_current(s.parent)
         if s.runtime is not None:
             _runtime_current(s.runtime, self)
+        if s.cache is not None:
+            from .presentation_startup_cache import owned_current
+            owned_current(s.cache, self)
+            if fact is not None:
+                _require(StartupArtifactOwner.seal_cache_observation(self) is self._cache_fact)
         if s.runtime is not None and fact is not None:
             _require(type(fact) is tuple and len(fact) == 5
                      and type(fact[4]) is _LinkTargetObservation)
@@ -666,6 +749,11 @@ class StartupArtifactOwner:
             read_index = len(s.reads)
             effect = _ReadEffect(cell)
             s.reads.append(effect)  # original allocation before read effects
+        source_read = source_return = None
+        if s.source_digest is not None:
+            from . import presentation_source_digest as source_digest
+            _require(type(s.reads) is list and len(s.reads) <= 65536)
+            source_read = source_digest.retain_read(s.source_digest, self, s, effect, read_index)
         self._reading = True
         data = None
         try:
@@ -685,11 +773,16 @@ class StartupArtifactOwner:
                 self._count_cell = after_cell
             if runtime is not None and same:
                 runtime.count[0] = after_cell
+            if source_read is not None:
+                source_return = source_digest.observed_read(source_read, after_cell, len(data))
             self._reading = False
             _require(same and (effect is None or (len(s.reads) == read_index + 1
                       and s.reads[read_index] is effect))
                      and len(data) <= count and _owner_guard(self) is s
-                     and self._bytes_read is after and self._count_cell is after_cell)
+                     and self._bytes_read is after and self._count_cell is after_cell
+                     and (source_read is None or
+                          (source_read.result[0] is source_return
+                           and source_read.root.reads[-1] is source_read)))
             return data
         except BaseException:
             self._unknown = True
@@ -884,22 +977,55 @@ class StartupArtifactOwner:
                  and self._fact_cell[4] is fact and self._count_cell is fact.count)
         return fact
 
+    def seal_cache_observation(self):
+        from .presentation_startup_cache import seal
+        _require(type(self) is StartupArtifactOwner)
+        fact = self._cache_fact
+        _require(type(fact) is tuple and len(fact) == 6
+                 and fact[0] is self and fact[1] is self._origin is self._scope
+                 and fact[2] is self._origin.cache and fact[5] is self._count_cell)
+        _require(seal(fact[2], self, fact[3], fact[4]) is fact[2])
+        return fact
+
     def _file(self, expected):
         s = _owner_guard(self)
         anchor = type(expected) is OperatorApprovalPath
+        declared_reader = None
         if anchor:
             from hmp_startup.gateway_approval import GatewayApprovalOwner
             _require(type(self) is GatewayApprovalOwner and type(s.expected) is tuple
                      and len(s.expected) == 1 and s.expected[0] is expected)
         else:
             _require(type(expected) is ExpectedArtifact)
+            if not _configuration(self) and type(self) is not StartupArtifactOwner:
+                from .presentation_gateway_package import GatewayPackageOwner
+                if type(self) is not GatewayPackageOwner:
+                    from hmp_startup.runtime_reader import RuntimeSourceReadOwner
+                    if type(self) is RuntimeSourceReadOwner:
+                        _require(expected is s.expected[0] and self._started is True
+                                 and self._ready is False)
+                    else:
+                        from hmp_startup.cache_reader import DeclaredCacheReadOwner
+                        if type(self) is DeclaredCacheReadOwner:
+                            _require(expected is s.expected[0] and self._started is True
+                                     and self._ready is False)
+                            declared_reader = DeclaredCacheReadOwner
         root_cell = self._root_cell
         held, directories, read_effects = [], [], []
+        source_root = source_effect = source_buffer = None
+        source_hash = b""
+        source_mtime = None
+        source_observations = []
         progress = self._count_cell if s.runtime is not None else None
         data = digest = None
         result = None
         failed = False
         try:
+            if s.source_digest is not None:
+                from . import presentation_source_digest as source_digest
+                source_root = source_digest.begin(self, s, expected)
+                source_effect = None if source_root is None else source_root.effect
+                source_buffer = None if source_root is None else source_root.buffer
             parent = None
             for name in ("/", *expected.path[1:].split("/")[:-1]):
                 row, fd = StartupArtifactOwner._open(self, name, parent, True)
@@ -923,15 +1049,26 @@ class StartupArtifactOwner:
                      and not before.st_mode & (0o022 | stat.S_ISUID | stat.S_ISGID))
             if _configuration(self):
                 _require(before.st_uid == s.context[1] and stat.S_IMODE(before.st_mode) == 0o600)
+            if source_effect is not None:
+                timestamp = before.st_mtime
+                _require(type(timestamp) in (int, float) and -2 ** 64 < timestamp < 2 ** 64)
+                source_mtime = int(timestamp)  # exact CPython path_stats conversion, not ns floor
             row, fd = StartupArtifactOwner._open(self, name, parent, False)
             held.append((row, fd))
             _require(_identity(StartupArtifactOwner._fstat(self, fd, s)) == original)
             digest = hashlib.sha256()
+            header = b""
+            capture_header = (not anchor and not _configuration(self)
+                              and expected.path.endswith(".pyc"))
             remaining = before.st_size if anchor else expected.size
             while remaining:
                 _require(_owner_guard(self) is s)
                 _require(progress is None or self._count_cell is progress)
-                data = StartupArtifactOwner._read(self, fd, min(remaining, 65536), s)
+                data = (StartupArtifactOwner._read(self, fd, min(remaining, 65536), s)
+                        if declared_reader is None else
+                        declared_reader._read(self, fd, min(remaining, 65536), s))
+                if source_root is not None:
+                    source_observations.append(source_digest.capture(source_root))
                 if anchor:
                     read_effects.append(s.reads[-1])
                 if progress is not None:
@@ -941,10 +1078,17 @@ class StartupArtifactOwner:
                 _require(_owner_guard(self) is s)
                 _append_configuration(self, data)
                 digest.update(data)
+                if source_effect is not None:
+                    source_digest.append(source_root, source_buffer, data, source_observations)
+                if capture_header and len(header) < 16:
+                    header += data[:16 - len(header)]
                 data = None
                 _require(_owner_guard(self) is s)
             _require(progress is None or self._count_cell is progress)
-            data = StartupArtifactOwner._read(self, fd, 1, s)
+            data = (StartupArtifactOwner._read(self, fd, 1, s) if declared_reader is None
+                    else declared_reader._read(self, fd, 1, s))
+            if source_root is not None:
+                source_observations.append(source_digest.capture(source_root))
             if anchor:
                 read_effects.append(s.reads[-1])
             count_cell, counted = self._count_cell, self._bytes_read
@@ -955,6 +1099,9 @@ class StartupArtifactOwner:
             _require(_owner_guard(self) is s
                      and type(actual_hash) is str
                      and (anchor or actual_hash == expected.sha256))
+            if source_effect is not None:
+                source_hash = source_digest.finish(source_root, source_buffer, count_cell,
+                                                   source_observations)
             for name, parent, directory, signature in directories:
                 _require(
                     _identity(StartupArtifactOwner._fstat(self, directory, s), True) == signature
@@ -967,11 +1114,20 @@ class StartupArtifactOwner:
                 result = _OperatorFileReceipt(self, s, expected, original, actual_hash, count_cell,
                                               tuple(row for row, _ in held), tuple(read_effects))
             elif not _configuration(self):
-                result = _HashedArtifact(self, s, expected, original, actual_hash)
+                result = _HashedArtifact(self, s, expected, original, actual_hash, header,
+                                         source_hash, source_root, source_mtime)
         except BaseException:
+            if source_effect is not None and source_effect.attempted is True:
+                source_effect.unknown = True
             failed = True
         finally:
-            data = digest = None
+            if source_effect is not None:
+                try:
+                    source_digest.clear(source_root, source_buffer)
+                except BaseException:
+                    source_effect.unknown = self._unknown = True
+                    failed = True
+            data = digest = header = None
             for row, fd in reversed(held):
                 try:
                     StartupArtifactOwner._close(self, row, fd, s, root_cell)
@@ -982,4 +1138,12 @@ class StartupArtifactOwner:
             raise ArtifactObservationError(self) from None
         _require(_owner_guard(self) is s and self._count_cell is count_cell
                  and self._bytes_read is counted)
+        if source_effect is not None:
+            source_fact = source_digest.fact(source_root, self, s, expected,
+                                             source_hash, count_cell, source_observations,
+                                             source_mtime)
+            result = result._replace(source_digest=source_fact)
+            _require(source_effect.cleared is True and source_effect.unknown is False
+                     and source_effect.result is source_hash
+                     and source_effect.buffer is source_buffer and len(source_buffer) == 0)
         return result

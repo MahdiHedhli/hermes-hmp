@@ -155,7 +155,7 @@ if mutation in ("runtime_file_boundary","runtime_file_over",
     for row in [wrapper,*dependency["files"],*dependency["libraries"],*interpreter["files"]]:
         declared[row["path"]]=row["size"]
     if mutation.startswith("runtime_file_"):
-        a._MAX_FILES = 6+len(declared)-(1 if mutation.endswith("over") else 0)
+        a._MAX_FILES = 6+len(declared)+1-(1 if mutation.endswith("over") else 0)
     else:
         # Real prior IO is retained; no fake declaration-derived prior counter is supplied.
         a._MAX_TOTAL = plugin._bytes_read + sum(size for name,size in declared.items()
@@ -238,7 +238,13 @@ entry = GatewayEntryOwner.start()""",
 if mutation in ("runtime_file_boundary","runtime_byte_boundary"):
     assert result._ready
     if mutation == "runtime_byte_boundary":assert result._fact_cell[2]._bytes_read == a._MAX_TOTAL
-if mutation in ("runtime_file_over","runtime_byte_over","runtime_overlap","runtime_private",
+if mutation == "runtime_file_over":
+    failed_io = entry._activation._artifact_owner
+    assert failed_io is not None and failed_io._failed and not failed_io._ready
+    assert failed_io._fact_cell is None and failed_io._cache_fact is None
+    assert failed_io._bytes_read == plugin._bytes_read
+    assert failed_io._origin.records == []
+if mutation in ("runtime_byte_over","runtime_overlap","runtime_private",
                 "runtime_namespace","runtime_search_path","runtime_spec_name","runtime_module_name",
                 "runtime_parent_count_swap","runtime_cross_overlap", "runtime_private_library",
                 "runtime_private_archive"):
