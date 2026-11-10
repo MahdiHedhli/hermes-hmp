@@ -18,6 +18,13 @@ activation has been implemented. Full character/name/avatar delivery remains ope
 The separately qualified `6796bfbb` local-image path must retain its later runtime
 and schema-4 fixes; the older character branch must not overwrite that deployment.
 
+Construction has now started on isolated draft branch `feat/bound-engine-custody-20261110`
+at executable checkpoint `3cdd355`. The literal capture record exists before validator
+callbacks, with three construction-only DATA checks passing on both actual Python
+3.14.9 and 3.11.15 and bounded independent source review. Parent/root consumers
+still require migration: this draft is not integrated, merge-ready or deployable.
+No fast dispatch or startup-timeout fix is claimed from those DATA checks.
+
 ## November 10 — iPad development update installed; LB1 device checks remain
 
 The existing iPad Pro now has development build **2026110901**, installed once
