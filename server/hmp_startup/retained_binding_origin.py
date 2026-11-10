@@ -13,11 +13,13 @@ _MODULES = ('hmp_plugin.presentation_gateway_package',
             'hmp_plugin.presentation_gateway_recipe',
             'hmp_plugin.presentation_startup_selection',
             'hmp_plugin.presentation_gateway_activation',
-            'hmp_plugin.presentation_startup_artifacts')
-# Only these two values legitimately change during activation allocation. Their
+            'hmp_plugin.presentation_startup_artifacts',
+            'hmp_startup.gateway_approval')
+# Only the listed activation/approval values change during owner allocation. Their
 # keys remain required; the original retained-scope body freshly joins their
 # values to its actual owner/scope. This DATA checker supplies no such authority.
-_LIVE_GLOBALS = ((), (), (), ('_ENTRY_OWNER', '_ENTRY_CELL'), ())
+_LIVE_GLOBALS = ((), (), (), ('_ENTRY_OWNER', '_ENTRY_CELL'), (),
+                 ('_OWNER', '_CELL', '_ROOT', '_FACT'))
 _CLASSES = ((0, 'GatewayPackageOwner'), (0, '_Manifest'), (1, 'GatewayRecipeOwner'),
             (2, 'StartupSelectionOwner'), (2, '_Scope'),
             (2, '_ApprovedSelectionSource'), (2, 'GatewayStartupSelection'),
@@ -28,7 +30,9 @@ _CLASSES = ((0, 'GatewayPackageOwner'), (0, '_Manifest'), (1, 'GatewayRecipeOwne
             (4, '_Descriptor'), (4, '_NativeScopeRegistration'),
             (4, '_NativeOpenAllocation'), (4, '_NativeCloseAllocation'),
             (4, '_NativeOpenedDescriptor'), (0, 'RetainedPackageData'),
-            (0, '_Scan'), (1, '_Recipe'))
+            (0, '_Scan'), (1, '_Recipe'),
+            (5, 'GatewayApprovalOwner'), (5, 'GatewayApprovalError'),
+            (5, '_RootSource'), (5, 'GatewayOperatorApproval'))
 _FUNCTIONS = ((0, 'GatewayPackageOwner', '_retained_binding'),
               (1, 'GatewayRecipeOwner', '_retained_binding'),
               (0, None, '_require'), (1, None, '_require'),
@@ -45,7 +49,12 @@ _FUNCTIONS = ((0, 'GatewayPackageOwner', '_retained_binding'),
               (4, None, '_native_descriptor_opened'),
               (4, None, '_native_file_allocation_original'),
               (4, None, '_expected'), (4, None, '_require'),
-              (4, 'ArtifactObservationError', '__init__'))
+              (4, 'ArtifactObservationError', '__init__'),
+              (5, 'GatewayApprovalOwner', '_retained_binding'),
+              (5, 'GatewayApprovalOwner', '_seal'),
+              (5, 'GatewayApprovalOwner', '_closed_custody'),
+              (5, None, '_require'), (5, None, '_same_entry'),
+              (5, None, '_api_state'), (5, 'GatewayApprovalError', '__init__'))
 
 
 class RetainedBindingOriginError(RuntimeError):
@@ -252,8 +261,7 @@ def current(packet):
           and modules[0][1].get('_same_recipe_binding') is functions[4][0]) is not True:
         raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
     # Join the imported aliases to the same defining objects, not merely to an
-    # independently coherent snapshot in each importing module. The approval
-    # module imported inside _approval_binding remains a separate prerequisite.
+    # independently coherent snapshot in each importing module.
     if (all(type(key) is str for key in modules[0][1])
           and all(type(key) is str for key in modules[1][1])
           and modules[0][1].get('StartupSelectionOwner') is classes[3][0]
@@ -286,4 +294,15 @@ def current(packet):
               and namespace.get('_descriptor_closed_in_scope') is functions[15][0]
               and namespace.get('_expected') is functions[19][0]) is not True:
             raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+    # Approval's live owner/cell/root/fact values are not cached authority. Its
+    # actual original validators still freshly join those values on each audit.
+    if (all(type(key) is str for key in modules[5][1])
+          and modules[5][1].get('GatewayActivationOwner') is classes[10][0]
+          and modules[5][1].get('_LATE_MODULES') is modules[3][1].get('_LATE_MODULES')
+          and modules[5][1].get('ExpectedArtifact') is classes[13][0]
+          and modules[5][1].get('_Scope') is classes[4][0]
+          and modules[5][1].get('_descriptor_closed_in_scope') is functions[15][0]
+          and modules[5][1].get('_OperatorFileReceipt') is modules[4][1].get('_OperatorFileReceipt')
+          and modules[5][1].get('_ReadEffect') is modules[4][1].get('_ReadEffect')) is not True:
+        raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
     return packet

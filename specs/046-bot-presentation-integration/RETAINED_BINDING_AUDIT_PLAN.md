@@ -1,3 +1,27 @@
+## November 10 — retained approval-validator origin
+
+The early helper record now includes the already prepared approval module, four
+approval classes and seven validator/error-constructor functions. It retains six
+modules, 27 classes and 29 functions in the same six-field DATA packet. The parent
+and both final Scope checks apply the same predicates and private refusal path.
+Imported artifact/activation aliases must join their defining held objects.
+
+Only approval's four live owner/cell/root/fact values are excluded from static
+identity snapshots. Their keys and namespace cardinality remain required; no
+caller can supply additional exclusions or replace static pairs with live keys.
+The original validators still freshly check ownership and live state. An intact
+DATA snapshot cannot authorize an inconsistent owner. No audit was removed.
+
+Four actual post-component/engine callback controls accepted changed approval code
+on the preceding source and now refuse it without executing that code. The same **341 selected cases pass on Python 3.14.9 and 3.11.15**, with
+identical source maps and case sets: the prior 258 cases, 12 import-order/metadata
+controls, 44 operator-approval cases, 23 new local approval controls and four
+actual parent callback faults. Closed-plugin-surface passes. Independent source
+review found no new concrete blocker; the reviewer also audited the current
+receipt/source/result hashes but did not rerun tests or audit the floor receipt. Entry-defined provenance,
+remaining import/builtin/dispatch closure, normal/native startup acceptance and
+phone bot-image/host-local-image delivery remain open. No deployment is claimed.
+
 # Same-call retained recipe audit consolidation — prerequisite review
 
 Status: RBH-01 selected-helper DATA and RBH-02 early-parent/scope binding are

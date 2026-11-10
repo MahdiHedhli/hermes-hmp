@@ -1,3 +1,12 @@
+## November 10 — approval rows now selected
+
+The static inventory still lists seven source files and 33 explicit functions;
+29 now have selected original helper metadata, including the seven approval
+validator/error-constructor rows. The four entry rows remain prerequisites.
+The inventory is AST/symbol evidence, not a full call graph or runtime provenance
+proof. Remaining inherited/property/native dispatch and import machinery must be
+qualified separately. No direct or nested audit has been consolidated.
+
 # RBH-03: retained-only source dependency review
 
 Status: source inventory, selection helpers, activation static projection and

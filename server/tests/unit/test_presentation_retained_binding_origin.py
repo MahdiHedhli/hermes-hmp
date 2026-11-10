@@ -1,6 +1,8 @@
 """Local helper DATA controls; not early custody, audit reuse or native admission."""
 import pytest
 
+from hmp_startup import gateway_approval as approval
+
 from hmp_plugin import presentation_gateway_package as package
 from hmp_plugin import presentation_gateway_recipe as recipe
 from hmp_plugin import presentation_startup_selection as selection
@@ -427,3 +429,65 @@ def test_canonical_builtin_module_globals_keep_actual_function_dictionary(monkey
     captured = origin.capture()
     assert origin.current(captured) is captured
     assert all(row[0].__builtins__ is vars(builtins) for row in captured[5])
+
+
+@pytest.mark.parametrize('owner,name', (
+    ('GatewayApprovalOwner', '_retained_binding'), ('GatewayApprovalOwner', '_seal'),
+    ('GatewayApprovalOwner', '_closed_custody'), (None, '_require'),
+    (None, '_same_entry'), (None, '_api_state'), ('GatewayApprovalError', '__init__')))
+def test_approval_validator_code_drift_refuses_without_dispatch(monkeypatch, owner, name):
+    packet = origin.capture()
+    namespace = approval if owner is None else getattr(approval, owner)
+    target = getattr(namespace, name)
+
+    def foreign(*args, **kwargs):
+        raise AssertionError('approval replacement dispatched')
+
+    class ForeignError(Exception):
+        def __init__(self, *args, **kwargs):
+            __class__  # Preserve the native constructor's class-cell shape.
+            raise AssertionError('approval replacement constructor dispatched')
+
+    code = ForeignError.__init__.__code__ if target.__closure__ else foreign.__code__
+    assert len(code.co_freevars) == len(target.__code__.co_freevars)
+    monkeypatch.setattr(target, '__code__', code)
+    with pytest.raises(origin.RetainedBindingOriginError):
+        origin.current(packet)
+
+
+def test_approval_projection_does_not_authorize_changed_live_state(monkeypatch):
+    packet = origin.capture()
+    for key in ('_OWNER', '_CELL', '_ROOT', '_FACT'):
+        monkeypatch.setattr(approval, key, object())
+    assert origin.current(packet) is packet
+    # DATA currentness cannot authorize even an exact-class owner allocation.
+    owner = object.__new__(approval.GatewayApprovalOwner)
+    with pytest.raises(approval.GatewayApprovalError):
+        approval.GatewayApprovalOwner._retained_binding(owner)
+
+
+@pytest.mark.parametrize('key', ('_OWNER', '_CELL', '_ROOT', '_FACT'))
+def test_approval_projection_requires_all_live_keys(monkeypatch, key):
+    packet = origin.capture()
+    monkeypatch.delattr(approval, key)
+    with pytest.raises(origin.RetainedBindingOriginError):
+        origin.current(packet)
+
+
+@pytest.mark.parametrize('key', ('_OWNER', '_CELL', '_ROOT', '_FACT'))
+def test_approval_static_projection_cannot_include_excluded_live_key(key):
+    packet = list(origin.capture())
+    rows = list(packet[3])
+    module, namespace, pairs = rows[5]
+    rows[5] = (module, namespace, ((key, namespace[key]), *pairs[1:]))
+    packet[3] = tuple(rows)
+    with pytest.raises(origin.RetainedBindingOriginError):
+        origin.current(tuple(packet))
+
+
+@pytest.mark.parametrize('name', ('GatewayActivationOwner', '_LATE_MODULES', 'ExpectedArtifact',
+    '_Scope', '_descriptor_closed_in_scope', '_OperatorFileReceipt', '_ReadEffect'))
+def test_approval_imports_join_original_defining_objects(monkeypatch, name):
+    monkeypatch.setattr(approval, name, object())
+    with pytest.raises(origin.RetainedBindingOriginError):
+        origin.capture()

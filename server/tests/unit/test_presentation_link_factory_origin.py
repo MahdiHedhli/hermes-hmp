@@ -3,6 +3,8 @@ import sys
 
 import pytest
 
+from hmp_startup import gateway_approval as approval
+
 from hmp_plugin import presentation_link_path_policy as policy
 from hmp_startup import link_factory_origin as origins
 
@@ -406,3 +408,37 @@ def test_component_builtin_all_refuses_before_dispatch(captured):
     finally:
         builtins.all = original
     assert refused and calls == []
+
+
+@pytest.mark.parametrize('boundary', ('component', 'engine'))
+@pytest.mark.parametrize('method', ('_retained_binding', '_seal'))
+def test_approval_helper_code_rejoined_after_later_callbacks(captured, monkeypatch, boundary, method):
+    from hmp_startup import gateway_approval as approval
+
+    helper = captured[0][6]
+    boundary_code = (helper[3][1][2] if boundary == 'component' else
+                     next(row[2] for row in captured[0][4][2]
+                          if row[0] == '_engine_origin_tail'))
+    parent_code = origins.current.__code__
+    target = getattr(approval.GatewayApprovalOwner, method)
+    observed, calls = [], []
+
+    def foreign(*args, **kwargs):
+        raise AssertionError('changed approval validator executed')
+
+    def observe(frame, event, value):
+        if event == 'call' and frame.f_code is foreign.__code__:
+            calls.append(True)
+        if (event == 'return' and frame.f_code is boundary_code
+                and frame.f_back.f_code is parent_code and not observed):
+            monkeypatch.setattr(target, '__code__', foreign.__code__)
+            observed.append(True)
+
+    assert sys.getprofile() is None
+    sys.setprofile(observe)
+    try:
+        with pytest.raises(RuntimeError, match='BI1_LINK_FACTORY_ORIGIN_REFUSED'):
+            origins.current(captured)
+    finally:
+        sys.setprofile(None)
+    assert observed == [True] and calls == []
