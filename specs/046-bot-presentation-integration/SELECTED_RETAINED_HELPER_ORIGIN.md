@@ -29,6 +29,15 @@ final Scope seals inline the same predicates. Same159 selected tests pass on bot
 runtimes (134local,24actual publication faults,1early-entry), with defining-alias,
 code/dispatch/constructor, missing-key, forged-pair and schema-replacement causals.
 
+The subsequent artifact-retainer refusal correction passes205 selected cases on
+both runtimes, including40actual publication faults and30legacy artifact/constructor
+cases. It uses per-attempt native exception/dictionary operations, fences the
+actual owner class before native dictionary reads and preserves all38 local guard
+conditions as exact-True inline checks. Sixteen actual error/owner drift controls
+verify no foreign dispatch and exact error/owner/failure/context state. It does
+not add artifact modules/functions to this record or certify external nested
+helper error construction. See RETAINED_HELPER_TRANSITIVE_SOURCE.md.
+
 Candidate collection contains no delegated Python helper calls before the checker.
 Its actual checker return must be the literal packet. Generic current() accepts
 a coherent copied packet as DATA; the actual original parent refuses a graft

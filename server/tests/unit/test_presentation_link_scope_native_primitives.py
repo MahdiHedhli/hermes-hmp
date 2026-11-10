@@ -9,7 +9,7 @@ from .test_presentation_gateway_approval import operator_composed_script
 
 
 @pytest.mark.parametrize('publication', ('first', 'second'))
-@pytest.mark.parametrize('export', ('map', 'is_not', 'layout_graft', 'helper_graft', 'helper_checker', 'helper_projection_schema', 'selection_code', 'selection_error_code', 'activation_code', 'activation_error_code', 'entry_getattribute', 'entry_subclass_dict'))
+@pytest.mark.parametrize('export', ('map', 'is_not', 'layout_graft', 'helper_graft', 'helper_checker', 'helper_projection_schema', 'selection_code', 'selection_error_code', 'activation_code', 'activation_error_code', 'artifact_error_code', 'artifact_error_new', 'artifact_error_getattribute', 'artifact_error_setattr', 'artifact_error_owner_property', 'artifact_owner_getattribute', 'artifact_owner_setattr', 'artifact_owner_dict_subclass', 'entry_getattribute', 'entry_subclass_dict'))
 def test_scope_publication_rejects_changed_primitive_or_layout_root(
         tmp_path, monkeypatch, request, publication, export):
     tree = ast.parse((base.SERVER / 'hmp_plugin/presentation_startup_artifacts.py').read_text())
@@ -45,6 +45,14 @@ assign=setattr
 observed=[];mutated=[];foreign_calls=[];held=[];registrations=[];successful_returns=[]
 hook_restore=[];class_restore=[];helper_restore=[];missing=object()
 helper_code_restore=[];late_helper_code=None
+member_restore=[];refusal_records=[]
+artifact_error_kind=a.ArtifactObservationError
+artifact_owner_kind=a.StartupArtifactOwner
+native_error_dict=BaseException.__dict__['__dict__'].__get__
+native_error_context=BaseException.__dict__['__context__'].__get__
+native_error_cause=BaseException.__dict__['__cause__'].__get__
+native_error_args=BaseException.__dict__['args'].__get__
+native_owner_dict=vars(artifact_owner_kind)['__dict__'].__get__
 
 def foreign(*args,**kwargs):
     foreign_calls.append(True)
@@ -59,6 +67,16 @@ def observe(frame,event,value):
             registrations.append(True)
         if event=='return' and frame.f_code is retain_code and value is held[0][0]:
             successful_returns.append(True)
+        if event=='return' and frame.f_code is retain_code and export.startswith('artifact_'):
+            error=frame.f_locals.get('refusal')
+            assert error is not None
+            values=native_error_dict(error,artifact_error_kind)
+            refusal_records.append(dict(exact_error_type=type(error) is artifact_error_kind,
+                exact_owner=values.get('failed_owner') is held[0][0],
+                fixed_args=native_error_args(error,artifact_error_kind)==('BI1_STARTUP_ARTIFACTS_REFUSED',),
+                context_cleared=native_error_context(error,artifact_error_kind) is None,
+                cause_cleared=native_error_cause(error,artifact_error_kind) is None,
+                native_failed_marker=native_owner_dict(held[0][0],artifact_owner_kind).get('_failed') is True))
     if (event=='return' and frame.f_code is rejoin_code and not mutated
             and frame.f_back.f_code is retain_code
             and frame.f_back.f_lineno==target_line):
@@ -95,9 +113,30 @@ def observe(frame,event,value):
             helper_restore.append((component,'_LIVE_GLOBALS',previous))
             assign(component,'_LIVE_GLOBALS',((),(),(),()))
             assert component._LIVE_GLOBALS is not previous
-        elif export in ('selection_code','selection_error_code','activation_code','activation_error_code'):
-            selected=sys.modules['hmp_plugin.presentation_gateway_activation'
-                if export.startswith('activation') else 'hmp_plugin.presentation_startup_selection']
+        elif export=='artifact_owner_dict_subclass':
+            class ChangedOwner(artifact_owner_kind):
+                __slots__=()
+                __dict__=property(foreign)
+            class_restore.append((owner,artifact_owner_kind))
+            late_helper_code=foreign.__code__
+            object.__setattr__(owner,'__class__',ChangedOwner)
+            assert type(owner) is ChangedOwner
+        elif export.startswith('artifact_') and export!='artifact_error_code':
+            selected=(artifact_owner_kind if export.startswith('artifact_owner_') else artifact_error_kind)
+            leaf=('owner_property' if export=='artifact_error_owner_property' else
+                  export.rsplit('_',1)[1])
+            name={'new':'__new__','getattribute':'__getattribute__',
+                  'setattr':'__setattr__','owner_property':'failed_owner'}[leaf]
+            member_restore.append((selected,name,vars(selected).get(name,missing)))
+            late_helper_code=foreign.__code__
+            replacement=(staticmethod(foreign) if leaf=='new' else
+                         property(foreign) if leaf=='owner_property' else foreign)
+            assign(selected,name,replacement)
+            assert vars(selected)[name] is replacement
+        elif export in ('selection_code','selection_error_code','activation_code','activation_error_code','artifact_error_code'):
+            selected=(a if export=='artifact_error_code' else
+                sys.modules['hmp_plugin.presentation_gateway_activation'
+                if export.startswith('activation') else 'hmp_plugin.presentation_startup_selection'])
             if export in ('selection_code','activation_code'):
                 function=(selected.GatewayActivationOwner._retained_scope
                     if export=='activation_code' else selected._approved_recipe)
@@ -107,7 +146,8 @@ def observe(frame,event,value):
                     def __init__(self,*args,**kwargs):
                         __class__
                         raise AssertionError('changed selection error dispatched')
-                function=(selected.ActivationCaptureError.__init__
+                function=(selected.ArtifactObservationError.__init__ if export=='artifact_error_code' else
+                    selected.ActivationCaptureError.__init__
                     if export=='activation_error_code' else selected.SelectionLoadError.__init__)
                 late_helper_code=ChangedError.__init__.__code__
             assert len(function.__code__.co_freevars)==len(late_helper_code.co_freevars)
@@ -173,6 +213,9 @@ finally:
     sys.setprofile(prior);sys.settrace(None)
     for component,name,previous in helper_restore:assign(component,name,previous)
     for function,previous in helper_code_restore:assign(function,'__code__',previous)
+    for selected,name,previous in member_restore:
+        if previous is missing:delattr(selected,name)
+        else:assign(selected,name,previous)
     for instance,entry_kind in class_restore:
         object.__setattr__(instance,'__class__',entry_kind)
     for entry_kind,previous in hook_restore:
@@ -185,6 +228,8 @@ finally:
         monitor.free_tool_id(5)
 assert mutated==[True] and len(observed)==1 and failed
 assert foreign_calls==[]
+if export.startswith('artifact_'):
+    assert len(refusal_records)==1 and all(refusal_records[0].values()),refusal_records
 assert registrations==[] and successful_returns==[]
 assert retained._failed and not retained._ready and retained._fact_cell is None
 owner,source=held[0]
@@ -198,6 +243,7 @@ evidence=dict(publication=publication,export=export,mutation_completed=True,
               refused=True,foreign_calls=0,new_work=0,reserve_change=0,
               registration_calls_after_mutation=0,successful_retainer_returns=0,
               scope_published_before_refusal=publication=='second')
+if export.startswith('artifact_'):evidence['private_refusal']=refusal_records[0]
 destination=base/'scope-native-primitive-refusal.json'
 destination.write_text(json.dumps(evidence,sort_keys=True));destination.chmod(0o600)
 assert sys.getprofile() is None and sys.gettrace() is None

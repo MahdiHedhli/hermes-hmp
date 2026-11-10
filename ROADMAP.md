@@ -1,3 +1,18 @@
+## November 10: retainer refusal constructor and native owner-dictionary correction
+
+Actual late-constructor controls failed at both publication seals; a broader
+intermediate run exposed first-seal vars(owner) before exact owner-type refusal.
+Both are corrected: private per-attempt native exception/dictionary operations,
+original owner dictionary identity before sticky marking, exact class before
+instance access and final native context clearing outside the handler. All38
+local exact-True guard predicates remain;36 AST-identical,2 deliberately
+strengthened native-dictionary joins. Same205 selected tests pass on both actual
+runtimes, including40 actual publication faults/16 private-refusal witnesses and
+30 legacy normal/negative artifact/constructor cases. Independent source review
+found no blocker within this correction. No audit elision or deployment.
+Shared descriptor/approval/entry closure, normal/native deadline and image/
+service/physical/release qualification remain open; no upstream-only image blocker.
+
 ## November 10: activation helper static projection
 
 The original helper record now covers4 loaded modules/13classes/15function rows.

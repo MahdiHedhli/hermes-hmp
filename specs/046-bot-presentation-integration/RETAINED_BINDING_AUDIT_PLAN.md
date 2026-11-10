@@ -9,6 +9,13 @@ not immutable authority or cached verdicts.
 Complete transitive coverage and audit consolidation remain open. This is not an
 authorization shortcut. See SELECTED_RETAINED_HELPER_ORIGIN.md.
 
+The prerequisite rejection path now avoids dispatching changed constructors or
+owner getters: same205 selected cases pass on both runtimes, including40actual
+publication faults and16native refusal witnesses. All38local guard conditions
+remain, with two exact-class/native-dictionary strengthenings. This fixes actual
+reproduced retainer failures, not descriptor/approval/entry closure or the full
+native deadline. No retained recipe/package audit has been removed.
+
 The actual EntryFileSnapshotOwner._pure_lineage calls the recipe retained-binding
 validator directly and then the package retained-binding validator. For an exact
 recipe-derived package, the latter freshly invokes that same recipe validator and

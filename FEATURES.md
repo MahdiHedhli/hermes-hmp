@@ -1,43 +1,44 @@
-## November 10 — activation helper binding verified; image delivery remains open
+## November 10 — startup refusal path repaired; image delivery remains open
 
-The original early startup record now includes the already-loaded activation
-module, its owner/scope/error classes and retained-scope/require/error-constructor
-code. It covers four modules, thirteen classes and fifteen function metadata rows.
-Only the two actual activation allocation values are excluded from static value
-snapshots; both keys remain required, all other namespace keys/values stay checked,
-and expected pairs cannot disguise a static export as a live key. The exclusion
-list is fixed in the original component, not supplied by callers.
+Actual fault tests exposed two rejection-path bugs in the experimental startup
+retainer: reporting late constructor drift invoked that changed constructor, and
+the first final publication check inspected an owner's dictionary before rejecting
+a changed owner subclass. Both are corrected in source; nothing was deployed.
 
-The original retained-scope validator still freshly joins the actual owner,
-allocation cell and scope. An unchanged inspection record is not a live-state
-verdict: tests accept changed allocation DATA and then require the original guard
-to refuse a mismatched cell. Parent env7, engine6 and the helper packet formats
-remain unchanged. The actual parent and both final Scope seals enforce the same
-projection and defining-alias checks inline; no audit has been removed.
+Each retainer attempt now holds a private typed refusal object through native base
+exception operations before callbacks. Fixed message/owner fields use held native
+dictionaries; reporting a refusal does not call changed constructors, getters or
+setters. Sticky failure writes require the actual owner's original dictionary.
+The final raise occurs outside the handler after native traceback/context/cause
+clearing. Thirty-eight local require/need statements keep the same exact-True
+checks inline; independent AST review confirms 36 unchanged conditions and two
+intentional exact-class/native-dictionary strengthenings. No parent/recipe audit
+or validation condition was removed, and no mutable permission verdict is cached.
 
-The same **159 selected tests pass on Python 3.14.9 and 3.11.15**, with unchanged
-server source maps and identical case sets: 134 local controls, twenty-four actual
-publication faults and one actual early-entry control. New cases cover live-key
-presence and static-pair forgery, namespace growth, activation code/dispatch/error
-changes, defining aliases and replacement of the projection schema itself. At
-both actual publication points, late activation/helper-error code or schema drift
-refuses with zero foreign dispatch, new native work, reservation change, later
-registration or successful retainer return. Independent source review found no
-blocker within this bounded extension; it performed no runtime testing.
+The same **205 selected tests pass on Python 3.14.9 and 3.11.15**, with identical
+server source maps and case sets: 134 local controls, forty actual publication
+faults, one early-entry control and thirty legacy artifact/constructor cases.
+All forty fault witnesses show zero foreign dispatch, new native work, reservation
+change, later registration or successful retainer return. Sixteen new actual
+refusal witnesses also verify the canonical error type, exact owner, fixed args,
+cleared context/cause and native sticky failure. Normal legacy artifact reads and
+original close/error behavior remain covered. Independent source review found no
+blocker within this correction; it did not run tests or import target modules.
 
-This remains partial transitive provenance. The late approval import, mutable
-approval/entry state and remaining descriptor/dispatch/primitive closure still
-precede same-call recipe audit consolidation. No new target module import, setting,
-permission, runtime availability gate or cached mutable verdict was introduced.
+The original helper record remains four loaded modules/thirteen classes/fifteen
+function rows, including activation's fixed two-value live projection. Artifact
+helper code/dispatch closure, the late approval import and mutable approval/entry
+state still need original binding before recipe-audit consolidation. Other nested
+helpers' ordinary error construction is not certified by this bounded retainer
+fix. No new module import, host setting, permission or availability gate was added.
 
 The preceding full native run exceeded its unchanged 60-second deadline after
 44 typed observations and one retired raw capsule; it does not qualify this new
-composition. No startup speed improvement or complete native/service/route pass
-is claimed. Desktop character display, host-local images and physical/release
-qualification remain open; no upstream-only image blocker has been demonstrated.
-No host/device/provider/model/job/install/release changes occurred. LLY520's
-authorized update still needs an established connection; prepared Android/iOS
-2026110901 were not newly installed or device-qualified by this work.
+composition. No complete normal/native/service/route, desktop character display,
+host-local image delivery or physical/release pass is claimed. No upstream-only
+image blocker has been demonstrated. No host/device/provider/model/job/install/
+release changes occurred. LLY520's authorized update still needs an established
+connection; Android/iOS 2026110901 were not newly installed or device-qualified.
 
 # November 9: duplicate runtime checks removed; images still unqualified
 

@@ -16,6 +16,45 @@ python tools/compat/retained_helper_source_census.py
 python tools/compat/test_retained_helper_source_census.py
 ```
 
+## Retainer refusal boundary correction
+
+Before adding the shared artifact helper closure, actual final-publication tests
+reproduced changed `ArtifactObservationError.__init__` dispatch while refusing that
+very drift. Both cases failed on the preceding source. The initial native-refusal
+correction then passed 174/175 selected cases; the remaining first-publication
+owner-subclass case exposed `vars(owner)` before exact owner-kind refusal.
+
+`StartupArtifactOwner._retain` now preallocates one private actual typed error per
+attempt with held native `BaseException` allocation/init/dictionary operations.
+Its message is fixed and `failed_owner` joins the actual original owner through
+the held native dictionary. Every local explicit or require/need guard raises
+that same private refusal without invoking a mutable subclass constructor. The
+original owner's native dictionary descriptor is held before callbacks; sticky
+failure is written only after actual dictionary identity rejoins. All final owner
+dictionary reads fence the original class first and use the held native getter.
+Native traceback/context/cause descriptors clear earlier rejection state before
+the final raise outside the handler. No error is cached on a long-lived owner.
+
+Thirty-eight one-positional-argument, discarded-value `_require`/`need` statements
+are exact-True inline guards. Conditions evaluate once in the same order. Static
+independent AST comparison found 36 unchanged and exactly two intentional
+exact-class/native-dictionary strengthenings. Original helper alias/code checks
+remain. No parent or retained recipe/package audit was omitted.
+
+Same205 selected tests pass on both Python versions with unchanged matching
+source maps/case sets:134local,40actual publication faults,1early-entry and30legacy
+artifact/constructor cases. The40 faults retain zero foreign calls, new work,
+reservation change, later registration or successful retainer return. Sixteen
+artifact error/owner constructor/code/getter/setter/property/subclass controls
+also witness the native error type, actual owner, fixed args, cleared context/cause
+and native failed flag. Dictionary-property controls use a real compatible owner
+subclass; direct reassignment of a class's protected `__dict__` is not claimed.
+
+This repairs the reproduced retainer failures only. Nested helpers outside
+`_retain` still have ordinary error construction. No complete artifact/helper
+closure, normal/native timeout resolution, service/phone image or release
+qualification is inferred. No host or device was changed or deployed.
+
 The inventory pins seven source files and enumerates 22 explicitly selected
 functions, their lexical global reads (including comprehensions), call
 expressions, local imports and attribute/subscript stores. It refuses missing or
