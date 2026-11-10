@@ -1,3 +1,11 @@
+## November 10 — retained compiler import removed
+
+The explicit 33-function source census now lists no local imports. The retained
+approval helper uses the original static class prepared by entry initialization;
+its public loader still performs the initial import. This removes one retained
+callback surface without certifying the full importer/native/property call graph
+or permitting audit consolidation. See SELECTED_RETAINED_HELPER_ORIGIN.md.
+
 ## November 10 — all explicit inventory rows now selected
 
 All 33 functions listed by the seven-file AST inventory now have selected helper

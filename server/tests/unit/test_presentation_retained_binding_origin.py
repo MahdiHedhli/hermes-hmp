@@ -600,3 +600,39 @@ def test_entry_activation_alias_joins_original_owner(monkeypatch):
     monkeypatch.setattr(entry, 'GatewayActivationOwner', object())
     with pytest.raises(origin.RetainedBindingOriginError):
         origin.capture()
+
+
+@pytest.mark.parametrize('current', (False, True))
+def test_retained_approval_validation_does_not_reenter_import_machinery(monkeypatch, current):
+    import builtins
+
+    original_import = builtins.__import__
+    attempted = []
+
+    def guarded_import(name, *args, **kwargs):
+        if name == 'hmp_startup.gateway_approval':
+            attempted.append(name)
+            raise AssertionError('retained validator reentered import machinery')
+        return original_import(name, *args, **kwargs)
+
+    owner = object.__new__(approval.GatewayApprovalOwner)
+    source = selection._ApprovedSelectionSource(owner, ())
+    monkeypatch.setattr(builtins, '__import__', guarded_import)
+    with pytest.raises(approval.GatewayApprovalError):
+        selection._approval_binding(source, current)
+    assert attempted == []
+
+
+@pytest.mark.parametrize('fault', ('none', 'foreign', 'missing'))
+def test_static_approval_alias_refuses_initial_incoherence(monkeypatch, fault):
+    if fault == 'missing':monkeypatch.delattr(selection, '_APPROVAL_OWNER_TYPE')
+    else:monkeypatch.setattr(selection, '_APPROVAL_OWNER_TYPE', None if fault == 'none' else object())
+    with pytest.raises(origin.RetainedBindingOriginError):origin.capture()
+
+
+@pytest.mark.parametrize('fault', ('none', 'foreign', 'missing'))
+def test_static_approval_alias_refuses_late_drift(monkeypatch, fault):
+    packet = origin.capture()
+    if fault == 'missing':monkeypatch.delattr(selection, '_APPROVAL_OWNER_TYPE')
+    else:monkeypatch.setattr(selection, '_APPROVAL_OWNER_TYPE', None if fault == 'none' else object())
+    with pytest.raises(origin.RetainedBindingOriginError):origin.current(packet)

@@ -833,6 +833,7 @@ def _capture_origin():
     # Initialization imports may execute code. Hold and reseal our own original
     # namespace, classes, helpers and generated constructors across them.
     type_of, vars_of, len_of, tuple_of, all_of = type, vars, len, tuple, all
+    zip_of, value_error = zip, ValueError
     module_kind, sys_module = ModuleType, sys
     refused = RuntimeError
     module_items = tuple_of(values.items())
@@ -847,7 +848,9 @@ def _capture_origin():
             if type_of(item) is FunctionType:
                 functions.append(item)
     function_rows = tuple_of((f, f.__code__, f.__defaults__, f.__kwdefaults__,
-                              () if f.__kwdefaults__ is None else tuple_of(f.__kwdefaults__.items()))
+                              () if f.__kwdefaults__ is None else tuple_of(f.__kwdefaults__.items()),
+                              f.__closure__, () if f.__closure__ is None else
+                              tuple_of(cell.cell_contents for cell in f.__closure__))
                              for f in functions)
     constructor = vars_of(_EntryOrigin)['__new__']
     if type_of(constructor) is staticmethod:
@@ -875,11 +878,18 @@ def _capture_origin():
                     or not all_of(type_of(k) is str for k in namespace)
                     or not all_of(k in namespace and namespace[k] is v for k, v in items)):
                 raise refused('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
-        for f, code, defaults, kw, pairs in function_rows:
+        for f, code, defaults, kw, pairs, closure, cells in function_rows:
             if (f.__code__ is not code or f.__defaults__ is not defaults or f.__kwdefaults__ is not kw
                     or (kw is not None and (not all_of(type_of(k) is str for k in kw)
                         or len_of(kw) != len_of(pairs)
                         or not all_of(k in kw and kw[k] is v for k, v in pairs)))):
+                raise refused('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+            try:
+                if (f.__closure__ is not closure or (closure is not None
+                        and not all_of(cell.cell_contents is value
+                                       for cell, value in zip_of(closure, cells, strict=True)))):
+                    raise refused('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+            except value_error:
                 raise refused('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
         for namespace, items in constructor_globals:
             if (len_of(namespace) != len_of(items) or not all_of(type_of(k) is str for k in namespace)
@@ -945,6 +955,24 @@ def _capture_origin():
         approval_values['GatewayEntryOwner'] = owner_kind
     if approval_values['GatewayEntryOwner'] is not owner_kind:
         raise refused('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+    # Hold already prepared approval code/dispatch before another module import
+    # can run callbacks. Reuse the original entry seal, including closure cells.
+    approval_classes = tuple_of(approval_values[name] for name in (
+        'GatewayApprovalOwner', 'GatewayApprovalError', '_RootSource', 'GatewayOperatorApproval'))
+    approval_class_rows = tuple_of((kind, tuple_of(vars_of(kind).items()), kind.__bases__)
+                                   for kind in approval_classes)
+    class_rows = (*class_rows, *approval_class_rows)
+    approval_functions = [item for item in approval_values.values() if type_of(item) is FunctionType]
+    for _, items, _ in approval_class_rows:
+        for _, item in items:
+            if type_of(item) in (classmethod, staticmethod):
+                item = item.__func__
+            if type_of(item) is FunctionType:
+                approval_functions.append(item)
+    function_rows = (*function_rows, *tuple_of((f, f.__code__, f.__defaults__, f.__kwdefaults__,
+        () if f.__kwdefaults__ is None else tuple_of(f.__kwdefaults__.items()),
+        f.__closure__, () if f.__closure__ is None else
+        tuple_of(cell.cell_contents for cell in f.__closure__)) for f in approval_functions))
     approval_items = tuple_of(approval_values.items())
     entry_seal = seal
 
@@ -956,6 +984,59 @@ def _capture_origin():
                 or not all_of(type_of(k) is str for k in approval_values)
                 or not all_of(k in approval_values and approval_values[k] is v
                               for k, v in approval_items)):
+            raise refused('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+
+    from hmp_plugin import presentation_startup_selection as selection_module
+    seal()
+    selection_name = 'hmp_plugin.presentation_startup_selection'
+    if (type_of(selection_module) is not module_kind
+            or registry.get(selection_name) is not selection_module):
+        raise refused('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+    selection_values = vars_of(selection_module)
+    if not all_of(type_of(k) is str for k in selection_values):
+        raise refused('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+    selection_label = selection_values.get('__name__')
+    selection_file = file.rsplit('/', 2)[0] + '/hmp_plugin/presentation_startup_selection.py'
+    if (type_of(selection_label) is not str or selection_label != selection_name
+            or type_of(selection_values.get('__file__')) is not str
+            or selection_values['__file__'] != selection_file):
+        raise refused('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+    for name in ('_approval_binding', '_require'):
+        helper = selection_values.get(name)
+        if (type_of(helper) is not FunctionType or helper.__globals__ is not selection_values
+                or helper.__code__.co_filename != selection_file):
+            raise refused('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+    approval_kind = approval_values['GatewayApprovalOwner']
+    if '_APPROVAL_OWNER_TYPE' not in selection_values:
+        raise refused('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+    if selection_values['_APPROVAL_OWNER_TYPE'] is None:
+        frame = getframe()
+        initializing_frame = False
+        for _ in range(128):
+            if frame is None:
+                break
+            if (frame.f_globals is values and frame.f_code.co_name == '<module>'
+                    and frame.f_code.co_filename == file):
+                initializing_frame = True
+                break
+            frame = frame.f_back
+        del frame
+        if values.get('_ENTRY_ORIGIN') is not None or initializing_frame is not True:
+            raise refused('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+        selection_values['_APPROVAL_OWNER_TYPE'] = approval_kind
+    if selection_values['_APPROVAL_OWNER_TYPE'] is not approval_kind:
+        raise refused('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+    selection_items = tuple_of(selection_values.items())
+    prepared_seal = seal
+
+    def seal():
+        prepared_seal()
+        if (registry.get(selection_name) is not selection_module
+                or vars_of(selection_module) is not selection_values
+                or len_of(selection_values) != len_of(selection_items)
+                or not all_of(type_of(k) is str for k in selection_values)
+                or not all_of(k in selection_values and selection_values[k] is v
+                              for k, v in selection_items)):
             raise refused('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
 
     from . import link_factory_origin

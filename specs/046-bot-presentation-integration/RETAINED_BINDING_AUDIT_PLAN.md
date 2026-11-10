@@ -1,3 +1,32 @@
+## November 10 — retained approval check no longer imports
+
+The retained approval helper now uses a static approval-owner class bound during
+original entry initialization. It no longer re-enters Python import machinery on
+each retained/current binding check. The public selection loader keeps its normal
+initial-load import. No approval validation or independent audit was removed.
+
+Only genuine entry module initialization with the staged origin may bind the
+predeclared empty alias. Missing, foreign or later-cleared aliases refuse without
+repair. Entry, approval and selection namespaces are resealed across callbacks;
+prepared entry/approval function closure cells now join their original code,
+defaults and keyword defaults. The alias is static in the helper record and joins
+the actual approval class in all three final DATA seals. Record shape and fixed
+live projections are unchanged.
+
+The preceding source failed both no-import controls at the actual import. The
+new source passes the 32 focused initialization/alias/no-import cases and both
+actual final-publication alias faults, including native private-error/no-new-work
+witnesses. The same **398 selected cases and full 68-case entry matrix pass
+on Python 3.14.9 and 3.11.15**, with identical source maps and matching case sets
+(465 unique cases). All 54 actual publication faults preserve zero foreign calls,
+new work, reservation change, later registration or successful retainer return;
+30 verify the native private-error state. Closed-plugin-surface passes. Independent
+source review found no new concrete blocker; it did not run or audit these suites.
+All 33 explicit source-inventory functions now contain no local imports; this is
+source evidence, not full public-import, native/property dispatch or startup
+qualification. Bot character and host-local image delivery remain unfinished.
+No host settings, grants, deployments or device builds changed.
+
 ## November 10 — retained entry-validator origin
 
 The early helper record now includes the entry module, eleven entry/native-data

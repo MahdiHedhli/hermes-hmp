@@ -477,3 +477,29 @@ def test_entry_helper_code_rejoined_after_later_callbacks(captured, monkeypatch,
     finally:
         sys.setprofile(None)
     assert observed == [True] and calls == []
+
+
+@pytest.mark.parametrize('boundary', ('component', 'engine'))
+def test_prebound_approval_alias_rejoined_after_later_callbacks(captured, monkeypatch, boundary):
+    from hmp_plugin import presentation_startup_selection as selection
+
+    helper = captured[0][6]
+    boundary_code = (helper[3][1][2] if boundary == 'component' else
+                     next(row[2] for row in captured[0][4][2]
+                          if row[0] == '_engine_origin_tail'))
+    parent_code = origins.current.__code__
+    observed = []
+
+    def observe(frame, event, value):
+        if (event == 'return' and frame.f_code is boundary_code
+                and frame.f_back.f_code is parent_code and not observed):
+            monkeypatch.setattr(selection, '_APPROVAL_OWNER_TYPE', object())
+            observed.append(True)
+
+    assert sys.getprofile() is None
+    sys.setprofile(observe)
+    try:
+        with pytest.raises(RuntimeError, match='BI1_LINK_FACTORY_ORIGIN_REFUSED'):
+            origins.current(captured)
+    finally:sys.setprofile(None)
+    assert observed == [True]

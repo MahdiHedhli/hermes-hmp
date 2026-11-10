@@ -25,6 +25,8 @@ from .presentation_startup_artifacts import (
 )
 
 _LIMIT = 65536
+# Bound only by original entry initialization, before retained helper capture.
+_APPROVAL_OWNER_TYPE = None
 _HEX = re.compile(r"[0-9a-f]{64}\Z", re.ASCII)
 _IID = re.compile(r"[a-z2-7]{52}\Z", re.ASCII)
 _KEYS = frozenset(("schema", "kind", "iid", "protocol", "algorithm", "credential_generation",
@@ -105,12 +107,11 @@ class _ApprovedSelectionSource(NamedTuple):
 
 
 def _approval_binding(source, current=False):
-    from hmp_startup.gateway_approval import GatewayApprovalOwner
-
-    _require(type(source) is _ApprovedSelectionSource
-             and type(source.owner) is GatewayApprovalOwner)
-    actual = (GatewayApprovalOwner.current_binding(source.owner) if current
-              else GatewayApprovalOwner._retained_binding(source.owner))
+    owner_type = _APPROVAL_OWNER_TYPE
+    _require(type(owner_type) is type and type(source) is _ApprovedSelectionSource
+             and type(source.owner) is owner_type)
+    actual = (owner_type.current_binding(source.owner) if current
+              else owner_type._retained_binding(source.owner))
     _require(type(source.binding) is tuple and len(source.binding) == len(actual) == 4
              and all(a is b for a, b in zip(source.binding, actual, strict=True)))
     return actual

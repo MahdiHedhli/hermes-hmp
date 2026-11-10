@@ -307,6 +307,7 @@ def current(packet):
     # Approval's live owner/cell/root/fact values are not cached authority. Its
     # actual original validators still freshly join those values on each audit.
     if (all(type(key) is str for key in modules[5][1])
+          and modules[2][1].get('_APPROVAL_OWNER_TYPE') is classes[23][0]
           and modules[5][1].get('GatewayActivationOwner') is classes[10][0]
           and modules[5][1].get('_LATE_MODULES') is modules[3][1].get('_LATE_MODULES')
           and modules[5][1].get('ExpectedArtifact') is classes[13][0]
