@@ -1,3 +1,30 @@
+## November 10 — shared approval-record dispatch held early
+
+The original helper record now holds OperatorApprovalPath, _OperatorFileReceipt
+and _ReadEffect before the later engine capture. It covers seven modules, 41
+classes and the same 33 functions. Approval aliases join the held defining classes
+in the parent and both final Scope DATA seals. Existing indices, live projections,
+packet shape and original audit calls are unchanged.
+
+All three early-capture controls accepted changed record dispatch on the preceding
+source; they now require the earlier original class, actual later engine return
+and refusal with no foreign calls. Six post-callback controls distinguish the
+existing earlier engine refusal from the final parent refusal by exact error
+type/message. Local getter/property controls and six actual final-publication
+faults preserve zero foreign calls/new work and the native private-error state.
+
+The same **420 selected cases pass on Python 3.14.9 and 3.11.15**, with
+identical source maps and case sets. All 60 actual publication faults preserve
+zero foreign calls, new work, reservation change, later registration or successful
+retainer return; 36 verify native private-error state. Closed-plugin-surface
+passes. Independent source review found no new concrete blocker; it did not run
+or independently audit these suites. The source census now finds no
+unselected directly-read project type among the explicit 33 helpers, but that is
+not a transitive call-graph proof. Unselected constructor/method code and remaining
+native/stdlib metadata dispatch still need separate review before audit
+consolidation. Complete normal/native startup and device bot-character/host-local
+image delivery remain open. No host, grant, deployment or device build changed.
+
 ## November 10 — retained approval check no longer imports
 
 The retained approval helper now uses a static approval-owner class bound during

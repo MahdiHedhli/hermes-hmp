@@ -503,3 +503,70 @@ def test_prebound_approval_alias_rejoined_after_later_callbacks(captured, monkey
             origins.current(captured)
     finally:sys.setprofile(None)
     assert observed == [True]
+
+
+@pytest.mark.parametrize('name', ('OperatorApprovalPath', '_OperatorFileReceipt', '_ReadEffect'))
+def test_shared_record_dispatch_held_before_later_engine_capture(monkeypatch, name):
+    from hmp_plugin import presentation_native_link as engine
+    from hmp_plugin import presentation_startup_artifacts as artifacts
+    from hmp_startup import retained_binding_origin as helpers
+
+    monkeypatch.setattr(origins, '_CAPTURE_STARTED', False)
+    target = getattr(artifacts, name)
+    helper_code, engine_code = helpers.capture.__code__, engine._capture_engine.__code__
+    parent_code = origins.capture.__code__
+    reached, held_original, engine_returned, calls = [], [], [], []
+
+    def foreign(*args):raise AssertionError('changed shared record getter executed')
+
+    def observe(frame, event, value):
+        if event == 'call' and frame.f_code is foreign.__code__:calls.append(True)
+        if event != 'return' or frame.f_back.f_code is not parent_code:return
+        if frame.f_code is helper_code and not reached:
+            held_original.append(any(row[0] is target for row in value[4]))
+            monkeypatch.setattr(target, '__getattribute__', foreign, raising=False)
+            reached.append(True)
+        elif frame.f_code is engine_code and reached:engine_returned.append(True)
+
+    assert sys.getprofile() is None
+    sys.setprofile(observe)
+    try:
+        with pytest.raises(RuntimeError, match='BI1_LINK_FACTORY_ORIGIN_REFUSED'):
+            origins.capture()
+    finally:sys.setprofile(None)
+    assert reached == [True] and held_original == [True] and engine_returned == [True]
+    assert calls == []
+
+
+@pytest.mark.parametrize('boundary', ('component', 'engine'))
+@pytest.mark.parametrize('name', ('OperatorApprovalPath', '_OperatorFileReceipt', '_ReadEffect'))
+def test_shared_record_dispatch_rejoined_after_later_callbacks(captured, monkeypatch, boundary, name):
+    from hmp_plugin import presentation_startup_artifacts as artifacts
+
+    helper = captured[0][6]
+    boundary_code = (helper[3][1][2] if boundary == 'component' else
+                     next(row[2] for row in captured[0][4][2]
+                          if row[0] == '_engine_origin_tail'))
+    parent_code = origins.current.__code__
+    observed, calls = [], []
+
+    def foreign(*args):raise AssertionError('changed shared getter executed')
+
+    def observe(frame, event, value):
+        if event == 'call' and frame.f_code is foreign.__code__:calls.append(True)
+        if (event == 'return' and frame.f_code is boundary_code
+                and frame.f_back.f_code is parent_code and not observed):
+            monkeypatch.setattr(getattr(artifacts, name), '__getattribute__', foreign, raising=False)
+            observed.append(True)
+
+    assert sys.getprofile() is None
+    sys.setprofile(observe)
+    try:
+        expected_error = artifacts.ArtifactObservationError if boundary == 'component' else RuntimeError
+        expected_args = ('BI1_STARTUP_ARTIFACTS_REFUSED',) if boundary == 'component' else (
+            'BI1_LINK_FACTORY_ORIGIN_REFUSED',)
+        with pytest.raises(expected_error) as caught:
+            origins.current(captured)
+        assert type(caught.value) is expected_error and caught.value.args == expected_args
+    finally:sys.setprofile(None)
+    assert observed == [True] and calls == []

@@ -16,7 +16,7 @@ _MODULES = ('hmp_plugin.presentation_gateway_package',
             'hmp_plugin.presentation_startup_artifacts',
             'hmp_startup.gateway_approval',
             'hmp_startup.gateway_entry')
-# Only the listed activation/approval values change during owner allocation. Their
+# Only the listed activation/approval/entry values change during allocation. Their
 # keys remain required; the original retained-scope body freshly joins their
 # values to its actual owner/scope. This DATA checker supplies no such authority.
 _LIVE_GLOBALS = ((), (), (), ('_ENTRY_OWNER', '_ENTRY_CELL'), (),
@@ -39,7 +39,8 @@ _CLASSES = ((0, 'GatewayPackageOwner'), (0, '_Manifest'), (1, 'GatewayRecipeOwne
             (6, '_Invocation'), (6, '_EntryOrigin'), (6, 'EntryStartupData'),
             (6, '_InterpreterOrigin'), (6, 'InterpreterStartupData'),
             (6, '_NativeIOOrigin'), (6, '_NativeFileLineage'),
-            (6, '_NativeFileLedger'), (6, '_NativeFilePhase'))
+            (6, '_NativeFileLedger'), (6, '_NativeFilePhase'),
+            (4, 'OperatorApprovalPath'), (4, '_OperatorFileReceipt'), (4, '_ReadEffect'))
 _FUNCTIONS = ((0, 'GatewayPackageOwner', '_retained_binding'),
               (1, 'GatewayRecipeOwner', '_retained_binding'),
               (0, None, '_require'), (1, None, '_require'),
@@ -313,8 +314,9 @@ def current(packet):
           and modules[5][1].get('ExpectedArtifact') is classes[13][0]
           and modules[5][1].get('_Scope') is classes[4][0]
           and modules[5][1].get('_descriptor_closed_in_scope') is functions[15][0]
-          and modules[5][1].get('_OperatorFileReceipt') is modules[4][1].get('_OperatorFileReceipt')
-          and modules[5][1].get('_ReadEffect') is modules[4][1].get('_ReadEffect')) is not True:
+          and modules[5][1].get('OperatorApprovalPath') is classes[38][0]
+          and modules[5][1].get('_OperatorFileReceipt') is classes[39][0]
+          and modules[5][1].get('_ReadEffect') is classes[40][0]) is not True:
         raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
     # The root is staged before capture and published only by the original
     # entry capture's literal return. DATA currentness does not approve a root

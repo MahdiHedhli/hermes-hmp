@@ -1,3 +1,12 @@
+## November 10 — explicit project-type reads covered
+
+The three formerly unselected directly-read project classes now have original
+class/member/bases metadata before the later engine snapshot. The seven-file,
+33-function source inventory finds no remaining direct project-type read outside
+the selected class list. This excludes neither indirect nor stdlib type dispatch
+and does not certify unselected callable code inside class members. No audit
+consolidation follows automatically from this static inventory result.
+
 ## November 10 — retained compiler import removed
 
 The explicit 33-function source census now lists no local imports. The retained

@@ -636,3 +636,37 @@ def test_static_approval_alias_refuses_late_drift(monkeypatch, fault):
     if fault == 'missing':monkeypatch.delattr(selection, '_APPROVAL_OWNER_TYPE')
     else:monkeypatch.setattr(selection, '_APPROVAL_OWNER_TYPE', None if fault == 'none' else object())
     with pytest.raises(origin.RetainedBindingOriginError):origin.current(packet)
+
+
+@pytest.mark.parametrize('name', ('OperatorApprovalPath', '_OperatorFileReceipt', '_ReadEffect'))
+def test_shared_record_getter_drift_refuses_before_access(monkeypatch, name):
+    packet = origin.capture()
+    calls = []
+
+    def foreign(*args):
+        calls.append(True)
+        raise AssertionError('shared record getter executed')
+
+    monkeypatch.setattr(getattr(artifacts, name), '__getattribute__', foreign, raising=False)
+    with pytest.raises(origin.RetainedBindingOriginError):origin.current(packet)
+    assert calls == []
+
+
+@pytest.mark.parametrize('name,field', (('OperatorApprovalPath', 'path'),
+    ('_OperatorFileReceipt', 'owner'), ('_ReadEffect', 'before')))
+def test_shared_record_field_property_drift_refuses_without_getter(monkeypatch, name, field):
+    packet = origin.capture()
+    calls = []
+
+    def foreign(*args):
+        calls.append(True)
+        raise AssertionError('shared record field property executed')
+
+    monkeypatch.setattr(getattr(artifacts, name), field, property(foreign), raising=False)
+    with pytest.raises(origin.RetainedBindingOriginError):origin.current(packet)
+    assert calls == []
+
+
+def test_approval_path_alias_joins_held_defining_class(monkeypatch):
+    monkeypatch.setattr(approval, 'OperatorApprovalPath', type('IndependentPath', (), {}))
+    with pytest.raises(origin.RetainedBindingOriginError):origin.capture()
