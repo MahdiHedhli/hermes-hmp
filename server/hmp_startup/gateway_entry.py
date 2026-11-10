@@ -463,6 +463,7 @@ class _NativeFileLineage(NamedTuple):
     context: tuple
     ledger: _NativeFileLedger
     link_policy: object = None
+    audit_record: object = None
 
     def __repr__(self):
         return "<OriginalNativeFileLineage unimplemented-effects redacted>"
@@ -497,6 +498,7 @@ class _EntryOrigin(NamedTuple):
     function: FunctionType
     code: CodeType
     link_policy: object = None
+    audit_record: object = None
 
     def __repr__(self):
         return "<GatewayEntryOrigin observed-not-admitted redacted>"
@@ -528,6 +530,7 @@ class GatewayEntryOwner:
         guard, guard_code = _origin_current, _origin_current.__code__
         origin = guard(_ENTRY_ORIGIN)
         link_policy = tuple.__getitem__(origin, 10)
+        audit_record = tuple.__getitem__(origin, 11)
         owner_kind = GatewayEntryOwner
         type_of, vars_of, len_of, tuple_of, all_of = type, vars, len, tuple, all
         refused = RuntimeError
@@ -574,6 +577,7 @@ class GatewayEntryOwner:
                     or not all_of(k in actual and actual[k] is v for k, v in items)):
                 raise refused('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
         need(guard(origin) is origin and tuple.__getitem__(origin, 10) is link_policy
+             and tuple.__getitem__(origin, 11) is audit_record
              and _OWNER is None and _CELL is None and _STARTED is None)
         _OWNER = owner  # before bootstrap/import/re-exec effects
         owner._scope = owner._activation = owner._bootstrap = owner._started_cell = None
@@ -582,7 +586,8 @@ class GatewayEntryOwner:
         started = None
         try:
             need(guard(origin) is origin and _ENTRY_ORIGIN is origin
-                 and tuple.__getitem__(origin, 10) is link_policy)
+                 and tuple.__getitem__(origin, 10) is link_policy
+                 and tuple.__getitem__(origin, 11) is audit_record)
             _require(type(sys.modules) is dict
                      and not any(name in sys.modules for name in (
                          "hermes_bootstrap", "pm.environments", "gateway.run",
@@ -601,7 +606,7 @@ class GatewayEntryOwner:
                                        [], [0, 0], [None], [False], [], [None],
                                        [None, None, None], phase)
             native_files = _NativeFileLineage(owner, interpreter.native_io, context, ledger,
-                                             link_policy)
+                                             link_policy, audit_record)
             s = _Invocation(context, main, file, vars(main).get("__spec__"),
                             sys.argv, _arguments(sys.argv),
                             sys.orig_argv, _arguments(sys.orig_argv), interpreter,
@@ -686,9 +691,13 @@ class GatewayEntryOwner:
                  and s.native_files.context is s.context
                  and type(s.native_file_ledger) is _NativeFileLedger
                  and s.native_files.ledger is s.native_file_ledger
-                 and tuple.__len__(s.native_files) == 5
+                 and tuple.__len__(s.native_files) == 6
                  and tuple.__getitem__(s.native_files, 4)
                      is tuple.__getitem__(started[5], 10)
+                 and tuple.__getitem__(s.native_files, 5)
+                     is tuple.__getitem__(started[5], 11)
+                 and tuple.__getitem__(started[5], 11)
+                     is tuple.__getitem__(tuple.__getitem__(started[5], 10), 0)[7]
                  and s.native_file_ledger.entry is self
                  and s.native_file_ledger.native is s.interpreter.native_io
                  and s.native_file_ledger.context is s.context
@@ -741,7 +750,15 @@ class GatewayEntryOwner:
                  and sys.argv is s.argv and _arguments(sys.argv) == s.arguments
                  and sys.orig_argv is s.original
                  and _arguments(sys.orig_argv) == s.original_arguments)
+        original = _origin_current(_ENTRY_ORIGIN)
+        _require(type(s.native_files) is _NativeFileLineage
+                 and tuple.__len__(s.native_files) == 6
+                 and tuple.__getitem__(s.native_files, 0) is self
+                 and tuple.__getitem__(s.native_files, 4) is tuple.__getitem__(original, 10)
+                 and tuple.__getitem__(s.native_files, 5) is tuple.__getitem__(original, 11))
         _require(_interpreter_current(s.interpreter) is s.interpreter)
+        _require(_origin_current(original) is original
+                 and tuple.__getitem__(s.native_files, 5) is tuple.__getitem__(original, 11))
         return s
 
     def _invocation_state(self, s, cell):
@@ -774,9 +791,17 @@ def _origin_current(origin):
              and sys.modules.get(origin.name) is origin.module)
     # Pointer preservation only: link helper/type validation is repeated when
     # that fixed policy is actually used, not cached as permission for any work.
-    _require(tuple.__len__(origin) == 11
+    _require(tuple.__len__(origin) == 12
              and type(tuple.__getitem__(origin, 10)) is tuple
              and tuple.__len__(tuple.__getitem__(origin, 10)) == 5)
+    policy = tuple.__getitem__(origin, 10)
+    environment = tuple.__getitem__(policy, 0)
+    record = tuple.__getitem__(origin, 11)
+    _require(type(environment) is tuple and tuple.__len__(environment) == 8
+             and type(record) is tuple and tuple.__len__(record) == 3
+             and tuple.__getitem__(environment, 7) is record
+             and tuple.__getitem__(record, 0) is tuple.__getitem__(environment, 4)
+             and tuple.__getitem__(record, 1) is tuple.__getitem__(environment, 5))
     values = origin.namespace
     method = vars(GatewayEntryOwner).get("start")
     _require(type(method) is classmethod and type(origin.function) is FunctionType
@@ -1049,10 +1074,15 @@ def _capture_origin():
     _require(type(capture) is FunctionType and capture.__globals__ is link_namespace)
     link_policy = capture()
     seal()
+    _require(type_of(link_policy) is tuple_of and len_of(link_policy) == 5)
+    link_environment = tuple_of.__getitem__(link_policy, 0)
+    _require(type_of(link_environment) is tuple_of and len_of(link_environment) == 8)
+    audit_record = tuple_of.__getitem__(link_environment, 7)
+    _require(type_of(audit_record) is tuple_of and len_of(audit_record) == 3)
     _require(guard(link_policy) is link_policy)
     seal()
     fields = (__name__, module, values, file, spec, origin, loader,
-              owner_kind, function, function.__code__, link_policy)
+              owner_kind, function, function.__code__, link_policy, audit_record)
     actual = constructor(origin_kind, *fields)
     seal()
     _require(type(actual) is origin_kind and tuple.__len__(actual) == len(fields)

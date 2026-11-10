@@ -12,11 +12,14 @@ def test_actual_module_entry_keeps_the_capture_return():
     assert entry._origin_current(actual) is actual
     captured = tuple.__getitem__(actual, 10)
     assert entry._link_policy_current(captured) is captured
+    record = tuple.__getitem__(actual, 11)
+    assert record is captured[0][7]
+    assert record[0] is captured[0][4] and record[1] is captured[0][5]
 
 
 @pytest.mark.parametrize('fault', (
     'field_copy', 'need_alias', 'guard_alias', 'entry_dispatch',
-    'policy_factory_export', 'entry_slot',
+    'policy_factory_export', 'entry_slot', 'audit_record_copy',
 ))
 def test_entry_constructor_refuses_changed_originals_before_publication(monkeypatch, fault):
     from hmp_plugin import presentation_link_path_policy as policy
@@ -35,7 +38,9 @@ def test_entry_constructor_refuses_changed_originals_before_publication(monkeypa
     def changed(cls, *values):
         constructor_calls.append(True)
         if fault == 'field_copy':
-            values = (*values[:10], tuple(list(values[10])))
+            values = (*values[:10], tuple(list(values[10])), *values[11:])
+        elif fault == 'audit_record_copy':
+            values = (*values[:11], tuple(list(values[11])))
         result = actual_new(cls, *values)
         if fault == 'need_alias':
             monkeypatch.setattr(entry, '_require', foreign)
@@ -50,7 +55,7 @@ def test_entry_constructor_refuses_changed_originals_before_publication(monkeypa
         return result
 
     monkeypatch.setattr(kind, '__new__', staticmethod(changed))
-    expected_error = entry.GatewayEntryError if fault == 'field_copy' else RuntimeError
+    expected_error = entry.GatewayEntryError if fault in ('field_copy', 'audit_record_copy') else RuntimeError
     with pytest.raises(expected_error):
         entry._capture_origin()
     assert constructor_calls == [True] and foreign_calls == []
@@ -102,6 +107,8 @@ from hmp_startup import gateway_entry as original_entry_module
 actual_lineage = GatewayEntryOwner._native_file_lineage(entry)
 actual_capture = tuple.__getitem__(original_entry_module._ENTRY_ORIGIN, 10)
 assert tuple.__getitem__(actual_lineage, 4) is actual_capture
+assert tuple.__getitem__(actual_lineage, 5) is tuple.__getitem__(original_entry_module._ENTRY_ORIGIN, 11)
+assert tuple.__getitem__(actual_lineage, 5) is actual_capture[0][7]
 assert original_entry_module._link_policy_current(actual_capture) is actual_capture
 assert original_entry_module._origin_current(original_entry_module._ENTRY_ORIGIN) is original_entry_module._ENTRY_ORIGIN
 ''', 1)
@@ -113,10 +120,11 @@ def test_old_lineage_constructor_keeps_nonadmitting_default():
     # Compatibility DATA only. No original entry/ledger or link grant is minted.
     lineage = entry._NativeFileLineage(object(), object(), (), object())
     assert tuple.__getitem__(lineage, 4) is None
+    assert tuple.__getitem__(lineage, 5) is None
 
 
 @pytest.mark.parametrize('fault', (
-    'origin_copy', 'link_copy', 'need_alias', 'owner_slot', 'raising', 'reentrant', 'tuple_new',
+    'origin_copy', 'link_copy', 'audit_copy', 'need_alias', 'owner_slot', 'raising', 'reentrant', 'tuple_new',
 ))
 def test_owner_constructor_cannot_replace_original_entry_or_replay(monkeypatch, fault):
     # Isolated pre-bootstrap fault controls. Never enter the real interpreter/
@@ -140,10 +148,12 @@ def test_owner_constructor_cannot_replace_original_entry_or_replay(monkeypatch, 
     def changed(cls):
         constructor_calls.append(True)
         owner = object.__new__(cls)
-        if fault in ('origin_copy', 'link_copy'):
+        if fault in ('origin_copy', 'link_copy', 'audit_copy'):
             changed_origin = (actual_origin._replace() if fault == 'origin_copy'
                               else actual_origin._replace(
-                                  link_policy=tuple(list(tuple.__getitem__(actual_origin, 10)))))
+                                  link_policy=tuple(list(tuple.__getitem__(actual_origin, 10))))
+                              if fault == 'link_copy' else actual_origin._replace(
+                                  audit_record=tuple(list(tuple.__getitem__(actual_origin, 11)))))
             replacements.append(changed_origin)
             monkeypatch.setattr(entry, '_ENTRY_ORIGIN', changed_origin)
         elif fault == 'need_alias':

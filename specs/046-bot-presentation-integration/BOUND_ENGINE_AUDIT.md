@@ -172,8 +172,9 @@ immutability, and the distinction between an original record and a coherent DATA
 copy. Independent bounded source review found no concrete issue in that subset.
 
 **This draft is not an integrated candidate.** The immediate parent now retains the literal record in environment field 7
-(environment width 8); remaining consumers must migrate. Original EntryOrigin/STARTED/CELL/lineage/
-Scope root custody, both publication windows and selectors remain incomplete.
+(environment width 8); remaining consumers must migrate. Original EntryOrigin/STARTED/CELL/lineage
+now retain the appended record, while Scope root custody, both publication
+windows and selectors remain incomplete.
 No lost-return/copy refusal, fast dispatch, startup, feature or deployment pass is
 claimed. BA2 stays unchecked. Do not deploy or merge this draft into the working
 media candidate until the coherent integration and its causal review are complete.
@@ -198,3 +199,26 @@ not independently rehash the reported test receipts. Private receipts:
 `/private/tmp/hq-6s1f9j83/receipt.json`, bound to HEAD b0502551 plus the tested
 source delta. EntryOrigin, lineage, Scope, final publication and selectors remain
 pending. Full BA2 and startup/deployment acceptance remain open.
+
+
+### BA2 original-entry/lineage checkpoint — November 10
+
+Original EntryOrigin appends audit_record at index11, NativeFileLineage at index5;
+existing link-policy indices10/4 remain unchanged. Entry capture retains the
+actual parent record before validation/constructor callbacks; the constructor's
+field-identity seal includes that record. Owner startup holds it before owner
+construction and passes it to the original lineage allocation. Invocation joins
+and original STARTED/CELL retained binding require the same record, without
+caching a generic validator verdict or enabling a fast path.
+
+Twenty focused cases pass on each Python 3.14.9 and 3.11.15 interpreter, source
+maps unchanged, no failures/errors/skips. They include original module entry,
+legacy nonadmitting defaults, entry-constructor coherent-record-copy refusal,
+and owner-constructor replacement/copy/lost-return/reentrant refusal before native
+bootstrap with no replay. Receipts: `/private/tmp/hq-590go5qa/receipt.json` and
+`/private/tmp/hq-c6e22gat/receipt.json`, tested HEAD5b8b709 plus source delta.
+Independent read-only source review found no introduced blocker in the entry/
+lineage production delta. Reported test receipts were not independently rehashed
+by that reviewer. The real-child lineage assertions were extended but that child
+was NOT executed in this tranche. Scope, both final publication windows and
+selectors still require migration, so full BA2/startup/deployment remain pending.

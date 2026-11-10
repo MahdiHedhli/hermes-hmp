@@ -1054,3 +1054,10 @@ pre/post record joins. Eight focused cases passed on each supported interpreter;
 independent bounded source review found no introduced issue. Original entry,
 lineage, Scope, final publication windows and selectors remain pending. BA2 is
 still unchecked; no startup or deployment qualification.
+
+BA2 entry/lineage progress (2026-11-10): append literal record at EntryOrigin11
+and lineage5; constructor/owner/invocation/STARTED-CELL identity joins added.
+Twenty focused cases passed on each supported interpreter, independent bounded
+production-source review found no introduced issue. Real-child lineage test
+extended but not executed here. Scope, both final publication seals and selectors
+remain incomplete; BA2 and deployment stay unqualified.
