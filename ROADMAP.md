@@ -1,3 +1,15 @@
+## November 10: selection helper original-root extension
+
+The retained-helper record now covers three loaded modules, ten classes and
+12 function/code/default/closure rows, with explicit defining-alias joins and
+refusal-constructor metadata. The actual early parent and both final publication
+seals apply the same checks. Same139 selected tests pass on current/minimum
+Python:120 local,18 actual publication causals,1 early-entry. Independent source
+review found no blocker within this scope. No audit was removed and no new import,
+setting or availability gate introduced. Late approval/import, mutable owner
+state and remaining dispatch/descriptor closure still precede consolidation.
+Full native/normal/service/image/device/release acceptance remains open.
+
 ## November 10: RBH-02 early parent and publication binding
 
 RBH-03's source-only inventory is now reproducible (seven modules, 22 selected

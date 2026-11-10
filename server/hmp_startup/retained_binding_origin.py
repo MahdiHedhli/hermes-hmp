@@ -10,12 +10,22 @@ from types import CellType, FunctionType, ModuleType
 
 
 _MODULES = ('hmp_plugin.presentation_gateway_package',
-            'hmp_plugin.presentation_gateway_recipe')
-_CLASSES = ((0, 'GatewayPackageOwner'), (0, '_Manifest'), (1, 'GatewayRecipeOwner'))
+            'hmp_plugin.presentation_gateway_recipe',
+            'hmp_plugin.presentation_startup_selection')
+_CLASSES = ((0, 'GatewayPackageOwner'), (0, '_Manifest'), (1, 'GatewayRecipeOwner'),
+            (2, 'StartupSelectionOwner'), (2, '_Scope'),
+            (2, '_ApprovedSelectionSource'), (2, 'GatewayStartupSelection'),
+            (2, 'SelectionLoadError'), (0, 'PackageInventoryError'),
+            (1, 'GatewayRecipeError'))
 _FUNCTIONS = ((0, 'GatewayPackageOwner', '_retained_binding'),
               (1, 'GatewayRecipeOwner', '_retained_binding'),
               (0, None, '_require'), (1, None, '_require'),
-              (1, None, '_same_recipe_binding'))
+              (1, None, '_same_recipe_binding'),
+              (2, 'StartupSelectionOwner', '_retained_binding'),
+              (2, None, '_approved_recipe'), (2, None, '_approval_binding'),
+              (2, None, '_require'), (2, 'SelectionLoadError', '__init__'),
+              (0, 'PackageInventoryError', '__init__'),
+              (1, 'GatewayRecipeError', '__init__'))
 
 
 class RetainedBindingOriginError(RuntimeError):
@@ -205,5 +215,18 @@ def current(packet):
     if (all(type(key) is str for key in modules[0][1])
           and modules[0][1].get('GatewayRecipeOwner') is classes[2][0]
           and modules[0][1].get('_same_recipe_binding') is functions[4][0]) is not True:
+        raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+    # Join the imported aliases to the same defining objects, not merely to an
+    # independently coherent snapshot in each importing module. The approval
+    # module imported inside _approval_binding remains a separate prerequisite.
+    if (all(type(key) is str for key in modules[0][1])
+          and all(type(key) is str for key in modules[1][1])
+          and modules[0][1].get('StartupSelectionOwner') is classes[3][0]
+          and modules[1][1].get('StartupSelectionOwner') is classes[3][0]
+          and modules[0][1].get('GatewayStartupSelection') is classes[6][0]
+          and modules[1][1].get('GatewayStartupSelection') is classes[6][0]
+          and modules[0][1].get('IoScope') is classes[4][0]
+          and modules[1][1].get('_Scope') is classes[4][0]
+          and modules[1][1].get('_approved_recipe') is functions[6][0]) is not True:
         raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
     return packet

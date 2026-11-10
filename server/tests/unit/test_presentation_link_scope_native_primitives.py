@@ -9,7 +9,7 @@ from .test_presentation_gateway_approval import operator_composed_script
 
 
 @pytest.mark.parametrize('publication', ('first', 'second'))
-@pytest.mark.parametrize('export', ('map', 'is_not', 'layout_graft', 'helper_graft', 'helper_checker', 'entry_getattribute', 'entry_subclass_dict'))
+@pytest.mark.parametrize('export', ('map', 'is_not', 'layout_graft', 'helper_graft', 'helper_checker', 'selection_code', 'selection_error_code', 'entry_getattribute', 'entry_subclass_dict'))
 def test_scope_publication_rejects_changed_primitive_or_layout_root(
         tmp_path, monkeypatch, request, publication, export):
     tree = ast.parse((base.SERVER / 'hmp_plugin/presentation_startup_artifacts.py').read_text())
@@ -44,13 +44,17 @@ original=getattr(module,export_name)
 assign=setattr
 observed=[];mutated=[];foreign_calls=[];held=[];registrations=[];successful_returns=[]
 hook_restore=[];class_restore=[];helper_restore=[];missing=object()
+helper_code_restore=[];late_helper_code=None
 
 def foreign(*args,**kwargs):
     foreign_calls.append(True)
     raise AssertionError('changed native primitive was dispatched')
 
 def observe(frame,event,value):
+    global late_helper_code
     if mutated:
+        if event=='call' and frame.f_code is late_helper_code:
+            foreign_calls.append(True)
         if event=='call' and frame.f_code is register_code and frame.f_back.f_code is retain_code:
             registrations.append(True)
         if event=='return' and frame.f_code is retain_code and value is held[0][0]:
@@ -85,6 +89,22 @@ def observe(frame,event,value):
             helper_restore.append((component,component.current))
             assign(component,'current',foreign)
             assert component.current is foreign
+        elif export in ('selection_code','selection_error_code'):
+            selected=sys.modules['hmp_plugin.presentation_startup_selection']
+            if export=='selection_code':
+                function=selected._approved_recipe
+                late_helper_code=foreign.__code__
+            else:
+                class ChangedError(Exception):
+                    def __init__(self,*args,**kwargs):
+                        __class__
+                        raise AssertionError('changed selection error dispatched')
+                function=selected.SelectionLoadError.__init__
+                late_helper_code=ChangedError.__init__.__code__
+            assert len(function.__code__.co_freevars)==len(late_helper_code.co_freevars)
+            helper_code_restore.append((function,function.__code__))
+            assign(function,'__code__',late_helper_code)
+            assert function.__code__ is late_helper_code
         elif export in ('layout_graft','helper_graft'):
             parent=context['link_origin']
             engine=parent[0][4]
@@ -143,6 +163,7 @@ except EntryFilesError as caught:
 finally:
     sys.setprofile(prior);sys.settrace(None)
     for component,previous in helper_restore:assign(component,'current',previous)
+    for function,previous in helper_code_restore:assign(function,'__code__',previous)
     for instance,entry_kind in class_restore:
         object.__setattr__(instance,'__class__',entry_kind)
     for entry_kind,previous in hook_restore:

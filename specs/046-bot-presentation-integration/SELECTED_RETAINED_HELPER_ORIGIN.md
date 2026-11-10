@@ -6,14 +6,16 @@ with component primitive/global/code/default bootstrap checks and inline selecte
 state seals at callback/publication boundaries. It supplies no reusable audit,
 permission or native-effect authority. Existing direct and nested audits remain.
 
-`server/hmp_startup/retained_binding_origin.py` reads only the two already loaded
-HMP package/recipe module objects. It retains module namespace/value identities,
-three exact class/member/base snapshots (package owner, manifest, recipe owner),
-and five selected function/code/globals/default/keyword-default/closure snapshots:
-the two retained-binding methods, their local require helpers and the shared
-recipe-binding comparator. It reads no host profile, configuration, file or
-provider data and executes none of those selected helpers. Namespace references
-are internal inspection DATA and must never become a public response.
+`server/hmp_startup/retained_binding_origin.py` reads the three already-loaded
+HMP package/recipe/selection modules. It retains namespace/value identities, ten
+exact class/member/base snapshots and twelve selected function/code/globals/
+default/keyword-default/closure rows. Selection's retained binding, approved-recipe,
+approval-binding and require helpers and all three refusal constructors now join
+the original two retained methods, require helpers and shared recipe comparator.
+Imported selection owners, scope/data types and approved-recipe must rejoin their
+same defining objects. It reads no host profile, configuration, file or provider
+data, imports no new target module and executes none of those selected helpers.
+Namespace references are internal inspection DATA, never a public response.
 
 Candidate collection contains no delegated Python helper calls before the checker.
 Its actual checker return must be the literal packet. Generic current() accepts
@@ -48,10 +50,13 @@ the initial test cleanup ordering error is fixed, not a production incident.
   helper predicate. This is bounded qualification, not the broader regression
   or full normal/native/service/device/release gate.
 - RBH-03: establish explicit transitive-helper coverage. The five selected code
-  rows do not cover code-only mutation of every imported helper, such as recipe's
-  approved-recipe or selection-owner methods. Use already qualified original
-  transitive bindings where demonstrated, or extend coverage. A module export
-  identity alone is insufficient for a whole-body execution claim.
+  rows from RBH-01 have now been extended to twelve: selection-helper and refusal
+  constructor code/closure coverage is implemented. The same139 selected tests
+  pass on both runtimes (120local,18actual publications,1early-entry), including
+  late code-only mutations at both publication boundaries. This still does not
+  cover the later approval import or complete activation/entry/descriptor/helper
+  closure. Reuse already qualified original transitive bindings only where their
+  actual root/coverage is demonstrated. Export identity alone is insufficient.
   The source-only seven-module/22-function inventory and mutable/late-key design
   are now recorded in RETAINED_HELPER_TRANSITIVE_SOURCE.md. Four tool causals pass
   on both runtimes with identical inventory output; runtime custody remains open.

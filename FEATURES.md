@@ -1,48 +1,40 @@
-## November 10 — helper record bound to startup; image delivery remains open
+## November 10 — selection helper binding verified; image delivery remains open
 
-The selected package/recipe helper record is now retained in the actual early
-parent environment (`env7`; the engine remains `engine6`). Component module,
-namespace, code/defaults, exception class and twelve inspection primitives are
-checked before dispatch. Selected helper state is checked again inline after the
-last engine-checker return and at both actual Scope publication boundaries.
-No direct or nested recipe audit has been removed, and no mutable permission or
-safety verdict is cached. This binds inspection DATA, not an image-serving grant.
+The actual early startup record now also holds the already-loaded selection
+module, its owner/scope/data classes, four retained-path helpers and the three
+package/recipe/selection refusal constructors. The record covers three module
+namespaces, ten classes and twelve function/code/default/closure rows. Imported
+selection owners, shared scope/data types and the approved-recipe alias must join
+the same defining objects. The actual parent and both final Scope seals apply
+the same new checks inline. Parent env7 and engine6 formats are unchanged.
 
-The next dependency review now has a reproducible source-only inventory covering
-seven modules and 22 selected functions, including local imports and changing
-startup cells. Four inventory-tool checks pass on both runtimes; this does not
-complete transitive runtime custody or make images available. See
-`specs/046-bot-presentation-integration/RETAINED_HELPER_TRANSITIVE_SOURCE.md`.
+The same **139 selected tests pass on Python 3.14.9 and 3.11.15**, with identical
+server source maps and case sets: 120 local controls, eighteen actual publication
+faults and one actual early-entry control. New cases cover code-only changes to
+selection helpers and refusal constructors, export/dispatch/default changes and
+inconsistent imported aliases already present before capture. At both actual
+publication points, changed selection helper/constructor code refuses without
+foreign dispatch, new native work, reservation change, subsequent registration
+or a successful retainer return. Independent source review found no blocker in
+this bounded extension; it did not perform runtime tests.
 
-The same **120 selected checks pass on Python 3.14.9 and 3.11.15**, with unchanged
-source and matching case sets: 105 local controls, fourteen actual publication
-fault cases and one actual early-entry control. They include foreign imported
-module refusal before namespace inspection; late checker/engine-return export
-and code drift; changed component metadata and builtin `all`; original entry and
-primitive refusals; and copied helper/parent grafts. Graft refusals can occur at
-the earlier independent entry-root join and are not misreported as proof of one
-particular new predicate. Faults preserve zero foreign calls, subsequent scope
-registration, successful retainer returns or new work/reservation changes.
-These are bounded source/startup checks, not physical or release acceptance.
+This is partial transitive provenance, not complete closure or image-serving
+authority. The later approval import, mutable approval/activation/entry state,
+remaining descriptor subcalls and wider dispatch/primitive closure still need
+original binding. No direct or nested recipe audit has been removed, no mutable
+verdict is cached, and no new module import, host setting or feature gate was
+introduced. The source-only dependency inventory remains review evidence only.
 
-The full native traversal exposed two old internal environment-shape checks;
-both now use the same new format. After those fixes, traversal again reaches
-actual native observations but still exceeds its unchanged 60-second deadline.
-Its last checkpoint has 44 typed observations, one retired raw capsule and zero
-close reservation. This subset is not full traversal, normal completion or a
-speed improvement. The earlier 327-check result belongs to the preceding source;
-the broader regression still needs qualification on this composition.
+The previous full native run on the preceding env7 source exceeded its unchanged
+60-second deadline after 44 typed observations and one retired raw capsule. It is
+not a full-native result for this new composition. No startup speed improvement,
+complete native/service/route pass, desktop character display or host-local image
+delivery is claimed. Complete integration and physical/release qualification
+remain open; no upstream-only image blocker has been demonstrated.
 
-Complete transitive-helper coverage remains required before any same-call audit
-consolidation. The selected record does not prove every imported helper's code.
-The original layout custody and fixed-width predicate optimization remain; the
-class-column vector experiment remains withheld. Full native/startup/service/
-route integration, desktop character/avatar display and host-local chat images
-remain unfinished. No upstream-only image blocker has been demonstrated.
-
-No host, device, permission, provider, model, job, installation or release was
-changed. LLY520's authorized update still needs its established connection.
-Prepared Android/iOS 2026110901 are not new device qualification.
+No host, device, permission, provider, model, job, installation or release changed.
+LLY520's authorized update still needs an established connection. Prepared
+Android/iOS 2026110901 are not newly installed or device-qualified by this work.
 
 # November 9: duplicate runtime checks removed; images still unqualified
 

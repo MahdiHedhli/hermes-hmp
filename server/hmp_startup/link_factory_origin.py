@@ -622,6 +622,8 @@ def current(origin, *, _type=type, _vars=vars, _tuple=tuple, _len=len,
                 raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
     if (_all((_type(helper_final_key) is _str for helper_final_key in helper_final_modules[0][1])) and helper_final_modules[0][1].get('GatewayRecipeOwner') is helper_final_classes[2][0] and (helper_final_modules[0][1].get('_same_recipe_binding') is helper_final_functions[4][0])) is not True:
         raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+    if (_all((_type(helper_final_key) is _str for helper_final_key in helper_final_modules[0][1])) and _all((_type(helper_final_key) is _str for helper_final_key in helper_final_modules[1][1])) and (helper_final_modules[0][1].get('StartupSelectionOwner') is helper_final_classes[3][0]) and (helper_final_modules[1][1].get('StartupSelectionOwner') is helper_final_classes[3][0]) and (helper_final_modules[0][1].get('GatewayStartupSelection') is helper_final_classes[6][0]) and (helper_final_modules[1][1].get('GatewayStartupSelection') is helper_final_classes[6][0]) and (helper_final_modules[0][1].get('IoScope') is helper_final_classes[4][0]) and (helper_final_modules[1][1].get('_Scope') is helper_final_classes[4][0]) and (helper_final_modules[1][1].get('_approved_recipe') is helper_final_functions[6][0])) is not True:
+        raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
     return origin
 
 

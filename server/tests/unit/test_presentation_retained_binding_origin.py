@@ -3,6 +3,7 @@ import pytest
 
 from hmp_plugin import presentation_gateway_package as package
 from hmp_plugin import presentation_gateway_recipe as recipe
+from hmp_plugin import presentation_startup_selection as selection
 from hmp_startup import retained_binding_origin as origin
 
 
@@ -204,3 +205,79 @@ def test_checker_callback_cannot_adopt_replacement_or_copy(monkeypatch, change):
     with pytest.raises(origin.RetainedBindingOriginError):
         origin.capture()
     assert observed == [True] and calls == []
+
+
+@pytest.mark.parametrize('module,owner,name', (
+    (selection, 'StartupSelectionOwner', '_retained_binding'),
+    (selection, None, '_approved_recipe'),
+    (selection, None, '_approval_binding'),
+    (selection, None, '_require'),
+    (selection, 'SelectionLoadError', '__init__'),
+    (package, 'PackageInventoryError', '__init__'),
+    (recipe, 'GatewayRecipeError', '__init__'),
+))
+def test_selected_code_only_drift_refuses_before_helper_or_error_dispatch(
+        monkeypatch, module, owner, name):
+    captured = origin.capture()
+    function = getattr(module if owner is None else getattr(module, owner), name)
+
+    def foreign(*args, **kwargs):
+        raise AssertionError('changed selected helper dispatched')
+
+    class ForeignError(Exception):
+        def __init__(self, *args, **kwargs):
+            # Match the original constructor's __class__ closure width; changing
+            # only code leaves its original class cell/function identity intact.
+            __class__
+            raise AssertionError('changed refusal constructor dispatched')
+
+    code = ForeignError.__init__.__code__ if name == '__init__' else foreign.__code__
+    assert len(code.co_freevars) == len(function.__code__.co_freevars)
+    monkeypatch.setattr(function, '__code__', code)
+    with pytest.raises(origin.RetainedBindingOriginError):
+        origin.current(captured)
+
+
+@pytest.mark.parametrize('drift', ('export', 'owner_dispatch', 'scope_dispatch',
+                                  'defaults', 'keyword_defaults'))
+def test_selection_exports_dispatch_and_metadata_refuse(monkeypatch, drift):
+    captured = origin.capture()
+    calls = []
+
+    def foreign(*args, **kwargs):
+        calls.append(True)
+        raise AssertionError('changed selection object dispatched')
+
+    if drift == 'export':
+        monkeypatch.setattr(selection, '_approval_binding', foreign)
+    elif drift == 'owner_dispatch':
+        monkeypatch.setattr(selection.StartupSelectionOwner, '__getattribute__', foreign,
+                            raising=False)
+    elif drift == 'scope_dispatch':
+        monkeypatch.setattr(selection._ApprovedSelectionSource, '__getattribute__', foreign,
+                            raising=False)
+    elif drift == 'defaults':
+        monkeypatch.setattr(selection._approval_binding, '__defaults__', (True,))
+    else:
+        monkeypatch.setattr(selection._approved_recipe, '__kwdefaults__', {'synthetic': True})
+    with pytest.raises(origin.RetainedBindingOriginError):
+        origin.current(captured)
+    assert calls == []
+
+
+@pytest.mark.parametrize('module,name', ((recipe, '_approved_recipe'),
+                                       (recipe, 'StartupSelectionOwner'),
+                                       (package, 'StartupSelectionOwner')))
+def test_initial_import_alias_must_join_its_actual_defining_object(monkeypatch, module, name):
+    calls = []
+
+    def foreign(*args, **kwargs):
+        calls.append(True)
+        raise AssertionError('inconsistent defining alias dispatched')
+
+    # The inconsistent value is present BEFORE capture. Independent per-module
+    # snapshots are individually coherent and cannot alone detect this mismatch.
+    monkeypatch.setattr(module, name, foreign)
+    with pytest.raises(origin.RetainedBindingOriginError):
+        origin.capture()
+    assert calls == []

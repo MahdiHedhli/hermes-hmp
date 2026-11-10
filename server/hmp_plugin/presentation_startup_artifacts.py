@@ -3778,6 +3778,8 @@ class StartupArtifactOwner:
                             raise error_type(owner) from None
                 if (link_helper_all((link_raw_type(link_hdata_key) is link_raw_str for link_hdata_key in link_hdata_modules[0][1])) and link_hdata_modules[0][1].get('GatewayRecipeOwner') is link_hdata_classes[2][0] and (link_hdata_modules[0][1].get('_same_recipe_binding') is link_hdata_functions[4][0])) is not True:
                     raise error_type(owner) from None
+                if (link_helper_all((link_raw_type(link_hdata_key) is link_raw_str for link_hdata_key in link_hdata_modules[0][1])) and link_helper_all((link_raw_type(link_hdata_key) is link_raw_str for link_hdata_key in link_hdata_modules[1][1])) and (link_hdata_modules[0][1].get('StartupSelectionOwner') is link_hdata_classes[3][0]) and (link_hdata_modules[1][1].get('StartupSelectionOwner') is link_hdata_classes[3][0]) and (link_hdata_modules[0][1].get('GatewayStartupSelection') is link_hdata_classes[6][0]) and (link_hdata_modules[1][1].get('GatewayStartupSelection') is link_hdata_classes[6][0]) and (link_hdata_modules[0][1].get('IoScope') is link_hdata_classes[4][0]) and (link_hdata_modules[1][1].get('_Scope') is link_hdata_classes[4][0]) and (link_hdata_modules[1][1].get('_approved_recipe') is link_hdata_functions[6][0])) is not True:
+                    raise error_type(owner) from None
 
                 link_pin_encoding_origin = link_pin_environment[3]
                 if link_raw_type(link_pin_encoding_origin) is not link_pin_types[9][0] or link_raw_tuple.__len__(link_pin_encoding_origin) != 7:
@@ -4228,6 +4230,8 @@ class StartupArtifactOwner:
                         except link_helper_value_error:
                             raise error_type(owner) from None
                 if (link_helper_all((link_raw_type(link_hdata_key) is link_raw_str for link_hdata_key in link_hdata_modules[0][1])) and link_hdata_modules[0][1].get('GatewayRecipeOwner') is link_hdata_classes[2][0] and (link_hdata_modules[0][1].get('_same_recipe_binding') is link_hdata_functions[4][0])) is not True:
+                    raise error_type(owner) from None
+                if (link_helper_all((link_raw_type(link_hdata_key) is link_raw_str for link_hdata_key in link_hdata_modules[0][1])) and link_helper_all((link_raw_type(link_hdata_key) is link_raw_str for link_hdata_key in link_hdata_modules[1][1])) and (link_hdata_modules[0][1].get('StartupSelectionOwner') is link_hdata_classes[3][0]) and (link_hdata_modules[1][1].get('StartupSelectionOwner') is link_hdata_classes[3][0]) and (link_hdata_modules[0][1].get('GatewayStartupSelection') is link_hdata_classes[6][0]) and (link_hdata_modules[1][1].get('GatewayStartupSelection') is link_hdata_classes[6][0]) and (link_hdata_modules[0][1].get('IoScope') is link_hdata_classes[4][0]) and (link_hdata_modules[1][1].get('_Scope') is link_hdata_classes[4][0]) and (link_hdata_modules[1][1].get('_approved_recipe') is link_hdata_functions[6][0])) is not True:
                     raise error_type(owner) from None
 
                 link_pin_encoding_origin = link_pin_environment[3]

@@ -1,8 +1,13 @@
 # RBH-03: retained-only source dependency review
 
-Status: source inventory implemented; original transitive custody and audit
-consolidation are not implemented. No runtime validator or availability gate
-changes in this increment.
+Status: source inventory and the already-loaded selection-helper custody layer
+are implemented. Complete transitive custody and audit consolidation remain open.
+The selection extension changes runtime integrity checks, not availability gates.
+The actual record now covers three modules, ten classes and twelve functions;
+same139 selected cases pass on both runtimes, including18actual publication faults.
+Source review found no blocker in that bounded extension. Later approval/import,
+mutable activation/entry state and remaining descriptor/dispatch closure are not
+qualified by that result. No audit has been removed or new target module imported.
 
 Reproduce without importing HMP or reading host configuration:
 

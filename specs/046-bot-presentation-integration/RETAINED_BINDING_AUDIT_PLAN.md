@@ -1,8 +1,10 @@
 # Same-call retained recipe audit consolidation — prerequisite review
 
 Status: RBH-01 selected-helper DATA and RBH-02 early-parent/scope binding are
-implemented with bounded source qualification. Transitive coverage and audit
-consolidation remain unimplemented. This is not an
+implemented with bounded source qualification. The already-loaded selection
+helpers and package/recipe/selection refusal constructors now have original-root
+code/closure checks, with same139 selected tests passing on both runtimes.
+Complete transitive coverage and audit consolidation remain open. This is not an
 authorization shortcut. See SELECTED_RETAINED_HELPER_ORIGIN.md.
 
 The actual EntryFileSnapshotOwner._pure_lineage calls the recipe retained-binding
