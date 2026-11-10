@@ -21,6 +21,8 @@ from .presentation_startup_artifacts import (
     _NativeScopeRegistration, _Scope, _native_descriptor_opened,
     _native_work_origin_tail, _native_work_registration_tail, _require,
     _runtime_current,
+    _native_walk_scope, _close_native_file_known, _prepare_native_link_open,
+    _native_descriptor_closed, ArtifactObservationError,
 )
 
 
@@ -43,6 +45,9 @@ class _LinkExecution(NamedTuple):
     budget: tuple
     fact: object
     after_state: object
+    actions: list
+    open_custody: list
+    closed: list
 
     def __repr__(self):
         return '<LinkExecution incomplete native traversal redacted>'
@@ -78,6 +83,29 @@ class _LinkBytesCommit(NamedTuple):
     def __repr__(self):
         return '<LinkBytesCommit actual raw-free length/count ACK redacted>'
 
+
+class _LinkAction(NamedTuple):
+    site: tuple
+    before: object
+    after: object
+    evidence: object
+
+    def __repr__(self):
+        return '<LinkAction literal original traversal handoff redacted>'
+
+
+class _LinkPathFinish(NamedTuple):
+    execution: _LinkExecution
+    outcome: tuple
+    actions: tuple
+    history: tuple
+    closed: tuple
+    count: tuple
+    budget: tuple
+
+    def __repr__(self):
+        return '<LinkPathFinish original closed traversal return redacted>'
+
 # Only these five aliases may use the shared module's namespace. The stage
 # selector validates both their retained kernel exports and these aliases.
 _produce_shared = metadata._produce_directory_metadata
@@ -85,6 +113,9 @@ _consume_shared = metadata._consume_directory_policy
 _ack_shared = metadata._ack_directory_policy
 _attached_shared = metadata._acked_directory_commit_tail
 _retired_shared = metadata._retired_directory_commit_tail
+_open_shared = StartupArtifactOwner._open
+_close_known_shared = _close_native_file_known
+_prepare_open_shared = _prepare_native_link_open
 
 
 def _engine_origin_tail(origin):
@@ -119,7 +150,8 @@ def _engine_origin_tail(origin):
     expected = (_LinkExecution, _LinkMetadataConsumer, _LinkMetadataCommit,
                 _NativeLinkMetadataResource, _LinkBytesConsumer, _LinkBytesCommit,
                 _NativeLinkBytesResource, metadata._LinkBytesOperation,
-                metadata._LinkBytesResult, metadata._LinkBytesReturn, _LinkRead)
+                metadata._LinkBytesResult, metadata._LinkBytesReturn, _LinkRead,
+                _LinkAction, _LinkPathFinish)
     _require(len(origin[1]) == len(expected))
     for row, selected in zip(origin[1], expected, strict=True):
         _require(type(row) is tuple and len(row) == 9 and row[0] is selected)
@@ -146,6 +178,7 @@ def _engine_origin_tail(origin):
               '_ack_shared': '_ack_directory_policy',
               '_attached_shared': '_acked_directory_commit_tail',
               '_retired_shared': '_retired_directory_commit_tail'}
+    effects = ('_open_shared', '_close_known_shared', '_prepare_open_shared')
     required_functions = (
         '_engine_origin_tail', '_execution_mirrors', '_opened_chain_tail', '_lifetime_tail',
         '_resource_tail', '_prepare_shared_consumer', '_latch_shared_consumer',
@@ -153,6 +186,8 @@ def _engine_origin_tail(origin):
         '_acked_shared_history', '_resource_bindings', '_byte_record_tail', '_make_shared_bytes_commit',
         '_commit_shared_bytes_tail', '_publish_shared_bytes_ack',
         '_acked_shared_bytes_history', *shared,
+        '_effect_pin', '_new_execution', '_append_action', '_finish_mirrors',
+        '_finish_path', '_drive_native_path', *effects,
     )
     _require(all(type(row) is tuple and len(row) == 7 and type(row[0]) is str
                  for row in origin[2])
@@ -170,6 +205,28 @@ def _engine_origin_tail(origin):
         if name in shared:
             _require(globals().get(name) is row[1])
             pin_function((shared[name], *row[1:]), kernel_names, shared[name])
+        elif name in effects:
+            _require(globals().get(name) is row[1] and type(row[1]) is FunctionType
+                     and row[1].__code__ is row[2] and row[1].__globals__ is row[3]
+                     and row[1].__defaults__ is row[4] and row[1].__kwdefaults__ is row[5]
+                     and type(row[6]) is tuple)
+            namespace = row[3]
+            _require(type(namespace) is dict and all(type(k) is str for k in namespace)
+                     and namespace.get('StartupArtifactOwner') is StartupArtifactOwner)
+            if name == '_open_shared':
+                _require(vars(StartupArtifactOwner).get('_open') is row[1])
+            elif name == '_close_known_shared':
+                _require(namespace.get('_close_native_file_known') is row[1])
+            else:
+                _require(namespace.get('_prepare_native_link_open') is row[1])
+            if row[5] is not None:
+                _require(type(row[5]) is dict and len(row[5]) == len(row[6])
+                         and all(type(k) is str for k in row[5])
+                         and all(type(pair) is tuple and len(pair) == 2 and type(pair[0]) is str
+                                 and pair[0] in row[5] and row[5][pair[0]] is pair[1]
+                                 for pair in row[6]))
+            else:
+                _require(len(row[6]) == 0)
         else:
             pin_function(row, globals(), name)
     required_kernel = (
@@ -258,6 +315,26 @@ def _execution_mirrors(execution):
              and execution.failed[0] is False
              and type(execution.finished) is list and len(execution.finished) == 1
              and type(execution.finished[0]) is bool)
+    _require(type(execution.actions) is list and type(execution.open_custody) is list
+             and type(execution.closed) is list and type(execution.budget) is tuple
+             and len(execution.budget) == 4
+             and execution.registration.native_ledger.counts is execution.budget[0]
+             and type(execution.budget[1]) is int and type(execution.budget[2]) is int
+             and type(execution.budget[3]) is tuple
+             and type(execution.budget[0]) is list and len(execution.budget[0]) == 2
+             and all(type(value) is int for value in execution.budget[0])
+             and execution.budget[0][0] >= execution.budget[1]
+             and execution.budget[0][1] == execution.budget[2] + len(execution.opened) - len(execution.closed)
+             and type(execution.cursor[0].position) is int
+             and 0 <= execution.cursor[0].position - len(execution.actions) <= 1)
+    # The shared caller validates its literal ACK before returning it to the
+    # driver. During that one handoff the policy is one step ahead of actions;
+    # only the actual acknowledged commit can explain that gap.
+    if len(execution.actions) != execution.cursor[0].position:
+        _require(execution.pending[0] is None and len(execution.history) > 0
+                 and type(execution.history[-1]) in (_LinkMetadataCommit, _LinkBytesCommit)
+                 and execution.history[-1].cursor is execution.cursor[0]
+                 and execution.history[-1].site == len(execution.actions))
     count = execution.count[0]
     _require(type(count) is tuple and len(count) == 3 and count[0] is owner
              and count[1] is reg.scope and type(count[2]) is int
@@ -867,3 +944,435 @@ def _acked_shared_bytes_history(owner, consumer, commit):
              and phase.current[0] in (phase.idle, phase.active, phase.pending))
     _native_work_registration_tail(owner, execution.registration)
     return commit
+
+
+def _effect_pin(origin, name):
+    """Return an already retained dependency, never nominate a current export."""
+    _engine_origin_tail(origin)
+    _require(type(name) is str)
+    rows = tuple(row for row in (*origin[2], *origin[3]) if row[0] == name)
+    _require(len(rows) == 1)
+    return rows[0][1]
+
+
+def _new_execution(owner, registration, path, hop, phase, index, before_state,
+                   start, observe):
+    """Bind one fixed path to its original Scope before any new file effect."""
+    _require(type(owner) is StartupArtifactOwner
+             and type(registration) is _NativeScopeRegistration
+             and type(phase) is int and phase in (0, 1)
+             and type(index) is int and type(observe) is bool)
+    scope = _native_walk_scope(owner, registration)
+    blueprint = tuple.__getitem__(scope, 17)
+    parent = tuple.__getitem__(registration.lineage, 4)
+    _require(type(parent) is tuple and len(parent) == 5
+             and type(blueprint) is parent[4][6][0]
+             and blueprint.owner is owner and blueprint.lineage is registration.lineage
+             and blueprint.origin is parent and blueprint.runtime is scope.runtime
+             and vars(owner).get('_count_cell') is start
+             and blueprint.runtime.count[0] is start
+             and type(path) is str)
+    # Lookup only: this provisional resource is never prepared or admitted.
+    # The kernel authenticates the independent early parent before selecting
+    # the engine; current module globals cannot create that parent authority.
+    lookup = _NativeLinkMetadataResource(owner, registration, None, None, None, (), None)
+    origin = metadata._closed_link_engine_origin(owner, lookup)
+    _engine_origin_tail(origin)
+    label = 'recheck' if not observe else 'before' if phase == 0 else 'after'
+    logical_index = len(blueprint.link.hops) if hop is None else index
+    rows = tuple(row for row in blueprint.rows
+                 if row.phase == label and row.index == logical_index)
+    _require(len(rows) == 1)
+    selected = rows[0]
+    _require(selected.path is path and selected.hop is hop
+             and (observe or phase == 1))
+    definitions = tuple(({'open': 0, 'fstat': 4, 'stat': 3, 'readlink': 5}[kind], name, parent)
+                        for kind, name, parent in policy._sites(selected))
+    cursor = policy._start(selected)
+    ledger = registration.native_ledger
+    _require(type(ledger.counts) is list and len(ledger.counts) == 2
+             and all(type(v) is int for v in ledger.counts)
+             and type(ledger.attempts) is list and ledger.inflight[0] is None
+             and ledger.failed[0] is False and ledger.failure[0] is None)
+    budget = (ledger.counts, ledger.counts[0], ledger.counts[1], tuple(ledger.attempts))
+    fact = after_state = baseline = None
+    if label != 'before':
+        _require(type(before_state) is _LinkSnapshot
+                 and blueprint.runtime.before[0] is before_state)
+        snapshot = before_state
+        if label == 'recheck':
+            after_state = blueprint.runtime.after[0]
+            fact = vars(owner).get('_fact_cell')
+            _require(type(after_state) is _LinkSnapshot)
+            snapshot = after_state
+        baseline = snapshot.target if hop is None else snapshot.links[logical_index][1]
+    values = (owner, registration, blueprint, origin, selected, definitions,
+              before_state, baseline, [start], [cursor], [None], [], [], [False],
+              [False], budget, fact, after_state, [], [], [])
+    kind, _, _, constructor, _, _, _, _, _ = origin[1][0]
+    execution = constructor(kind, *values)
+    _engine_origin_tail(origin)
+    _require(type(execution) is kind and tuple.__len__(execution) == len(values)
+             and all(tuple.__getitem__(execution, i) is value for i, value in enumerate(values)))
+    prior = vars(owner).get('_native_link_execution')
+    _require(prior is None or (type(prior) is _LinkExecution and prior.finished[0] is True))
+    vars(owner)['_native_link_execution'] = execution
+    _execution_mirrors(execution)
+    _native_work_registration_tail(owner, registration)
+    _engine_origin_tail(origin)
+    _execution_mirrors(execution)
+    return execution
+
+
+def _append_action(execution, site, before, after, evidence):
+    """Retain the literal driver return; stored history cannot repair its loss."""
+    _require(type(execution) is _LinkExecution and type(before) is policy._LinkPathCursor
+             and type(after) is policy._LinkPathCursor
+             and type(before.position) is int and type(after.position) is int
+             and type(execution.actions) is list and type(execution.definitions) is tuple
+             and type(execution.opened) is list and type(execution.history) is list
+             and type(execution.cursor) is list and len(execution.cursor) == 1
+             and type(site) is tuple and len(site) == 3 and type(site[0]) is int
+             and 0 <= before.position < len(execution.definitions)
+             and len(execution.actions) == before.position
+             and execution.definitions[before.position] is site
+             and after.predecessor is before and after.position == before.position + 1
+             and before.policy is after.policy is execution.policy)
+    if site[0] == 0:
+        _require(type(evidence) is tuple and len(evidence) == 2
+                 and type(evidence[0]) is _NativeOpenedDescriptor
+                 and evidence[0].fd is evidence[1]
+                 and execution.opened[-1] is evidence[0]
+                 and execution.cursor[0] is before)
+    else:
+        _require(type(evidence) is (_LinkBytesCommit if site[0] == 5 else _LinkMetadataCommit)
+                 and evidence.before is before and evidence.cursor is after
+                 and execution.cursor[0] is after
+                 and execution.history[-1] is evidence)
+    values = (site, before, after, evidence)
+    kind, _, _, constructor, _, _, _, _, _ = execution.origin[1][11]
+    action = constructor(kind, *values)
+    _engine_origin_tail(execution.origin)
+    _require(type(action) is kind and tuple.__len__(action) == len(values)
+             and all(tuple.__getitem__(action, i) is value for i, value in enumerate(values))
+             and len(execution.actions) == before.position
+             and execution.cursor[0] is (before if site[0] == 0 else after))
+    execution.actions.append(action)
+    if site[0] == 0:
+        execution.cursor[0] = after
+    _execution_mirrors(execution)
+    return action
+
+
+def _finish_mirrors(execution, outcome, actions, history, closed, count, budget):
+    """Closed original handoffs and budget, with no new native admission."""
+    _require(type(execution) is _LinkExecution)
+    _execution_mirrors(execution)
+    ledger = execution.registration.native_ledger
+    scope = execution.registration.scope
+    active = vars(scope.activation)
+    runtime = execution.blueprint.runtime
+    entry = vars(runtime.entry)
+    _require(active.get('_scope') is scope.activation_scope
+             and active.get('_ready') is True and active.get('_retired') is False
+             and active.get('_uncertain') is False
+             and active.get('_artifact_owner') is execution.owner
+             and active.get('_artifact_cell') is execution.registration.root
+             and entry.get('_failed') is False and entry.get('_unknown') is False
+             and entry.get('_inputs') is runtime.inputs
+             and entry.get('_root_cell') is runtime.cell)
+    _require(type(outcome) is tuple and len(outcome) == 3
+             and type(actions) is tuple and type(history) is tuple and type(closed) is tuple
+             and len(actions) == len(execution.definitions) == execution.cursor[0].position
+             and len(execution.actions) == len(actions)
+             and all(a is b for a, b in zip(actions, execution.actions, strict=True))
+             and len(execution.history) == len(history)
+             and all(a is b for a, b in zip(history, execution.history, strict=True))
+             and len(closed) == len(execution.closed) == len(execution.opened)
+             and all(a is b for a, b in zip(closed, execution.closed, strict=True))
+             and execution.pending[0] is None and execution.count[0] is count
+             and execution.budget is budget and ledger.counts is budget[0]
+             and ledger.counts[0] == budget[1] + len(actions) + len(closed)
+             and ledger.counts[1] == budget[2]
+             and ledger.inflight[0] is None and ledger.failed[0] is False
+             and ledger.failure[0] is None and ledger.phase.current[0] is ledger.phase.idle
+             and ledger.phase.result[0] is None)
+    actual_attempts = []
+    prior = None
+    sequence = 0
+    initial_count = count
+    byte_delta = 0
+    for ordinal, action in enumerate(actions):
+        _require(type(action) is _LinkAction and action.site is execution.definitions[ordinal]
+                 and type(action.before) is policy._LinkPathCursor
+                 and type(action.after) is policy._LinkPathCursor
+                 and type(action.before.position) is type(action.after.position) is int
+                 and action.before.position == ordinal and action.after.position == ordinal + 1
+                 and action.after.predecessor is action.before
+                 and (prior is None or action.before is prior)
+                 and action.before.policy is action.after.policy is execution.policy)
+        prior = action.after
+        if action.site[0] == 0:
+            returned = action.evidence
+            _require(type(returned) is tuple and len(returned) == 2
+                     and type(returned[0]) is _NativeOpenedDescriptor
+                     and returned[0].fd is returned[1])
+            actual_attempts.append(returned[0].allocation)
+        else:
+            commit = action.evidence
+            _require(type(commit) is (_LinkBytesCommit if action.site[0] == 5 else _LinkMetadataCommit)
+                     and sequence < len(history) and history[sequence] is commit
+                     and commit.sequence == sequence and commit.site == ordinal
+                     and commit.before is action.before and commit.cursor is action.after)
+            consumer = commit.consumer
+            _require(type(consumer) is (_LinkBytesConsumer if action.site[0] == 5
+                                       else _LinkMetadataConsumer))
+            operation = consumer.operation
+            _require(type(operation) is (metadata._LinkBytesOperation if action.site[0] == 5
+                                        else metadata._MetadataOperation)
+                     and type(operation.result) is (metadata._LinkBytesResult if action.site[0] == 5
+                                                     else metadata._MetadataResult)
+                     and type(operation.resource) is (_NativeLinkBytesResource if action.site[0] == 5
+                                                      else _NativeLinkMetadataResource)
+                     and all(type(cell) is list and len(cell) == 1 for cell in
+                             (consumer.commit, operation.result.acknowledged,
+                              operation.result.attempt, operation.result.consumer)))
+            _require(consumer.execution is execution and consumer.commit[0] is commit
+                     and operation.result.acknowledged[0] is commit
+                     and operation.result.attempt[0] is operation
+                     and operation.result.consumer[0] is consumer
+                     and operation.resource.site is action.site
+                     and operation.resource.execution is execution
+                     and consumer.predecessor is (None if sequence == 0 else history[sequence - 1]))
+            _require(type(consumer.custody) is tuple and len(consumer.custody) == 6
+                     and type(operation.state) is list and len(operation.state) == 3
+                     and operation.state[0] is operation.state[1] is True
+                     and operation.state[2] is False
+                     and type(operation.ended) is list and len(operation.ended) == 1
+                     and operation.ended[0] is True)
+            payload_origin, marker, link, slot, state, reference = consumer.custody
+            result = operation.result
+            _require(type(payload_origin) is metadata._PayloadOrigin
+                     and type(marker) is payload_origin.marker_type
+                     and marker.owner is execution.owner and marker.operation is operation
+                     and marker.consumer is None and marker.origin is payload_origin
+                     and result.custody_origin is payload_origin
+                     and type(link) is list and len(link) == 1 and link[0] is None
+                     and result.custody_link is marker.owner_link is link
+                     and type(slot) is list and len(slot) == 1 and slot[0] is marker
+                     and result.custody_slot is marker.marker_slot is slot
+                     and marker.state is state and type(state) is list and len(state) == 3
+                     and state[0] is state[1] is True and state[2] is False
+                     and marker.reference is reference
+                     and type(reference) is payload_origin.reference_type)
+            actual_attempts.append(operation)
+            if action.site[0] == 5:
+                _require(type(commit.length) is int and commit.length > 0
+                         and commit.record.acknowledgement is commit
+                         and commit.record.data is None and commit.record.unknown is False
+                         and commit.record.length is commit.length
+                         and commit.after_count is count
+                         and commit.before_count[2] + commit.length == count[2])
+                initial_count, byte_delta = commit.before_count, commit.length
+            sequence += 1
+    _require(prior is execution.cursor[0] and sequence == len(history)
+             and type(outcome[0]) is tuple and outcome[0] is prior.leaf
+             and type(outcome[1]) is tuple and len(outcome[1]) == len(prior.directories)
+             and outcome[2] is prior.link_length)
+    for index, row in enumerate(outcome[1]):
+        _require(type(row) is tuple and len(row) == 2
+                 and row[0] is execution.policy.components[index]
+                 and row[1] is prior.directories[index])
+    if execution.baseline is not None:
+        _require(outcome[:2] == execution.baseline)
+    expected_delta = (0 if execution.policy.hop is None or execution.policy.phase == 'recheck'
+                      else len(execution.policy.hop.target))
+    _require(byte_delta == expected_delta and count[2] == initial_count[2] + byte_delta
+             and len(ledger.attempts) == len(budget[3]) + len(actual_attempts)
+             and all(ledger.attempts[i] is row for i, row in enumerate(budget[3]))
+             and all(ledger.attempts[len(budget[3]) + i] is row
+                     for i, row in enumerate(actual_attempts)))
+    for descriptor, receipt in zip(reversed(execution.opened), closed, strict=True):
+        close = descriptor.close
+        _require(_native_descriptor_closed(descriptor, ledger)
+                 and type(receipt) is tuple and len(receipt) == 3
+                 and receipt[0] is close and receipt[1] is descriptor.fd and receipt[2] is None
+                 and close.result[0] is receipt and close.state[0] is True
+                 and close.state[1] is False and close.raw[0] is None)
+    return execution
+
+
+def _finish_path(execution):
+    _require(type(execution) is _LinkExecution and execution.finished[0] is False)
+    _engine_origin_tail(execution.origin)
+    outcome = policy._outcome(execution.cursor[0])
+    actions, history, closed = tuple(execution.actions), tuple(execution.history), tuple(execution.closed)
+    count, budget = execution.count[0], execution.budget
+    _finish_mirrors(execution, outcome, actions, history, closed, count, budget)
+    origin_check = _effect_pin(execution.origin, '_origin_tail')
+    for commit in history:
+        payload_origin, _, _, _, _, reference = commit.consumer.custody
+        origin_check(payload_origin)
+        _require(payload_origin.reference_callback.__get__(reference, payload_origin.reference_type) is None
+                 and payload_origin.reference_call(reference) is None)
+    _native_work_registration_tail(execution.owner, execution.registration)
+    _runtime_current(execution.blueprint.runtime, execution.owner)
+    _engine_origin_tail(execution.origin)
+    _finish_mirrors(execution, outcome, actions, history, closed, count, budget)
+    values = (execution, outcome, actions, history, closed, count, budget)
+    kind, _, _, constructor, _, _, _, _, _ = execution.origin[1][12]
+    finish = constructor(kind, *values)
+    _engine_origin_tail(execution.origin)
+    for commit in history:
+        payload_origin, _, _, _, _, reference = commit.consumer.custody
+        origin_check(payload_origin)
+        _require(payload_origin.reference_callback.__get__(reference, payload_origin.reference_type) is None
+                 and payload_origin.reference_call(reference) is None)
+    # Constructor and weak observations can retire/change a parent. Revisit
+    # the full current Scope/runtime authority after them, then repeat the
+    # pure finish mirrors; the earlier check is not a reusable grant.
+    _require(_native_walk_scope(execution.owner, execution.registration)
+             is execution.registration.scope)
+    _runtime_current(execution.blueprint.runtime, execution.owner)
+    _engine_origin_tail(execution.origin)
+    _finish_mirrors(execution, outcome, actions, history, closed, count, budget)
+    _require(type(finish) is kind and tuple.__len__(finish) == len(values)
+             and all(tuple.__getitem__(finish, i) is value for i, value in enumerate(values)))
+    execution.finished[0] = True
+    return finish
+
+
+def _drive_native_path(owner, registration, path, hop, phase, index, before_state,
+                       start, observe=True):
+    """Fixed traversal using the shared producer, with independent close custody.
+
+    This remains unreachable from the legacy caller until the early-origin and
+    snapshot publication integration is complete. It never serves file bytes.
+    """
+    execution = _new_execution(owner, registration, path, hop, phase, index,
+                               before_state, start, observe)
+    origin = execution.origin
+    open_call = _effect_pin(origin, '_open_shared')
+    prepare_open = _effect_pin(origin, '_prepare_open_shared')
+    close_call = _effect_pin(origin, '_close_known_shared')
+    run = _effect_pin(origin, '_run_directory_observation')
+    append = _effect_pin(origin, '_append_action')
+    finish_call = _effect_pin(origin, '_finish_path')
+    # Literal pre-C allocations survive lost open/constructor returns. These
+    # are cleanup evidence only; no receipt is reconstructed from a mutable
+    # holder, current descriptor registry or ledger.
+    custody = []
+    predecessor = None
+    failed = False
+    try:
+        for ordinal, site in enumerate(execution.definitions):
+            _engine_origin_tail(origin)
+            _execution_mirrors(execution)
+            _require(len(execution.actions) == ordinal
+                     and execution.cursor[0].position == ordinal)
+            before = execution.cursor[0]
+            opcode, name, parent_index = site
+            parent = None if parent_index is None else execution.opened[parent_index]
+            fd = None if parent is None else parent.fd
+            if opcode == 0:
+                allocation = prepare_open(owner, registration, name, fd)
+                _require(type(allocation) is _NativeOpenAllocation
+                         and allocation.owner is owner and allocation.registration is registration)
+                claim = (allocation, allocation.raw)
+                custody.append(claim)
+                execution.open_custody.append(claim)
+                _engine_origin_tail(origin)
+                returned = open_call(owner, name, fd, True, registration, allocation)
+                _require(type(returned) is tuple and len(returned) == 2
+                         and type(returned[0]) is _NativeOpenedDescriptor
+                         and type(returned[1]) is int and returned[0].fd is returned[1]
+                         and allocation is returned[0].allocation
+                         and claim[1] is returned[0].allocation.raw)
+                execution.opened.append(returned[0])
+                after = policy._advance(before, 'opened')
+                append(execution, site, before, after, returned)
+                returned = None
+                continue
+            record = encoded = None
+            if opcode == 4:
+                parent = execution.opened[name]
+                arguments = (parent.fd,)
+            elif opcode == 3:
+                arguments = (name, fd)
+            else:
+                _require(opcode == 5 and execution.policy.hop is not None)
+                parent_origin = execution.blueprint.origin
+                encoding_row = parent_origin[2][6]
+                _require(encoding_row[0] == 'encode_basename')
+                metadata._link_function_pin(encoding_row, encoding_row[3], 'encode_basename')
+                encoded = encoding_row[1](parent_origin, name)
+                _engine_origin_tail(origin)
+                _require(type(encoded) is parent_origin[4][10][0]
+                         and encoded[0] is parent_origin and encoded[1] is name
+                         and type(encoded[2]) is bytes)
+                arguments = (encoded[2], fd)
+                position = phase * len(execution.blueprint.link.hops) + index
+                kind, _, _, constructor, _, _, _, _, _ = origin[1][10]
+                record = constructor(kind, hop, phase, position, execution.count[0])
+                _engine_origin_tail(origin)
+                _require(type(record) is kind and record.hop is hop
+                         and record.phase is phase and record.index is position
+                         and record.before is execution.count[0]
+                         and len(execution.blueprint.runtime.reads) == position)
+                execution.blueprint.runtime.reads.append(record)
+            values = (owner, registration, execution, site, ordinal, arguments, parent)
+            resource_index = 3 if opcode != 5 else 6
+            if opcode == 5:
+                values = (*values, record, encoded)
+            kind, _, _, constructor, _, _, _, _, _ = origin[1][resource_index]
+            resource = constructor(kind, *values)
+            _engine_origin_tail(origin)
+            _require(type(resource) is kind and tuple.__len__(resource) == len(values)
+                     and all(tuple.__getitem__(resource, i) is value for i, value in enumerate(values)))
+            commit = run(owner, resource, predecessor)
+            _require(type(commit) is (_LinkBytesCommit if opcode == 5 else _LinkMetadataCommit)
+                     and commit.consumer.operation.resource is resource
+                     and commit.before is before)
+            append(execution, site, before, commit.cursor, commit)
+            predecessor = commit
+    except BaseException:
+        failed = True
+    finally:
+        # Cleanup consumes only original reserved close authority. Never replay
+        # an attempted close, including an ambiguous/lost close return.
+        for claim in reversed(custody):
+            try:
+                _require(type(claim) is tuple and len(claim) == 2
+                         and type(claim[0]) is _NativeOpenAllocation
+                         and type(claim[1]) is list and len(claim[1]) == 1
+                         and claim[0].raw is claim[1])
+                allocation, raw = claim
+                if allocation.close.state[0] is True:
+                    failed = True
+                    continue
+                if type(raw[0]) is not int:
+                    _require(raw[0] is None)
+                    continue
+                receipt = close_call(owner, allocation, raw[0], registration.native_ledger)
+                _require(type(receipt) is tuple and len(receipt) == 3
+                         and receipt[0] is allocation.close and receipt[1] is raw[0]
+                         and receipt[2] is None and allocation.close.result[0] is receipt)
+                execution.closed.append(receipt)
+            except BaseException:
+                failed = True
+        if failed:
+            execution.failed[0] = True
+            vars(owner)['_unknown'] = True
+    if failed:
+        raise ArtifactObservationError(owner) from None
+    try:
+        finish = finish_call(execution)
+        _require(type(finish) is _LinkPathFinish and finish.execution is execution)
+        return finish
+    except BaseException:
+        execution.failed[0] = True
+        vars(owner)['_unknown'] = True
+    # Raising outside the handler avoids retaining a foreign exception (and
+    # its traceback/data) as __context__ on this public refusal.
+    finish = None
+    raise ArtifactObservationError(owner) from None

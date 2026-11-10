@@ -1,25 +1,21 @@
-## Native-link acceptance baseline — November 9, 2026
+## Native-link integration — November 9, 2026
 
-The distinct op5 byte family and shared producer/count/ACK draft are now written.
-Keep it disabled until the actual path driver, finishes, snapshot/recheck and
-complete early code/property bindings are connected and tested together. Local
-memory checks and passing old Directory calls do not qualify actual op5 effects.
+The distinct op5 family and fixed-order traversal/finish driver are written as a
+disabled draft. Original pre-C open allocation is held independently by the
+caller across lost returns and reserved reverse cleanup. All path metadata and
+link bytes use the same shared operation kernel in the draft; no parallel
+producer or permissive absence fallback was added.
 
-Closed Link metadata resources/consumers, kernel branches and policy/commit
-projections now exist as an unwired draft. Existing early origins refuse them.
-Do not activate the engine or present packet/compatibility tests as completion:
-distinct op5, full traversal/finish/raw retirement, original core/property
-bindings and actual enabled-cohort tests remain in the same coupled task.
+Next: retain actual finishes through raw-free snapshots/fact/recheck, complete
+original early core/property/lifecycle binding, then qualify the admitted full
+path and failure matrix before connecting it. Existing env4 admission remains
+closed. Packet/accounting and isolated original-open checks are narrower than
+that acceptance. The current actual-startup legacy baseline is deliberately red;
+minimum-Python instrumentation timeout remains unqualified.
 
-The next implementation remains the complete native link traversal. A new
-actual-startup test reaches normal completion on current Python and deliberately
-fails metadata admission, link-read admission and raw-byte retirement. This
-does not qualify the path or finish character/image delivery. Minimum-Python
-instrumentation exceeded the unchanged child deadline; its native acceptance
-coverage remains missing. Implement the closed metadata and distinct byte-result
-lifecycles together, then carry actual finishes through snapshots/recheck/cleanup.
-Do not enable a detached link-read helper or replace existing security gates.
-See [contract](specs/046-bot-presentation-integration/EXECUTABLE_LINK_NATIVE_LIFECYCLE.md).
+Host/runtime, authenticated service, broker and physical mobile image delivery
+remain required. No installed feature or upstream blocker is established by this
+draft. See [contract](specs/046-bot-presentation-integration/EXECUTABLE_LINK_NATIVE_LIFECYCLE.md).
 
 ## Integrated startup verification — November 8, 2026
 

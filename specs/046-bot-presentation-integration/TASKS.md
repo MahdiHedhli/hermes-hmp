@@ -22,6 +22,12 @@
       actual op5 C-call, partial-store and complete path/finish qualification
       remain open. Do not rebuild these families or count local DATA tests as
       delivered images.
+      The fixed-order driver/finish draft is now written. It holds the actual
+      pre-C allocation independently and consumes reserved reverse close once,
+      including a lost open return. Review caught and corrected mutable-holder
+      adoption and finish exception-context retention. Full actual Link
+      history/snapshot/recheck and callback/constructor causals remain required;
+      this task is still open and the early engine remains disabled.
 
 - [x] **GR2-LINKS-L1** Explicit recipe2/interpreter2 document loader under original immutable version/root/IO/counter ownership, no detection/fallback/retry; D1 rejects recipe2 before artifact acquisition. Bounded independent source review accepted. This loads pinned DATA only.
 - [x] **GR2-LINKS-L2** Decode/retain the closed selected interpreter link plan against original entry/runtime bindings, canonical target/UID/executable-mode constraints and raw/normalized path policy. Preserve stricter pins during deduplication and reserve both text observations in the original limits. Independent source review accepted the plan boundary; actual completion is tracked separately in L3.

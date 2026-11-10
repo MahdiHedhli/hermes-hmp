@@ -1620,6 +1620,36 @@ def _descriptor_refused(row):
         row.unknown = True
 
 
+def _prepare_native_link_open(owner, registration, name, parent):
+    """Return this original open claim before C to the fixed link driver.
+
+    This performs no file effect. The caller must retain this literal return
+    independently for cleanup; a later ledger/cell lookup is not a substitute.
+    The normal _open admission still rechecks the actor and original parents.
+    """
+    _require(type(owner) is StartupArtifactOwner
+             and type(registration) is _NativeScopeRegistration
+             and type(name) is str and type(parent) in (int, type(None)))
+    native = _capture_native_work_origin(owner, registration)
+    scope = _native_walk_scope(owner, registration)
+    _require(native is not None and scope is registration.scope)
+    _native_relative_arguments(scope, name, parent)
+    flags = native.flags[0] | native.flags[1] | native.flags[2] | native.flags[3] | native.flags[4]
+    row = _Descriptor()
+    scope.records.append(row)
+    row.attempted = True
+    allocation = _allocate_native_file_open(owner, registration, parent, (name, flags, parent), row)
+    _require(type(allocation) is _NativeOpenAllocation
+             and allocation.owner is owner and allocation.registration is registration
+             and allocation.scope is scope and allocation.pending is row
+             and allocation.arguments[0] is name and allocation.arguments[1] == flags
+             and allocation.arguments[2] is parent and allocation.raw[0] is None
+             and allocation.result[0] is None and scope.records[-1] is row
+             and _native_file_allocation_original(allocation, registration.native_ledger)
+                 is allocation.close)
+    return allocation
+
+
 def _close_native_file_known(owner, allocation, fd, original_ledger):
     """Consume the original reserved cleanup, with no current-work-root lookup."""
     close = _native_file_allocation_original(allocation, original_ledger)
@@ -1666,11 +1696,13 @@ def _close_native_file_known(owner, allocation, fd, original_ledger):
         value = close_call(fd)
         close.raw[0] = value  # retain actual return before allocating receipt DATA
         _require(value is None)
-        close.result[0] = (close, fd, value)
+        receipt = (close, fd, value)
+        close.result[0] = receipt
         _require(_native_file_allocation_original(allocation, original_ledger) is close
                  and ledger.inflight is inflight and inflight[0] is close
                  and ledger.counts is counts and len(counts) == 2
                  and counts[0] is used_after and counts[1] is reserved_after)
+        return receipt
     except BaseException:
         if not actor_mismatch:
             if failure[0] is None:
@@ -3843,7 +3875,10 @@ class StartupArtifactOwner:
                  and s.activation._artifact_fact_cell is fact)
         return s
 
-    def _open(self, name, parent, directory, native_registration=None):
+    def _open(self, name, parent, directory, native_registration=None, prepared=None):
+        _require(prepared is None or
+                 (type(self) is StartupArtifactOwner and native_registration is not None
+                  and type(prepared) is _NativeOpenAllocation))
         native = _capture_native_work_origin(self, native_registration)
         open_call = None if native is None else native.operations[0]
         native_flags = None if native is None else native.flags
@@ -3856,11 +3891,20 @@ class StartupArtifactOwner:
         _native_relative_arguments(s, name, parent)
         if s.native_files is not None:
             _require(type(directory) is bool)
-        row = _Descriptor()
-        s.records.append(row)  # original descriptor allocation before open
+        if prepared is None:
+            row = _Descriptor()
+            s.records.append(row)  # original descriptor allocation before open
+            row.attempted = True
+        else:
+            _require(prepared.owner is self and prepared.registration is native_registration
+                     and prepared.scope is s and prepared.native is native
+                     and type(prepared.pending) is _Descriptor
+                     and s.records[-1] is prepared.pending
+                     and prepared.raw[0] is None and prepared.result[0] is None
+                     and prepared.refused[0] is False)
+            row = prepared.pending
         fd = None
-        allocation = None
-        row.attempted = True
+        allocation = prepared
         if native is None:
             flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK
             if directory:
@@ -3879,8 +3923,15 @@ class StartupArtifactOwner:
             if native is None:
                 open_call = os.open
             if native is not None:
-                allocation = _allocate_native_file_open(
-                    self, native_registration, parent, (name, flags, parent), row)
+                if prepared is None:
+                    allocation = _allocate_native_file_open(
+                        self, native_registration, parent, (name, flags, parent), row)
+                else:
+                    _require(allocation is prepared and type(directory) is bool and directory
+                             and prepared.arguments[0] is name
+                             and prepared.arguments[1] == flags
+                             and prepared.arguments[2] is parent
+                             and prepared.raw[0] is None and prepared.result[0] is None)
                 records = s.records
                 record_prefix = tuple(records)
                 record_index = len(record_prefix) - 1
@@ -3905,7 +3956,8 @@ class StartupArtifactOwner:
                              allocation, native_registration.native_ledger) is allocation.close
                          and _native_parent_descriptor(native_registration, name, parent)
                              is allocation.parent
-                         and allocation.ledger.inflight[0] is None)
+                         and allocation.ledger.inflight[0] is None
+                         and (prepared is None or allocation is prepared))
                 allocation.ledger.inflight[0] = allocation
             fd = open_call(name, flags, dir_fd=parent)
             if allocation is not None:
@@ -3940,7 +3992,8 @@ class StartupArtifactOwner:
                          and records is s.records and records[record_index] is row
                          and row is descriptor and row.close.state[0] is False
                          and row.close.state[1] is False
-                         and row.close.raw[0] is row.close.unset and row.close.result[0] is None)
+                         and row.close.raw[0] is row.close.unset and row.close.result[0] is None
+                         and (prepared is None or allocation is prepared))
             return row, fd
         except BaseException:
             _descriptor_refused(row)
@@ -3981,8 +4034,7 @@ class StartupArtifactOwner:
                      and s.native_files.ledger is registration.native_ledger
                      and row.fd is fd
                      and _native_descriptor_opened(row, registration.native_ledger) is row.close)
-            _close_native_file_known(self, row.allocation, fd, registration.native_ledger)
-            return
+            return _close_native_file_known(self, row.allocation, fd, registration.native_ledger)
         # Cleanup may run after a failed guard, but only on the original context.
         _require(type(s) is _Scope and type(s.context) is tuple and len(s.context) == 3
                  and all(type(v) is int for v in s.context))

@@ -114,6 +114,46 @@ gate stays closed. Complete the real driver/finishes/snapshot/recheck, original
 code/property bindings, interruption/cleanup matrix and physical/runtime gates
 before enabling image delivery.
 
+### Fixed driver draft and cleanup review
+
+The same disabled branch now contains `_drive_native_path`, a fixed-order
+driver using the existing shared observation caller for metadata and link bytes.
+It retains literal per-site returns and complete action/history/count/close
+inputs for `_LinkPathFinish`; that type is DATA, not a new work allowance.
+The caller first receives the actual `_prepare_native_link_open` allocation
+before the native open and keeps its original raw-return cell independently.
+The existing `_open` accepts that exact preparation and rechecks its original
+scope, parent, argument, actor and claim bindings before the file operation.
+This avoids recovering cleanup authority from a mutable post-effect holder.
+Reverse cleanup consumes only the actual original reserved close; an attempted
+or uncertain close is never repeated, nor is a missing open return retried.
+
+Bounded read-only review caught mutable-holder adoption, incomplete finish
+custody/descriptor checks, exception-context retention, and a missing authority
+recheck after the second weak observation. Those specific structures were
+corrected: actual pre-C allocation, original closed-descriptor and marker/link/
+state/reference checks, weak-death observation followed by fresh Scope/runtime
+validation and final mirrors, and fresh public refusal outside the exception
+handler. This is not independent approval of the complete coupled driver.
+
+The dedicated synthetic native-open fixture exercises the original C open and
+close without replacing either: normal return, loss of the open return, and
+revocation after open. It retains the original allocation before effects and
+asserts one open/one close, restored reserve, retained debit/attempt prefix, and
+no observer left installed. Its scope is deliberately narrower than actual
+all-phase Link admission, full finish/snapshot/recheck or physical image delivery.
+The same 202 selected cases pass on Python 3.14.9 and 3.11.15, with unchanged
+source, identical full footprints/case sets and verified log/XML hashes. Scope:
+198 local packet/encoding/accounting/fence controls, the three actual original
+prepared-open/close cases, and one existing Directory normal case. Full Link
+admission and snapshot/finish qualification do not follow from these results.
+
+Before wiring, complete raw-free snapshot/fact/recheck publication, independent
+early bindings for all original dependency/property/core authority, historical
+finish checks that survive later healthy work, and actual all-phase native
+Link/partial-store/return-loss/constructor/finalizer causals. The existing env4
+gate remains unchanged and rejects new Link resources. No service is enabled.
+
 Capture code/type/member/dispatch and all original immutable policy inputs in the
 pre-Scope factory, then seal actual constructor returns. Use a distinct fixed
 link resource/consumer on the canonical shared kernel; do not broaden the

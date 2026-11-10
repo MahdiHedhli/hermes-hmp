@@ -94,7 +94,10 @@ def packet():
              '_publish_shared_ack', '_acked_shared_history', '_produce_shared',
              '_consume_shared', '_ack_shared', '_attached_shared', '_retired_shared',
              '_resource_bindings', '_byte_record_tail', '_make_shared_bytes_commit', '_commit_shared_bytes_tail',
-             '_publish_shared_bytes_ack', '_acked_shared_bytes_history')
+             '_publish_shared_bytes_ack', '_acked_shared_bytes_history',
+             '_effect_pin', '_new_execution', '_append_action', '_finish_mirrors',
+             '_finish_path', '_drive_native_path', '_open_shared', '_close_known_shared',
+             '_prepare_open_shared')
     functions = tuple(_pin_function(name, vars(link)[name], vars(link)[name].__globals__)
                       for name in names)
     kernel_functions = tuple(_pin_function(name, function, function.__globals__)
@@ -112,13 +115,72 @@ def packet():
                   constructor.__globals__, constructor.__defaults__, kind.__bases__,
                   tuple((name, namespace.get(name)) for name in (
                       '__getattribute__', '__getattr__', '__setattr__', '__delattr__')))
-    types = (*types, record_pin)
+    types = (*types, record_pin, _pin_type(link._LinkAction), _pin_type(link._LinkPathFinish))
     return sys.modules[link.__name__], types, functions, kernel_functions
 
 
 def test_local_packet_validator_returns_the_actual_packet_without_admitting_work():
     original = packet()
     assert link._engine_origin_tail(original) is original
+
+
+@pytest.mark.parametrize('effect', ('_open_shared', '_close_known_shared', '_prepare_open_shared'))
+@pytest.mark.parametrize('fault', ('export', 'code', 'defaults', 'kwdefaults'))
+def test_cleanup_and_open_dependencies_cannot_be_renominated(monkeypatch, effect, fault):
+    original = packet()
+    calls = []
+
+    def replacement(*args, **kwargs):
+        calls.append('foreign effect')
+        raise AssertionError('foreign effect executed')
+
+    def changed_code(*args, **kwargs):
+        raise AssertionError('changed effect executed')
+
+    function = getattr(link, effect)
+    if fault == 'export':
+        monkeypatch.setattr(link, effect, replacement)
+    elif fault == 'code':
+        monkeypatch.setattr(function, '__code__', changed_code.__code__)
+    elif fault == 'defaults':
+        monkeypatch.setattr(function, '__defaults__', ('SYNTHETIC',))
+    else:
+        monkeypatch.setattr(function, '__kwdefaults__', {'synthetic': True})
+    with pytest.raises(ArtifactObservationError):
+        link._engine_origin_tail(original)
+    assert calls == []
+
+
+@pytest.mark.parametrize('stage', ('driver', 'finish', 'action'))
+def test_driver_entry_refuses_foreign_owners_before_any_effect_or_protocol(stage):
+    calls = []
+    foreign = Foreign(calls)
+    with pytest.raises(ArtifactObservationError):
+        if stage == 'driver':
+            link._drive_native_path(foreign, foreign, foreign, foreign, 0, 0, None, None)
+        elif stage == 'finish':
+            link._finish_path(foreign)
+        else:
+            link._append_action(foreign, foreign, foreign, foreign, foreign)
+    assert calls == []
+
+
+@pytest.mark.parametrize('field', ('actions', 'definitions', 'opened', 'history'))
+def test_action_handoff_fences_replaced_collections_before_protocols(field):
+    from .test_presentation_link_path_policy import _at
+
+    calls = []
+    before = _at(0)
+    after = link.policy._advance(before, 'opened')
+    values = [None] * len(link._LinkExecution._fields)
+    for name, value in dict(actions=[], definitions=((0, '/', None),), opened=[],
+                            history=[], cursor=[before]).items():
+        values[link._LinkExecution._fields.index(name)] = value
+    values[link._LinkExecution._fields.index(field)] = Foreign(calls)
+    execution = link._LinkExecution(*values)
+    with pytest.raises(ArtifactObservationError):
+        link._append_action(execution, (0, '/', None), before, after, None)
+    assert calls == []
 
 
 @pytest.mark.parametrize('fault', ('export', 'code', 'defaults', 'kwdefaults', 'foreign_key'))

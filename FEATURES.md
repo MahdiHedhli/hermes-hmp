@@ -1,25 +1,27 @@
-# November 9: native image traversal remains unfinished
+# November 9: image traversal implementation remains unqualified
 
-The disabled draft now includes distinct link-byte handling on the same operation
-lifecycle, with count auditing and raw-free ACK projections. Selected synthetic
-accounting and existing Directory compatibility pass on both Python versions;
-actual link-byte admission and complete traversal are not yet qualified. No image
-service, host or device was enabled by this work.
+The disabled Link branch now includes the complete fixed-order path driver and
+finish draft: original pre-operation open allocation, shared metadata/readlink
+caller, literal ACK history, byte accounting, and reverse one-attempt cleanup.
+The driver retains the original open allocation before the file operation; it
+never recovers cleanup authority from a mutable holder or current ledger.
 
-The coupled branch now has a disabled Link metadata implementation on the shared
-operation kernel. Its early-engine gate stays closed; byte operations, complete
-traversal/finishes and runtime wiring are still required. Selected local guards
-and existing Directory compatibility pass on both Python versions. This is source
-progress, not an installed image feature or complete native qualification.
+This is still source work. Early-origin binding, raw-free snapshot/fact/recheck
+publication, complete lifecycle/property seals and admitted full-path causal
+qualification remain unfinished. Existing origins continue refusing the new
+Link family. No image route is enabled and no host or device was updated.
 
-The draft native-link branch now has an actual-startup acceptance test covering
-the real link-path filesystem calls. On Python 3.14.9 startup completes, but the
-test exposes missing typed admission for 129 metadata/two link-read calls and
-retained raw link bytes. The test is intentionally red; it adds no working phone
-feature. Minimum-Python instrumentation timed out and is not qualified. Complete
-the coupled native traversal, service/runtime and physical delivery before
-claiming desktop character or host-local chat images. No host/device update or
-image enablement occurred. See [remaining work](specs/046-bot-presentation-integration/EXECUTABLE_LINK_NATIVE_LIFECYCLE.md).
+The same 202 selected checks pass on Python 3.14.9 and 3.11.15 with matching
+source and case sets: 198 local controls, three actual prepared-open/cleanup
+cases and one existing Directory normal case. These do not qualify the full
+Link driver, snapshots, runtime or phone display.
+
+The actual-startup acceptance baseline remains deliberately red: current Python
+observed 129 untyped metadata calls, two untyped link reads and retained raw link
+bytes on the legacy caller. Minimum-Python observer timing remains unqualified.
+Local packet/accounting checks and isolated original open/close tests cannot
+substitute for the complete path, runtime or physical image acceptance.
+See [remaining work](specs/046-bot-presentation-integration/EXECUTABLE_LINK_NATIVE_LIFECYCLE.md).
 
 # November 8: shared original file lineage under source qualification
 
