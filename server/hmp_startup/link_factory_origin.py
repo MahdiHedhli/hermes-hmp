@@ -647,6 +647,8 @@ def current(origin, *, _type=type, _vars=vars, _tuple=tuple, _len=len,
             raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
     if (_all((_type(helper_final_key) is _str for helper_final_key in helper_final_modules[5][1])) and helper_final_modules[5][1].get('GatewayActivationOwner') is helper_final_classes[10][0] and (helper_final_modules[5][1].get('_LATE_MODULES') is helper_final_modules[3][1].get('_LATE_MODULES')) and (helper_final_modules[5][1].get('ExpectedArtifact') is helper_final_classes[13][0]) and (helper_final_modules[5][1].get('_Scope') is helper_final_classes[4][0]) and (helper_final_modules[5][1].get('_descriptor_closed_in_scope') is helper_final_functions[15][0]) and (helper_final_modules[5][1].get('_OperatorFileReceipt') is helper_final_modules[4][1].get('_OperatorFileReceipt')) and (helper_final_modules[5][1].get('_ReadEffect') is helper_final_modules[4][1].get('_ReadEffect'))) is not True:
         raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+    if (_all((_type(helper_final_key) is _str for helper_final_key in helper_final_modules[6][1])) and helper_final_modules[5][1].get('GatewayEntryOwner') is helper_final_classes[27][0] and (helper_final_modules[6][1].get('GatewayActivationOwner') is helper_final_classes[10][0])) is not True:
+        raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
     return origin
 
 

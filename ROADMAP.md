@@ -1,3 +1,33 @@
+## November 10 — retained entry-validator origin
+
+The early helper record now includes the entry module, eleven entry/native-data
+classes and four retained-validator/error-constructor functions. It retains seven
+modules, 38 classes and 33 functions in the unchanged six-field DATA packet. The
+approval entry-owner alias and entry activation-owner alias join their defining
+held classes; the parent and both Scope final seals apply identical predicates.
+
+The entry origin key is explicitly None before capture, then the original bottom
+assignment publishes only its literal constructor return. Both import orders
+verify this transition and the final origin's ownership of the literal helper
+packet. Five fixed entry values remain live: owner, cell, started record,
+one-attempt flag and origin. Their keys and cardinality remain required, with no
+caller exclusions. DATA currentness does not prove any live value: original root,
+started/owner and one-attempt checks still refuse invalid states independently.
+
+Four actual post-checker/engine callback controls accepted changed entry code on
+the preceding source and now refuse it without executing the replacement.
+Thirty-one new local controls cover code/constructor closure, class dispatch,
+required live keys, forged exclusions, actual root/one-attempt refusal and aliases.
+The same **376 selected cases and full 68-case entry matrix pass on Python
+3.14.9 and 3.11.15**, with identical source maps and matching case sets (443
+unique cases; the normal entry case overlaps). Closed-plugin-surface passes.
+Independent source review found no new concrete blocker; it did not run tests or
+independently audit these receipts.
+This does not prove a coherent replacement of every live mirror safe; independent
+original caller/Scope custody remains essential. Remaining native/import/builtin/
+property dispatch, complete normal/native startup and device image delivery are
+still open. No audit, host setting, grant or deployment was changed.
+
 ## November 10 — retained approval-validator origin
 
 The early helper record now includes the already prepared approval module, four

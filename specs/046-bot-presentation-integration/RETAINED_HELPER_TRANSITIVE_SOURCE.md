@@ -1,3 +1,11 @@
+## November 10 — all explicit inventory rows now selected
+
+All 33 functions listed by the seven-file AST inventory now have selected helper
+metadata, including the four entry rows. This closes the explicit inventory list,
+not the transitive call graph. Nested constructors/properties, imports and other
+native/builtin dispatch remain separate prerequisites. No audit consolidation or
+complete startup qualification follows from inventory coverage alone.
+
 ## November 10 — approval rows now selected
 
 The static inventory still lists seven source files and 33 explicit functions;

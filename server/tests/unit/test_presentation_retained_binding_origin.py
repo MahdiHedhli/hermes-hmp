@@ -491,3 +491,112 @@ def test_approval_imports_join_original_defining_objects(monkeypatch, name):
     monkeypatch.setattr(approval, name, object())
     with pytest.raises(origin.RetainedBindingOriginError):
         origin.capture()
+
+
+@pytest.mark.parametrize('owner,name', (('GatewayEntryOwner', '_retained_binding'),
+    (None, '_native_file_ledger_shape'), (None, '_require'), ('GatewayEntryError', '__init__')))
+def test_entry_validator_code_drift_refuses_without_dispatch(monkeypatch, owner, name):
+    from hmp_startup import gateway_entry as entry
+    packet = origin.capture()
+    target = getattr(entry if owner is None else getattr(entry, owner), name)
+
+    def foreign(*args, **kwargs):
+        raise AssertionError('entry replacement dispatched')
+
+    class ForeignError(Exception):
+        def __init__(self, *args, **kwargs):
+            __class__
+            raise AssertionError('entry replacement constructor dispatched')
+
+    code = ForeignError.__init__.__code__ if target.__closure__ else foreign.__code__
+    assert len(code.co_freevars) == len(target.__code__.co_freevars)
+    monkeypatch.setattr(target, '__code__', code)
+    with pytest.raises(origin.RetainedBindingOriginError):
+        origin.current(packet)
+
+
+@pytest.mark.parametrize('name', ('GatewayEntryOwner', 'GatewayEntryError', '_Invocation',
+    '_EntryOrigin', 'EntryStartupData', '_InterpreterOrigin', 'InterpreterStartupData',
+    '_NativeIOOrigin', '_NativeFileLineage', '_NativeFileLedger', '_NativeFilePhase'))
+def test_entry_class_dispatch_drift_refuses_without_getter(monkeypatch, name):
+    from hmp_startup import gateway_entry as entry
+    packet = origin.capture()
+    calls = []
+
+    def foreign(*args):
+        calls.append(True)
+        raise AssertionError('entry field getter dispatched')
+
+    monkeypatch.setattr(getattr(entry, name), '__getattribute__', foreign, raising=False)
+    with pytest.raises(origin.RetainedBindingOriginError):
+        origin.current(packet)
+    assert calls == []
+
+
+@pytest.mark.parametrize('key', ('_OWNER', '_CELL', '_STARTED', '_START_ATTEMPTED', '_ENTRY_ORIGIN'))
+def test_entry_projection_requires_all_live_keys(monkeypatch, key):
+    from hmp_startup import gateway_entry as entry
+    packet = origin.capture()
+    monkeypatch.delattr(entry, key)
+    with pytest.raises(origin.RetainedBindingOriginError):
+        origin.current(packet)
+
+
+@pytest.mark.parametrize('key', ('_OWNER', '_CELL', '_STARTED', '_START_ATTEMPTED', '_ENTRY_ORIGIN'))
+def test_entry_static_projection_cannot_include_live_key(key):
+    packet = list(origin.capture())
+    rows = list(packet[3])
+    module, namespace, pairs = rows[6]
+    rows[6] = (module, namespace, ((key, namespace[key]), *pairs[1:]))
+    packet[3] = tuple(rows)
+    with pytest.raises(origin.RetainedBindingOriginError):
+        origin.current(tuple(packet))
+
+
+def test_entry_projection_does_not_authorize_changed_live_state(monkeypatch):
+    from hmp_startup import gateway_entry as entry
+    packet = origin.capture()
+    for key in ('_OWNER', '_CELL', '_STARTED', '_START_ATTEMPTED', '_ENTRY_ORIGIN'):
+        monkeypatch.setattr(entry, key, object())
+    assert origin.current(packet) is packet
+    owner = object.__new__(entry.GatewayEntryOwner)
+    with pytest.raises(entry.GatewayEntryError):
+        entry.GatewayEntryOwner._retained_binding(owner)
+
+
+@pytest.mark.parametrize('replacement', (None, object()))
+def test_entry_projection_cannot_authorize_a_changed_origin(monkeypatch, replacement):
+    from hmp_startup import gateway_entry as entry
+    packet = origin.capture()
+    original = entry._ENTRY_ORIGIN
+    assert entry._origin_current(original) is original
+    monkeypatch.setattr(entry, '_ENTRY_ORIGIN', replacement)
+    assert origin.current(packet) is packet
+    with pytest.raises(entry.GatewayEntryError):
+        entry._origin_current(original)
+
+
+def test_entry_projection_cannot_reopen_start_attempt(monkeypatch):
+    from hmp_startup import gateway_entry as entry
+    packet = origin.capture()
+    assert entry._OWNER is None and entry._CELL is None and entry._STARTED is None
+    monkeypatch.setattr(entry, '_START_ATTEMPTED', True)
+    assert origin.current(packet) is packet
+    with pytest.raises(entry.GatewayEntryError):
+        entry.GatewayEntryOwner.start()
+    assert entry._OWNER is None and entry._CELL is None and entry._STARTED is None
+    assert entry._START_ATTEMPTED is True
+
+
+@pytest.mark.parametrize('module,name', ((approval, 'GatewayEntryOwner'),))
+def test_approval_entry_alias_cannot_nominate_an_independent_owner(monkeypatch, module, name):
+    monkeypatch.setattr(module, name, object())
+    with pytest.raises(origin.RetainedBindingOriginError):
+        origin.capture()
+
+
+def test_entry_activation_alias_joins_original_owner(monkeypatch):
+    from hmp_startup import gateway_entry as entry
+    monkeypatch.setattr(entry, 'GatewayActivationOwner', object())
+    with pytest.raises(origin.RetainedBindingOriginError):
+        origin.capture()

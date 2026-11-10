@@ -14,12 +14,14 @@ _MODULES = ('hmp_plugin.presentation_gateway_package',
             'hmp_plugin.presentation_startup_selection',
             'hmp_plugin.presentation_gateway_activation',
             'hmp_plugin.presentation_startup_artifacts',
-            'hmp_startup.gateway_approval')
+            'hmp_startup.gateway_approval',
+            'hmp_startup.gateway_entry')
 # Only the listed activation/approval values change during owner allocation. Their
 # keys remain required; the original retained-scope body freshly joins their
 # values to its actual owner/scope. This DATA checker supplies no such authority.
 _LIVE_GLOBALS = ((), (), (), ('_ENTRY_OWNER', '_ENTRY_CELL'), (),
-                 ('_OWNER', '_CELL', '_ROOT', '_FACT'))
+                 ('_OWNER', '_CELL', '_ROOT', '_FACT'),
+                 ('_OWNER', '_CELL', '_STARTED', '_START_ATTEMPTED', '_ENTRY_ORIGIN'))
 _CLASSES = ((0, 'GatewayPackageOwner'), (0, '_Manifest'), (1, 'GatewayRecipeOwner'),
             (2, 'StartupSelectionOwner'), (2, '_Scope'),
             (2, '_ApprovedSelectionSource'), (2, 'GatewayStartupSelection'),
@@ -32,7 +34,12 @@ _CLASSES = ((0, 'GatewayPackageOwner'), (0, '_Manifest'), (1, 'GatewayRecipeOwne
             (4, '_NativeOpenedDescriptor'), (0, 'RetainedPackageData'),
             (0, '_Scan'), (1, '_Recipe'),
             (5, 'GatewayApprovalOwner'), (5, 'GatewayApprovalError'),
-            (5, '_RootSource'), (5, 'GatewayOperatorApproval'))
+            (5, '_RootSource'), (5, 'GatewayOperatorApproval'),
+            (6, 'GatewayEntryOwner'), (6, 'GatewayEntryError'),
+            (6, '_Invocation'), (6, '_EntryOrigin'), (6, 'EntryStartupData'),
+            (6, '_InterpreterOrigin'), (6, 'InterpreterStartupData'),
+            (6, '_NativeIOOrigin'), (6, '_NativeFileLineage'),
+            (6, '_NativeFileLedger'), (6, '_NativeFilePhase'))
 _FUNCTIONS = ((0, 'GatewayPackageOwner', '_retained_binding'),
               (1, 'GatewayRecipeOwner', '_retained_binding'),
               (0, None, '_require'), (1, None, '_require'),
@@ -54,7 +61,10 @@ _FUNCTIONS = ((0, 'GatewayPackageOwner', '_retained_binding'),
               (5, 'GatewayApprovalOwner', '_seal'),
               (5, 'GatewayApprovalOwner', '_closed_custody'),
               (5, None, '_require'), (5, None, '_same_entry'),
-              (5, None, '_api_state'), (5, 'GatewayApprovalError', '__init__'))
+              (5, None, '_api_state'), (5, 'GatewayApprovalError', '__init__'),
+              (6, 'GatewayEntryOwner', '_retained_binding'),
+              (6, None, '_native_file_ledger_shape'), (6, None, '_require'),
+              (6, 'GatewayEntryError', '__init__'))
 
 
 class RetainedBindingOriginError(RuntimeError):
@@ -304,5 +314,12 @@ def current(packet):
           and modules[5][1].get('_descriptor_closed_in_scope') is functions[15][0]
           and modules[5][1].get('_OperatorFileReceipt') is modules[4][1].get('_OperatorFileReceipt')
           and modules[5][1].get('_ReadEffect') is modules[4][1].get('_ReadEffect')) is not True:
+        raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+    # The root is staged before capture and published only by the original
+    # entry capture's literal return. DATA currentness does not approve a root
+    # value, a started allocation or the one-attempt flag; original validators do.
+    if (all(type(key) is str for key in modules[6][1])
+          and modules[5][1].get('GatewayEntryOwner') is classes[27][0]
+          and modules[6][1].get('GatewayActivationOwner') is classes[10][0]) is not True:
         raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
     return packet

@@ -442,3 +442,38 @@ def test_approval_helper_code_rejoined_after_later_callbacks(captured, monkeypat
     finally:
         sys.setprofile(None)
     assert observed == [True] and calls == []
+
+
+@pytest.mark.parametrize('boundary', ('component', 'engine'))
+@pytest.mark.parametrize('owner,method', (('GatewayEntryOwner', '_retained_binding'),
+                                        (None, '_native_file_ledger_shape')))
+def test_entry_helper_code_rejoined_after_later_callbacks(captured, monkeypatch, boundary, owner, method):
+    from hmp_startup import gateway_entry as entry
+
+    helper = captured[0][6]
+    boundary_code = (helper[3][1][2] if boundary == 'component' else
+                     next(row[2] for row in captured[0][4][2]
+                          if row[0] == '_engine_origin_tail'))
+    parent_code = origins.current.__code__
+    target = getattr(entry if owner is None else getattr(entry, owner), method)
+    observed, calls = [], []
+
+    def foreign(*args, **kwargs):
+        raise AssertionError('changed entry validator executed')
+
+    def observe(frame, event, value):
+        if event == 'call' and frame.f_code is foreign.__code__:
+            calls.append(True)
+        if (event == 'return' and frame.f_code is boundary_code
+                and frame.f_back.f_code is parent_code and not observed):
+            monkeypatch.setattr(target, '__code__', foreign.__code__)
+            observed.append(True)
+
+    assert sys.getprofile() is None
+    sys.setprofile(observe)
+    try:
+        with pytest.raises(RuntimeError, match='BI1_LINK_FACTORY_ORIGIN_REFUSED'):
+            origins.current(captured)
+    finally:
+        sys.setprofile(None)
+    assert observed == [True] and calls == []

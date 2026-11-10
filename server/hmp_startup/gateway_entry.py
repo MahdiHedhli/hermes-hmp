@@ -24,6 +24,8 @@ _OWNER = None
 _CELL = None
 _STARTED = None
 _START_ATTEMPTED = False
+# Required key during early helper capture; only the final literal return publishes it.
+_ENTRY_ORIGIN = None
 _VERSION_TYPE = type(sys.version_info)
 _FLAGS_TYPE = type(sys.flags)
 
