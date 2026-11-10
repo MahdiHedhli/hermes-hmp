@@ -1,3 +1,29 @@
+## November 10 — native startup still misses deadline; audit shortcut rejected
+
+The fresh isolated native-link contract on production source f98ede4 still timed
+out at the unchanged 60-second deadline. Its last checkpoint was path event 4 at
+53.62 seconds: 44 typed effects, one retired raw capsule, work 963 and reservation
+zero. This is a failed startup gate, not image delivery or installed acceptance.
+
+A new diagnostic on both supported Python runtimes confirms the package validator
+runs the original nested recipe audit once, alongside the current direct call,
+with the same held scope/manifest/binding and unchanged work/byte counters. Each
+measurement uses 24 samples on a known frozen fixture; it is not adversarial
+caller qualification or a timing pass threshold.
+
+| Python | Direct recipe median | Two selected checks | Two full parent checks |
+| --- | ---: | ---: | ---: |
+| 3.14.9 | 0.136 ms | 0.900 ms | 4.275 ms |
+| 3.11.15 | 0.144 ms | 0.945 ms | 3.989 ms |
+
+Both straightforward consolidation designs cost more than the audit they remove,
+even before extra caller authentication. Neither was implemented; production
+validation and every audit remain unchanged. Independent contract review also
+found no existing interface that can carry an earlier verdict across intervening
+callbacks safely. The next optimization must follow the measured hot owner/runtime
+guard call graph, with fresh checks and unchanged acceptance gates. Full startup,
+service/routes, device bot characters and host-local images remain unfinished.
+
 ## November 10 — native API metadata inspection avoids foreign hooks
 
 Native root-API metadata is now validated with exact dictionary key types before
