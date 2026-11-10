@@ -1083,3 +1083,10 @@ static live body omits only immutable layout parsing; generic fullvalidator and
 record3genericrow retained.124 selected cases pass current/minimum; independent
 source-only AST comparison accepted. Strict rooted parent/caller wiring still
 pending, no production selector calls newtarget; no integratedperformance pass.
+
+BA3 strict parent component (2026-11-10): appended original current_started row7,
+width8 contracts agree; original roots and livechecker provenance pre/post/final
+joins implemented, fullgeneric current retained. Review-found lateowner-class
+rejoin repaired with actual trapping-subclass callback control.213 selected cases
+pass each runtime. Production Scope/selectors still use generic path; coherent
+caller activation/all original engine sites and unchanged nativegate remain open.

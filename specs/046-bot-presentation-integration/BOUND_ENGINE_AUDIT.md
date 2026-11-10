@@ -363,3 +363,43 @@ The earlier122-case receipts hq-e7wj_yhn / hq-r0vdos61 remain historical partial
 This is not BA3 coherent integration or a demonstrated speedup. Strict rooted
 parent dispatch and actual publication/selector callers remain to implement;
 full native60s and fresh-probe/startup/feature/device/release gates remain open.
+
+
+### BA3 strict rooted parent body — source component, November 10
+
+The fixed `current_started` parent entrypoint is now appended at own-function
+row7 without moving rows0–6; all fixed parent-width contracts now require8 rows.
+`current` remains the complete generic capture/DATA entrypoint. The new body
+preserves the original parent/module/type/selected-helper checks, but before
+selecting the held live checker requires the actual captured entry module/classes,
+EntryOrigin, STARTED/CELL, owner invocation, native lineage and original record.
+A held native owner-dictionary descriptor avoids Python getter nomination. The
+live row's exact code/globals/builtins/defaults/keyword contents/closure are checked
+before direct original-engine/layout dispatch and again after the callback.
+Original roots are rejoined before dispatch, after return and before final return.
+Missing roots refuse; this is not an implicit generic fallback.
+
+Independent AST comparison found no original mutable statement omitted beyond the
+intended engine dispatch replacement. Review caught a missing exact owner-type
+recheck after the live callback; all four descriptor reseals now check the exact
+original type first. An actual callback changes the owner to a compatible subclass
+with trapping dictionary/getattribute hooks; exact refusal and zero hooks are
+asserted after native restoration. The draft was never deployed or selected by
+production callers. Bounded source correction and fixture fidelity were reviewed;
+execution receipts were not independently rehashed by the reviewer.
+
+213 selected cases pass on each Python3.14.9 and3.11.15, sources unchanged and
+zero failures/errors/skips: hq-ztj9szti / hq-1gn44cyv. The selection includes the
+complete factory DATA suite, earlier generic/live cases, real entry lineage, and
+real early started-root positive/negative controls. The latter assert literal
+engine/layout arguments, original STARTED/CELL witnesses, exact RuntimeError args,
+completed after-return mutations, and zero foreign calls. The first broader run
+(hq-8r5irsvp / hq-3v1blsq8) had two stale observer failures indexing engine6 instead
+of record3; only those test observers were migrated to field0, preserving their
+original earlier-helper-versus-later-engine code-substitution refusal assertions.
+
+No Scope/metadata selector chooses current_started yet. Remaining original generic
+engine calls also need a reviewed rooted dispatch path with fresh original-custody
+checks; do not replace arbitrary DATA calls or add fallback/cached verdicts.
+Both publication seals, actual selectors, their causal observers and unchanged
+native60s/full fresh-probe/startup gates remain to qualify before any BA3 acceptance.

@@ -614,7 +614,7 @@ def _closed_link_engine_origin(owner, resource):
     _require(type(parent) is tuple and len(parent) == 5)
     environment, own = parent[0], parent[2]
     _require(type(environment) is tuple and len(environment) == 8
-             and type(own) is tuple and len(own) == 7)
+             and type(own) is tuple and len(own) == 8)
     audit_record = tuple.__getitem__(lineage, 5)
     scope = registration.scope
     _require(type(registration.entry_module) is ModuleType)

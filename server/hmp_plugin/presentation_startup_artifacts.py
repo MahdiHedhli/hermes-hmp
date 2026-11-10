@@ -3696,7 +3696,7 @@ class StartupArtifactOwner:
                         raise refusal from None
                 if link_pin_modules[0][2].get('_CAPTURE_STARTED') is not True:
                     raise refusal from None
-                link_pin_own_names = ('_pin_function', '_pin_type', 'capture', 'current', 'factory', 'blueprint_factory', 'encode_basename')
+                link_pin_own_names = ('_pin_function', '_pin_type', 'capture', 'current', 'factory', 'blueprint_factory', 'encode_basename', 'current_started')
                 link_pin_policy_names = ('_need', '_parts', '_policy_tail', '_new_policy', '_sites', '_directory', '_leaf', '_cursor_tail', '_start', '_action', '_advance', '_outcome', '_scope_blueprint_guard', '_scope_blueprint_cohort', '_scope_blueprint_tail', '_new_scope_blueprint')
                 for link_pin_rows, link_pin_expected, link_pin_namespace in ((link_pin_own_functions, link_pin_own_names, link_pin_modules[0][2]), (link_pin_policy_functions, link_pin_policy_names, link_pin_modules[1][2])):
                     if link_raw_len(link_pin_rows) != link_raw_len(link_pin_expected):
@@ -4202,7 +4202,7 @@ class StartupArtifactOwner:
                         raise refusal from None
                 if link_pin_modules[0][2].get('_CAPTURE_STARTED') is not True:
                     raise refusal from None
-                link_pin_own_names = ('_pin_function', '_pin_type', 'capture', 'current', 'factory', 'blueprint_factory', 'encode_basename')
+                link_pin_own_names = ('_pin_function', '_pin_type', 'capture', 'current', 'factory', 'blueprint_factory', 'encode_basename', 'current_started')
                 link_pin_policy_names = ('_need', '_parts', '_policy_tail', '_new_policy', '_sites', '_directory', '_leaf', '_cursor_tail', '_start', '_action', '_advance', '_outcome', '_scope_blueprint_guard', '_scope_blueprint_cohort', '_scope_blueprint_tail', '_new_scope_blueprint')
                 for link_pin_rows, link_pin_expected, link_pin_namespace in ((link_pin_own_functions, link_pin_own_names, link_pin_modules[0][2]), (link_pin_policy_functions, link_pin_policy_names, link_pin_modules[1][2])):
                     if link_raw_len(link_pin_rows) != link_raw_len(link_pin_expected):

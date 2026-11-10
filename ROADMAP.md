@@ -37,6 +37,13 @@ fresh mutable-state and post-callback drift refusals. No production caller selec
 this body yet: strict rooted parent/caller wiring and original startup acceptance
 remain pending. This source step does not qualify character delivery or deployment.
 
+The strict started-root parent validator is now implemented separately from
+full generic validation, with original root and live-checker provenance checks
+across callbacks. All213 selected cases pass on both runtimes; a review-found late
+owner-class recheck was repaired and causally tested before deployment. Production
+selectors have not switched to it, so no startup speedup or character-delivery pass
+is claimed. Caller integration and the unchanged60-second gate remain next.
+
 ## November 10 — iPad development update installed; LB1 device checks remain
 
 The existing iPad Pro now has development build **2026110901**, installed once

@@ -226,7 +226,7 @@ def test_artifact_code_held_before_later_engine_capture_cannot_be_renominated(mo
         elif frame.f_code is engine_capture_code and reached:
             # Prove the later real engine capture accepted the changed code as
             # its own candidate. Only the earlier held record distinguishes it.
-            artifact = next(row for row in value[4][3]
+            artifact = next(row for row in value[0][4][3]
                             if row[0] == 'hmp_plugin.presentation_startup_artifacts')
             engine_adopted.append(any(row[0] is target and row[1] is forbidden_code.__code__
                                       for row in artifact[5]))
