@@ -26,7 +26,7 @@ stage('after_link_retention')
 original_scope_dispatch=vars(a._Scope).get('__getattribute__')
 original_blueprint_dispatch=vars(policy._LinkScopeBlueprint).get('__getattribute__')
 selected_return=2 if fault=='scope_dispatch_early' else 4
-original_current_code=actual_origins.current.__code__
+original_current_code=actual_origins.current_started.__code__
 original_ctor_code=a._Scope.__new__.__code__
 original_blueprint_code=policy._new_scope_blueprint.__code__
 original_retain_code=a.StartupArtifactOwner._retain.__func__.__code__

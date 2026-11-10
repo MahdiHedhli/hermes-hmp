@@ -1,48 +1,35 @@
 ## Desktop-character startup boundary — November 10, 2026
 
-The exact character source `15eeb14d` still fails its original 60-second native
-startup contract; the current-source receipt/log were revalidated rather than
-relabeling an older failure. This is an HMP implementation gate, not a demonstrated
-upstream-only limitation or a new phone delivery pass.
+The isolated `feat/bound-engine-custody-20261110` draft now connects actual retained
+Scope and metadata selectors to the captured strict started-root parent validator
+and fixed live checker. Full generic capture/DATA validators remain. Original
+EntryOrigin/STARTED/CELL, invocation, lineage, Scope and audit-record pointers are
+joined across callbacks; both callees' code/export/globals/builtins/default/keyword/
+closure provenance is rechecked after return. Independent review found and rechecked
+the postcallee correction. No live host or phone was updated by this source work.
 
-Independent architecture review accepted the next immutable-audit-record boundary:
-original factory-return identity must join EntryOrigin/STARTED/CELL, lineage, Scope
-and both publication windows before a fixed checker can omit immutable schema
-reparsing. Every mutable code/namespace/class/closure, authorization and resource
-check remains fresh. A two-runtime representation probe showed why a considered
-`partial` carrier is unsuitable as immutable state; an exact tuple DATA record
-with held fixed dispatch was selected instead. This freezes an implementation
-contract only: no optimization, reduced audit, wider deadline or production
-activation has been implemented. Full character/name/avatar delivery remains open.
+The final227-case selection passes on Python3.14.9 and3.11.15, including original publication
+record grafts and12 actual selector late-key/malformed/code/default/export refusal
+cases. Both source maps remain unchanged, with zero failures/errors/skips.
+A finite registration-class/field-getter gap was also corrected using held native
+tuple reads and original class-member snapshots, with actual getter-drift controls.
+The first integration attempts exposed two stale seven-row parent-width guards;
+both now require8 and positive factory/blueprint tests cover them. Those failed
+runs remain evidence, rather than being relabeled timing failures.
 
-The separately qualified `6796bfbb` local-image path must retain its later runtime
-and schema-4 fixes; the older character branch must not overwrite that deployment.
+The final-source native run, with no other qualification run active, reaches
+traversal but still times out at its unchanged60-second deadline. It reaches
+path event4 at51.02s with44 typed observations, one retired capsule and work963 /
+reserved0. Generic engine calls fall to2810 from the earlier8383, but this is not
+a demonstrated end-to-end speedup. Inclusive timings overlap; no intrinsic speedup is inferred from reduced counts. Other direct generic engine calls
+and repeated selected-helper audits remain; their mutable checks cannot be removed.
+A source-backed selected-helper immutable-layout extension needs its own reviewed
+original-capsule/root binding before implementation. No full BA3, startup,
+character delivery, physical-device, release or deployment pass is claimed.
 
-The isolated draft `feat/bound-engine-custody-20261110` now carries the original
-immutable record through its immediate parent, EntryOrigin, STARTED/CELL lineage,
-Scope, both final publication checks and selectors. All full generic checks remain;
-fast dispatch has not been enabled. The 115-case regression selection passes on
-Python 3.14.9 and 3.11.15, as do both real publication-window coherent-record-graft
-refusals. These establish bounded custody/refusal evidence, not full acceptance.
-Independent review caught and rechecked fixes for late entry-dictionary key fences
-and the appended fresh-probe Scope field. The real selector late-dictionary and
-malformed-entry controls pass on both Python 3.14.9 and 3.11.15. Full normal publication/native traversal still hits the unchanged
-60-second deadlines, including unobserved normal Scope completion on both runtimes.
-No timeout fix, complete character delivery, merge-ready or deployment claim is made.
-
-The next fixed live-checker body is now present in the isolated draft, with its
-own early-held function row. Independent AST comparison confirms only immutable
-layout parsing was omitted;124 selected cases pass on both runtimes, including
-fresh mutable-state and post-callback drift refusals. No production caller selects
-this body yet: strict rooted parent/caller wiring and original startup acceptance
-remain pending. This source step does not qualify character delivery or deployment.
-
-The strict started-root parent validator is now implemented separately from
-full generic validation, with original root and live-checker provenance checks
-across callbacks. All213 selected cases pass on both runtimes; a review-found late
-owner-class recheck was repaired and causally tested before deployment. Production
-selectors have not switched to it, so no startup speedup or character-delivery pass
-is claimed. Caller integration and the unchanged60-second gate remain next.
+The separately qualified working HMP `6796bfbb` media candidate must retain its
+later runtime and schema4 protections. Do not deploy this older character draft
+over it without coherent integration and complete acceptance.
 
 ## November 10 — iPad development update installed; LB1 device checks remain
 

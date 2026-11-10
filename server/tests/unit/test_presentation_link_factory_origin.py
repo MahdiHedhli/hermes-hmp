@@ -19,6 +19,8 @@ def captured(monkeypatch):
 def test_actual_capture_return_rejoins_without_calling_policy(captured):
     assert origins.current(captured) is captured
     assert origins.factory(captured) is policy._new_policy
+    assert origins.blueprint_factory(captured) is policy._new_scope_blueprint
+    assert policy._scope_blueprint_guard(captured) is captured
     assert tuple(row[0] for row in captured[1]) == (
         'hmp_startup.link_factory_origin', 'hmp_plugin.presentation_link_path_policy',
         'hmp_plugin.presentation_startup_artifacts', 'hmp_startup.runtime_files')

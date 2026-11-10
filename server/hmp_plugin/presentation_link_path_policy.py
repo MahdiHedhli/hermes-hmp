@@ -320,7 +320,7 @@ def _scope_blueprint_guard(origin):
     if type(origin) is not tuple or len(origin) != 5:
         raise ArtifactObservationError from None
     own = tuple.__getitem__(origin, 2)
-    if type(own) is not tuple or len(own) != 7:
+    if type(own) is not tuple or len(own) != 8:
         raise ArtifactObservationError from None
     row = tuple.__getitem__(own, 3)
     if (type(row) is not tuple or len(row) != 7 or type(row[0]) is not str or row[0] != 'current'

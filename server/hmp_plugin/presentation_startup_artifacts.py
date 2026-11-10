@@ -3407,7 +3407,7 @@ class StartupArtifactOwner:
                     raise refusal from None
                 # Raw pointer joins above derive the actual origin. Its fixed
                 # early current row is independently code/default pinned below.
-                current_row = link_origin[2][3]
+                current_row = link_origin[2][7]
                 blueprint_row = link_origin[2][5]
                 factory_row = link_origin[3][15]
                 tail_row = link_origin[3][14]

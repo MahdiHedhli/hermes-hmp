@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import sys
-from types import FunctionType, ModuleType, MemberDescriptorType
+from types import FunctionType, ModuleType, MemberDescriptorType, GetSetDescriptorType
 from typing import NamedTuple
 
 from .presentation_metadata_custody import (
@@ -607,8 +607,8 @@ def _closed_link_engine_origin(owner, resource):
              and type(tuple.__getitem__(resource, 1)) is _NativeScopeRegistration)
     registration = tuple.__getitem__(resource, 1)
     _native_work_registration_tail(owner, registration)
-    lineage = registration.lineage
-    _require(type(lineage) is registration.type_pins[0]
+    lineage = tuple.__getitem__(registration, 0)
+    _require(type(lineage) is tuple.__getitem__(registration, 11)[0]
              and tuple.__len__(lineage) == 6)
     parent = tuple.__getitem__(lineage, 4)
     _require(type(parent) is tuple and len(parent) == 5)
@@ -616,9 +616,9 @@ def _closed_link_engine_origin(owner, resource):
     _require(type(environment) is tuple and len(environment) == 8
              and type(own) is tuple and len(own) == 8)
     audit_record = tuple.__getitem__(lineage, 5)
-    scope = registration.scope
-    _require(type(registration.entry_module) is ModuleType)
-    entry_names = vars(registration.entry_module)
+    scope = tuple.__getitem__(registration, 2)
+    _require(type(tuple.__getitem__(registration, 12)) is ModuleType)
+    entry_names = vars(tuple.__getitem__(registration, 12))
     _require(type(entry_names) is dict and all(type(k) is str for k in entry_names))
     entry_origin = entry_names.get('_ENTRY_ORIGIN')
     _require(type(entry_origin) is entry_names.get('_EntryOrigin')
@@ -629,15 +629,74 @@ def _closed_link_engine_origin(owner, resource):
              and tuple.__getitem__(entry_origin, 11) is audit_record
              and audit_record[0] is environment[4]
              and audit_record[1] is environment[5])
-    current_row = own[3]
+    registration_kind = type(registration)
+    registration_rows = tuple(class_row for module_row in audit_record[0][4][3]
+                              for class_row in module_row[4]
+                              if class_row[0] is registration_kind)
+    _require(len(registration_rows) == 1)
+    registration_class = registration_rows[0]
+    # Original scope roots, held before either validator callback. Native tuple
+    # access and the held dictionary descriptor avoid nominating Python getters.
+    digest = tuple.__getitem__(scope, 9)
+    binding = tuple.__getitem__(digest, 1)
+    _require(type(binding) is tuple and len(binding) == 3)
+    invocation, started = binding[0], binding[2]
+    cell = entry_names.get('_CELL')
+    entry_owner = tuple.__getitem__(lineage, 0)
+    entry_kind = tuple.__getitem__(entry_origin, 7)
+    _require(type(entry_kind) is type and type(entry_owner) is entry_kind)
+    entry_kind_names = vars(entry_kind)
+    _require(all(type(k) is str for k in entry_kind_names))
+    entry_descriptor = entry_kind_names.get('__dict__')
+    entry_bases = entry_kind.__bases__
+    _require(type(entry_descriptor) is GetSetDescriptorType
+             and entry_descriptor.__objclass__ is entry_kind
+             and entry_descriptor.__name__ == '__dict__')
+    entry_owner_names = entry_descriptor.__get__(entry_owner, entry_kind)
+    _require(type(registration) is registration_kind and type(registration_kind) is type
+             and registration_kind.__bases__ is registration_class[1])
+    registration_names = vars(registration_kind)
+    _require(all(type(k) is str for k in registration_names)
+             and len(registration_names) == len(registration_class[2])
+             and all(k in registration_names and registration_names[k] is v
+                     for k, v in registration_class[2]))
+    _require(type(tuple.__getitem__(registration, 12)) is ModuleType
+             and vars(tuple.__getitem__(registration, 12)) is entry_names
+             and all(type(k) is str for k in entry_names)
+             and entry_names.get('_ENTRY_ORIGIN') is entry_origin
+             and entry_names.get('_STARTED') is started
+             and entry_names.get('_CELL') is cell
+             and entry_names.get('_OWNER') is entry_owner
+             and type(entry_owner) is entry_kind
+             and entry_kind.__bases__ is entry_bases
+             and all(type(k) is str for k in entry_kind_names)
+             and entry_kind_names.get('__dict__') is entry_descriptor
+             and type(entry_owner_names) is dict
+             and all(type(k) is str for k in entry_owner_names)
+             and entry_descriptor.__get__(entry_owner, entry_kind) is entry_owner_names
+             and entry_owner_names.get('_scope') is invocation
+             and entry_owner_names.get('_started_cell') is started
+             and entry_owner_names.get('_ready') is True
+             and entry_owner_names.get('_failed') is False
+             and type(started) is tuple and len(started) == 7
+             and started[0] is entry_owner and started[1] is invocation
+             and started[2] is cell and started[5] is entry_origin
+             and type(cell) is tuple and len(cell) == 2
+             and cell[0] is entry_owner and cell[1] is invocation
+             and tuple.__getitem__(invocation, 9) is lineage
+             and tuple.__getitem__(entry_origin, 10) is parent
+             and tuple.__getitem__(entry_origin, 11) is audit_record
+             and tuple.__getitem__(tuple.__getitem__(registration, 2), 18) is audit_record
+             and tuple.__getitem__(tuple.__getitem__(registration, 0), 5) is audit_record)
+    current_row = own[7]
     _require(type(current_row) is tuple and len(current_row) == 7)
     # Authenticate the first retained validator with primitives. Calling the
     # current exported pin helper here would let a replacement bootstrap itself.
     namespace = current_row[3]
     _require(type(namespace) is dict and all(type(k) is str for k in namespace)
-             and type(current_row[0]) is str and current_row[0] == 'current'
+             and type(current_row[0]) is str and current_row[0] == 'current_started'
              and type(current_row[1]) is FunctionType
-             and namespace.get('current') is current_row[1]
+             and namespace.get('current_started') is current_row[1]
              and current_row[1].__globals__ is namespace
              and current_row[1].__defaults__ is current_row[4]
              and current_row[1].__kwdefaults__ is current_row[5]
@@ -649,13 +708,69 @@ def _closed_link_engine_origin(owner, resource):
               and all(type(pair) is tuple and len(pair) == 2 and type(pair[0]) is str
                       and pair[0] in kw and kw[pair[0]] is pair[1]
                       for pair in current_row[6])))
+    _require(type(sys) is ModuleType and sys is environment[0]
+             and vars(sys) is environment[1] and all(type(k) is str for k in environment[2]))
+    builtin_module = environment[2].get('builtins')
+    _require(type(builtin_module) is ModuleType)
+    builtin_namespace = vars(builtin_module)
+    _require(all(type(k) is str for k in builtin_namespace))
     validator = current_row[1]
-    if (validator.__code__ is not current_row[2]
+    parent_namespace, parent_kw = namespace, kw
+    if (validator.__builtins__ is not builtin_namespace or validator.__closure__ is not None
+            or validator.__code__ is not current_row[2]
             or validator.__defaults__ is not current_row[4]
             or validator.__kwdefaults__ is not kw):
         raise ArtifactObservationError from None
     _require(validator(parent) is parent)
-    scope = registration.scope
+    _require(type(parent_namespace) is dict and all(type(k) is str for k in parent_namespace)
+             and parent_namespace.get('current_started') is validator
+             and validator.__code__ is current_row[2]
+             and validator.__globals__ is parent_namespace
+             and validator.__builtins__ is builtin_namespace
+             and validator.__closure__ is None
+             and validator.__defaults__ is current_row[4]
+             and validator.__kwdefaults__ is parent_kw
+             and type(parent_kw) is dict and all(type(k) is str for k in parent_kw)
+             and len(parent_kw) == len(current_row[6])
+             and all(type(pair) is tuple and len(pair) == 2 and type(pair[0]) is str
+                     and pair[0] in parent_kw and parent_kw[pair[0]] is pair[1]
+                     for pair in current_row[6]))
+    _require(type(registration) is registration_kind and type(registration_kind) is type
+             and registration_kind.__bases__ is registration_class[1])
+    registration_names = vars(registration_kind)
+    _require(all(type(k) is str for k in registration_names)
+             and len(registration_names) == len(registration_class[2])
+             and all(k in registration_names and registration_names[k] is v
+                     for k, v in registration_class[2]))
+    _require(type(tuple.__getitem__(registration, 12)) is ModuleType
+             and vars(tuple.__getitem__(registration, 12)) is entry_names
+             and all(type(k) is str for k in entry_names)
+             and entry_names.get('_ENTRY_ORIGIN') is entry_origin
+             and entry_names.get('_STARTED') is started
+             and entry_names.get('_CELL') is cell
+             and entry_names.get('_OWNER') is entry_owner
+             and type(entry_owner) is entry_kind
+             and entry_kind.__bases__ is entry_bases
+             and all(type(k) is str for k in entry_kind_names)
+             and entry_kind_names.get('__dict__') is entry_descriptor
+             and type(entry_owner_names) is dict
+             and all(type(k) is str for k in entry_owner_names)
+             and entry_descriptor.__get__(entry_owner, entry_kind) is entry_owner_names
+             and entry_owner_names.get('_scope') is invocation
+             and entry_owner_names.get('_started_cell') is started
+             and entry_owner_names.get('_ready') is True
+             and entry_owner_names.get('_failed') is False
+             and type(started) is tuple and len(started) == 7
+             and started[0] is entry_owner and started[1] is invocation
+             and started[2] is cell and started[5] is entry_origin
+             and type(cell) is tuple and len(cell) == 2
+             and cell[0] is entry_owner and cell[1] is invocation
+             and tuple.__getitem__(invocation, 9) is lineage
+             and tuple.__getitem__(entry_origin, 10) is parent
+             and tuple.__getitem__(entry_origin, 11) is audit_record
+             and tuple.__getitem__(tuple.__getitem__(registration, 2), 18) is audit_record
+             and tuple.__getitem__(tuple.__getitem__(registration, 0), 5) is audit_record)
+    scope = tuple.__getitem__(registration, 2)
     blueprint = tuple.__getitem__(scope, 17)
     _require(type(parent[4]) is tuple and len(parent[4]) >= 11
              and type(blueprint) is parent[4][6][0]
@@ -669,13 +784,13 @@ def _closed_link_engine_origin(owner, resource):
              and sys.modules.get('hmp_plugin.presentation_native_link') is origin[0])
     rows = tuple(row for row in origin[2]
                  if type(row) is tuple and len(row) == 7
-                 and type(row[0]) is str and row[0] == '_engine_origin_tail')
+                 and type(row[0]) is str and row[0] == '_engine_live_tail')
     _require(len(rows) == 1)
     row, namespace = rows[0], vars(origin[0])
-    _require(row is audit_record[2])
+    _require(audit_record[2][0] == '_engine_origin_tail')
     _require(all(type(k) is str for k in namespace)
              and type(row[1]) is FunctionType and row[3] is namespace
-             and namespace.get('_engine_origin_tail') is row[1]
+             and namespace.get('_engine_live_tail') is row[1]
              and row[1].__globals__ is namespace and row[1].__defaults__ is row[4]
              and row[1].__kwdefaults__ is row[5] and type(row[6]) is tuple)
     kw = row[5]
@@ -685,19 +800,85 @@ def _closed_link_engine_origin(owner, resource):
               and all(type(pair) is tuple and len(pair) == 2 and type(pair[0]) is str
                       and pair[0] in kw and kw[pair[0]] is pair[1] for pair in row[6])))
     check = row[1]
-    if (check.__code__ is not row[2] or check.__defaults__ is not row[4]
+    if (check.__builtins__ is not builtin_namespace or check.__closure__ is not None
+            or check.__code__ is not row[2] or check.__defaults__ is not row[4]
             or check.__kwdefaults__ is not kw):
         raise ArtifactObservationError from None
-    _require(check(origin) is origin)
-    _require(type(registration.entry_module) is ModuleType
-             and vars(registration.entry_module) is entry_names
+    _require(check(origin, audit_record[1]) is origin)
+    _require(type(origin[0]) is ModuleType and vars(origin[0]) is namespace
+             and all(type(k) is str for k in namespace)
+             and namespace.get('_engine_live_tail') is check
+             and check.__code__ is row[2] and check.__globals__ is namespace
+             and check.__builtins__ is builtin_namespace and check.__closure__ is None
+             and check.__defaults__ is row[4] and check.__kwdefaults__ is kw
+             and type(kw) is dict and all(type(k) is str for k in kw)
+             and len(kw) == len(row[6])
+             and all(type(pair) is tuple and len(pair) == 2 and type(pair[0]) is str
+                     and pair[0] in kw and kw[pair[0]] is pair[1] for pair in row[6]))
+    _require(type(parent_namespace) is dict and all(type(k) is str for k in parent_namespace)
+             and parent_namespace.get('current_started') is validator
+             and validator.__code__ is current_row[2]
+             and validator.__globals__ is parent_namespace
+             and validator.__builtins__ is builtin_namespace
+             and validator.__closure__ is None
+             and validator.__defaults__ is current_row[4]
+             and validator.__kwdefaults__ is parent_kw
+             and type(parent_kw) is dict and all(type(k) is str for k in parent_kw)
+             and len(parent_kw) == len(current_row[6])
+             and all(type(pair) is tuple and len(pair) == 2 and type(pair[0]) is str
+                     and pair[0] in parent_kw and parent_kw[pair[0]] is pair[1]
+                     for pair in current_row[6]))
+    _require(type(registration) is registration_kind and type(registration_kind) is type
+             and registration_kind.__bases__ is registration_class[1])
+    registration_names = vars(registration_kind)
+    _require(all(type(k) is str for k in registration_names)
+             and len(registration_names) == len(registration_class[2])
+             and all(k in registration_names and registration_names[k] is v
+                     for k, v in registration_class[2]))
+    _require(type(tuple.__getitem__(registration, 12)) is ModuleType
+             and vars(tuple.__getitem__(registration, 12)) is entry_names
+             and all(type(k) is str for k in entry_names)
+             and entry_names.get('_ENTRY_ORIGIN') is entry_origin
+             and entry_names.get('_STARTED') is started
+             and entry_names.get('_CELL') is cell
+             and entry_names.get('_OWNER') is entry_owner
+             and type(entry_owner) is entry_kind
+             and entry_kind.__bases__ is entry_bases
+             and all(type(k) is str for k in entry_kind_names)
+             and entry_kind_names.get('__dict__') is entry_descriptor
+             and type(entry_owner_names) is dict
+             and all(type(k) is str for k in entry_owner_names)
+             and entry_descriptor.__get__(entry_owner, entry_kind) is entry_owner_names
+             and entry_owner_names.get('_scope') is invocation
+             and entry_owner_names.get('_started_cell') is started
+             and entry_owner_names.get('_ready') is True
+             and entry_owner_names.get('_failed') is False
+             and type(started) is tuple and len(started) == 7
+             and started[0] is entry_owner and started[1] is invocation
+             and started[2] is cell and started[5] is entry_origin
+             and type(cell) is tuple and len(cell) == 2
+             and cell[0] is entry_owner and cell[1] is invocation
+             and tuple.__getitem__(invocation, 9) is lineage
+             and tuple.__getitem__(entry_origin, 10) is parent
+             and tuple.__getitem__(entry_origin, 11) is audit_record
+             and tuple.__getitem__(tuple.__getitem__(registration, 2), 18) is audit_record
+             and tuple.__getitem__(tuple.__getitem__(registration, 0), 5) is audit_record)
+    _require(type(registration) is registration_kind and type(registration_kind) is type
+             and registration_kind.__bases__ is registration_class[1])
+    registration_names = vars(registration_kind)
+    _require(all(type(k) is str for k in registration_names)
+             and len(registration_names) == len(registration_class[2])
+             and all(k in registration_names and registration_names[k] is v
+                     for k, v in registration_class[2]))
+    _require(type(tuple.__getitem__(registration, 12)) is ModuleType
+             and vars(tuple.__getitem__(registration, 12)) is entry_names
              and all(type(k) is str for k in entry_names))
-    _require(tuple.__getitem__(registration.scope, 17) is blueprint
-             and tuple.__getitem__(registration.lineage, 4) is parent
+    _require(tuple.__getitem__(tuple.__getitem__(registration, 2), 17) is blueprint
+             and tuple.__getitem__(tuple.__getitem__(registration, 0), 4) is parent
              and parent[0] is environment and environment[4] is origin
              and environment[7] is audit_record
-             and tuple.__getitem__(registration.scope, 18) is audit_record
-             and tuple.__getitem__(registration.lineage, 5) is audit_record
+             and tuple.__getitem__(tuple.__getitem__(registration, 2), 18) is audit_record
+             and tuple.__getitem__(tuple.__getitem__(registration, 0), 5) is audit_record
              and entry_names.get('_ENTRY_ORIGIN') is entry_origin
              and tuple.__getitem__(entry_origin, 11) is audit_record)
     return origin

@@ -1090,3 +1090,19 @@ joins implemented, fullgeneric current retained. Review-found lateowner-class
 rejoin repaired with actual trapping-subclass callback control.213 selected cases
 pass each runtime. Production Scope/selectors still use generic path; coherent
 caller activation/all original engine sites and unchanged nativegate remain open.
+
+BA3 actual caller activation (2026-11-10 draft): Scope link_rejoin row7 and actual
+closed metadata selector now use strict rooted parent/live checker, with original
+root+postcallee provenance reseals. Review-found postcallee gap repaired; own8
+schema guards corrected with blueprintfactory/guard positive controls. Final223
+current selection passed; minimum pending. Originalnative nowagain60stimeout,
+not initialsetuprefusal. Selected-helper immutable-layout candidate has explicit
+construction/root/callback/security requirements; not implemented or qualification.
+
+Final actualcaller checkpoint (2026-11-10): registration field/getter drift gap
+fixed with native tuple reads +original complete class predicates, reviewed and
+12actual late-selector cases included.227 selected cases pass each runtime,
+source unchanged. Finalsource originalnative run alone still60stimeout,44typed /
+event4/work963/reserved0; BA3/full startup/feature delivery remain unchecked.
+No live deploy or media6796 rollback; next immutableselected-helper layout needs
+its original capsule/root binding and complete causal acceptance.

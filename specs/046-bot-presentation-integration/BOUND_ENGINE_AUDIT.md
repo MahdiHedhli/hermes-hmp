@@ -403,3 +403,116 @@ engine calls also need a reviewed rooted dispatch path with fresh original-custo
 checks; do not replace arbitrary DATA calls or add fallback/cached verdicts.
 Both publication seals, actual selectors, their causal observers and unchanged
 native60s/full fresh-probe/startup gates remain to qualify before any BA3 acceptance.
+
+
+### BA3 actual Scope/selector activation draft — November 10
+
+Retained Scope link_rejoin now selects parent ownrow7 current_started; metadata's
+closed selector authenticates that row and the independently held live checker.
+It holds actual original STARTED/CELL/invocation/lineage/Scope record roots before
+callbacks, uses native owner-dictionary inspection with exact original class,
+and reseals roots plus both callees' complete provenance after return. No caller
+selects a current exported helper. Pre-entry and standalone current remain generic.
+Other direct generic engine calls remain unchanged.
+
+Review found the new metadata postcallback needed callee-provenance reseals in
+addition to roots; both parent/live code/export/globals/builtins/default/keyword/
+closure are now rechecked. Exact actual return-event code/default/export mutations
+have dedicated original-root journey cases. Local observer arming at the actual
+selector avoids unrelated global profiling. The record/negative assertions remain
+outside refusal handlers and foreign code frame events are counted independently.
+Bounded source correction and fixture fidelity were independently reviewed.
+
+Integration first failed before injection because blueprint_factory, then
+_scope_blueprint_guard retained the previous own-width7. Both were corrected to8,
+with positive generic entrypoint coverage. hq-ivmr3ycp/hq-teu_tomj and
+hq-cp5yfoxm/hq-3895w9t3 plus the selector failures hq-jrb_r4tp/hq-h3n3beox preserve
+those setup failures. Native hq-ihnk_bzp / hq-eqtiydf9 are early2–3second refusals,
+not timeouts. Final width-positive/two-graft controls pass on both runtimes:
+hq-78fh5hsx / hq-kobzecvf. Parent-return provenance reach case hq-9ewu5mn1 passes.
+
+The final current selection hq-cz1n8gu7 passes223 cases, no skips/errors/failures,
+sources unchanged; minimum run is active at this checkpoint. Original native
+hq-51u5_0w2 returns to60second timeout, reaching event4 at51.8047s with44 typed
+observations/dead capsule1/work963/reserved0. Generic engine calls2810 (earlier
+8383) and original parent80 (newparent not instrumented) do not close performance.
+Owner_guard inclusive31.31s/runtime7.72s overlap; native/regression runs overlapped,
+so no intrinsic timing comparison is claimed. All original native operation,
+retirement, close, startup, fresh-probe, feature and device gates remain intact.
+
+
+### Next candidate: selected-helper bound schema (not implemented)
+
+Independent source/performance review identified repeated selected-helper schema
+parsing as the next permitted slice, rather than deleting owner/parent/recipe
+audits. It requires a narrow additional construction contract before code:
+retain an actual selected packet/layout/live-checker return in an appended helper-
+capsule field, preserving existing indices. A literal layout binds original packet
+rows, immutable key/value columns and expected references. Its fixed livechecker
+row is held before callbacks and freshly authenticated by the original parent.
+Keep retained_binding_origin.current(packet) complete for capture/standalone DATA.
+
+Strict started callers must establish independently held original entry/root/
+capsule/layout pointer eligibility BEFORE selecting that livechecker; they cannot
+bootstrap eligibility from a matching packet or layout. No prior-success token,
+implicit generic fallback or cross-callback verdict. Both final Scope copies and
+post-engine parent seals need the same rooted immutable-only interpretation.
+Every7-module live key/cardinality/static identity/exclusion check,41-class bases/
+complete members/dispatch,33-function code/globals/builtins/default/keyword/closure
+and all cross-module aliases remains fresh. Counts refer to the current pinned
+schema and must be verified before implementation, not hardcoded as universal.
+
+Required causals include packet/layout/capsule/environment/invocation coherent
+grafts against independent EntryOrigin/STARTED/CELL at both publication windows;
+lost factory return with no recovery; checker provenance before/after callbacks;
+missing-None/colliding/GC-mutated keys, dynamic class/function/builtin/alias drift
+after earlier success; unchanged generic malformed DATA behavior. Current/minimum
+actual-root normal and original60s native gates remain mandatory. This candidate
+is not a guarantee of sufficient speedup and is not permission to remove audits.
+
+
+### Registration getter correction — experimental selector only
+
+Source review confirmed that exact NamedTuple registration instances still have
+mutable Python classes: a field property or __getattribute__ changed at the live
+checker return could execute during an attribute-based root rejoin. The older
+generic-selector final seal shared that pattern; this is not evidence of a newly
+exploited/deployed incident. The character draft has not been deployed.
+
+The closed selector now preholds its actual registration kind and original class
+row from the literal engine dependency table before validators. Registration
+field reads use native tuple.__getitem__; four callback/root fences require exact
+kind, original bases, full key types/cardinality and every original member identity
+before root use. This catches both same-key property replacements and added
+inherited dispatch hooks. No mutable schema or class-state verdict is cached.
+Independent finite source review accepted that correction and fixture fidelity.
+
+Actual live-return scope/lineage/entry_module property and __getattribute__ cases
+join the previous8 selector controls. Mutation completion, canonical roots,
+zero getter/foreign-frame hooks/effects and ledger/cleanup state are asserted
+outside handlers, after restoring class state. The current2case smoke passes
+hq-v7uc_gye, minimum smoke hq-b4vevh9m. Final227-case source qualification current
+passes hq-7ztfc_ig; minimum hq-3kewsfft is active at this checkpoint. Earlier223
+hq-cz1n8gu7 / hq-2rauat42 results predate this refinement; native60s failure
+hq-51u5_0w2 likewise belongs to that earlier executable snapshot, not a fresh
+full-normal run of the getter correction. Whole startup remains unproven.
+
+
+### Final activation source checkpoint — November 10
+
+Final227-case selections pass on both Python3.14.9 and3.11.15 with unchanged source
+maps and zero failures/errors/skips: hq-7ztfc_ig (current), hq-3kewsfft (minimum).
+These include all12 actual selector late-root/callee/registration-dispatch cases,
+both original publication record graft windows, full generic/factory DATA and
+actual started-parent/entry lineage controls. Registration getter correction is
+therefore verified for that bounded source/callback matrix, not a deployed incident.
+
+With other qualification runners terminal, the final exact-source original native
+contract hq-7f4l9y4c still fails at unchanged60s (one actual failure, source unchanged).
+It reaches path event4 at51.0161s,44 observed/typed, retired capsule1, work963 /
+reserved0. Generic engine2810, runtime5286, owner5276 and original-parent80 counts
+are diagnostics; completed inclusive times3.21s/7.65s/31.08s/0.19s overlap, and the
+new started/live helpers are not separately instrumented. This is not full native
+or startup acceptance and does not justify deleting any owner/parent/recipe audit.
+The next selected-helper immutable-layout proposal remains unimplemented; full
+fresh-probe, service, routes, character rendering, device and release gates stay open.

@@ -1908,7 +1908,7 @@ def blueprint_factory(origin, *, _type=type, _tuple=tuple, _len=len, _error=Runt
     if _type(origin) is not _tuple or _len(origin) != 5:
         raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
     rows = origin[2]
-    if _type(rows) is not _tuple or _len(rows) != 7:
+    if _type(rows) is not _tuple or _len(rows) != 8:
         raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
     row = rows[4]
     if (_type(row) is not _tuple or _len(row) != 7 or _type(row[0]) is not str
