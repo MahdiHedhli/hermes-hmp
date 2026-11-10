@@ -9,6 +9,12 @@
 
 ## Executable leaf-link integration
 
+- [ ] **LP3-NATIVE-ACCEPTANCE** Complete the coupled typed metadata/readlink path,
+      raw retirement and literal finish/snapshot/recheck publication. The new
+      actual-startup contract test is deliberately red on current Python;
+      minimum-Python instrumentation timed out, not a causal pass. No native
+      path/service/physical image completion follows from earlier DATA checks.
+
 - [x] **GR2-LINKS-L1** Explicit recipe2/interpreter2 document loader under original immutable version/root/IO/counter ownership, no detection/fallback/retry; D1 rejects recipe2 before artifact acquisition. Bounded independent source review accepted. This loads pinned DATA only.
 - [x] **GR2-LINKS-L2** Decode/retain the closed selected interpreter link plan against original entry/runtime bindings, canonical target/UID/executable-mode constraints and raw/normalized path policy. Preserve stricter pins during deduplication and reserve both text observations in the original limits. Independent source review accepted the plan boundary; actual completion is tracked separately in L3.
 - [x] **GR2-LINKS-L3** Retain descriptor-relative leaf-link observations before/after target hashing through the SAME original aggregate IO owner, charge both actual readlink observations, and verify the complete real-link/target refusal matrix. Hardlinks/ancestor links remain refused.

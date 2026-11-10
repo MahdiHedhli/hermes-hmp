@@ -2,7 +2,8 @@
 
 November 9, 2026. Source prerequisite for desktop character delivery, not a new
 public API, permission, installed feature or upstream dependency. The current
-baseline is `f6f3348e6e08b92a63ec28d03e85db81d38e6b9c`.
+production baseline is `c37925523f9ab7410c656b0bfd4fda383126c2f1`
+(documentation successor `b5990a2`).
 
 The existing complete runtime/cache file metadata walk and fresh/startup absence
 drivers must remain intact. Do not replace them with another implementation.
@@ -10,6 +11,23 @@ The next incomplete native boundary is `StartupArtifactOwner._link_path` and
 `_readlink` in `presentation_startup_artifacts.py`. They currently use original
 held native callees/actor checks and local accounting, but do not carry the shared
 typed operation/result/consume/ACK lifecycle through the complete link traversal.
+The actual isolated startup acceptance test now observes all link paths on
+Python 3.14.9. Startup completes and closes its held descriptors, but the test
+fails its three intended requirements: 129 metadata calls and two readlink calls
+have no corresponding in-flight typed operation, and both read records and both
+snapshot observations retain actual raw link bytes. These are experimental
+source findings, not an exposed service or a new installed feature. The test is
+deliberately red until the coupled path is implemented; it is not an additional
+passing prerequisite milestone. See
+`server/tests/unit/test_presentation_native_link_traversal.py`.
+
+The minimum-Python observer remains unqualified: instrumentation exceeded the
+unchanged 60-second child limit, including a restricted first-hop observation.
+Those timeouts do not establish the intended causal failures on Python 3.11.15.
+Current-Python uses local C-call monitoring; the older interpreter's first-hop
+fallback is explicitly narrower and cannot qualify all phases even if completed.
+The earlier passing encoding/Scope suites do not satisfy these native tests.
+
 Package/entry enumeration and factory/service admission are separate unfinished
 boundaries. `PresentationNativeService` is not registered with routes.
 
@@ -26,8 +44,9 @@ shape, continuity and privilege consistency checks do not replace the native
 plan's private-path allowlist or lexical target-resolution validation. Future
 driver tests must reject a copied/replaced plan against the independently held
 original. Policy actions describe basename strings; the native driver must hold
-the actual original `os.fsencode` result and its original encoding semantics.
-It must not silently substitute UTF-8 filenames on a custom interpreter.
+the actual encoded bytes from the early retained `str.encode` descriptor and
+interpreter filesystem settings, through `encode_basename`. A later
+`os.fsencode` export or assumed UTF-8 is not the original encoding authority.
 
 For each original path, preserve the current order:
 

@@ -1,3 +1,14 @@
+# November 9: native image traversal remains unfinished
+
+The draft native-link branch now has an actual-startup acceptance test covering
+the real link-path filesystem calls. On Python 3.14.9 startup completes, but the
+test exposes missing typed admission for 129 metadata/two link-read calls and
+retained raw link bytes. The test is intentionally red; it adds no working phone
+feature. Minimum-Python instrumentation timed out and is not qualified. Complete
+the coupled native traversal, service/runtime and physical delivery before
+claiming desktop character or host-local chat images. No host/device update or
+image enablement occurred. See [remaining work](specs/046-bot-presentation-integration/EXECUTABLE_LINK_NATIVE_LIFECYCLE.md).
+
 # November 8: shared original file lineage under source qualification
 
 The isolated native-file-effects branch now carries one immutable original-entry

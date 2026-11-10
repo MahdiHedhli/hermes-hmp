@@ -1,3 +1,15 @@
+## Native-link acceptance baseline — November 9, 2026
+
+The next implementation remains the complete native link traversal. A new
+actual-startup test reaches normal completion on current Python and deliberately
+fails metadata admission, link-read admission and raw-byte retirement. This
+does not qualify the path or finish character/image delivery. Minimum-Python
+instrumentation exceeded the unchanged child deadline; its native acceptance
+coverage remains missing. Implement the closed metadata and distinct byte-result
+lifecycles together, then carry actual finishes through snapshots/recheck/cleanup.
+Do not enable a detached link-read helper or replace existing security gates.
+See [contract](specs/046-bot-presentation-integration/EXECUTABLE_LINK_NATIVE_LIFECYCLE.md).
+
 ## Integrated startup verification — November 8, 2026
 
 The combined startup candidate `1ab9910` failed **215 cases** and passed
