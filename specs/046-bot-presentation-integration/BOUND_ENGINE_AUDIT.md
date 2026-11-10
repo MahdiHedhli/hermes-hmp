@@ -559,3 +559,21 @@ first/second checker-return code/export/keyword mutation controls with external
 mutation/reach/zero-foreign-call assertions. The earlier failed cases are not
 construction proof. No full native rerun or timeout fix is claimed for this
 unwired construction addition; all original qualification gates remain open.
+
+Native refusal-channel repair (2026-11-10): the unused selected-layout factory
+and live target previously could invoke a changed custom error constructor
+while refusing code drift. The actual first/second checker-return causal test
+reproduced this in hq-dgjb35ts; that failure is retained as evidence. New factory
+and live-target refusals now use their held native RuntimeError; the factory
+also authenticates the original custom-error export, bases and complete members
+before and after its unchanged generic callbacks. Its own collector refusal
+paths use the same native error. Original capture/current API behavior remains
+unchanged; no claim covers all unrelated asynchronous or legacy error paths.
+
+Final dirty-source suites hq-ur3y2n4e (Python3.14.9) and hq-74h80708
+(Python3.11.15) each passed243 tests, no failures/errors/skips, unchanged source.
+New callback cases require exact native RuntimeError/fixed refusal args and zero
+foreign constructor calls; direct malformed live DATA has the same assertion.
+The record remains unwired: parent-capsule construction/actual-return retention
+and independent original root eligibility are next. No full native rerun,
+startup-time improvement, deployment or physical-device acceptance is claimed.

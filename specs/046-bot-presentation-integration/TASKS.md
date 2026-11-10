@@ -1113,3 +1113,9 @@ record, target current_live stillfullgeneric.240 helper/factory/construction cas
 pass both runtimes after correcting collector/provenance namespace shadowing;
 bounded independent review accepted. Parentcapsule append/actualroot wiring and
 immutable-only omission not implemented; no startup or performance acceptance.
+
+Selected-helper native refusal repair (2026-11-10): explicit custom-constructor
+callback regression reproduced and corrected in the new unwired factory/live
+paths;243 focused cases pass both actual runtimes with unchanged source. Legacy
+generic API unchanged. Parent capsule/actual root integration remains next,
+and native startup timeout/full feature/device gates remain open.

@@ -347,7 +347,7 @@ def current(packet):
     return packet
 
 
-def current_live(packet, bound_layout):
+def current_live(packet, bound_layout, *, _error=RuntimeError):
     """Unwired selected-live target; still performs full generic validation.
 
     Rooted immutable-only parsing changes require separate caller/capsule wiring.
@@ -355,9 +355,9 @@ def current_live(packet, bound_layout):
     """
     if (type(bound_layout) is not tuple or len(bound_layout) != 4
             or bound_layout[0] is not packet):
-        raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+        raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
     if (type(packet) is tuple and len(packet) == 6) is not True:
-        raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+        raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
     system, system_names, registry, modules, classes, functions = packet
     if (type(system) is ModuleType and type(system_names) is dict
           and vars(system) is system_names
@@ -367,17 +367,17 @@ def current_live(packet, bound_layout):
           and type(modules) is tuple and len(modules) == len(_MODULES)
           and type(classes) is tuple and len(classes) == len(_CLASSES)
           and type(functions) is tuple and len(functions) == len(_FUNCTIONS)) is not True:
-        raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+        raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
     builtin_module = registry.get('builtins')
     if type(builtin_module) is not ModuleType:
-        raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+        raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
     builtin_namespace = vars(builtin_module)
     if (type(builtin_namespace) is dict
           and all(type(key) is str for key in builtin_namespace)) is not True:
-        raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+        raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
     for row, name, live_keys in zip(modules, _MODULES, _LIVE_GLOBALS, strict=True):
         if (type(row) is tuple and len(row) == 3) is not True:
-            raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+            raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
         module, namespace, pairs = row
         if (type(module) is ModuleType and type(namespace) is dict
               and all(type(key) is str for key in registry)
@@ -388,7 +388,7 @@ def current_live(packet, bound_layout):
                    or namespace.get('__builtins__') is builtin_module)
               and type(pairs) is tuple
               and len(namespace) == len(pairs) + len(live_keys)) is not True:
-            raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+            raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
         # Compare in the live-to-private direction. Allocations may run GC
         # callbacks after the initial key fence; never hash an expected name
         # into that subsequently mutable dictionary. The private index contains
@@ -396,10 +396,10 @@ def current_live(packet, bound_layout):
         expected_pairs = {}
         for pair in pairs:
             if (type(pair) is tuple and len(pair) == 2 and type(pair[0]) is str) is not True:
-                raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+                raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
             key, value = pair
             if key in live_keys or key in expected_pairs:
-                raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+                raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
             expected_pairs[key] = value
         valid, observed, live_seen = True, 0, 0
         try:
@@ -417,30 +417,30 @@ def current_live(packet, bound_layout):
             valid = False  # A changed-size/key iterator is refusal, not retry.
         if (valid is True and observed == len(pairs) + len(live_keys)
                 and live_seen == len(live_keys)) is not True:
-            raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+            raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
     for row, (index, name) in zip(classes, _CLASSES, strict=True):
         if (type(row) is tuple and len(row) == 3) is not True:
-            raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+            raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
         kind, bases, pairs = row
         if (type(kind) is type
               and all(type(key) is str for key in modules[index][1])
               and modules[index][1].get(name) is kind
               and kind.__bases__ is bases and type(pairs) is tuple) is not True:
-            raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+            raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
         names = vars(kind)
         if (all(type(key) is str for key in names) and len(names) == len(pairs)) is not True:
-            raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+            raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
         seen = set()
         for pair in pairs:
             if (type(pair) is tuple and len(pair) == 2 and type(pair[0]) is str) is not True:
-                raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+                raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
             key, value = pair
             if (key not in seen and key in names and names[key] is value) is not True:
-                raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+                raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
             seen.add(key)
     for row, (index, owner, name) in zip(functions, _FUNCTIONS, strict=True):
         if (type(row) is tuple and len(row) == 8) is not True:
-            raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+            raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
         function, code, namespace, defaults, kw, pairs, closure, cells = row
         if (type(namespace) is dict and namespace is modules[index][1]
               and type(function) is FunctionType and function.__globals__ is namespace
@@ -449,10 +449,10 @@ def current_live(packet, bound_layout):
               and (defaults is None or type(defaults) is tuple)
               and function.__kwdefaults__ is kw and function.__closure__ is closure
               and type(pairs) is tuple and type(cells) is tuple) is not True:
-            raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+            raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
         names = namespace
         if (all(type(key) is str for key in namespace)) is not True:
-            raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+            raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
         if owner is not None:
             held_kind = None
             for class_row, (class_index, class_name) in zip(classes, _CLASSES, strict=True):
@@ -462,41 +462,41 @@ def current_live(packet, bound_layout):
             if (type(held_kind) is type
                   and all(type(key) is str for key in namespace)
                   and namespace.get(owner) is held_kind) is not True:
-                raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+                raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
             names = vars(held_kind)
         if (all(type(key) is str for key in names) and names.get(name) is function) is not True:
-            raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+            raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
         if kw is None:
             if (pairs == ()) is not True:
-                raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+                raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
         else:
             if (type(kw) is dict and all(type(key) is str for key in kw)
                   and len(kw) == len(pairs)) is not True:
-                raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+                raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
             seen = set()
             for pair in pairs:
                 if (type(pair) is tuple and len(pair) == 2 and type(pair[0]) is str) is not True:
-                    raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+                    raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
                 key, value = pair
                 if (key not in seen and key in kw and kw[key] is value) is not True:
-                    raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+                    raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
                 seen.add(key)
         if closure is None:
             if (cells == ()) is not True:
-                raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+                raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
         else:
             if (type(closure) is tuple and len(closure) == len(cells)) is not True:
-                raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+                raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
             try:
                 if (all(type(cell) is CellType and cell.cell_contents is value
                           for cell, value in zip(closure, cells, strict=True))) is not True:
-                    raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+                    raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
             except ValueError:
-                raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+                raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
     if (all(type(key) is str for key in modules[0][1])
           and modules[0][1].get('GatewayRecipeOwner') is classes[2][0]
           and modules[0][1].get('_same_recipe_binding') is functions[4][0]) is not True:
-        raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+        raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
     # Join the imported aliases to the same defining objects, not merely to an
     # independently coherent snapshot in each importing module.
     if (all(type(key) is str for key in modules[0][1])
@@ -508,7 +508,7 @@ def current_live(packet, bound_layout):
           and modules[0][1].get('IoScope') is classes[4][0]
           and modules[1][1].get('_Scope') is classes[4][0]
           and modules[1][1].get('_approved_recipe') is functions[6][0]) is not True:
-        raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+        raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
     if (all(type(key) is str for key in modules[0][1])
           and all(type(key) is str for key in modules[1][1])
           and all(type(key) is str for key in modules[2][1])
@@ -517,20 +517,20 @@ def current_live(packet, bound_layout):
           and modules[1][1].get('GatewayActivationOwner') is classes[10][0]
           and modules[2][1].get('GatewayActivationOwner') is classes[10][0]
           and modules[2][1].get('_LATE_MODULES') is modules[3][1].get('_LATE_MODULES')) is not True:
-        raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+        raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
     # The shared descriptor/expectation code is held BEFORE the later engine
     # capture. Rejoining that later engine snapshot alone could adopt code drift.
     if (all(type(key) is str for key in modules[4][1])
           and modules[4][1].get('_Scope') is classes[4][0]
           and modules[4][1].get('GatewayActivationOwner') is classes[10][0]) is not True:
-        raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+        raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
     for index in (0, 1, 2):
         namespace = modules[index][1]
         if (all(type(key) is str for key in namespace)
               and namespace.get('ExpectedArtifact') is classes[13][0]
               and namespace.get('_descriptor_closed_in_scope') is functions[15][0]
               and namespace.get('_expected') is functions[19][0]) is not True:
-            raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+            raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
     # Approval's live owner/cell/root/fact values are not cached authority. Its
     # actual original validators still freshly join those values on each audit.
     if (all(type(key) is str for key in modules[5][1])
@@ -543,14 +543,14 @@ def current_live(packet, bound_layout):
           and modules[5][1].get('OperatorApprovalPath') is classes[38][0]
           and modules[5][1].get('_OperatorFileReceipt') is classes[39][0]
           and modules[5][1].get('_ReadEffect') is classes[40][0]) is not True:
-        raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+        raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
     # The root is staged before capture and published only by the original
     # entry capture's literal return. DATA currentness does not approve a root
     # value, a started allocation or the one-attempt flag; original validators do.
     if (all(type(key) is str for key in modules[6][1])
           and modules[5][1].get('GatewayEntryOwner') is classes[27][0]
           and modules[6][1].get('GatewayActivationOwner') is classes[10][0]) is not True:
-        raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+        raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
     return packet
 
 
@@ -562,7 +562,9 @@ def capture_bound(*, _checker=current, _checker_code=current.__code__,
                   _builtins=current.__builtins__, _module_roles=_MODULES,
                   _class_roles=_CLASSES, _function_roles=_FUNCTIONS, _live_roles=_LIVE_GLOBALS,
                   _type=type, _tuple=tuple, _dict=dict, _str=str, _len=len,
-                  _vars=vars, _any=any, _function=FunctionType, _error=RetainedBindingOriginError):
+                  _vars=vars, _any=any, _function=FunctionType, _error=RuntimeError,
+                  _error_kind=RetainedBindingOriginError, _error_bases=RetainedBindingOriginError.__bases__,
+                  _error_members=tuple(vars(RetainedBindingOriginError).items())):
     """Literal selected packet/layout/checker DATA; no caller uses it for startup yet.
 
     Generic capture() keeps its six-field API. The future independent parent
@@ -583,6 +585,18 @@ def capture_bound(*, _checker=current, _checker_code=current.__code__,
             or namespace.get('_FUNCTIONS') is not _function_roles
             or namespace.get('_LIVE_GLOBALS') is not _live_roles):
         raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+    # A refusal must not dispatch a constructor replaced by the callback.
+    # Keep generic APIs unchanged, but authenticate their custom error channel
+    # before entering them and use the held native error for factory refusal.
+    if (_type(_error_kind) is not _type
+            or namespace.get('RetainedBindingOriginError') is not _error_kind
+            or _error_kind.__bases__ is not _error_bases):
+        raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+    error_names = _vars(_error_kind)
+    if (_any(_type(k) is not _str for k in error_names)
+            or _len(error_names) != _len(_error_members)
+            or _any(k not in error_names or error_names[k] is not v for k,v in _error_members)):
+        raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
     for name, function, code, defaults, kw, pairs in fixed:
         if (_type(function) is not _function or namespace.get(name) is not function
                 or function.__code__ is not code or function.__globals__ is not namespace
@@ -595,17 +609,17 @@ def capture_bound(*, _checker=current, _checker_code=current.__code__,
             raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
     registry = sys.modules
     if type(registry) is not dict or not all(type(key) is str for key in registry):
-        raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+        raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
     modules = []
     for name, live_keys in zip(_MODULES, _LIVE_GLOBALS, strict=True):
         module = registry.get(name)
         if type(module) is not ModuleType:
-            raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+            raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
         candidate_namespace = vars(module)
         if (type(candidate_namespace) is not dict or not all(type(key) is str for key in candidate_namespace)
                 or type(candidate_namespace.get('__name__')) is not str or candidate_namespace['__name__'] != name
                 or not all(key in candidate_namespace for key in live_keys)):
-            raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+            raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
         modules.append((module, candidate_namespace, tuple((key, value)
             for key, value in candidate_namespace.items() if key not in live_keys)))
     modules = tuple(modules)
@@ -613,20 +627,20 @@ def capture_bound(*, _checker=current, _checker_code=current.__code__,
     for index, name in _CLASSES:
         candidate_namespace = modules[index][1]
         if not all(type(key) is str for key in candidate_namespace):
-            raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+            raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
         kind = candidate_namespace.get(name)
         if type(kind) is not type:
-            raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+            raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
         names = vars(kind)
         if not all(type(key) is str for key in names):
-            raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+            raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
         classes.append((kind, kind.__bases__, tuple(names.items())))
     classes = tuple(classes)
     functions = []
     for index, owner, name in _FUNCTIONS:
         candidate_namespace = modules[index][1]
         if not all(type(key) is str for key in candidate_namespace):
-            raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+            raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
         names = candidate_namespace
         if owner is not None:
             held_kind = None
@@ -635,24 +649,24 @@ def capture_bound(*, _checker=current, _checker_code=current.__code__,
                     held_kind = row[0]
                     break
             if type(held_kind) is not type or candidate_namespace.get(owner) is not held_kind:
-                raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+                raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
             names = vars(held_kind)
         if not all(type(key) is str for key in names):
-            raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+            raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
         function = names.get(name)
         if type(function) is not FunctionType or function.__globals__ is not candidate_namespace:
-            raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+            raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
         defaults, kw, closure = function.__defaults__, function.__kwdefaults__, function.__closure__
         if ((defaults is not None and type(defaults) is not tuple)
                 or (kw is not None and (type(kw) is not dict
                                         or not all(type(key) is str for key in kw)))
                 or (closure is not None and (type(closure) is not tuple
                                              or not all(type(cell) is CellType for cell in closure)))):
-            raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+            raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
         try:
             cells = () if closure is None else tuple(cell.cell_contents for cell in closure)
         except ValueError:
-            raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+            raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
         functions.append((function, function.__code__, candidate_namespace, defaults, kw,
                           () if kw is None else tuple(kw.items()), closure, cells))
     packet = (sys, vars(sys), registry, modules, classes, tuple(functions))
@@ -661,6 +675,18 @@ def capture_bound(*, _checker=current, _checker_code=current.__code__,
             or namespace.get('_CLASSES') is not _class_roles
             or namespace.get('_FUNCTIONS') is not _function_roles
             or namespace.get('_LIVE_GLOBALS') is not _live_roles):
+        raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+    # A refusal must not dispatch a constructor replaced by the callback.
+    # Keep generic APIs unchanged, but authenticate their custom error channel
+    # before entering them and use the held native error for factory refusal.
+    if (_type(_error_kind) is not _type
+            or namespace.get('RetainedBindingOriginError') is not _error_kind
+            or _error_kind.__bases__ is not _error_bases):
+        raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+    error_names = _vars(_error_kind)
+    if (_any(_type(k) is not _str for k in error_names)
+            or _len(error_names) != _len(_error_members)
+            or _any(k not in error_names or error_names[k] is not v for k,v in _error_members)):
         raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
     for name, function, code, defaults, kw, pairs in fixed:
         if (_type(function) is not _function or namespace.get(name) is not function
@@ -679,6 +705,18 @@ def capture_bound(*, _checker=current, _checker_code=current.__code__,
             or namespace.get('_CLASSES') is not _class_roles
             or namespace.get('_FUNCTIONS') is not _function_roles
             or namespace.get('_LIVE_GLOBALS') is not _live_roles):
+        raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+    # A refusal must not dispatch a constructor replaced by the callback.
+    # Keep generic APIs unchanged, but authenticate their custom error channel
+    # before entering them and use the held native error for factory refusal.
+    if (_type(_error_kind) is not _type
+            or namespace.get('RetainedBindingOriginError') is not _error_kind
+            or _error_kind.__bases__ is not _error_bases):
+        raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+    error_names = _vars(_error_kind)
+    if (_any(_type(k) is not _str for k in error_names)
+            or _len(error_names) != _len(_error_members)
+            or _any(k not in error_names or error_names[k] is not v for k,v in _error_members)):
         raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
     for name, function, code, defaults, kw, pairs in fixed:
         if (_type(function) is not _function or namespace.get(name) is not function
@@ -704,6 +742,18 @@ def capture_bound(*, _checker=current, _checker_code=current.__code__,
             or namespace.get('_FUNCTIONS') is not _function_roles
             or namespace.get('_LIVE_GLOBALS') is not _live_roles):
         raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+    # A refusal must not dispatch a constructor replaced by the callback.
+    # Keep generic APIs unchanged, but authenticate their custom error channel
+    # before entering them and use the held native error for factory refusal.
+    if (_type(_error_kind) is not _type
+            or namespace.get('RetainedBindingOriginError') is not _error_kind
+            or _error_kind.__bases__ is not _error_bases):
+        raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+    error_names = _vars(_error_kind)
+    if (_any(_type(k) is not _str for k in error_names)
+            or _len(error_names) != _len(_error_members)
+            or _any(k not in error_names or error_names[k] is not v for k,v in _error_members)):
+        raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
     for name, function, code, defaults, kw, pairs in fixed:
         if (_type(function) is not _function or namespace.get(name) is not function
                 or function.__code__ is not code or function.__globals__ is not namespace
@@ -721,6 +771,18 @@ def capture_bound(*, _checker=current, _checker_code=current.__code__,
             or namespace.get('_CLASSES') is not _class_roles
             or namespace.get('_FUNCTIONS') is not _function_roles
             or namespace.get('_LIVE_GLOBALS') is not _live_roles):
+        raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+    # A refusal must not dispatch a constructor replaced by the callback.
+    # Keep generic APIs unchanged, but authenticate their custom error channel
+    # before entering them and use the held native error for factory refusal.
+    if (_type(_error_kind) is not _type
+            or namespace.get('RetainedBindingOriginError') is not _error_kind
+            or _error_kind.__bases__ is not _error_bases):
+        raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+    error_names = _vars(_error_kind)
+    if (_any(_type(k) is not _str for k in error_names)
+            or _len(error_names) != _len(_error_members)
+            or _any(k not in error_names or error_names[k] is not v for k,v in _error_members)):
         raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
     for name, function, code, defaults, kw, pairs in fixed:
         if (_type(function) is not _function or namespace.get(name) is not function

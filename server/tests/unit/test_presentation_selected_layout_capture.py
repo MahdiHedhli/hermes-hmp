@@ -46,7 +46,7 @@ def test_generic_capture_api_is_unchanged_and_copies_are_not_root_authority():
 
 
 @pytest.mark.parametrize('boundary',(1,2))
-@pytest.mark.parametrize('fault',('live_code','live_export','checker_code','checker_export','live_kwdict'))
+@pytest.mark.parametrize('fault',('live_code','live_export','checker_code','checker_export','live_kwdict','error_and_live_code'))
 def test_bound_factory_rejoins_fixed_checker_after_each_callback(monkeypatch,boundary,fault):
     factory_code,checker_code=selected.capture_bound.__code__,selected.current.__code__
     reached,changes,foreign_calls=[],[],[]
@@ -58,7 +58,13 @@ def test_bound_factory_rejoins_fixed_checker_after_each_callback(monkeypatch,bou
             reached.append(True)
             if len(reached)==boundary:
                 changes.append(True)
-                if fault=='live_code':monkeypatch.setattr(selected.current_live,'__code__',foreign.__code__)
+                if fault=='error_and_live_code':
+                    def foreign_error(*args,**kwargs):
+                        foreign_calls.append(True)
+                        raise AssertionError('changed error constructor executed')
+                    monkeypatch.setattr(selected.RetainedBindingOriginError,'__init__',foreign_error)
+                    monkeypatch.setattr(selected.current_live,'__code__',foreign.__code__)
+                elif fault=='live_code':monkeypatch.setattr(selected.current_live,'__code__',foreign.__code__)
                 elif fault=='live_export':monkeypatch.setattr(selected,'current_live',foreign)
                 elif fault=='checker_code':monkeypatch.setattr(selected.current,'__code__',foreign.__code__)
                 elif fault=='checker_export':monkeypatch.setattr(selected,'current',foreign)
@@ -66,7 +72,21 @@ def test_bound_factory_rejoins_fixed_checker_after_each_callback(monkeypatch,bou
     assert sys.getprofile() is None
     sys.setprofile(observe)
     try:
-        with pytest.raises(selected.RetainedBindingOriginError,match='BI1_RETAINED_HELPER_ORIGIN_REFUSED'):
+        with pytest.raises(RuntimeError,match='BI1_RETAINED_HELPER_ORIGIN_REFUSED') as refused:
             selected.capture_bound()
+        assert type(refused.value) is RuntimeError and refused.value.args==('BI1_RETAINED_HELPER_ORIGIN_REFUSED',)
     finally:sys.setprofile(None)
     assert len(reached)==boundary and changes==[True] and foreign_calls==[]
+
+
+def test_live_target_refusal_does_not_use_a_changed_custom_error_constructor(monkeypatch):
+    packet,layout,_=selected.capture_bound()
+    changed=(False,*packet[1:]);calls=[]
+    def foreign_error(*args,**kwargs):
+        calls.append(True)
+        raise AssertionError('custom error constructor dispatched')
+    monkeypatch.setattr(selected.RetainedBindingOriginError,'__init__',foreign_error)
+    with pytest.raises(RuntimeError) as refused:
+        selected.current_live(changed,(changed,*layout[1:]))
+    assert type(refused.value) is RuntimeError
+    assert refused.value.args==('BI1_RETAINED_HELPER_ORIGIN_REFUSED',) and calls==[]
