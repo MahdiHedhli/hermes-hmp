@@ -35,6 +35,13 @@ performs the complete same fresh check, with original object identity joins and
 all later checks preserved. A prior callback return cannot cache authority. A
 reviewed design is not permission to skip a security boundary or claim a feature.
 
+Independent call-path review rejected removing the owner's first activation
+check merely because a package parent exists. The later activation check follows
+imports and retained-binding/context/approval callbacks, and an intervening
+failure can prevent it. That would change pre-dispatch validation and sticky
+failure behavior. The earlier runtime-guard reduction does not generalize to
+this sequence. No activation check was removed.
+
 The full original character/avatar and local-image delivery requirements remain
 open, including full native lifecycle, runtime/service/route integration and
 physical device acceptance. No upstream-only blocker has been established.
