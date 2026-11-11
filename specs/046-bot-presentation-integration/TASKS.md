@@ -4,7 +4,7 @@
       comparison for package/recipe/selection; required keys/roots/flags/facts/
       counters/buffers/activation links. DATA only, no authority or guard replacement.
 - [x] Same7 current/minimum tests, including80 actual owner changes/deletions with
-      restore/positive and no native work, foreign-key/getter refusals. Independent
+      restore/positive and no native work, foreign-key refusal/native getter bypass. Independent
       source/final evidence review complete; prior failed setup retained separately.
 - [ ] **RGA-01d-FRESH-DAG** Complete remaining descriptor/approval/cache/entry/
       actor/runtime/root/callee predicates and final callback-free full graph
