@@ -87,6 +87,7 @@ def env(tmp_path):
     for service in e.services:
         for op in service._ops.values():
             assert op.worker is None or not op.worker.is_alive()
+            assert op.writer is None or op.writer.task is None or op.writer.task.done()
     store.close()
 
 

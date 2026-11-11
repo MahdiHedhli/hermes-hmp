@@ -9,6 +9,7 @@ future owned HTTP writer settles. Request cancellation is not thread drain.
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import threading
 from collections import deque
@@ -24,6 +25,11 @@ from .presentation_budget import PresentationWorkLedger
 from .presentation_memory import PresentationMemoryBudget
 from .presentation_native_claim import NativeReadRegistry, NativeSourceError
 from .presentation_native_files import NativePresentationFileReader
+from .presentation_native_http import (
+    NATIVE_RESPONSE_TYPE,
+    NativePresentationHttpWrite,
+    NativePresentationStreamAbortedError,
+)
 from .presentation_native_projection import NativePresentationProjector
 
 
@@ -88,6 +94,7 @@ class _Operation:
     result: object = None
     timer: object = None
     poll: object = None
+    writer: object = None
 
 
 class NativePresentationOwner:
@@ -130,6 +137,7 @@ class NativePresentationService:
         self._reader = NativePresentationFileReader(self._registry)
         self._projector = NativePresentationProjector(self._registry, self._reader)
         self._thread_type = threading.Thread
+        self._response_type = NATIVE_RESPONSE_TYPE
 
     def _local(self):
         try:
@@ -420,6 +428,16 @@ class NativePresentationService:
     def _discard(self, op):
         if not op.joined:
             return False
+        if op.writer is not None:
+            if not op.writer.settled or op.writer.unknown:
+                op.state = "writer_debt" if op.retired else "emitting"
+                return False
+            try:
+                op.writer.release()
+            except BaseException:
+                op.cleanup_unknown = True
+                op.state, op.outcome = "debt", "unavailable"
+                return False
         if not self._drop_payload(op):
             return False
         try:
@@ -445,6 +463,8 @@ class NativePresentationService:
             op.joined = True  # never constructed/started a worker
         try:
             self._registry._retire(self, op)
+            if op.writer is not None and not op.writer.settled:
+                op.writer.abort()
             if op.joined:
                 self._discard(op)
         except BaseException:
@@ -488,6 +508,112 @@ class NativePresentationService:
         if op is not None:
             self._retire_operation(op)
             self._dispatch()
+
+    def _request_matches(self, op, request):
+        try:
+            return (
+                request.method == "GET"
+                and request.match_info.get("p") == op.profile
+                and request.headers.getall("Authorization", []) == [op.authorization]
+                and request.headers.getall("HMP-Instance", []) == [op.instance]
+                and (op.kind != "avatar" or request.match_info.get("revision") == op.revision)
+            )
+        except Exception:
+            return False
+
+    def _write_current(self, op, writer, *, transport_required=True):
+        try:
+            return (
+                self._ops.get(op.handle) is op
+                and op.writer is writer
+                and not op.retired
+                and self._local()
+                and self._clock() < writer.deadline
+                and self._actor_current(op) == "ready"
+                and self._request_matches(op, writer.request)
+                and (
+                    not transport_required
+                    or (
+                        writer.transport is not None
+                        and writer.request.transport is writer.transport
+                        and not writer.transport.is_closing()
+                    )
+                )
+            )
+        except Exception:
+            return False
+
+    def _writer_finished(self, handle):
+        op = self._ops.get(handle)
+        if op is None or op.writer is None:
+            return
+        if op.retired or op.writer.status != "sent" or op.writer.unknown:
+            self._retire_operation(op)
+        else:
+            self._discard(op)
+        self._dispatch()
+
+    def _output_shape(self, op):
+        result = op.result
+        if result is None or type(result.metadata) is not bytes or len(result.metadata) > 4096:
+            raise NativePresentationUnavailableError()
+        if op.kind == "metadata":
+            return "application/json", len(result.metadata)
+        if op.revision is None:
+            raise NativePresentationUnavailableError("bad_request")
+        avatar = json.loads(result.metadata).get("avatar")
+        if avatar is None or result.avatar is None:
+            raise NativePresentationUnavailableError("not_found")
+        if (
+            type(avatar) is not dict
+            or avatar.get("revision") != op.revision
+            or avatar.get("mime") not in ("image/png", "image/jpeg", "image/webp")
+            or type(result.avatar) is not bytes
+            or not 1 <= len(result.avatar) <= 2_000_000
+            or avatar.get("bytes") != len(result.avatar)
+        ):
+            raise NativePresentationUnavailableError()
+        return avatar["mime"], len(result.avatar)
+
+    async def emit(self, handle, request):
+        op = self._ops.get(handle) if type(handle) is _Handle else None
+        if op is None or not op.joined or op.state != "complete" or op.outcome != "ready":
+            raise NativePresentationUnavailableError()
+        status = self._authenticate(op)
+        if status != "ready" or not self._request_matches(op, request):
+            self.abandon(handle)
+            raise NativePresentationUnavailableError(
+                status if status != "ready" else "unauthenticated"
+            )
+        mime, length = self._output_shape(op)
+        writer = NativePresentationHttpWrite()
+        op.writer, op.state = writer, "emitting"  # adopt before any prepare/task/lease effect
+        if op.timer is not None:
+            op.timer.cancel()
+        try:
+            started = writer.start(self, op, request, mime, length)
+        except BaseException:
+            writer.start_unknown = True
+            started = False
+        if not started:
+            self.abandon(handle)
+            if writer.unknown or writer.attempted:
+                raise NativePresentationStreamAbortedError()
+            raise NativePresentationUnavailableError()
+        try:
+            await asyncio.wait_for(
+                asyncio.shield(writer.signal), max(0.0, writer.deadline - self._clock())
+            )
+        except asyncio.CancelledError:
+            self.abandon(handle)
+            raise
+        except TimeoutError:
+            self.abandon(handle)
+            raise NativePresentationStreamAbortedError() from None
+        if writer.status != "sent" or writer.unknown:
+            self.abandon(handle)
+            raise NativePresentationStreamAbortedError()
+        return writer.response
 
     def retire(self):
         self._retired = True
