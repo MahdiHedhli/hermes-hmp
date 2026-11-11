@@ -9,72 +9,176 @@ import sys
 from types import CellType, FunctionType, ModuleType
 
 
-_MODULES = ('hmp_plugin.presentation_gateway_package',
-            'hmp_plugin.presentation_gateway_recipe',
-            'hmp_plugin.presentation_startup_selection',
-            'hmp_plugin.presentation_gateway_activation',
-            'hmp_plugin.presentation_startup_artifacts',
-            'hmp_startup.gateway_approval',
-            'hmp_startup.gateway_entry')
-# Only the listed activation/approval/entry values change during allocation. Their
+_MODULES = (
+    "hmp_plugin.presentation_gateway_package",
+    "hmp_plugin.presentation_gateway_recipe",
+    "hmp_plugin.presentation_startup_selection",
+    "hmp_plugin.presentation_gateway_activation",
+    "hmp_plugin.presentation_startup_artifacts",
+    "hmp_startup.gateway_approval",
+    "hmp_startup.gateway_entry",
+    "hmp_startup.runtime_files",
+    "hmp_startup.entry_files",
+    "hmp_startup.cache_context",
+)
+# Only the listed activation/approval/entry/cache values change during allocation. Their
 # keys remain required; the original retained-scope body freshly joins their
 # values to its actual owner/scope. This DATA checker supplies no such authority.
-_LIVE_GLOBALS = ((), (), (), ('_ENTRY_OWNER', '_ENTRY_CELL'), (),
-                 ('_OWNER', '_CELL', '_ROOT', '_FACT'),
-                 ('_OWNER', '_CELL', '_STARTED', '_START_ATTEMPTED', '_ENTRY_ORIGIN'))
-_CLASSES = ((0, 'GatewayPackageOwner'), (0, '_Manifest'), (1, 'GatewayRecipeOwner'),
-            (2, 'StartupSelectionOwner'), (2, '_Scope'),
-            (2, '_ApprovedSelectionSource'), (2, 'GatewayStartupSelection'),
-            (2, 'SelectionLoadError'), (0, 'PackageInventoryError'),
-            (1, 'GatewayRecipeError'), (3, 'GatewayActivationOwner'),
-            (3, '_ActivationScope'), (3, 'ActivationCaptureError'),
-            (4, 'ExpectedArtifact'), (4, 'ArtifactObservationError'),
-            (4, '_Descriptor'), (4, '_NativeScopeRegistration'),
-            (4, '_NativeOpenAllocation'), (4, '_NativeCloseAllocation'),
-            (4, '_NativeOpenedDescriptor'), (0, 'RetainedPackageData'),
-            (0, '_Scan'), (1, '_Recipe'),
-            (5, 'GatewayApprovalOwner'), (5, 'GatewayApprovalError'),
-            (5, '_RootSource'), (5, 'GatewayOperatorApproval'),
-            (6, 'GatewayEntryOwner'), (6, 'GatewayEntryError'),
-            (6, '_Invocation'), (6, '_EntryOrigin'), (6, 'EntryStartupData'),
-            (6, '_InterpreterOrigin'), (6, 'InterpreterStartupData'),
-            (6, '_NativeIOOrigin'), (6, '_NativeFileLineage'),
-            (6, '_NativeFileLedger'), (6, '_NativeFilePhase'),
-            (4, 'OperatorApprovalPath'), (4, '_OperatorFileReceipt'), (4, '_ReadEffect'))
-_FUNCTIONS = ((0, 'GatewayPackageOwner', '_retained_binding'),
-              (1, 'GatewayRecipeOwner', '_retained_binding'),
-              (0, None, '_require'), (1, None, '_require'),
-              (1, None, '_same_recipe_binding'),
-              (2, 'StartupSelectionOwner', '_retained_binding'),
-              (2, None, '_approved_recipe'), (2, None, '_approval_binding'),
-              (2, None, '_require'), (2, 'SelectionLoadError', '__init__'),
-              (0, 'PackageInventoryError', '__init__'),
-              (1, 'GatewayRecipeError', '__init__'),
-              (3, 'GatewayActivationOwner', '_retained_scope'),
-              (3, None, '_require'), (3, 'ActivationCaptureError', '__init__'),
-              (4, None, '_descriptor_closed_in_scope'),
-              (4, None, '_native_descriptor_closed'),
-              (4, None, '_native_descriptor_opened'),
-              (4, None, '_native_file_allocation_original'),
-              (4, None, '_expected'), (4, None, '_require'),
-              (4, 'ArtifactObservationError', '__init__'),
-              (5, 'GatewayApprovalOwner', '_retained_binding'),
-              (5, 'GatewayApprovalOwner', '_seal'),
-              (5, 'GatewayApprovalOwner', '_closed_custody'),
-              (5, None, '_require'), (5, None, '_same_entry'),
-              (5, None, '_api_state'), (5, 'GatewayApprovalError', '__init__'),
-              (6, 'GatewayEntryOwner', '_retained_binding'),
-              (6, None, '_native_file_ledger_shape'), (6, None, '_require'),
-              (6, 'GatewayEntryError', '__init__'),
-              (4, None, '_closed_file_graph_mirrors'),
-              (4, None, '_scope_file_graph_mirrors'),
-              (4, None, '_loaded_owner_graph_mirrors'),
-              (4, None, '_cache_context_graph_mirrors'),
-              (4, None, '_approval_graph_mirrors'),
-              (4, None, '_entry_graph_mirrors'),
-              (4, None, '_activation_graph_mirrors'),
-              (4, None, '_native_io_graph_mirrors'),
-              (4, None, '_interpreter_graph_mirrors'))
+_LIVE_GLOBALS = (
+    (),
+    (),
+    (),
+    ("_ENTRY_OWNER", "_ENTRY_CELL"),
+    (),
+    ("_OWNER", "_CELL", "_ROOT", "_FACT"),
+    ("_OWNER", "_CELL", "_STARTED", "_START_ATTEMPTED", "_ENTRY_ORIGIN"),
+    (),
+    (),
+    ("_OWNER", "_ROOT", "_FACT"),
+)
+_CLASSES = (
+    (0, "GatewayPackageOwner"),
+    (0, "_Manifest"),
+    (1, "GatewayRecipeOwner"),
+    (2, "StartupSelectionOwner"),
+    (2, "_Scope"),
+    (2, "_ApprovedSelectionSource"),
+    (2, "GatewayStartupSelection"),
+    (2, "SelectionLoadError"),
+    (0, "PackageInventoryError"),
+    (1, "GatewayRecipeError"),
+    (3, "GatewayActivationOwner"),
+    (3, "_ActivationScope"),
+    (3, "ActivationCaptureError"),
+    (4, "ExpectedArtifact"),
+    (4, "ArtifactObservationError"),
+    (4, "_Descriptor"),
+    (4, "_NativeScopeRegistration"),
+    (4, "_NativeOpenAllocation"),
+    (4, "_NativeCloseAllocation"),
+    (4, "_NativeOpenedDescriptor"),
+    (0, "RetainedPackageData"),
+    (0, "_Scan"),
+    (1, "_Recipe"),
+    (5, "GatewayApprovalOwner"),
+    (5, "GatewayApprovalError"),
+    (5, "_RootSource"),
+    (5, "GatewayOperatorApproval"),
+    (6, "GatewayEntryOwner"),
+    (6, "GatewayEntryError"),
+    (6, "_Invocation"),
+    (6, "_EntryOrigin"),
+    (6, "EntryStartupData"),
+    (6, "_InterpreterOrigin"),
+    (6, "InterpreterStartupData"),
+    (6, "_NativeIOOrigin"),
+    (6, "_NativeFileLineage"),
+    (6, "_NativeFileLedger"),
+    (6, "_NativeFilePhase"),
+    (4, "OperatorApprovalPath"),
+    (4, "_OperatorFileReceipt"),
+    (4, "_ReadEffect"),
+    (7, "RuntimeFilesError"),
+    (7, "RuntimePackage"),
+    (7, "LinkHop"),
+    (7, "ExecutableLinkPlan"),
+    (7, "RuntimeFilePlan"),
+    (8, "EntryFilesError"),
+    (8, "_Inputs"),
+    (8, "EntryFileSnapshotOwner"),
+    (9, "CacheContextError"),
+    (9, "CacheInputData"),
+    (9, "_ContextSource"),
+    (9, "CacheContextOwner"),
+)
+_FUNCTIONS = (
+    (0, "GatewayPackageOwner", "_retained_binding"),
+    (1, "GatewayRecipeOwner", "_retained_binding"),
+    (0, None, "_require"),
+    (1, None, "_require"),
+    (1, None, "_same_recipe_binding"),
+    (2, "StartupSelectionOwner", "_retained_binding"),
+    (2, None, "_approved_recipe"),
+    (2, None, "_approval_binding"),
+    (2, None, "_require"),
+    (2, "SelectionLoadError", "__init__"),
+    (0, "PackageInventoryError", "__init__"),
+    (1, "GatewayRecipeError", "__init__"),
+    (3, "GatewayActivationOwner", "_retained_scope"),
+    (3, None, "_require"),
+    (3, "ActivationCaptureError", "__init__"),
+    (4, None, "_descriptor_closed_in_scope"),
+    (4, None, "_native_descriptor_closed"),
+    (4, None, "_native_descriptor_opened"),
+    (4, None, "_native_file_allocation_original"),
+    (4, None, "_expected"),
+    (4, None, "_require"),
+    (4, "ArtifactObservationError", "__init__"),
+    (5, "GatewayApprovalOwner", "_retained_binding"),
+    (5, "GatewayApprovalOwner", "_seal"),
+    (5, "GatewayApprovalOwner", "_closed_custody"),
+    (5, None, "_require"),
+    (5, None, "_same_entry"),
+    (5, None, "_api_state"),
+    (5, "GatewayApprovalError", "__init__"),
+    (6, "GatewayEntryOwner", "_retained_binding"),
+    (6, None, "_native_file_ledger_shape"),
+    (6, None, "_require"),
+    (6, "GatewayEntryError", "__init__"),
+    (4, None, "_closed_file_graph_mirrors"),
+    (4, None, "_scope_file_graph_mirrors"),
+    (4, None, "_loaded_owner_graph_mirrors"),
+    (4, None, "_cache_context_graph_mirrors"),
+    (4, None, "_approval_graph_mirrors"),
+    (4, None, "_entry_graph_mirrors"),
+    (4, None, "_activation_graph_mirrors"),
+    (4, None, "_native_io_graph_mirrors"),
+    (4, None, "_interpreter_graph_mirrors"),
+    (7, "RuntimeFilesError", "__init__"),
+    (7, None, "_require"),
+    (7, None, "_pairs"),
+    (7, None, "_document"),
+    (7, None, "_path"),
+    (7, None, "_inside"),
+    (7, None, "_typed_equal"),
+    (7, None, "_library_name"),
+    (7, "LinkHop", "__repr__"),
+    (7, "ExecutableLinkPlan", "__repr__"),
+    (7, None, "_link_plan"),
+    (7, "RuntimeFilePlan", "__repr__"),
+    (7, None, "build_runtime_plan"),
+    (7, None, "build_runtime_link_plan"),
+    (7, None, "_build_runtime_plan"),
+    (7, None, "plan_current"),
+    (7, None, "loaded_origins"),
+    (8, "EntryFilesError", "__init__"),
+    (8, None, "_require"),
+    (8, None, "_same_package"),
+    (8, None, "_pairs"),
+    (8, "_Inputs", "__repr__"),
+    (8, None, "_decode"),
+    (8, "EntryFileSnapshotOwner", "_current"),
+    (8, "EntryFileSnapshotOwner", "_pure_lineage"),
+    (8, "EntryFileSnapshotOwner", "_pure_current"),
+    (8, "EntryFileSnapshotOwner", "_io_current"),
+    (8, "EntryFileSnapshotOwner", "_names"),
+    (8, "EntryFileSnapshotOwner", "_tree"),
+    (8, "EntryFileSnapshotOwner", "_metadata"),
+    (8, "EntryFileSnapshotOwner", "_walk"),
+    (8, "EntryFileSnapshotOwner", "_origins"),
+    (8, "EntryFileSnapshotOwner", "__repr__"),
+    (9, "CacheContextError", "__init__"),
+    (9, None, "_require"),
+    (9, "CacheInputData", "__repr__"),
+    (9, "_ContextSource", "__repr__"),
+    (9, None, "_context"),
+    (9, None, "_getter_current"),
+    (9, None, "_rows"),
+    (9, "CacheContextOwner", "__repr__"),
+    (9, "CacheContextOwner", "_seal"),
+    (9, "CacheContextOwner", "retained_binding"),
+    (9, "CacheContextOwner", "current_binding"),
+)
 
 
 class RetainedBindingOriginError(RuntimeError):
@@ -353,6 +457,64 @@ def current(packet):
           and modules[5][1].get('GatewayEntryOwner') is classes[27][0]
           and modules[6][1].get('GatewayActivationOwner') is classes[10][0]) is not True:
         raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+    for runtime_consumer, runtime_alias, runtime_definition, runtime_name in (
+        (7, "_artifacts", 4, None),
+        (7, "_PRIVATE", 0, "_PRIVATE"),
+        (7, "_table_rows", 0, "_table_rows"),
+        (7, "ExpectedArtifact", 4, "ExpectedArtifact"),
+        (7, "_expected", 4, "_expected"),
+        (7, "_HashedArtifact", 4, "_HashedArtifact"),
+        (8, "GatewayActivationOwner", 3, "GatewayActivationOwner"),
+        (8, "GatewayPackageOwner", 0, "GatewayPackageOwner"),
+        (8, "_same_origins", 0, "_same_origins"),
+        (8, "_Scan", 0, "_Scan"),
+        (8, "_table_rows", 0, "_table_rows"),
+        (8, "_Tree", 0, "_Tree"),
+        (8, "GatewayRecipeOwner", 1, "GatewayRecipeOwner"),
+        (8, "_same_recipe_binding", 1, "_same_recipe_binding"),
+        (8, "ExpectedArtifact", 4, "ExpectedArtifact"),
+        (8, "StartupArtifactOwner", 4, "StartupArtifactOwner"),
+        (8, "_capture_native_scope", 4, "_capture_native_scope"),
+        (8, "_descriptor_closed_in_scope", 4, "_descriptor_closed_in_scope"),
+        (8, "_descriptor_refused", 4, "_descriptor_refused"),
+        (8, "_expected", 4, "_expected"),
+        (8, "_HashedArtifact", 4, "_HashedArtifact"),
+        (8, "_identity", 4, "_identity"),
+        (8, "_native_registration_tail", 4, "_native_registration_tail"),
+        (8, "_native_walk_scope", 4, "_native_walk_scope"),
+        (8, "_Scope", 4, "_Scope"),
+        (8, "gateway_entry", 6, None),
+        (8, "GatewayEntryOwner", 6, "GatewayEntryOwner"),
+        (9, "GatewayPackageOwner", 0, "GatewayPackageOwner"),
+        (9, "GatewayRecipeOwner", 1, "GatewayRecipeOwner"),
+        (9, "_same_recipe_binding", 1, "_same_recipe_binding"),
+        (9, "ExpectedArtifact", 4, "ExpectedArtifact"),
+        (9, "RuntimeFilePlan", 7, "RuntimeFilePlan"),
+        (9, "RuntimePackage", 7, "RuntimePackage"),
+        (9, "plan_current", 7, "plan_current"),
+        (9, "EntryFileSnapshotOwner", 8, "EntryFileSnapshotOwner"),
+        (9, "_Inputs", 8, "_Inputs"),
+        (9, "_same_package", 8, "_same_package"),
+        (9, "GatewayEntryOwner", 6, "GatewayEntryOwner"),
+        (9, "_origin_current", 6, "_origin_current"),
+    ):
+        runtime_consumer_names = modules[runtime_consumer][1]
+        runtime_definition_names = modules[runtime_definition][1]
+        if not all(
+            type(runtime_key) is str for runtime_key in runtime_consumer_names
+        ) or not all(type(runtime_key) is str for runtime_key in runtime_definition_names):
+            raise RetainedBindingOriginError("BI1_RETAINED_HELPER_ORIGIN_REFUSED") from None
+        runtime_expected = (
+            modules[runtime_definition][0]
+            if runtime_name is None
+            else runtime_definition_names.get(runtime_name)
+        )
+        if (
+            (runtime_name is not None and runtime_name not in runtime_definition_names)
+            or runtime_alias not in runtime_consumer_names
+            or runtime_consumer_names[runtime_alias] is not runtime_expected
+        ):
+            raise RetainedBindingOriginError("BI1_RETAINED_HELPER_ORIGIN_REFUSED") from None
     return packet
 
 
@@ -529,6 +691,64 @@ def current_live(packet, bound_layout, *, _error=RuntimeError):
           and modules[5][1].get('GatewayEntryOwner') is classes[27][0]
           and modules[6][1].get('GatewayActivationOwner') is classes[10][0]) is not True:
         raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+    for runtime_consumer, runtime_alias, runtime_definition, runtime_name in (
+        (7, "_artifacts", 4, None),
+        (7, "_PRIVATE", 0, "_PRIVATE"),
+        (7, "_table_rows", 0, "_table_rows"),
+        (7, "ExpectedArtifact", 4, "ExpectedArtifact"),
+        (7, "_expected", 4, "_expected"),
+        (7, "_HashedArtifact", 4, "_HashedArtifact"),
+        (8, "GatewayActivationOwner", 3, "GatewayActivationOwner"),
+        (8, "GatewayPackageOwner", 0, "GatewayPackageOwner"),
+        (8, "_same_origins", 0, "_same_origins"),
+        (8, "_Scan", 0, "_Scan"),
+        (8, "_table_rows", 0, "_table_rows"),
+        (8, "_Tree", 0, "_Tree"),
+        (8, "GatewayRecipeOwner", 1, "GatewayRecipeOwner"),
+        (8, "_same_recipe_binding", 1, "_same_recipe_binding"),
+        (8, "ExpectedArtifact", 4, "ExpectedArtifact"),
+        (8, "StartupArtifactOwner", 4, "StartupArtifactOwner"),
+        (8, "_capture_native_scope", 4, "_capture_native_scope"),
+        (8, "_descriptor_closed_in_scope", 4, "_descriptor_closed_in_scope"),
+        (8, "_descriptor_refused", 4, "_descriptor_refused"),
+        (8, "_expected", 4, "_expected"),
+        (8, "_HashedArtifact", 4, "_HashedArtifact"),
+        (8, "_identity", 4, "_identity"),
+        (8, "_native_registration_tail", 4, "_native_registration_tail"),
+        (8, "_native_walk_scope", 4, "_native_walk_scope"),
+        (8, "_Scope", 4, "_Scope"),
+        (8, "gateway_entry", 6, None),
+        (8, "GatewayEntryOwner", 6, "GatewayEntryOwner"),
+        (9, "GatewayPackageOwner", 0, "GatewayPackageOwner"),
+        (9, "GatewayRecipeOwner", 1, "GatewayRecipeOwner"),
+        (9, "_same_recipe_binding", 1, "_same_recipe_binding"),
+        (9, "ExpectedArtifact", 4, "ExpectedArtifact"),
+        (9, "RuntimeFilePlan", 7, "RuntimeFilePlan"),
+        (9, "RuntimePackage", 7, "RuntimePackage"),
+        (9, "plan_current", 7, "plan_current"),
+        (9, "EntryFileSnapshotOwner", 8, "EntryFileSnapshotOwner"),
+        (9, "_Inputs", 8, "_Inputs"),
+        (9, "_same_package", 8, "_same_package"),
+        (9, "GatewayEntryOwner", 6, "GatewayEntryOwner"),
+        (9, "_origin_current", 6, "_origin_current"),
+    ):
+        runtime_consumer_names = modules[runtime_consumer][1]
+        runtime_definition_names = modules[runtime_definition][1]
+        if not all(
+            type(runtime_key) is str for runtime_key in runtime_consumer_names
+        ) or not all(type(runtime_key) is str for runtime_key in runtime_definition_names):
+            raise _error("BI1_RETAINED_HELPER_ORIGIN_REFUSED") from None
+        runtime_expected = (
+            modules[runtime_definition][0]
+            if runtime_name is None
+            else runtime_definition_names.get(runtime_name)
+        )
+        if (
+            (runtime_name is not None and runtime_name not in runtime_definition_names)
+            or runtime_alias not in runtime_consumer_names
+            or runtime_consumer_names[runtime_alias] is not runtime_expected
+        ):
+            raise _error("BI1_RETAINED_HELPER_ORIGIN_REFUSED") from None
     return packet
 
 

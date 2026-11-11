@@ -1,3 +1,30 @@
+## November 11: persistent runtime plain-code custody
+
+- [x] **RGA-01d-RUNTIME-PLAIN** Append the three prewarmed runtime modules,
+      twelve declared classes and44 plain functions/methods to the actual early
+      packet. Preserve old positions and six-field API; newcounts10/53/86.
+      Cacheowner/root/fact are live values only; their keys remain mandatory.
+- [x] Join39 imported aliases to defining held modules in both checkers, both
+      parent audits and both Scope publication audits. Initial coherent wrong
+      aliases refuse; no imported wrapper function is executed by inspection.
+- [x] Retain132 drift and39 initial-alias failing controls, then green candidates;
+      six actual Scope code causals require private refusal/zero foreign calls,
+      work/reservations/registration/success at both publication points. Baseline
+      already rejects2entry-lineage controls;4cache/plan cases call changed code.
+- [x] Final765 broad cases plus22 dedicated started-parent cases per current/
+      minimum runtime pass. Repair independently reproduced pre-start test setup
+      dependency with explicit definition import and observed0generic fallback.
+      Production/actual broad test bytes unchanged after765; dedicated22 matches
+      all551 server-source hashes. Independent review preserves these limits.
+- [ ] **RGA-01d-RUNTIME-CALLABLES** Complete actual classmethod/generated helper/
+      constructor code/globals/default/cell custody; these12classes still expose
+      unrecorded callable attributes58on3.14.9 vs44on3.11.15. Include cache-candidate
+      dependency closure and native constructor source/alias prerequisites.
+- [ ] Preserve full original caller/root/callee/transitive/GC/callback checks and
+      fresh final graph reseal before dispatch; no graph shortcut is activated.
+- [ ] Unchanged native60s, complete feature/device/Linux/provider/release gates,
+      full roadmap and documentation objective remain required and active.
+
 ## November 11: fixed runtime prewarm custody
 
 - [x] **RGA-01d-PREWARM-TRANSIENT** Prepare runtime_files, entry_files and

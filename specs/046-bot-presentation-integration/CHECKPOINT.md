@@ -1,3 +1,44 @@
+## Persistent runtime record — November 11, 2026 UTC
+
+The character-image startup draft now retains the three prewarmed runtime modules,
+their12 declared classes and44 plain functions/methods in the actual early helper
+record. Old positions remain unchanged: the record now holds10modules,53classes and
+86functions, with the same six-field packet API. Only cache owner/root/fact values
+join the existing live-value exclusions; their keys remain required. The started
+parent's fixed prefix was updated to match. No fast audit path is activated.
+
+Thirty-nine imported aliases are joined to their defining held modules in both
+DATA checkers, both parent audits and both Scope publication audits. Initial wrong
+aliases can no longer become accepted coherent snapshots. The132 plain-code/default/
+keyword-default controls and39 alias controls first fail on their respective
+baselines, then pass. Six actual Scope causals mutate runtime code at both publication
+points and require private refusal with no foreign calls, new work, reservations,
+registration or successful return. The parent already passed the two entry-lineage
+controls; four cache/plan cases exposed foreign dispatch and are corrected in this
+draft. No deployed incident or live-host change is established by these fixtures.
+
+The same765 broad regression cases pass on actual Python3.14.9 and3.11.15, with no
+failures/errors/skips and unchanged source during each run. Dedicated22 started-parent
+cases also pass on both. Their standalone first test previously depended on other
+suite imports; the unchanged parent reproduces that setup failure. It now explicitly
+loads definitions without starting an owner and observes zero generic fallback calls.
+Only that separately executed test file changed after the765 runs; all production
+and executed broad-suite test bytes are unchanged. Independent review and private
+source/log/XML receipts retain this distinction. New tests are lint-clean, production
+lint counts match their baselines, and surface/private/diff checks pass.
+
+This is partial persistent code custody, not complete dependency or constructor
+coverage. An isolated census among these12classes still finds58 unrecorded callable
+attributes on3.14.9 and44 on3.11.15, including classmethods and generated constructors/
+helpers. Cache-candidate dependency closure, full original-root/caller/callee and
+transitive code checks, GC/callback safety, final fresh graph integration and the
+unchanged native60s acceptance remain open. The last dated native startup still
+fails; this step does not claim a speedup or a new native pass. Bot character images,
+host-local image display, physical devices, Linux and release remain separately
+unqualified. Installed builds, grants, providers, models, jobs and stores are unchanged.
+The full feature goal remains active; these remaining integration gaps are ours,
+not a claim that upstream lacks the requested image features.
+
 ## Fixed runtime prewarming — November 11, 2026 UTC
 
 The character startup draft now prepares the fixed runtime-file, entry-file and

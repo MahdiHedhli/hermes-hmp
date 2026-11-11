@@ -4,12 +4,33 @@ from hmp_startup import link_factory_origin as origins
 from . import test_presentation_entry_files as base
 
 
-def test_started_parent_refuses_pre_entry_without_generic_fallback(monkeypatch):
+def test_started_parent_refuses_before_start_without_generic_fallback(monkeypatch):
+    import sys
+
+    from hmp_startup import gateway_entry
+
+    # This is pre-start, not pre-definition. Do not depend on another test's
+    # collection imports to prepare the original Entry and helper definitions.
+    assert gateway_entry._OWNER is gateway_entry._CELL is gateway_entry._STARTED is None
+    assert gateway_entry._START_ATTEMPTED is False
     monkeypatch.setattr(origins, '_CAPTURE_STARTED', False)
     packet = origins.capture()
     assert origins.current(packet) is packet
-    with pytest.raises(RuntimeError, match='BI1_LINK_FACTORY_ORIGIN_REFUSED'):
-        origins.current_started(packet)
+    calls = []
+    generic_code = origins.current.__code__
+
+    def observe(frame, event, value):
+        if event == 'call' and frame.f_code is generic_code:
+            calls.append(True)
+
+    assert sys.getprofile() is None
+    sys.setprofile(observe)
+    try:
+        with pytest.raises(RuntimeError, match='BI1_LINK_FACTORY_ORIGIN_REFUSED'):
+            origins.current_started(packet)
+    finally:
+        sys.setprofile(None)
+    assert calls == []
 
 
 @pytest.mark.parametrize('fault', ('normal', 'parent_copy', 'record_copy', 'owner_invocation',

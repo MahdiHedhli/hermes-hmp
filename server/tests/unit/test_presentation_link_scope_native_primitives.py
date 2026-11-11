@@ -9,7 +9,7 @@ from .test_presentation_gateway_approval import operator_composed_script
 
 
 @pytest.mark.parametrize('publication', ('first', 'second'))
-@pytest.mark.parametrize('export', ('map', 'is_not', 'layout_graft', 'audit_graft', 'helper_graft', 'helper_layout_graft', 'helper_record_graft', 'helper_checker', 'helper_projection_schema', 'api_spec_dict_default', 'record_path_dispatch', 'record_receipt_dispatch', 'record_read_effect_dispatch', 'selection_approval_alias', 'selection_code', 'selection_error_code', 'activation_code', 'activation_error_code', 'artifact_error_code', 'artifact_error_new', 'artifact_error_getattribute', 'artifact_error_setattr', 'artifact_error_owner_property', 'artifact_owner_getattribute', 'artifact_owner_setattr', 'artifact_owner_dict_subclass', 'artifact_descriptor_code', 'artifact_allocation_code', 'artifact_expected_code', 'artifact_allocation_dispatch', 'execution_sum', 'execution_ord', 'entry_getattribute', 'entry_subclass_dict', 'artifact_graph_closed_file', 'artifact_graph_scope_file', 'artifact_graph_loaded_owner', 'artifact_graph_cache_context', 'artifact_graph_approval', 'artifact_graph_entry', 'artifact_graph_activation', 'artifact_graph_native_io', 'artifact_graph_interpreter'))
+@pytest.mark.parametrize('export', ('map', 'is_not', 'layout_graft', 'audit_graft', 'helper_graft', 'helper_layout_graft', 'helper_record_graft', 'helper_checker', 'helper_projection_schema', 'api_spec_dict_default', 'record_path_dispatch', 'record_receipt_dispatch', 'record_read_effect_dispatch', 'selection_approval_alias', 'selection_code', 'selection_error_code', 'activation_code', 'activation_error_code', 'artifact_error_code', 'artifact_error_new', 'artifact_error_getattribute', 'artifact_error_setattr', 'artifact_error_owner_property', 'artifact_owner_getattribute', 'artifact_owner_setattr', 'artifact_owner_dict_subclass', 'artifact_descriptor_code', 'artifact_allocation_code', 'artifact_expected_code', 'artifact_allocation_dispatch', 'execution_sum', 'execution_ord', 'entry_getattribute', 'entry_subclass_dict', 'artifact_graph_closed_file', 'artifact_graph_scope_file', 'artifact_graph_loaded_owner', 'artifact_graph_cache_context', 'artifact_graph_approval', 'artifact_graph_entry', 'artifact_graph_activation', 'artifact_graph_native_io', 'artifact_graph_interpreter', 'runtime_code_entry_lineage', 'runtime_code_cache_seal', 'runtime_code_plan'))
 def test_scope_publication_rejects_changed_primitive_or_layout_root(
         tmp_path, monkeypatch, request, publication, export):
     tree = ast.parse((base.SERVER / 'hmp_plugin/presentation_startup_artifacts.py').read_text())
@@ -68,7 +68,7 @@ def observe(frame,event,value):
         if event=='return' and frame.f_code is retain_code and value is held[0][0]:
             successful_returns.append(True)
         if (event=='return' and frame.f_code is retain_code
-                and (export.startswith(('artifact_','execution_','record_','api_')) or export=='selection_approval_alias')):
+                and (export.startswith(('artifact_','execution_','record_','api_','runtime_code_')) or export=='selection_approval_alias')):
             error=frame.f_locals.get('refusal')
             assert error is not None
             values=native_error_dict(error,artifact_error_kind)
@@ -128,6 +128,18 @@ def observe(frame,event,value):
             late_helper_code=foreign.__code__
             object.__setattr__(owner,'__class__',ChangedOwner)
             assert type(owner) is ChangedOwner
+        elif export.startswith('runtime_code_'):
+            component,owner_name,name={
+                'runtime_code_entry_lineage':('entry_files','EntryFileSnapshotOwner','_pure_lineage'),
+                'runtime_code_cache_seal':('cache_context','CacheContextOwner','_seal'),
+                'runtime_code_plan':('runtime_files',None,'plan_current'),
+            }[export]
+            names=vars(sys.modules['hmp_startup.'+component])
+            function=names[name] if owner_name is None else vars(names[owner_name])[name]
+            helper_code_restore.append((function,function.__code__))
+            late_helper_code=foreign.__code__
+            assign(function,'__code__',late_helper_code)
+            assert function.__code__ is late_helper_code
         elif export.startswith('artifact_graph_'):
             name='_'+export[len('artifact_graph_'):]+'_graph_mirrors'
             function=getattr(a,name)
@@ -304,7 +316,7 @@ finally:
         monitor.free_tool_id(5)
 assert mutated==[True] and len(observed)==1 and failed
 assert foreign_calls==[]
-if (export.startswith(('artifact_','execution_','record_','api_')) or export=='selection_approval_alias'):
+if (export.startswith(('artifact_','execution_','record_','api_','runtime_code_')) or export=='selection_approval_alias'):
     assert len(refusal_records)==1 and all(refusal_records[0].values()),refusal_records
 assert registrations==[] and successful_returns==[]
 assert retained._failed and not retained._ready and retained._fact_cell is None
@@ -319,7 +331,7 @@ evidence=dict(publication=publication,export=export,mutation_completed=True,
               refused=True,foreign_calls=0,new_work=0,reserve_change=0,
               registration_calls_after_mutation=0,successful_retainer_returns=0,
               scope_published_before_refusal=publication=='second')
-if (export.startswith(('artifact_','execution_','record_','api_')) or export=='selection_approval_alias'):evidence['private_refusal']=refusal_records[0]
+if (export.startswith(('artifact_','execution_','record_','api_','runtime_code_')) or export=='selection_approval_alias'):evidence['private_refusal']=refusal_records[0]
 destination=base/'scope-native-primitive-refusal.json'
 destination.write_text(json.dumps(evidence,sort_keys=True));destination.chmod(0o600)
 assert sys.getprofile() is None and sys.gettrace() is None

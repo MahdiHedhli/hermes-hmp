@@ -6323,6 +6323,77 @@ class StartupArtifactOwner:
                     raise refusal from None
                 if (link_helper_all((link_raw_type(link_hdata_key) is link_raw_str for link_hdata_key in link_hdata_modules[6][1])) and link_hdata_modules[5][1].get('GatewayEntryOwner') is link_hdata_classes[27][0] and (link_hdata_modules[6][1].get('GatewayActivationOwner') is link_hdata_classes[10][0])) is not True:
                     raise refusal from None
+                for (
+                    link_runtime_consumer,
+                    link_runtime_alias,
+                    link_runtime_definition,
+                    link_runtime_name,
+                ) in (
+                    (7, "_artifacts", 4, None),
+                    (7, "_PRIVATE", 0, "_PRIVATE"),
+                    (7, "_table_rows", 0, "_table_rows"),
+                    (7, "ExpectedArtifact", 4, "ExpectedArtifact"),
+                    (7, "_expected", 4, "_expected"),
+                    (7, "_HashedArtifact", 4, "_HashedArtifact"),
+                    (8, "GatewayActivationOwner", 3, "GatewayActivationOwner"),
+                    (8, "GatewayPackageOwner", 0, "GatewayPackageOwner"),
+                    (8, "_same_origins", 0, "_same_origins"),
+                    (8, "_Scan", 0, "_Scan"),
+                    (8, "_table_rows", 0, "_table_rows"),
+                    (8, "_Tree", 0, "_Tree"),
+                    (8, "GatewayRecipeOwner", 1, "GatewayRecipeOwner"),
+                    (8, "_same_recipe_binding", 1, "_same_recipe_binding"),
+                    (8, "ExpectedArtifact", 4, "ExpectedArtifact"),
+                    (8, "StartupArtifactOwner", 4, "StartupArtifactOwner"),
+                    (8, "_capture_native_scope", 4, "_capture_native_scope"),
+                    (8, "_descriptor_closed_in_scope", 4, "_descriptor_closed_in_scope"),
+                    (8, "_descriptor_refused", 4, "_descriptor_refused"),
+                    (8, "_expected", 4, "_expected"),
+                    (8, "_HashedArtifact", 4, "_HashedArtifact"),
+                    (8, "_identity", 4, "_identity"),
+                    (8, "_native_registration_tail", 4, "_native_registration_tail"),
+                    (8, "_native_walk_scope", 4, "_native_walk_scope"),
+                    (8, "_Scope", 4, "_Scope"),
+                    (8, "gateway_entry", 6, None),
+                    (8, "GatewayEntryOwner", 6, "GatewayEntryOwner"),
+                    (9, "GatewayPackageOwner", 0, "GatewayPackageOwner"),
+                    (9, "GatewayRecipeOwner", 1, "GatewayRecipeOwner"),
+                    (9, "_same_recipe_binding", 1, "_same_recipe_binding"),
+                    (9, "ExpectedArtifact", 4, "ExpectedArtifact"),
+                    (9, "RuntimeFilePlan", 7, "RuntimeFilePlan"),
+                    (9, "RuntimePackage", 7, "RuntimePackage"),
+                    (9, "plan_current", 7, "plan_current"),
+                    (9, "EntryFileSnapshotOwner", 8, "EntryFileSnapshotOwner"),
+                    (9, "_Inputs", 8, "_Inputs"),
+                    (9, "_same_package", 8, "_same_package"),
+                    (9, "GatewayEntryOwner", 6, "GatewayEntryOwner"),
+                    (9, "_origin_current", 6, "_origin_current"),
+                ):
+                    link_runtime_consumer_names = link_hdata_modules[link_runtime_consumer][1]
+                    link_runtime_definition_names = link_hdata_modules[link_runtime_definition][1]
+                    if not link_helper_all(
+                        link_raw_type(link_runtime_key) is link_raw_str
+                        for link_runtime_key in link_runtime_consumer_names
+                    ) or not link_helper_all(
+                        link_raw_type(link_runtime_key) is link_raw_str
+                        for link_runtime_key in link_runtime_definition_names
+                    ):
+                        raise refusal from None
+                    link_runtime_expected = (
+                        link_hdata_modules[link_runtime_definition][0]
+                        if link_runtime_name is None
+                        else link_runtime_definition_names.get(link_runtime_name)
+                    )
+                    if (
+                        (
+                            link_runtime_name is not None
+                            and link_runtime_name not in link_runtime_definition_names
+                        )
+                        or link_runtime_alias not in link_runtime_consumer_names
+                        or link_runtime_consumer_names[link_runtime_alias]
+                        is not link_runtime_expected
+                    ):
+                        raise refusal from None
 
                 link_pin_encoding_origin = link_pin_environment[3]
                 if link_raw_type(link_pin_encoding_origin) is not link_pin_types[9][0] or link_raw_tuple.__len__(link_pin_encoding_origin) != 7:
@@ -6813,6 +6884,77 @@ class StartupArtifactOwner:
                     raise refusal from None
                 if (link_helper_all((link_raw_type(link_hdata_key) is link_raw_str for link_hdata_key in link_hdata_modules[6][1])) and link_hdata_modules[5][1].get('GatewayEntryOwner') is link_hdata_classes[27][0] and (link_hdata_modules[6][1].get('GatewayActivationOwner') is link_hdata_classes[10][0])) is not True:
                     raise refusal from None
+                for (
+                    link_runtime_consumer,
+                    link_runtime_alias,
+                    link_runtime_definition,
+                    link_runtime_name,
+                ) in (
+                    (7, "_artifacts", 4, None),
+                    (7, "_PRIVATE", 0, "_PRIVATE"),
+                    (7, "_table_rows", 0, "_table_rows"),
+                    (7, "ExpectedArtifact", 4, "ExpectedArtifact"),
+                    (7, "_expected", 4, "_expected"),
+                    (7, "_HashedArtifact", 4, "_HashedArtifact"),
+                    (8, "GatewayActivationOwner", 3, "GatewayActivationOwner"),
+                    (8, "GatewayPackageOwner", 0, "GatewayPackageOwner"),
+                    (8, "_same_origins", 0, "_same_origins"),
+                    (8, "_Scan", 0, "_Scan"),
+                    (8, "_table_rows", 0, "_table_rows"),
+                    (8, "_Tree", 0, "_Tree"),
+                    (8, "GatewayRecipeOwner", 1, "GatewayRecipeOwner"),
+                    (8, "_same_recipe_binding", 1, "_same_recipe_binding"),
+                    (8, "ExpectedArtifact", 4, "ExpectedArtifact"),
+                    (8, "StartupArtifactOwner", 4, "StartupArtifactOwner"),
+                    (8, "_capture_native_scope", 4, "_capture_native_scope"),
+                    (8, "_descriptor_closed_in_scope", 4, "_descriptor_closed_in_scope"),
+                    (8, "_descriptor_refused", 4, "_descriptor_refused"),
+                    (8, "_expected", 4, "_expected"),
+                    (8, "_HashedArtifact", 4, "_HashedArtifact"),
+                    (8, "_identity", 4, "_identity"),
+                    (8, "_native_registration_tail", 4, "_native_registration_tail"),
+                    (8, "_native_walk_scope", 4, "_native_walk_scope"),
+                    (8, "_Scope", 4, "_Scope"),
+                    (8, "gateway_entry", 6, None),
+                    (8, "GatewayEntryOwner", 6, "GatewayEntryOwner"),
+                    (9, "GatewayPackageOwner", 0, "GatewayPackageOwner"),
+                    (9, "GatewayRecipeOwner", 1, "GatewayRecipeOwner"),
+                    (9, "_same_recipe_binding", 1, "_same_recipe_binding"),
+                    (9, "ExpectedArtifact", 4, "ExpectedArtifact"),
+                    (9, "RuntimeFilePlan", 7, "RuntimeFilePlan"),
+                    (9, "RuntimePackage", 7, "RuntimePackage"),
+                    (9, "plan_current", 7, "plan_current"),
+                    (9, "EntryFileSnapshotOwner", 8, "EntryFileSnapshotOwner"),
+                    (9, "_Inputs", 8, "_Inputs"),
+                    (9, "_same_package", 8, "_same_package"),
+                    (9, "GatewayEntryOwner", 6, "GatewayEntryOwner"),
+                    (9, "_origin_current", 6, "_origin_current"),
+                ):
+                    link_runtime_consumer_names = link_hdata_modules[link_runtime_consumer][1]
+                    link_runtime_definition_names = link_hdata_modules[link_runtime_definition][1]
+                    if not link_helper_all(
+                        link_raw_type(link_runtime_key) is link_raw_str
+                        for link_runtime_key in link_runtime_consumer_names
+                    ) or not link_helper_all(
+                        link_raw_type(link_runtime_key) is link_raw_str
+                        for link_runtime_key in link_runtime_definition_names
+                    ):
+                        raise refusal from None
+                    link_runtime_expected = (
+                        link_hdata_modules[link_runtime_definition][0]
+                        if link_runtime_name is None
+                        else link_runtime_definition_names.get(link_runtime_name)
+                    )
+                    if (
+                        (
+                            link_runtime_name is not None
+                            and link_runtime_name not in link_runtime_definition_names
+                        )
+                        or link_runtime_alias not in link_runtime_consumer_names
+                        or link_runtime_consumer_names[link_runtime_alias]
+                        is not link_runtime_expected
+                    ):
+                        raise refusal from None
 
                 link_pin_encoding_origin = link_pin_environment[3]
                 if link_raw_type(link_pin_encoding_origin) is not link_pin_types[9][0] or link_raw_tuple.__len__(link_pin_encoding_origin) != 7:

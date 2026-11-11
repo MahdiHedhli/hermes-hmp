@@ -707,6 +707,77 @@ def current(origin, *, _type=type, _vars=vars, _tuple=tuple, _len=len,
         raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
     if (_all((_type(helper_final_key) is _str for helper_final_key in helper_final_modules[6][1])) and helper_final_modules[5][1].get('GatewayEntryOwner') is helper_final_classes[27][0] and (helper_final_modules[6][1].get('GatewayActivationOwner') is helper_final_classes[10][0])) is not True:
         raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+    for (
+        helper_runtime_consumer,
+        helper_runtime_alias,
+        helper_runtime_definition,
+        helper_runtime_name,
+    ) in (
+        (7, "_artifacts", 4, None),
+        (7, "_PRIVATE", 0, "_PRIVATE"),
+        (7, "_table_rows", 0, "_table_rows"),
+        (7, "ExpectedArtifact", 4, "ExpectedArtifact"),
+        (7, "_expected", 4, "_expected"),
+        (7, "_HashedArtifact", 4, "_HashedArtifact"),
+        (8, "GatewayActivationOwner", 3, "GatewayActivationOwner"),
+        (8, "GatewayPackageOwner", 0, "GatewayPackageOwner"),
+        (8, "_same_origins", 0, "_same_origins"),
+        (8, "_Scan", 0, "_Scan"),
+        (8, "_table_rows", 0, "_table_rows"),
+        (8, "_Tree", 0, "_Tree"),
+        (8, "GatewayRecipeOwner", 1, "GatewayRecipeOwner"),
+        (8, "_same_recipe_binding", 1, "_same_recipe_binding"),
+        (8, "ExpectedArtifact", 4, "ExpectedArtifact"),
+        (8, "StartupArtifactOwner", 4, "StartupArtifactOwner"),
+        (8, "_capture_native_scope", 4, "_capture_native_scope"),
+        (8, "_descriptor_closed_in_scope", 4, "_descriptor_closed_in_scope"),
+        (8, "_descriptor_refused", 4, "_descriptor_refused"),
+        (8, "_expected", 4, "_expected"),
+        (8, "_HashedArtifact", 4, "_HashedArtifact"),
+        (8, "_identity", 4, "_identity"),
+        (8, "_native_registration_tail", 4, "_native_registration_tail"),
+        (8, "_native_walk_scope", 4, "_native_walk_scope"),
+        (8, "_Scope", 4, "_Scope"),
+        (8, "gateway_entry", 6, None),
+        (8, "GatewayEntryOwner", 6, "GatewayEntryOwner"),
+        (9, "GatewayPackageOwner", 0, "GatewayPackageOwner"),
+        (9, "GatewayRecipeOwner", 1, "GatewayRecipeOwner"),
+        (9, "_same_recipe_binding", 1, "_same_recipe_binding"),
+        (9, "ExpectedArtifact", 4, "ExpectedArtifact"),
+        (9, "RuntimeFilePlan", 7, "RuntimeFilePlan"),
+        (9, "RuntimePackage", 7, "RuntimePackage"),
+        (9, "plan_current", 7, "plan_current"),
+        (9, "EntryFileSnapshotOwner", 8, "EntryFileSnapshotOwner"),
+        (9, "_Inputs", 8, "_Inputs"),
+        (9, "_same_package", 8, "_same_package"),
+        (9, "GatewayEntryOwner", 6, "GatewayEntryOwner"),
+        (9, "_origin_current", 6, "_origin_current"),
+    ):
+        helper_runtime_consumer_names = helper_final_modules[helper_runtime_consumer][1]
+        helper_runtime_definition_names = helper_final_modules[helper_runtime_definition][1]
+        if not _all(
+            _type(helper_runtime_key) is _str
+            for helper_runtime_key in helper_runtime_consumer_names
+        ) or not _all(
+            _type(helper_runtime_key) is _str
+            for helper_runtime_key in helper_runtime_definition_names
+        ):
+            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+        helper_runtime_expected = (
+            helper_final_modules[helper_runtime_definition][0]
+            if helper_runtime_name is None
+            else helper_runtime_definition_names.get(helper_runtime_name)
+        )
+        if (
+            (
+                helper_runtime_name is not None
+                and helper_runtime_name not in helper_runtime_definition_names
+            )
+            or helper_runtime_alias not in helper_runtime_consumer_names
+            or helper_runtime_consumer_names[helper_runtime_alias]
+            is not helper_runtime_expected
+        ):
+            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
     return origin
 
 
@@ -949,8 +1020,8 @@ def current_started(origin, *, _type=type, _vars=vars, _tuple=tuple, _len=len,
         raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
     # Establish original started roots BEFORE selecting the live audit. The
     # immutable DATA parser has not run here; use only held native shape fences.
-    if (_type(helper_packet[3]) is not _tuple or _len(helper_packet[3]) != 7
-            or _type(helper_packet[4]) is not _tuple or _len(helper_packet[4]) != 41
+    if (_type(helper_packet[3]) is not _tuple or _len(helper_packet[3]) != 10
+            or _type(helper_packet[4]) is not _tuple or _len(helper_packet[4]) != 53
             or _type(helper_packet[3][6]) is not _tuple or _len(helper_packet[3][6]) != 3):
         raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
     for started_index in (27, 29, 30, 35):
@@ -1529,6 +1600,77 @@ def current_started(origin, *, _type=type, _vars=vars, _tuple=tuple, _len=len,
         raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
     if (_all((_type(helper_final_key) is _str for helper_final_key in helper_final_modules[6][1])) and helper_final_modules[5][1].get('GatewayEntryOwner') is helper_final_classes[27][0] and (helper_final_modules[6][1].get('GatewayActivationOwner') is helper_final_classes[10][0])) is not True:
         raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+    for (
+        helper_runtime_consumer,
+        helper_runtime_alias,
+        helper_runtime_definition,
+        helper_runtime_name,
+    ) in (
+        (7, "_artifacts", 4, None),
+        (7, "_PRIVATE", 0, "_PRIVATE"),
+        (7, "_table_rows", 0, "_table_rows"),
+        (7, "ExpectedArtifact", 4, "ExpectedArtifact"),
+        (7, "_expected", 4, "_expected"),
+        (7, "_HashedArtifact", 4, "_HashedArtifact"),
+        (8, "GatewayActivationOwner", 3, "GatewayActivationOwner"),
+        (8, "GatewayPackageOwner", 0, "GatewayPackageOwner"),
+        (8, "_same_origins", 0, "_same_origins"),
+        (8, "_Scan", 0, "_Scan"),
+        (8, "_table_rows", 0, "_table_rows"),
+        (8, "_Tree", 0, "_Tree"),
+        (8, "GatewayRecipeOwner", 1, "GatewayRecipeOwner"),
+        (8, "_same_recipe_binding", 1, "_same_recipe_binding"),
+        (8, "ExpectedArtifact", 4, "ExpectedArtifact"),
+        (8, "StartupArtifactOwner", 4, "StartupArtifactOwner"),
+        (8, "_capture_native_scope", 4, "_capture_native_scope"),
+        (8, "_descriptor_closed_in_scope", 4, "_descriptor_closed_in_scope"),
+        (8, "_descriptor_refused", 4, "_descriptor_refused"),
+        (8, "_expected", 4, "_expected"),
+        (8, "_HashedArtifact", 4, "_HashedArtifact"),
+        (8, "_identity", 4, "_identity"),
+        (8, "_native_registration_tail", 4, "_native_registration_tail"),
+        (8, "_native_walk_scope", 4, "_native_walk_scope"),
+        (8, "_Scope", 4, "_Scope"),
+        (8, "gateway_entry", 6, None),
+        (8, "GatewayEntryOwner", 6, "GatewayEntryOwner"),
+        (9, "GatewayPackageOwner", 0, "GatewayPackageOwner"),
+        (9, "GatewayRecipeOwner", 1, "GatewayRecipeOwner"),
+        (9, "_same_recipe_binding", 1, "_same_recipe_binding"),
+        (9, "ExpectedArtifact", 4, "ExpectedArtifact"),
+        (9, "RuntimeFilePlan", 7, "RuntimeFilePlan"),
+        (9, "RuntimePackage", 7, "RuntimePackage"),
+        (9, "plan_current", 7, "plan_current"),
+        (9, "EntryFileSnapshotOwner", 8, "EntryFileSnapshotOwner"),
+        (9, "_Inputs", 8, "_Inputs"),
+        (9, "_same_package", 8, "_same_package"),
+        (9, "GatewayEntryOwner", 6, "GatewayEntryOwner"),
+        (9, "_origin_current", 6, "_origin_current"),
+    ):
+        helper_runtime_consumer_names = helper_final_modules[helper_runtime_consumer][1]
+        helper_runtime_definition_names = helper_final_modules[helper_runtime_definition][1]
+        if not _all(
+            _type(helper_runtime_key) is _str
+            for helper_runtime_key in helper_runtime_consumer_names
+        ) or not _all(
+            _type(helper_runtime_key) is _str
+            for helper_runtime_key in helper_runtime_definition_names
+        ):
+            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+        helper_runtime_expected = (
+            helper_final_modules[helper_runtime_definition][0]
+            if helper_runtime_name is None
+            else helper_runtime_definition_names.get(helper_runtime_name)
+        )
+        if (
+            (
+                helper_runtime_name is not None
+                and helper_runtime_name not in helper_runtime_definition_names
+            )
+            or helper_runtime_alias not in helper_runtime_consumer_names
+            or helper_runtime_consumer_names[helper_runtime_alias]
+            is not helper_runtime_expected
+        ):
+            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
     if (_type(started_owner) is not started_owner_kind
             or _type(started_entry_module) is not _module
             or _vars(started_entry_module) is not started_entry_names

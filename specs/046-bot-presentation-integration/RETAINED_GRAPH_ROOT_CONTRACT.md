@@ -527,3 +527,29 @@ still lacks these modules' complete runtime class/code closure. Original-root
 record expansion, constructor/transitive/source/caller/callee/bothScope checks
 and complete fresh graph reseal remain next. No arbitrary-GC atomicity, native
 startup speedup,60s success, feature delivery or release qualification follows.
+
+## November 11: persistent runtime plain-code record
+
+The actual early packet appends runtime_files, entry_files and cache_context;
+old module/class/function indices are preserved and widths are10/53/86. Runtime
+cache owner/root/fact fields are excluded only as live values with mandatory keys.
+The started-root prefix is updated. Both DATA checkers, both original parent audit
+copies and both Scope publication copies join the same39 fixed import aliases to
+their defining held modules. Parent and bothScope function metadata loops consume
+the expanded actual role table. No new audit admission or graph shortcut follows.
+
+132 plain-code metadata and39 coherent-alias controls expose the omissions before
+correction. Six actual publication causals preserve private refusal with no foreign
+calls/effects: the dated parent already refuses2entry-lineage controls, while4cache/
+plan code mutations execute before the new record catches them. Final765 broad
+and22 dedicated parent-start cases pass each tested runtime. The separate uncollected
+pre-start test setup was corrected after the broad suite without production or
+executed broad-test byte changes; final22 binds all551 server-source entries.
+
+This record remains incomplete for callable closure: actual new-class inventory
+finds58 unrecorded callable attributes on3.14.9 and44 on3.11.15, including classmethods
+and generated constructors/helpers. Cache-candidate and transitive callee/source
+closure, original caller/root/bothScope ownership, all GC/callback causal checks and
+whole fresh graph integration remain required. Pure inspection is not atomic; the
+existing live-key fences are not a claim of arbitrary-GC safety. Keep these drafts
+out of new fast admission until that work and unchanged native60s acceptance pass.
