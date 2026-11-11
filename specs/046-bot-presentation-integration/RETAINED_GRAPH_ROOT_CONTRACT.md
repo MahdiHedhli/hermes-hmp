@@ -86,3 +86,44 @@ work/attempts/registrations and no foreign binding hooks. This is an explicit
 custody prerequisite, not the reduced graph audit or end-to-end performance fix.
 The full generic source/runtime checks remain. Remaining root provenance,
 post-callback joins and reduced-dispatch causals are still required by RGA-01.
+
+## RGA-01b: hold source identity across callbacks
+
+The retainer now holds the literal original package-source pointer after the
+RGA-01a member fence. Each `link_rejoin` joins it to the actual runtime inputs and
+held package-binding containers before and after the parent origin checker.
+Both final raw publication windows also require Scope.parent to be that source.
+Original-source identity is checked before indexed source access, so a foreign
+replacement cannot nominate a getter. No late helper is added to these joins.
+
+Twelve additional controls replace the source with an equal source copy, a source
+with a copied binding container, or a foreign object at four actual caller sites:
+the first line after blueprint factory return, the first caller line after parent
+checker return, and each final raw publication window. The test asserts actual
+frame writeback, exact outer error/failed owner, sticky failure, no foreign hooks,
+no later registration or successful return and unchanged native ledger. These
+are negative prefix controls, not arbitrary asynchronous mutation/atomicity,
+successful native traversal or permission admission evidence.
+
+The first failed run overmatched AST conditions before exercising these controls;
+the second reached all controls but failed a witness that assumed a not-yet-set
+registration attribute existed. Both failed receipts remain private. The fixed
+24-case current-Python run passes. Broad final regression is recorded separately.
+Independent read-only source review found no concrete blocker and confirmed the
+caller-line scope; it did not execute tests or independently rehash the receipts.
+
+RGA-01b does not close RGA-01. The actual original-source/Scope/registration joins
+at every intended native consumer, complete fresh graph implementation,
+post-callback mutable checks, original native60s and physical/release gates remain.
+
+Final RGA-01b regression: matching626 pass on actual Python3.14.9 and3.11.15,
+source unchanged within each run, zero failures/errors/skips. Receipts:
+`/private/tmp/hq-n_7pb45o/receipt.json` and
+`/private/tmp/hq-qpyxx6k0/receipt.json`. The original native traversal is evaluated
+separately; these regression passes do not close its deadline or full feature.
+
+Fresh original native gate `/private/tmp/hq-yj2pkdxk/receipt.json` fails with
+TimeoutExpired60s, source unchanged. Last original progress checkpoint event4
+at48.82648s:44 observed/typed, one retired capsule, work963/reserved0. No earlier
+setup refusal, skipped traversal, deadline change, speedup or full acceptance is
+claimed. The original test was run alone after both regression suites settled.

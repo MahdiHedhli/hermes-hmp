@@ -1,3 +1,24 @@
+## Original package source across callbacks — November 10, 2026
+
+The local bot-character draft now retains the original package-source identity
+across the parent checker and both final Scope publication windows. It checks
+identity before source field access and keeps every full generic/current audit.
+No reduced graph audit or cached currentness verdict is enabled.
+
+Matching 626 checks pass on actual Python 3.14.9 and 3.11.15, with unchanged
+source and zero failures/errors/skips. Twelve new actual caller-site controls
+exercise equal source copies, copied binding containers and foreign replacements
+after factory/parent returns and at both final windows. They verify actual
+writeback, exact failed-owner error, no foreign hooks, no later registration or
+successful return and unchanged native work. These are negative prefix controls,
+not successful startup or physical rendering. Independent read-only review found
+no concrete source blocker; it did not execute or independently rehash the suites.
+The fresh original native traversal still times out at its unchanged60s deadline
+(last checkpoint event4 at48.83s,44 typed observations, one retired capsule).
+This is not a measured startup speedup. The actual fresh retained-graph
+optimization and complete native/feature/device/release qualification remain open. Working media6796 and installed builds are
+unchanged; no grants/providers/models/jobs or release actions were performed.
+
 ## Original entry package-binding fence — November 10, 2026
 
 The local character draft now explicitly joins package and nested selection

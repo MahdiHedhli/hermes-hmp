@@ -6,6 +6,9 @@
 - [x] **RGA-01a** Add explicit original entry-input package/selection member
       join before policy capture; no audit skipped. Focused actual-prefix causals
       distinguish original members from mismatches; no full completion claimed.
+- [x] **RGA-01b** Rejoin held original package-source/input/binding pointers
+      before/after the parent checker and both raw publication windows. No generic
+      audit removed; callback causals and final regression recorded in contract.
 - [ ] **RGA-01** Prove original entry-input/root custody at every intended reduced
       audit consumer, then implement the fresh graph audit with pre/post callback
       rejoins and complete generic fallback APIs. No reduced parser is enabled.

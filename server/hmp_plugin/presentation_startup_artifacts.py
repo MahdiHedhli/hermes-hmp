@@ -3509,6 +3509,7 @@ class StartupArtifactOwner:
                      and tuple.__getitem__(tuple.__getitem__(input_package_binding, 4), 2) is tuple.__getitem__(tuple.__getitem__(source_package_binding, 4), 2)
                      and tuple.__getitem__(tuple.__getitem__(input_package_binding, 4), 3) is tuple.__getitem__(tuple.__getitem__(source_package_binding, 4), 3)) is not True:
                     raise refusal from None
+                original_package_source = source
                 link_tail, link_tail_code = tail_row[1], tail_row[2]
                 source_check, source_check_code = _source_current, _source_current.__code__
 
@@ -3574,6 +3575,10 @@ class StartupArtifactOwner:
                          and tuple.__getitem__(runtime, 7) is runtime_original_link
                          and runtime_entry_names.get('_inputs') is runtime_inputs
                          and runtime_entry_names.get('_root_cell') is runtime_cell
+                         and source is original_package_source
+                         and tuple.__getitem__(source, 1) is source_package_binding
+                         and tuple.__getitem__(runtime_inputs, 4) is tuple.__getitem__(source, 0)
+                         and tuple.__getitem__(runtime_inputs, 5) is input_package_binding
                          and tuple.__getitem__(runtime_inputs, 12) is runtime_original_plan
                          and tuple.__getitem__(runtime_original_plan, 14) is runtime_original_link) is not True:
                         raise refusal from None
@@ -3582,6 +3587,14 @@ class StartupArtifactOwner:
                         raise refusal from None
                     for row in (current_row, blueprint_row, factory_row, tail_row, cohort_row):
                         function_row_current(row)
+                    # The origin checker above is a callback boundary. Rejoin
+                    # original package DATA afterward as well as before it.
+                    if (source is not original_package_source
+                            or tuple.__getitem__(source, 1) is not source_package_binding
+                            or tuple.__getitem__(runtime, 2) is not runtime_inputs
+                            or tuple.__getitem__(runtime_inputs, 4) is not tuple.__getitem__(source, 0)
+                            or tuple.__getitem__(runtime_inputs, 5) is not input_package_binding):
+                        raise refusal from None
 
                 # Check raw publication cohorts after EACH child helper return.
                 # Factory reads these snapshots, never owner getters or grants.
@@ -3705,6 +3718,10 @@ class StartupArtifactOwner:
                         or tuple.__getitem__(runtime_inputs, 12) is not runtime_original_plan
                         or tuple.__getitem__(runtime_original_plan, 14) is not runtime_original_link
                         or tuple.__getitem__(runtime_original_plan, 7) is not expected
+                        or source is not original_package_source
+                        or tuple.__getitem__(source, 1) is not source_package_binding
+                        or tuple.__getitem__(runtime_inputs, 5) is not input_package_binding
+                        or tuple.__getitem__(s, 5) is not original_package_source
                         or tuple.__getitem__(runtime_inputs, 4) is not tuple.__getitem__(source, 0)):
                     raise refusal from None
                 # Rejoin actual source/entry pointer identities without calling
@@ -4193,6 +4210,10 @@ class StartupArtifactOwner:
                         or tuple.__getitem__(runtime_inputs, 12) is not runtime_original_plan
                         or tuple.__getitem__(runtime_original_plan, 14) is not runtime_original_link
                         or tuple.__getitem__(runtime_original_plan, 7) is not expected
+                        or source is not original_package_source
+                        or tuple.__getitem__(source, 1) is not source_package_binding
+                        or tuple.__getitem__(runtime_inputs, 5) is not input_package_binding
+                        or tuple.__getitem__(s, 5) is not original_package_source
                         or tuple.__getitem__(runtime_inputs, 4) is not tuple.__getitem__(source, 0)):
                     raise refusal from None
                 # Rejoin actual source/entry pointer identities without calling
