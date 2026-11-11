@@ -65,7 +65,16 @@ _FUNCTIONS = ((0, 'GatewayPackageOwner', '_retained_binding'),
               (5, None, '_api_state'), (5, 'GatewayApprovalError', '__init__'),
               (6, 'GatewayEntryOwner', '_retained_binding'),
               (6, None, '_native_file_ledger_shape'), (6, None, '_require'),
-              (6, 'GatewayEntryError', '__init__'))
+              (6, 'GatewayEntryError', '__init__'),
+              (4, None, '_closed_file_graph_mirrors'),
+              (4, None, '_scope_file_graph_mirrors'),
+              (4, None, '_loaded_owner_graph_mirrors'),
+              (4, None, '_cache_context_graph_mirrors'),
+              (4, None, '_approval_graph_mirrors'),
+              (4, None, '_entry_graph_mirrors'),
+              (4, None, '_activation_graph_mirrors'),
+              (4, None, '_native_io_graph_mirrors'),
+              (4, None, '_interpreter_graph_mirrors'))
 
 
 class RetainedBindingOriginError(RuntimeError):

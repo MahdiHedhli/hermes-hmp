@@ -1,3 +1,34 @@
+## Graph checker code capture — November 11, 2026 UTC
+
+The character startup draft now retains the nine new graph checkers in the
+existing early code record before later callbacks. The prior33 function positions
+remain unchanged; the record now covers42 functions,41 classes and7 modules in
+the same six-field DATA packet. Existing generic, parent and both final Scope
+checks use the extended role list. No faster or reduced guard is enabled.
+
+Twenty-seven local controls change code, positional defaults or keyword defaults
+for each checker; eighteen actual publication controls change checker code at
+both Scope boundaries. They refuse without executing changed functions, adding
+native work, changing reservations or returning a successful retainer, and verify
+the existing private refusal state. Tests using the exact previous role source
+showed27 missing-refusal failures after a test free-variable witness was corrected;
+the earlier mixed setup failures remain distinct from that causal red result.
+
+The broad386-case runs initially had382 passes and4 import-order failures on both
+runtimes. Exact previous-role baseline reproduced the same4 failures: their hooks
+watched the superseded capture function, so neither observation nor late fault
+injection fired. The tests now observe actual capture_bound, check the literal
+record/layout/packet identities and retain early alias/state assertions. The
+corrected22 import-order cases pass; final386 runs also pass on actual Python
+3.14.9 and3.11.15 with unchanged source and no failures/errors/skips. Independent
+review verifies source and receipt bindings; intermediate failures are not passes.
+
+This pins checker metadata, not all transitive dependencies or original caller/
+root authority. Complete actor/API observations, cache/runtime semantic closure,
+final live graph integration, actual adversarial/cleanup and original60s/feature/
+physical/release gates remain open. Character images are still unfinished. No
+running host/device build, grants, providers, models, jobs or release changed.
+
 ## Interpreter and native API graph checks — November 11, 2026 UTC
 
 The local character startup draft now includes unintegrated interpreter/cache/

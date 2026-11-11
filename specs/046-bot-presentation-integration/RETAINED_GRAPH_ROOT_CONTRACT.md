@@ -464,3 +464,25 @@ code/caller/root custody, actor/API results and final full live graph compositio
 are still required. Existing generic interfaces stay complete. Final145 tests on
 both supported actual Python runtimes are field/fixture evidence, not native60s,
 feature delivery, physical-device or release acceptance. No runtime changed.
+
+## Original graph function code rows — November 11
+
+The selected helper role table now appends the nine unintegrated graph functions
+at indices33..41. Earlier33 positions,41classes,7modules and the six-field packet
+remain unchanged. Existing generic/live/parent and two final Scope comparisons
+are driven by the same held role tuple. This prevents their code/default/keyword
+metadata from changing after capture without refusal. It adds no graph invocation
+or audit reduction and does not establish their complete transitive/root authority.
+
+Corrected baseline27 tests on exactprevious-role source all failed DIDNOTRAISE;
+new27 local metadata controls and18 actual Scope late-code controls pass. The
+first red attempt included9 closure-witness setup errors, which are not claimed
+as27 causal failures. Actual publication controls retain zero foreign execution,
+work/reservation change, registration or successful return and private refusal.
+
+Broad386 initially had4 import-order failures reproduced withprevious roles:
+the old test hooks watched capture instead of actual capture_bound. Observers and
+late-alias injection now target the actual factory return, verify record3/layout4/
+packet identity, staged Entry root and alias readiness, and Entry's retained literal
+record. Corrected final386 current/minimum pass with source/log/XML verification.
+No runtime, native60s/performance/full-DAG/feature/device/release claim follows.

@@ -1,3 +1,22 @@
+## November 11: graph checker early code capture
+
+- [x] **RGA-01d-GRAPH-CODE-PINS** Append9 graph functions to original early
+      helper roles:42functions/41classes/7modules, six-field packet unchanged,
+      prior33indices preserved. Parent and both Scope seals use same roles.
+- [x] New27 code/default/kwdefault controls +18 actual late-code publication
+      controls, zero foreign dispatch/work/reservation/registration/success,
+      exact private refusal. Corrected exactold-role red27allDIDNOTRAISE retained;
+      earlier9freevar witness errors not counted as causal omission evidence.
+- [x] Repair stale import-order observers/injection to actual capture_bound
+      and verify literal record/layout/packet and Entry retained-record identity.
+      Previous-role baseline reproduced same4 failures; original earlier386
+      runs remain failed382pass4fail, corrected final386current/minimum allpass.
+- [ ] Complete original caller/Entry/Scope/callee transitive dependency and
+      class/source provenance, actual actor/API observations, cache/runtime
+      semantic closure and final pure live graph. No fast guard enabled.
+- [ ] Integrate and run actual graft/callback/GC/cleanup/original60s/fullfeature/
+      device/release gates; all original roadmap requirements remain active.
+
 ## November 11: interpreter and native API field checks
 
 - [x] **RGA-01d-INTERPRETER-FIELDS** Unintegrated runtime/cache/hash/compiler/

@@ -17,7 +17,7 @@ package=ModuleType('hmp_plugin')
 package.__path__=[str(Path(server)/'hmp_plugin')]
 sys.modules[package.__name__]=package
 sys.path.insert(0,server)
-ready=[];bound=[];packets=[];staged=[]
+ready=[];bound=[];packets=[];records=[];staged=[]
 def observe(frame,event,value):
     module=frame.f_globals.get('__name__')
     if (event=='call' and module=='hmp_startup.gateway_entry'
@@ -28,10 +28,13 @@ def observe(frame,event,value):
             ('GatewayApprovalOwner','GatewayApprovalError','_RootSource',
              'GatewayOperatorApproval','_api_state','_same_entry','_require')))
     if (event=='return' and module=='hmp_startup.retained_binding_origin'
-            and frame.f_code.co_name=='capture'):
+            and frame.f_code.co_name=='capture_bound'):
         approval=sys.modules.get('hmp_startup.gateway_approval')
         entry=sys.modules['hmp_startup.gateway_entry']
-        packets.append(value)
+        assert type(value) is tuple and len(value)==3
+        assert type(value[1]) is tuple and len(value[1])==4
+        assert value[1][0] is value[0]
+        packets.append(value[0]);records.append(value)
         staged.append('_ENTRY_ORIGIN' in vars(entry) and vars(entry)['_ENTRY_ORIGIN'] is None)
         bound.append(approval is not None
             and vars(approval).get('GatewayEntryOwner') is vars(entry)['GatewayEntryOwner']
@@ -54,6 +57,7 @@ finally:sys.setprofile(None)
 assert ready==[True] and bound==[True] and staged==[True],(ready,bound,staged)
 assert type(entry._ENTRY_ORIGIN) is entry._EntryOrigin
 assert entry._ENTRY_ORIGIN.link_policy[0][6][6] is packets[0]
+assert entry._ENTRY_ORIGIN.link_policy[0][6][7] is records[0]
 assert approval.GatewayEntryOwner is entry.GatewayEntryOwner
 assert all(vars(approval)[name] is None for name in ('_OWNER','_CELL','_ROOT','_FACT'))
 assert entry._OWNER is None and entry._CELL is None and entry._STARTED is None
@@ -125,7 +129,7 @@ def observe(frame,event,value):
         spec_values.pop(foreign_key);spec_values['_initializing']=True
         armed=True
     if (event=='return' and label=='hmp_startup.retained_binding_origin'
-            and frame.f_code.co_name=='capture' and case=='late-alias'):
+            and frame.f_code.co_name=='capture_bound' and case=='late-alias'):
         vars(sys.modules['hmp_startup.gateway_approval'])['GatewayEntryOwner']=foreign
         injected.append(case)
 def trace_spec(frame,event,value):

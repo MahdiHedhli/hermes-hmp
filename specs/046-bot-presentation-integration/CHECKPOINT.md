@@ -1,3 +1,24 @@
+## November 11: new graph checker code rows retained early
+
+The original helper role table now retains9 additional artifact graph functions
+(42total; prior33positions/41classes/7modules/six-field DATA unchanged). Existing
+parent and both final Scope metadata checks use the extended roles; no graph
+checker is dispatched by production guards. New27 metadata controls and18 actual
+Scope late-code controls preserve zero foreign calls/work/registration/success
+and private refusal. Corrected exactbaseline27 omission failures retained.
+
+Final386 cases pass current3.14.9/minimum3.11.15 with unchanged source and nofail/
+error/skip, independent all548 source/log/XML verification. Earlier382pass4fail
+runs remain failures; previous-role baseline reproduces same4 stale import-order
+hooks. Test migration to actual capture_bound preserves actual timing/literal
+record/alias/root assertions and now exercises late fault injection correctly.
+
+Remaining: transitive class/global/source and original caller/Entry/Scope/callee
+provenance, actor/API actual results, cache/runtime semantic closure and final
+pure live graph before any selected reduction, actual integrated graft/callback/
+GC/cleanup and unchanged native60s/feature/physical/release gates. Last dated
+native startup still fails60s. Full original goal active; no deployed changes.
+
 ## November 11: interpreter/native field checkpoint
 
 Latest source adds unintegrated interpreter/cache/compiler/decoder and native API

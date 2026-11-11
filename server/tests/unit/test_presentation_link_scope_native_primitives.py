@@ -9,7 +9,7 @@ from .test_presentation_gateway_approval import operator_composed_script
 
 
 @pytest.mark.parametrize('publication', ('first', 'second'))
-@pytest.mark.parametrize('export', ('map', 'is_not', 'layout_graft', 'audit_graft', 'helper_graft', 'helper_layout_graft', 'helper_record_graft', 'helper_checker', 'helper_projection_schema', 'api_spec_dict_default', 'record_path_dispatch', 'record_receipt_dispatch', 'record_read_effect_dispatch', 'selection_approval_alias', 'selection_code', 'selection_error_code', 'activation_code', 'activation_error_code', 'artifact_error_code', 'artifact_error_new', 'artifact_error_getattribute', 'artifact_error_setattr', 'artifact_error_owner_property', 'artifact_owner_getattribute', 'artifact_owner_setattr', 'artifact_owner_dict_subclass', 'artifact_descriptor_code', 'artifact_allocation_code', 'artifact_expected_code', 'artifact_allocation_dispatch', 'execution_sum', 'execution_ord', 'entry_getattribute', 'entry_subclass_dict'))
+@pytest.mark.parametrize('export', ('map', 'is_not', 'layout_graft', 'audit_graft', 'helper_graft', 'helper_layout_graft', 'helper_record_graft', 'helper_checker', 'helper_projection_schema', 'api_spec_dict_default', 'record_path_dispatch', 'record_receipt_dispatch', 'record_read_effect_dispatch', 'selection_approval_alias', 'selection_code', 'selection_error_code', 'activation_code', 'activation_error_code', 'artifact_error_code', 'artifact_error_new', 'artifact_error_getattribute', 'artifact_error_setattr', 'artifact_error_owner_property', 'artifact_owner_getattribute', 'artifact_owner_setattr', 'artifact_owner_dict_subclass', 'artifact_descriptor_code', 'artifact_allocation_code', 'artifact_expected_code', 'artifact_allocation_dispatch', 'execution_sum', 'execution_ord', 'entry_getattribute', 'entry_subclass_dict', 'artifact_graph_closed_file', 'artifact_graph_scope_file', 'artifact_graph_loaded_owner', 'artifact_graph_cache_context', 'artifact_graph_approval', 'artifact_graph_entry', 'artifact_graph_activation', 'artifact_graph_native_io', 'artifact_graph_interpreter'))
 def test_scope_publication_rejects_changed_primitive_or_layout_root(
         tmp_path, monkeypatch, request, publication, export):
     tree = ast.parse((base.SERVER / 'hmp_plugin/presentation_startup_artifacts.py').read_text())
@@ -128,6 +128,13 @@ def observe(frame,event,value):
             late_helper_code=foreign.__code__
             object.__setattr__(owner,'__class__',ChangedOwner)
             assert type(owner) is ChangedOwner
+        elif export.startswith('artifact_graph_'):
+            name='_'+export[len('artifact_graph_'):]+'_graph_mirrors'
+            function=getattr(a,name)
+            helper_code_restore.append((function,function.__code__))
+            late_helper_code=foreign.__code__
+            assign(function,'__code__',late_helper_code)
+            assert function.__code__ is late_helper_code
         elif export in ('artifact_descriptor_code','artifact_allocation_code','artifact_expected_code'):
             name={'artifact_descriptor_code':'_descriptor_closed_in_scope',
                   'artifact_allocation_code':'_native_file_allocation_original',
