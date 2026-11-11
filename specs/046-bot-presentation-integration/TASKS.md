@@ -1,3 +1,18 @@
+## November 11: RGA-01 native consumer dispatch decision
+
+- [x] **RGA-01c-CARRIER-DECISION** Source and independent read-only review
+      identify the existing registered Scope parent/runtime as original carriers;
+      no extra blueprint source pointer selected. This is a design decision,
+      not completed runtime custody or performance acceptance.
+- [ ] **RGA-01c-ROOT-FIRST-DISPATCH** Establish actual registered Scope and
+      independent Entry roots before any schema-omitting dispatch; authenticate
+      fixed function/layout through original early origin. Keep generic APIs full.
+- [ ] **RGA-01d-FRESH-GRAPH** Implement complete mutable graph predicates and
+      pre/post-callback rejoins; no saved currentness verdict or permission bypass.
+- [ ] **RGA-01e-CAUSALS** Actual copied/coherent-graft/registration/late-mutation/
+      cleanup dispatch controls on current and minimum Python, then original60s
+      and complete feature/device qualification. See [contract](RETAINED_GRAPH_ROOT_CONTRACT.md).
+
 ## November 10: RGA-01 original retained-graph custody
 
 - [x] Trace blueprint, digest, original entry inputs and artifact publication.
