@@ -1,7 +1,8 @@
 ## Native service implementation checkpoint — November11
 
 - [x] **NS2-MEMORY** Portable16MiB/64-live-buffer logical reservations; explicit copy/conversion/result/stream accounting, identity-bound original leases, no forged/double/altered release and no automatic cancellation release. Both runtime17-case suites independently reviewed;559 source maps/log/XML/IDs verified. No actual buffer/reader/worker/authority qualification follows.
-- [ ] **NS2-READER** Implement the real authorized fixed metadata/static-avatar source transaction and full projection composition under the reviewed native capability; do not fake old worker GO.
+- [x] **NS2-RAW-SOURCE** Independently accepted original registry-bound single-use claims and real fixed nofollow POSIX metadata/static-avatar transaction. Both61-case suites pass with563 matching source files/log/XML/unique IDs. Causal tests cover full size/work bounds, unsafe links/ambiguous sources, mutation/revocation/deadline, foreign registry/clock, unknown close and growth-byte credit/cleanup. Tests use temporary POSIX files and unit-issued claims, not native authentication. No route or capability is enabled.
+- [ ] **NS2-READER** Full bounded YAML/raster/character projection and actual service-authorized claim issuance remain unfinished; do not fake old worker GO or mark full NS2 complete. Raw source admission is not image decoding or emission authority.
 - [ ] **NS3–NS7** Owned worker/mailbox/debt/reconnect/drain, native factory/routes, normal/fault/client/device/release qualification remain open.
 
 ## Selected implementation — native presentation service, November11
