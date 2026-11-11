@@ -1,3 +1,12 @@
+## Optional registered parser/PTY mode — November 11, 2026 UTC
+
+Current tools also support --registered-cli-pty. The actual descriptor callbacks
+and terminal guards now have separate native integration evidence; the default
+observer mode is regression-tested unchanged. See
+[registered-mode qualification](REGISTERED_CLI_PTY_QUALIFICATION.md).
+Native main/shell startup, received signals and physical/mobile/release remain
+separate. The November10 sample below is versioned historical evidence.
+
 # AT1-NATIVE-IPC-01: native IPC and authenticated projection — November 10, 2026
 
 The working HMP6796 / Hermes ed1 (0.22.7) exported-source composition now passes

@@ -1,3 +1,10 @@
+## Registered command terminal integration — November 11, 2026 UTC
+
+Actual descriptor setup/dispatch and real PTY/pipe guards now pass against native
+ed1/HMP6796, with the full stock launcher deliberately excluded. See
+[coverage and exact bindings](REGISTERED_CLI_PTY_QUALIFICATION.md). No native API,
+mode, grant, deployment or physical acceptance is inferred from this test.
+
 ## Coupled macOS integration — November 10, 2026
 
 The native helper sample is now complemented by real local IPC/CLI-observer and

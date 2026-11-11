@@ -1,0 +1,201 @@
+{
+  "task": "AT1-REGISTERED-CLI-PTY-01",
+  "native_source": "ed1afb082eb3e46cf2edae9d8f68fb67b09ee4df",
+  "hmp_runtime_source": "6796bfbb45177f86125635ff801fbc80b034a226",
+  "fixture_sha256": "718dc5ade61fa0e17a14c1a216dac22cdd294c5192afff1a6d3ac8fa5e64ea03",
+  "controller_sha256": "f00af49dfd52f10d41ee70e987afdb4e63bb44e78023afdb6f3016bd5c70049a",
+  "manifest_sha256": "cf076fe5fbf243c6e340d382be1a50f6342279701e81b23e20e6cc6bdde510af",
+  "source_count": 12577,
+  "source_unchanged": true,
+  "python_sha256": "32cf05f7a990fe21a7e7a09e82bd6fe647ba56ad7fac870229a709824a51c0dd",
+  "report_sha256": "8e1e538a3a2bc6ababf35972a54d8df0f5dd1e882905de4b3be87e3d190c0fb5",
+  "log_sha256": "d3a4b43eff3d233fc154221d4d4c94e1778f98d2a19a3efb9d87050b81a974df",
+  "registered_cases": [
+    {
+      "choice": "once",
+      "observed": "once_acknowledged",
+      "actualCliObserver": true,
+      "registeredBeginParserHandler": true,
+      "registeredCancelParserHandler": false,
+      "registeredStatusParserHandler": true,
+      "realPtyObserved": true,
+      "kernelAuthenticatedIpc": true,
+      "actualAuthenticatedHttpCard": true,
+      "joinedCompletion": true,
+      "cardWithdrawn": true,
+      "nativeQueueEmpty": true,
+      "producerSlotReleased": true
+    },
+    {
+      "choice": "deny",
+      "observed": "denied",
+      "actualCliObserver": true,
+      "registeredBeginParserHandler": true,
+      "registeredCancelParserHandler": false,
+      "registeredStatusParserHandler": true,
+      "realPtyObserved": true,
+      "kernelAuthenticatedIpc": true,
+      "actualAuthenticatedHttpCard": true,
+      "joinedCompletion": true,
+      "cardWithdrawn": true,
+      "nativeQueueEmpty": true,
+      "producerSlotReleased": true
+    },
+    {
+      "choice": "cancel",
+      "observed": "cancelled",
+      "actualCliObserver": true,
+      "registeredBeginParserHandler": false,
+      "registeredCancelParserHandler": true,
+      "registeredStatusParserHandler": true,
+      "realPtyObserved": true,
+      "kernelAuthenticatedIpc": true,
+      "actualAuthenticatedHttpCard": true,
+      "joinedCompletion": true,
+      "cardWithdrawn": true,
+      "nativeQueueEmpty": true,
+      "producerSlotReleased": true
+    },
+    {
+      "choice": "expiry",
+      "observed": "expired",
+      "actualCliObserver": true,
+      "registeredBeginParserHandler": true,
+      "registeredCancelParserHandler": false,
+      "registeredStatusParserHandler": true,
+      "realPtyObserved": true,
+      "kernelAuthenticatedIpc": true,
+      "actualAuthenticatedHttpCard": true,
+      "joinedCompletion": true,
+      "cardWithdrawn": true,
+      "nativeQueueEmpty": true,
+      "producerSlotReleased": true
+    }
+  ],
+  "registered_refusals": [
+    {
+      "case": "missing-session",
+      "code": 2,
+      "stdinTty": true,
+      "stdoutTty": true,
+      "noUnixRequest": true
+    },
+    {
+      "case": "noninteractive",
+      "code": 1,
+      "stdinTty": false,
+      "stdoutTty": false,
+      "noUnixRequest": true
+    },
+    {
+      "case": "agent-session",
+      "code": 1,
+      "stdinTty": true,
+      "stdoutTty": true,
+      "noUnixRequest": true
+    }
+  ],
+  "actual_cli_result_witnesses": [
+    {
+      "choice": "once",
+      "code": 0,
+      "stdout_sha256": "ab047a569070ddfa0dfb7f9101c453fe2962794713dacbeab8fe0662c11aa4f3",
+      "native_terminal": "once_acknowledged",
+      "queue_empty": true,
+      "slot_released": true
+    },
+    {
+      "choice": "deny",
+      "code": 0,
+      "stdout_sha256": "fa92895d7ba60500446f6b0da276e494182f51979800f9cb5511bd0dcf89c8d2",
+      "native_terminal": "denied",
+      "queue_empty": true,
+      "slot_released": true
+    },
+    {
+      "choice": "cancel",
+      "code": 0,
+      "stdout_sha256": "f97277bfa408e2f3a517a2a61cfc73a94f4002091aee451c32d23d15805f01ab",
+      "native_terminal": "cancelled",
+      "queue_empty": true,
+      "slot_released": true
+    },
+    {
+      "choice": "expiry",
+      "code": 0,
+      "stdout_sha256": "2441a54c073bc1d7501dae2831afd7a80210a808750232df0a5033407f57d9d4",
+      "native_terminal": "expired",
+      "queue_empty": true,
+      "slot_released": true
+    }
+  ],
+  "observer_default_regression": {
+    "passed": true,
+    "report_sha256": "bdaf8b0558736709dd275e033977c011331dd996cd6c22d004beb975a66cd072",
+    "fixture_sha256": "718dc5ade61fa0e17a14c1a216dac22cdd294c5192afff1a6d3ac8fa5e64ea03"
+  },
+  "admission": {
+    "current": {
+      "cases": 5,
+      "passed": true,
+      "receipt_sha256": "22658eb460f8e7da7b4631d42bf71c6cb3445e8ccb82bcff522b3b507334dc8c",
+      "python_version": [
+        3,
+        14,
+        9
+      ]
+    },
+    "floor": {
+      "cases": 5,
+      "passed": true,
+      "receipt_sha256": "95ff2cfe4cff7aa0e49bb1c61cd839abebd18c3f1e007b5824923581709d8082",
+      "python_version": [
+        3,
+        11,
+        15
+      ]
+    }
+  },
+  "ownership": {
+    "server_thread_joined": true,
+    "cli_resource_debt": 0,
+    "native_lifecycle_released": true,
+    "native_messages_unchanged": true
+  },
+  "independent_review": "Read-only reviewer rehashed all12577 sources and exact final report/log/scripts/runtime/status bindings, native results and cleanup; no mismatch. No reviewer execution or independent admission/lint run.",
+  "production_qualified": false,
+  "physical_qualified": false,
+  "excluded": [
+    "native main/shell launcher/updater/plugin discovery",
+    "received SIGINT/OS signal behavior",
+    "mobile widget/push/physical device",
+    "real pairing/native device key storage",
+    "Linux/full fault matrix/release/avatar startup"
+  ],
+  "failed_predecessors": [
+    {
+      "case": "stdout-loss",
+      "qualified": false,
+      "controller_sha256": "a51393360323a9e18e6ad52db0b0085f5d9a7720e5263729be25b85165469b21",
+      "report_sha256": "96a78e78ee6f70ff56f6604ffd7fc8b1ca7e3480b0d8b31064630f7b569bc062",
+      "cleanup_observed": true,
+      "external_interrupt": false
+    },
+    {
+      "case": "stdout-loss-diagnosed",
+      "qualified": false,
+      "controller_sha256": "ca69f30f48e98d14e1ecd8f9157fd203f3e28570315113a0731026830fc2df64",
+      "report_sha256": "5bb053dc4db17bc2172d409850fe9f9bda20f79b6e1d83690b7903ad6db34c19",
+      "cleanup_observed": true,
+      "external_interrupt": false
+    },
+    {
+      "case": "tcdrain-interrupted",
+      "qualified": false,
+      "controller_sha256": "43e48bbe732d770f36d7acc1464224f776911c4b5dfcc9f11307324feab3083a",
+      "report_sha256": "f13a6f3d4d0d43a96c819d7e52c30b88ef1e57267d03d9a7c0f6694454135eac",
+      "cleanup_observed": true,
+      "external_interrupt": true
+    }
+  ]
+}

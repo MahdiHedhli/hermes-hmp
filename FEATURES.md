@@ -1,3 +1,20 @@
+## Registered approval-test command and terminal — November 11, 2026 UTC
+
+The genuine registered HMP parser/handler now passes actual PTY integration on
+synthetic macOS native ed1/HMP6796. Parsed begin handles acknowledge/deny/expiry;
+parsed cancel controls an observer-started operation; parsed status reconciles
+all four joined outcomes. Real pipes, missing session and an agent-session
+marker refuse before any Unix request. The native chat stays empty, cards and
+queues clear, producer capacity releases and the server thread joins.
+
+The default observer mode still passes; admission checks pass current/minimum
+Python and the source/evidence bindings were independently rehashed. See
+specs/039-hmp-operator-approval-test/REGISTERED_CLI_PTY_QUALIFICATION.md.
+This tests descriptor registration with fixture argparse wiring and a synthetic
+host-ID port, not native main/shell launch, received signals, phone UI/push,
+real pairing, Linux, faults or release. Avatar startup53 remains unfinished.
+No deployed host, phone build, permission/provider/model/job or release changed.
+
 ## Approval-test native IPC and projection — November 10, 2026
 
 AT1 now passes a coupled synthetic macOS native integration on working HMP6796

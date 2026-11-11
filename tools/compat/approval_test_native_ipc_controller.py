@@ -30,6 +30,11 @@ def main():
     parser.add_argument("--sample", type=Path, required=True)
     parser.add_argument("--manifest-sha256", required=True)
     parser.add_argument("--python", type=Path, required=True)
+    parser.add_argument(
+        "--registered-cli-pty",
+        action="store_true",
+        help="also exercise the registered HMP parser/handler with real PTYs",
+    )
     args = parser.parse_args()
     if sys.platform != "darwin":
         parser.error("this fixture currently qualifies macOS only")
@@ -134,6 +139,9 @@ def main():
         "HERMES_DISABLE_LAZY_INSTALLS": "1",
         "CI": "true",
     }
+    if args.registered_cli_pty:
+        env["HMP_AT1_FIXTURE_CLI_PTY"] = "1"
+        receipt["registeredCliPtyRequested"] = True
     with (root / "child.log").open("w") as log:
         (root / "child.log").chmod(0o600)
         child = subprocess.Popen(
@@ -171,10 +179,32 @@ def main():
     )
     if (root / "report.json").is_file():
         report = json.loads((root / "report.json").read_text())
+        requested_mode_observed = report.get("registeredCliMode") is args.registered_cli_pty
+        if args.registered_cli_pty:
+            cases = report.get("cases", [])
+            requested_mode_observed = (
+                requested_mode_observed
+                and report.get("registeredHmpParserTtyQualified") is True
+                and report.get("nativeLauncherMainCalled") is False
+                and report.get("fixtureServerThreadJoined") is True
+                and report.get("fixtureCliResourceDebt") == 0
+                and len(report.get("registeredCliRefusals", [])) == 3
+                and len(cases) == 4
+                and all(
+                    case.get("realPtyObserved") is True
+                    and case.get("registeredStatusParserHandler") is True
+                    for case in cases
+                )
+                and sum(case.get("registeredBeginParserHandler") is True for case in cases) == 3
+                and sum(case.get("registeredCancelParserHandler") is True for case in cases) == 1
+            )
         receipt.update(
             reportSHA256=digest(root / "report.json"),
             observedPhase=report.get("phase"),
-            boundedIntegrationPassed=code == 0 and report.get("phase") == "complete",
+            requestedModeObserved=requested_mode_observed,
+            boundedIntegrationPassed=(
+                code == 0 and report.get("phase") == "complete" and requested_mode_observed
+            ),
         )
     save()
     print(

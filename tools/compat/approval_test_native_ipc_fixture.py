@@ -10,7 +10,9 @@ IPC, and authenticated HTTP card/control. It does not test shell parser/TTY,
 physical phone UI, push delivery, Linux or release eligibility.
 """
 
+import argparse
 import asyncio
+import errno
 import fcntl
 import hashlib
 import hmac
@@ -18,10 +20,14 @@ import importlib
 import json
 import os
 import pwd
+import queue
+import select
 import socket
 import ssl
 import stat
 import sys
+import threading
+import time
 import traceback
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
@@ -113,6 +119,14 @@ def inside(p, base):
     return p == base or base in p.parents
 
 
+registered_cli_mode = os.environ.get("HMP_AT1_FIXTURE_CLI_PTY") == "1"
+cli_jobs = queue.Queue()
+cli_stop = object()
+cli_connects = [0]
+cli_main_thread = threading.get_ident()
+cli_resource_debt = []
+
+
 def audit(event, args):
     if event.startswith("socket."):
         if event == "socket.__new__":
@@ -137,6 +151,8 @@ def audit(event, args):
                 and Path(address).is_absolute()
                 and inside(Path(address).resolve(), root)
             ):
+                if event == "socket.connect" and threading.get_ident() == cli_main_thread:
+                    cli_connects[0] += 1
                 return
         if event == "socket.getaddrinfo" and args[0] == "127.0.0.1" and args[1] == port:
             return
@@ -465,6 +481,173 @@ try:
                 # Observe the next actual submitted generation; never submit/replay a write.
         return observations, errors
 
+    async def registered_cli(argv, *, terminal=True, agent=False):
+        # The owning server loop retains this result until the real handler
+        # returns on the main thread; observer cancellation cannot cancel it.
+        loop = asyncio.get_running_loop()
+        completed = loop.create_future()
+        cli_jobs.put((loop, completed, argv, terminal, agent))
+        return await asyncio.shield(completed)
+
+    def run_registered_cli(job):
+        loop, completed, argv, terminal, agent = job
+        streams, descriptors, cleanup_errors = [], [], []
+        stream_close_attempts, fd_close_attempts = set(), set()
+        saved_streams = sys.stdin, sys.stdout, sys.stderr
+        before_connects = cli_connects[0]
+        result = failure = None
+
+        def stream(fd, mode):
+            # fdopen may fail after ownership transfer. Never close a possibly
+            # reused numeric fd after an uncertain transfer.
+            descriptors.remove(fd)
+            try:
+                value = os.fdopen(fd, mode, encoding="utf-8", buffering=1)
+            except BaseException:
+                cli_resource_debt.append(("fdopen-transfer-unknown", fd))
+                raise
+            streams.append(value)
+            return value
+
+        def close_stream(value):
+            stream_close_attempts.add(id(value))
+            try:
+                value.close()
+            except BaseException:
+                cli_resource_debt.append(("stream-close-unknown", value))
+                raise
+
+        def close_fd(fd):
+            fd_close_attempts.add(fd)
+            try:
+                os.close(fd)
+            except BaseException:
+                cli_resource_debt.append(("fd-close-unknown", fd))
+                raise
+
+        def duplicate(fd):
+            copied = os.dup(fd)
+            descriptors.append(copied)
+            return copied
+
+        try:
+            if terminal:
+                output_reader, slave = os.openpty()
+                descriptors.extend((output_reader, slave))
+                input_reader = stream(duplicate(slave), "r")
+                output_writer = stream(duplicate(slave), "w")
+                close_fd(slave)
+                descriptors.remove(slave)
+            else:
+                input_fd, input_writer = os.pipe()
+                descriptors.extend((input_fd, input_writer))
+                output_reader, output_fd = os.pipe()
+                descriptors.extend((output_reader, output_fd))
+                input_reader = stream(input_fd, "r")
+                output_writer = stream(output_fd, "w")
+            sys.stdin, sys.stdout, sys.stderr = input_reader, output_writer, output_writer
+            stdin_tty, stdout_tty = input_reader.isatty(), output_writer.isatty()
+            assert stdin_tty is terminal and stdout_tty is terminal
+            # Use the genuine descriptor's setup_fn and handler_fn. The tiny
+            # argparse attachment is fixture wiring; never import native main,
+            # whose module-level interrupted-update recovery is outside this test.
+            command = manager._cli_commands["hmp"]
+            parser = argparse.ArgumentParser(prog="hermes")
+            groups = parser.add_subparsers(dest="command")
+            hmp_parser = groups.add_parser(command["name"])
+            command["setup_fn"](hmp_parser)
+            hmp_parser.set_defaults(func=command["handler_fn"])
+            try:
+                parsed = parser.parse_args(argv)
+                assert parsed.func is command["handler_fn"]
+                fixture_env = dict(os.environ)
+                if agent:
+                    fixture_env["HERMES_SESSION_SYNTHETIC_AT1"] = "1"
+                cli_module = importlib.import_module(module.__package__ + ".cli")
+                env = cli_module.CliEnv(
+                    environ=fixture_env,
+                    identity_kwargs={
+                        "host_id": lambda: identity_module.HostId(
+                            identity_module.HOST_SOURCE_DARWIN,
+                            "00000000-0000-4000-8000-000000000001",
+                        )
+                    },
+                )
+                code = parsed.func(parsed, env=env)
+            except SystemExit as exc:
+                code = exc.code
+            assert type(code) is int
+            output_writer.flush()
+            # Darwin can discard unread PTY bytes at last-slave close. Drain
+            # the actual flushed output while its slave remains owned/open.
+            os.set_blocking(output_reader, False)
+            raw = bytearray()
+            capture_deadline = time.monotonic() + 2.0
+            while True:
+                # Bounded readiness observation, not tcdrain: Darwin may wait
+                # for a master reader inside tcdrain itself. CLI has returned
+                # and explicitly flushed, so no more command writes are owned.
+                remaining = capture_deadline - time.monotonic()
+                if remaining <= 0:
+                    raise TimeoutError("fixture_cli_capture_incomplete")
+                ready, _, _ = select.select(
+                    [output_reader], [], [], min(remaining, 0.05 if raw else 1.0)
+                )
+                if not ready:
+                    break
+                try:
+                    chunk = os.read(output_reader, 4096)
+                except BlockingIOError:
+                    break
+                except OSError as exc:
+                    if terminal and exc.errno == errno.EIO:
+                        break
+                    raise
+                if not chunk:
+                    break
+                raw.extend(chunk)
+                assert len(raw) <= 4096
+            close_stream(output_writer)
+            close_stream(input_reader)
+            if not terminal:
+                close_fd(input_writer)
+                descriptors.remove(input_writer)
+            result = {
+                "code": code,
+                "stdout": bytes(raw).decode("utf-8").replace("\r\n", "\n"),
+                "stdinTty": stdin_tty,
+                "stdoutTty": stdout_tty,
+                "unixConnects": cli_connects[0] - before_connects,
+            }
+        except BaseException as exc:
+            failure = exc
+        finally:
+            sys.stdin, sys.stdout, sys.stderr = saved_streams
+            for value in streams:
+                if id(value) in stream_close_attempts:
+                    continue
+                try:
+                    close_stream(value)
+                except BaseException as exc:
+                    cleanup_errors.append(type(exc).__name__)
+            for descriptor in descriptors:
+                if descriptor in fd_close_attempts:
+                    continue
+                try:
+                    close_fd(descriptor)
+                except BaseException as exc:
+                    cleanup_errors.append(type(exc).__name__)
+            if cleanup_errors:
+                # Retain evidence of uncertain ownership; do not replay closes
+                # or turn a failed diagnostic into a successful native result.
+                cli_resource_debt.append((streams, descriptors, cleanup_errors))
+                if failure is None:
+                    failure = RuntimeError("fixture_cli_cleanup_unconfirmed")
+        if failure is not None:
+            loop.call_soon_threadsafe(completed.set_exception, failure)
+        else:
+            loop.call_soon_threadsafe(completed.set_result, result)
+
     async def lifecycle():
         global context, adapter
         srv = None
@@ -736,6 +919,52 @@ try:
                     w.close()
                     await w.wait_closed()
 
+            report["registeredCliMode"] = registered_cli_mode
+            begin_args = [
+                "hmp",
+                "approval-test",
+                "begin",
+                "--device",
+                device_id,
+                "--profile",
+                "default",
+                "--session",
+                sid,
+                "--timeout-ms",
+                "2000",
+            ]
+            if registered_cli_mode:
+                report["registeredCliRefusals"] = []
+                for label, args, terminal, agent in (
+                    (
+                        "missing-session",
+                        [
+                            "hmp",
+                            "approval-test",
+                            "begin",
+                            "--device",
+                            device_id,
+                            "--profile",
+                            "default",
+                        ],
+                        True,
+                        False,
+                    ),
+                    ("noninteractive", begin_args, False, False),
+                    ("agent-session", begin_args, True, True),
+                ):
+                    refused = await registered_cli(args, terminal=terminal, agent=agent)
+                    assert refused["code"] == (2 if label == "missing-session" else 1)
+                    assert refused["unixConnects"] == 0 and service._operation is None
+                    report["registeredCliRefusals"].append(
+                        {
+                            "case": label,
+                            "code": refused["code"],
+                            "stdinTty": refused["stdinTty"],
+                            "stdoutTty": refused["stdoutTty"],
+                            "noUnixRequest": True,
+                        }
+                    )
             report["cases"] = []
             for choice, expected in (
                 ("once", "once_acknowledged"),
@@ -745,9 +974,21 @@ try:
             ):
                 output = StringIO()
                 request = codec.HostBeginRequest(generation, device_id, "default", sid, 2000)
-                task = asyncio.create_task(observer.run_command(binding, request, output))
+                parsed_begin = registered_cli_mode and choice != "cancel"
+                task = asyncio.create_task(
+                    registered_cli(begin_args)
+                    if parsed_begin
+                    # The auxiliary cancel-case begin runs on the server loop.
+                    # It exercises the real observer/transport but no signals;
+                    # parsed begin/cancel/status handlers run on the main thread.
+                    else observer.run_command(
+                        binding, request, output, install_signals=not registered_cli_mode
+                    )
+                )
                 try:
-                    deadline = asyncio.get_running_loop().time() + 1.5
+                    deadline = asyncio.get_running_loop().time() + (
+                        10 if registered_cli_mode else 1.5
+                    )
                     card = None
                     while card is None:
                         assert asyncio.get_running_loop().time() < deadline
@@ -778,14 +1019,54 @@ try:
                         # A distinct real CLI observer/control invocation over the real socket.
                         operation = output.getvalue().split()[1].removesuffix(":")
                         cancel_output = StringIO()
-                        code = await observer.run_command(
-                            binding,
-                            codec.HostOperationRequest(generation, "cancel", operation),
-                            cancel_output,
-                        )
-                        assert code == 2 and "cancel requested" in cancel_output.getvalue()
+                        if registered_cli_mode:
+                            parsed_cancel = await registered_cli(
+                                ["hmp", "approval-test", "cancel", operation]
+                            )
+                            code = parsed_cancel["code"]
+                            cancel_text = parsed_cancel["stdout"]
+                            assert parsed_cancel["stdinTty"] and parsed_cancel["stdoutTty"]
+                            assert parsed_cancel["unixConnects"] == 1
+                        else:
+                            code = await observer.run_command(
+                                binding,
+                                codec.HostOperationRequest(generation, "cancel", operation),
+                                cancel_output,
+                            )
+                            cancel_text = cancel_output.getvalue()
+                        assert code == 2 and "cancel requested" in cancel_text
                     result = await asyncio.wait_for(asyncio.shield(task), 7)
-                    assert result == 0 and ("joined " + expected + ".") in output.getvalue()
+                    if parsed_begin:
+                        assert result["stdinTty"] and result["stdoutTty"]
+                        assert result["unixConnects"] == 1
+                        result_code, result_text = result["code"], result["stdout"]
+                    else:
+                        result_code, result_text = result, output.getvalue()
+                    if registered_cli_mode:
+                        report.setdefault("registeredCliResults", []).append(
+                            {
+                                "choice": choice,
+                                "code": result_code,
+                                "output": result_text,
+                                "nativeTerminal": None
+                                if service._terminal is None
+                                else service._terminal.outcome.status.value,
+                                "nativeQueueEmpty": not native_approval.list_gateway_approvals(
+                                    route
+                                ),
+                                "producerSlotReleased": producer._slot.operation is None,
+                            }
+                        )
+                    assert result_code == 0 and ("joined " + expected + ".") in result_text
+                    if registered_cli_mode:
+                        operation = result_text.split()[1].removesuffix(":")
+                        status_result = await registered_cli(
+                            ["hmp", "approval-test", "status", operation]
+                        )
+                        assert status_result["code"] == 0
+                        assert expected in status_result["stdout"]
+                        assert status_result["stdinTty"] and status_result["stdoutTty"]
+                        assert status_result["unixConnects"] == 1
                     status, projection = await phone(
                         "GET", "/hmp/v1/bots/default/approval-tests/current"
                     )
@@ -798,6 +1079,11 @@ try:
                             "choice": choice,
                             "observed": expected,
                             "actualCliObserver": True,
+                            "registeredBeginParserHandler": parsed_begin,
+                            "registeredCancelParserHandler": registered_cli_mode
+                            and choice == "cancel",
+                            "registeredStatusParserHandler": registered_cli_mode,
+                            "realPtyObserved": registered_cli_mode,
                             "kernelAuthenticatedIpc": True,
                             "actualAuthenticatedHttpCard": True,
                             "joinedCompletion": True,
@@ -822,6 +1108,9 @@ try:
                 physicalCardObserved=False,
                 realPairingQualified=False,
                 shellParserTtyQualified=False,
+                registeredHmpParserTtyQualified=registered_cli_mode,
+                nativeLauncherMainCalled=False,
+                fixtureSyntheticHostIdentityPort=True,
             )
             operator_service = srv._operator_read
             report["operatorSocketStarted"] = operator_service is not None
@@ -978,7 +1267,44 @@ try:
             if cleanup:
                 raise RuntimeError("tls_lifecycle_cleanup_refused")
 
-    asyncio.run(lifecycle())
+    if registered_cli_mode:
+        lifecycle_failures = []
+
+        def run_native_lifecycle():
+            try:
+                asyncio.run(lifecycle())
+            except BaseException as exc:
+                lifecycle_failures.append(exc)
+            finally:
+                cli_jobs.put(cli_stop)
+
+        native_thread = threading.Thread(
+            target=run_native_lifecycle, name="hmp-at1-fixture-server", daemon=False
+        )
+        start_failure = None
+        try:
+            native_thread.start()
+        except BaseException as exc:
+            if native_thread.ident is None and not native_thread.is_alive():
+                raise
+            start_failure = exc
+        try:
+            while True:
+                job = cli_jobs.get()
+                if job is cli_stop:
+                    break
+                run_registered_cli(job)
+        finally:
+            native_thread.join()
+        report["fixtureServerThreadJoined"] = True
+        report["fixtureCliResourceDebt"] = len(cli_resource_debt)
+        assert not cli_resource_debt
+        if start_failure is not None:
+            raise start_failure
+        if lifecycle_failures:
+            raise lifecycle_failures[0]
+    else:
+        asyncio.run(lifecycle())
     assert report.get("readyHTTPStatus") == 200
     assert all(
         report.get(key) is True
