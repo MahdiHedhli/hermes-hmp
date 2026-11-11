@@ -1,3 +1,33 @@
+## Integrated native character and media checkpoint — November 11, 2026
+
+The native character service now includes the complete deployed media baseline in
+HMP commit `9ab269583e4b99e9950e4354349a30d93c1b7814` (parents `7c52806` and
+`6796bfbb`). The first actual gateway run caught missing media permission/schema
+APIs in the earlier character-only branch; that candidate was withheld. The merge
+preserves schema 4 media grants/CAS, readiness diagnostics and actual read-worker
+ownership alongside the new presentation lifecycle. Both Python 3.14.9 and 3.11.15
+pass 1,597 identical parent cases plus 93 subtests (1,690 total each), with zero
+failures/errors/skips and all 579 source fingerprints unchanged. Independent
+review verifies the merge and exact source/log/XML binding.
+
+A fresh isolated run against Hermes `ed1afb082eb3e46cf2edae9d8f68fb67b09ee4df`
+uses the normal plugin loader, GatewayRunner constructor/configured profile routing,
+actual adapter factory and pinned TLS 1.3. Both default/beta authenticated character
+metadata GETs return 200 with the closed DTO. Existing host-local image regression
+checks pass: exact image bytes across two profiles/two synthetic devices, stale
+media-grant reference refusal after revoke/regrant, per-profile bot revocation and
+foreign-instance token refusal. Actual presentation/operator workers drain, the
+adapter closes its Store/dependencies, native database owners close and plugin
+registrations clear. All 12,838 copied source files remain unchanged.
+
+This is synthetic gateway integration evidence, not a real pairing walkthrough,
+full GatewayRunner main-loop run, provider-generated image, custom/static avatar
+byte-delivery test, Flutter decoder/display pass, physical-device or Linux/release
+qualification. Those next checks remain open. No live host, grants, models,
+providers, jobs or installed apps changed. LLY520 is absent from the latest remote
+management inventory; its authorized update has not occurred. The full feature
+goal remains active.
+
 ## Generated record metadata — November 11, 2026 UTC
 
 The character-image startup draft now appends generated-helper metadata as the
