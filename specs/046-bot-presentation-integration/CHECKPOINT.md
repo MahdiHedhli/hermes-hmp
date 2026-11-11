@@ -1,3 +1,62 @@
+## Rooted route current-runtime prefix result — November11
+
+Current17 corrected cases pass with zero failures/errors/skips, unchanged source,
+matching log/XML hashes and all557 source maps independently verified. This is
+resource-route prefix acceptance only; minimum17 runs serially next. Actual
+consumer lifetime and complete native startup are not covered by that result.
+A separate lifetime harness remains private/unexecuted: independent review caught
+an attempt to read caller.resource before its assignment at the pin-return site;
+it now derives the resource from the original consumer/operation and compares the
+local only when bound. A local WIP commit may preserve this stage for independent
+next-unit authoring; it does not authorize deployment or remove the full guard.
+
+## Rooted-route observer correction — November11, current
+
+The corrected broad draft runs showed first-case failures and were intentionally
+interrupted to obtain a bounded normal-case traceback. That diagnostic and a
+subsequent isolated normal run both hit the unchanged60s fixture timeout; neither
+proves an accounting assertion failure or production acceptance. The observer now
+holds original code/native-operation references, ignores unrelated return events
+and uses direct C-operation identities without per-event property reads/generators.
+Independent read-only review accepts this observation scope; production predicates
+and deadline are unchanged. The isolated normal1 prefix passes46.15s with source
+unchanged. This is harness overhead correction, not a native startup speedup.
+The17-case fault matrix is now serial current first, then minimum after terminal;
+actual full startup/optimizedDAG/feature/device/release acceptance remain open.
+
+## Rooted link Scope route — implementation under review, November11
+
+A separate root-owned implementation worktree now defines an early-retained
+_native_link_scope_current execution/resource route at the actual resource and
+lifetime callers. Generic _native_scope_current/_native_walk_scope and their seven
+call sites remain unchanged. The new route holds actual Scope/digest/Entry/input/
+snapshot/owner roots around the FULL existing owner guard; no reduced audit or
+performance pass is claimed. It is the root-carrying integration stage of RGA-01e,
+not a substitute for its complete fresh mutable DAG and native60s requirements.
+
+Independent draft review corrected argument substitution, original-class and
+held-callee selection, class-key/native-descriptor and last-return root fences.
+An actual normal route prefix passed once. Two preceding diagnostic runs refused
+before injection; one identified first-seen engine class/function rows in the
+importing module, not necessarily the defining module. Those are retained failed
+drafts, not successful security controls. Current changed source is not qualified
+by the earlier normal result.
+
+Review then found a false-green initial-fault witness and missing accounting
+comparisons. The two obsolete17-case runs were deliberately interrupted with
+SIGINT only for their exact isolated runner/pytest/wrapper process trees; neither
+qualifies. Corrected tests record checker success before fault-specific returns,
+require completed mutation/readback, and verify attempts/scopes/cursor/history/
+actions, exact reserved-close charges and original close receipts. Normal observer
+exception disables its C observer, so that cleanup is proved by accounting/receipts,
+not a claimed all-phase call trace. Seventeen corrected cases on each runtime are
+running; acceptance/review and subsequent complete DAG integration remain open.
+
+Prior-source actual consumer21-case suites separately passed on both runtimes,
+with same ordered IDs and556 source maps bound to44b6d04. These preserve original
+selector/input/callee-prefix guarantees only; not full startup or this new route.
+No deployment, build, permissions, provider, model, job or store changes occurred.
+
 ## Generated closure primitives — bounded checks passed, November 11
 
 Candidate checks join canonical collections closure values to independently held

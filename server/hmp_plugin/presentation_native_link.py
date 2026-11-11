@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import sys
 from operator import is_not as _native_identity_is_not
-from types import FunctionType, ModuleType, CellType, BuiltinFunctionType
+from types import FunctionType, ModuleType, CellType, BuiltinFunctionType, GetSetDescriptorType
 from typing import NamedTuple
 
 from . import presentation_link_path_policy as policy
@@ -134,7 +134,7 @@ _RECORD_ALLOCATOR = object.__new__
 
 
 _ENGINE_FUNCTIONS = (
-    '_capture_engine', '_dependency_mirrors', '_engine_origin_tail', '_execution_mirrors',
+    '_capture_engine', '_dependency_mirrors', '_engine_origin_tail', '_native_link_scope_current', '_execution_mirrors',
     '_opened_chain_tail', '_lifetime_tail', '_resource_tail', '_prepare_shared_consumer',
     '_latch_shared_consumer', '_make_shared_commit', '_commit_shared_tail',
     '_publish_shared_ack', '_acked_shared_history', '_resource_bindings', '_byte_record_tail',
@@ -831,7 +831,7 @@ def _engine_origin_tail(origin, *, _type=type, _tuple=tuple, _dict=dict, _str=st
             raise _error from None
     shared = {'_produce_shared': '_produce_directory_metadata', '_consume_shared': '_consume_directory_policy', '_ack_shared': '_ack_directory_policy', '_attached_shared': '_acked_directory_commit_tail', '_retired_shared': '_retired_directory_commit_tail'}
     effects = ('_open_shared', '_close_known_shared', '_prepare_open_shared')
-    required_functions = ('_capture_engine', '_dependency_mirrors', '_engine_origin_tail', '_execution_mirrors', '_opened_chain_tail', '_lifetime_tail', '_resource_tail', '_prepare_shared_consumer', '_latch_shared_consumer', '_make_shared_commit', '_commit_shared_tail', '_publish_shared_ack', '_acked_shared_history', '_resource_bindings', '_byte_record_tail', '_make_shared_bytes_commit', '_commit_shared_bytes_tail', '_publish_shared_bytes_ack', '_acked_shared_bytes_history', *shared, '_effect_pin', '_new_execution', '_append_action', '_finish_mirrors', '_finish_path', '_drive_native_path', '_path_history_mirrors', '_history_phase_mirrors', '_finish_history', '_snapshot_history_mirrors', '_snapshot', '_make_fact', '_recheck', *effects, '_engine_live_tail')
+    required_functions = ('_capture_engine', '_dependency_mirrors', '_engine_origin_tail', '_native_link_scope_current', '_execution_mirrors', '_opened_chain_tail', '_lifetime_tail', '_resource_tail', '_prepare_shared_consumer', '_latch_shared_consumer', '_make_shared_commit', '_commit_shared_tail', '_publish_shared_ack', '_acked_shared_history', '_resource_bindings', '_byte_record_tail', '_make_shared_bytes_commit', '_commit_shared_bytes_tail', '_publish_shared_bytes_ack', '_acked_shared_bytes_history', *shared, '_effect_pin', '_new_execution', '_append_action', '_finish_mirrors', '_finish_path', '_drive_native_path', '_path_history_mirrors', '_history_phase_mirrors', '_finish_history', '_snapshot_history_mirrors', '_snapshot', '_make_fact', '_recheck', *effects, '_engine_live_tail')
     if not (all((type(row) is tuple and len(row) == 7 and (type(row[0]) is str) for row in origin[2])) and len(origin[2]) == len(required_functions) and (len({row[0] for row in origin[2]}) == len(required_functions)) and all((name in required_functions for name, *_ in origin[2]))):
         raise _error from None
     for row in origin[2]:
@@ -1058,7 +1058,7 @@ def _engine_live_tail(origin, bound_layout, *, _type=type, _tuple=tuple, _dict=d
             raise _error from None
     shared = {'_produce_shared': '_produce_directory_metadata', '_consume_shared': '_consume_directory_policy', '_ack_shared': '_ack_directory_policy', '_attached_shared': '_acked_directory_commit_tail', '_retired_shared': '_retired_directory_commit_tail'}
     effects = ('_open_shared', '_close_known_shared', '_prepare_open_shared')
-    required_functions = ('_capture_engine', '_dependency_mirrors', '_engine_origin_tail', '_execution_mirrors', '_opened_chain_tail', '_lifetime_tail', '_resource_tail', '_prepare_shared_consumer', '_latch_shared_consumer', '_make_shared_commit', '_commit_shared_tail', '_publish_shared_ack', '_acked_shared_history', '_resource_bindings', '_byte_record_tail', '_make_shared_bytes_commit', '_commit_shared_bytes_tail', '_publish_shared_bytes_ack', '_acked_shared_bytes_history', *shared, '_effect_pin', '_new_execution', '_append_action', '_finish_mirrors', '_finish_path', '_drive_native_path', '_path_history_mirrors', '_history_phase_mirrors', '_finish_history', '_snapshot_history_mirrors', '_snapshot', '_make_fact', '_recheck', *effects, '_engine_live_tail')
+    required_functions = ('_capture_engine', '_dependency_mirrors', '_engine_origin_tail', '_native_link_scope_current', '_execution_mirrors', '_opened_chain_tail', '_lifetime_tail', '_resource_tail', '_prepare_shared_consumer', '_latch_shared_consumer', '_make_shared_commit', '_commit_shared_tail', '_publish_shared_ack', '_acked_shared_history', '_resource_bindings', '_byte_record_tail', '_make_shared_bytes_commit', '_commit_shared_bytes_tail', '_publish_shared_bytes_ack', '_acked_shared_bytes_history', *shared, '_effect_pin', '_new_execution', '_append_action', '_finish_mirrors', '_finish_path', '_drive_native_path', '_path_history_mirrors', '_history_phase_mirrors', '_finish_history', '_snapshot_history_mirrors', '_snapshot', '_make_fact', '_recheck', *effects, '_engine_live_tail')
     if not (all((type(row) is tuple and len(row) == 7 and (type(row[0]) is str) for row in origin[2])) and len(origin[2]) == len(required_functions) and (len({row[0] for row in origin[2]}) == len(required_functions)) and all((name in required_functions for name, *_ in origin[2]))):
         raise _error from None
     for row in origin[2]:
@@ -1296,6 +1296,244 @@ def _opened_chain_tail(execution):
     return execution
 
 
+def _native_link_scope_current(execution, resource):
+    """Hold the actual link caller's roots across the complete owner guard.
+
+    This first integration keeps the FULL generic guard. It establishes the
+    execution-only call route needed by the later coherent DAG implementation;
+    it is neither a reduced audit nor native performance qualification.
+    A proposed coherent record is not standalone original-call authority.
+    """
+    _require(type(execution) is _LinkExecution
+             and type(resource) in (_NativeLinkMetadataResource, _NativeLinkBytesResource))
+    owner = tuple.__getitem__(execution, 0)
+    registration = tuple.__getitem__(execution, 1)
+    blueprint = tuple.__getitem__(execution, 2)
+    origin = tuple.__getitem__(execution, 3)
+    _require(type(origin) is tuple and len(origin) == 6
+             and type(origin[2]) is tuple)
+    engine_rows = tuple(row for row in origin[2]
+                        if type(row) is tuple and len(row) == 7
+                        and type(row[0]) is str and row[0] == '_engine_origin_tail')
+    _require(len(engine_rows) == 1)
+    engine_row = engine_rows[0]
+    engine_check = engine_row[1]
+    _require(all(type(k) is str for k in globals())
+             and globals().get('_engine_origin_tail') is engine_check
+             and type(engine_check) is FunctionType
+             and engine_check.__code__ is engine_row[2]
+             and engine_check.__globals__ is engine_row[3] is globals()
+             and engine_check.__defaults__ is engine_row[4]
+             and engine_check.__kwdefaults__ is engine_row[5]
+             and engine_check.__closure__ is None
+             and type(engine_row[5]) is dict
+             and all(type(k) is str for k in engine_row[5])
+             and type(engine_row[6]) is tuple
+             and len(engine_row[5]) == len(engine_row[6])
+             and all(type(pair) is tuple and len(pair) == 2
+                     and type(pair[0]) is str and pair[0] in engine_row[5]
+                     and engine_row[5][pair[0]] is pair[1] for pair in engine_row[6]))
+    engine_check(origin)
+    _require(type(owner) is StartupArtifactOwner
+             and type(registration) is _NativeScopeRegistration
+             and tuple.__getitem__(resource, 0) is owner
+             and tuple.__getitem__(resource, 1) is registration
+             and tuple.__getitem__(resource, 2) is execution)
+    scope = tuple.__getitem__(registration, 2)
+    _require(type(scope) is _Scope and tuple.__len__(scope) == 19
+             and tuple.__getitem__(scope, 17) is blueprint)
+    package_source = tuple.__getitem__(scope, 5)
+    runtime = tuple.__getitem__(scope, 6)
+    digest = tuple.__getitem__(scope, 9)
+    _require(type(package_source) is artifacts_module._PackageSource
+             and type(runtime) is _RuntimeSource)
+    inputs = tuple.__getitem__(runtime, 2)
+    snapshot = tuple.__getitem__(runtime, 0)
+    snapshot_kind = tuple.__getitem__(runtime, 1)
+    snapshot_cell = tuple.__getitem__(runtime, 3)
+    binding = tuple.__getitem__(digest, 1)
+    _require(type(binding) is tuple and len(binding) == 3)
+    invocation, cell, started = binding
+    _require(type(started) is tuple and len(started) == 7
+             and type(cell) is tuple and len(cell) == 2)
+    entry_origin = started[5]
+    entry_owner = cell[0]
+    lineage = tuple.__getitem__(registration, 0)
+    audit = tuple.__getitem__(scope, 18)
+    # Expected roots come from the actual caller-held immutable Scope/digest,
+    # not the current Entry module exports that will be compared to them.
+    _require(started[0] is entry_owner and started[1] is invocation
+             and started[2] is cell and cell[1] is invocation
+             and tuple.__getitem__(invocation, 9) is lineage
+             and tuple.__getitem__(scope, 10) is lineage
+             and tuple.__len__(entry_origin) == 12
+             and tuple.__getitem__(entry_origin, 11) is audit
+             and tuple.__getitem__(lineage, 5) is audit
+             and type(audit) is tuple and len(audit) == 3
+             and audit[0] is origin and audit[1] is origin[5])
+    entry_module = tuple.__getitem__(registration, 12)
+    _require(type(entry_module) is ModuleType)
+    entry_names = vars(entry_module)
+    _require(type(entry_names) is dict and all(type(k) is str for k in entry_names)
+             and entry_names.get('_ENTRY_ORIGIN') is entry_origin
+             and entry_names.get('_OWNER') is entry_owner
+             and entry_names.get('_CELL') is cell
+             and entry_names.get('_STARTED') is started)
+    _require(type(snapshot_kind) is type and type(snapshot) is snapshot_kind
+             and type(snapshot_cell) is tuple and len(snapshot_cell) == 2
+             and snapshot_cell[0] is snapshot and snapshot_cell[1] is inputs)
+    # Root the snapshot class in the original parent helper packet, not the
+    # engine's five-module class inventory (which does not own entry_files).
+    parent = tuple.__getitem__(entry_origin, 10)
+    _require(type(parent) is tuple and len(parent) == 5
+             and tuple.__getitem__(lineage, 4) is parent
+             and type(parent[0]) is tuple and len(parent[0]) == 8
+             and parent[0][4] is origin)
+    helper_capsule = parent[0][6]
+    _require(type(helper_capsule) is tuple and len(helper_capsule) == 8)
+    helper_packet = helper_capsule[6]
+    _require(type(helper_packet) is tuple and len(helper_packet) == 6
+             and type(helper_packet[4]) is tuple and len(helper_packet[4]) == 55)
+    snapshot_class = helper_packet[4][48]
+    _require(type(snapshot_class) is tuple and len(snapshot_class) == 3
+             and snapshot_class[0] is snapshot_kind
+             and snapshot_kind.__bases__ is snapshot_class[1])
+    snapshot_class_names = vars(snapshot_kind)
+    _require(all(type(k) is str for k in snapshot_class_names)
+             and type(snapshot_class[2]) is tuple
+             and len(snapshot_class_names) == len(snapshot_class[2])
+             and all(k in snapshot_class_names and snapshot_class_names[k] is v
+                     for k, v in snapshot_class[2]))
+    snapshot_descriptor = snapshot_class_names.get('__dict__')
+    _require(type(snapshot_descriptor) is GetSetDescriptorType
+             and snapshot_descriptor.__objclass__ is snapshot_kind
+             and snapshot_descriptor.__name__ == '__dict__')
+    snapshot_names = snapshot_descriptor.__get__(snapshot, snapshot_kind)
+    _require(type(snapshot_names) is dict and all(type(k) is str for k in snapshot_names)
+             and snapshot_names.get('_inputs') is inputs
+             and snapshot_names.get('_root_cell') is snapshot_cell)
+    # Select the original guard from immutable early class/function rows,
+    # never from the current class after an engine-check callback.
+    artifact_dependency = origin[4][3][2]
+    guard_classes = tuple(row for dependency in origin[4][3]
+                          for row in dependency[4]
+                          if row[0] is StartupArtifactOwner)
+    _require(len(guard_classes) == 1)
+    guard_members = tuple(pair for pair in guard_classes[0][2]
+                          if pair[0] == '_guard')
+    _require(len(guard_members) == 1)
+    guard = guard_members[0][1]
+    guard_rows = tuple(row for dependency in origin[4][3]
+                       for row in dependency[5] if row[0] is guard)
+    _require(len(guard_rows) == 1)
+    guard_row = guard_rows[0]
+    guard_names = vars(StartupArtifactOwner)
+    _require(all(type(k) is str for k in guard_names)
+             and guard_names.get('_guard') is guard
+             and type(guard) is FunctionType
+             and guard.__code__ is guard_row[1]
+             and guard.__globals__ is guard_row[2] is artifact_dependency[2]
+             and guard.__builtins__ is engine_check.__builtins__
+             and guard.__defaults__ is guard_row[3] is None
+             and guard.__kwdefaults__ is guard_row[4] is None
+             and guard_row[5] == ()
+             and guard.__closure__ is guard_row[6] is None
+             and guard_row[7] == ())
+    owner_kind = type(owner)
+    owner_class_names = vars(owner_kind)
+    _require(all(type(k) is str for k in owner_class_names))
+    owner_descriptor = owner_class_names.get('__dict__')
+    _require(type(owner_descriptor) is GetSetDescriptorType
+             and owner_descriptor.__objclass__ is owner_kind
+             and owner_descriptor.__name__ == '__dict__')
+    owner_names = owner_descriptor.__get__(owner, owner_kind)
+    owner_cell = tuple.__getitem__(registration, 3)
+    owner_root = tuple.__getitem__(registration, 4)
+    _require(type(owner_names) is dict and all(type(k) is str for k in owner_names)
+             and owner_names.get('_scope') is scope
+             and owner_names.get('_origin') is scope
+             and owner_names.get('_cell') is owner_cell
+             and owner_names.get('_root_cell') is owner_root
+             and owner_names.get('_native_scope_registration') is registration)
+    guard_code, guard_defaults, guard_keywords = (
+        guard.__code__, guard.__defaults__, guard.__kwdefaults__)
+    _require(guard(owner) is scope)
+    # Reauthenticate executable state before using any current Python getter.
+    # Generic guards remain complete; no prior success becomes a reusable grant.
+    _require(all(type(k) is str for k in globals())
+             and globals().get('_engine_origin_tail') is engine_check
+             and type(engine_check) is FunctionType
+             and engine_check.__code__ is engine_row[2]
+             and engine_check.__globals__ is engine_row[3] is globals()
+             and engine_check.__defaults__ is engine_row[4]
+             and engine_check.__kwdefaults__ is engine_row[5]
+             and engine_check.__closure__ is None
+             and type(engine_row[5]) is dict
+             and all(type(k) is str for k in engine_row[5])
+             and type(engine_row[6]) is tuple
+             and len(engine_row[5]) == len(engine_row[6])
+             and all(type(pair) is tuple and len(pair) == 2
+                     and type(pair[0]) is str and pair[0] in engine_row[5]
+                     and engine_row[5][pair[0]] is pair[1] for pair in engine_row[6]))
+    engine_check(origin)
+    _require(all(type(k) is str for k in vars(StartupArtifactOwner))
+             and vars(StartupArtifactOwner).get('_guard') is guard
+             and guard.__code__ is guard_code
+             and guard.__defaults__ is guard_defaults
+             and guard.__kwdefaults__ is guard_keywords)
+    _execution_mirrors(execution)
+    _native_work_registration_tail(owner, registration)
+    _require(tuple.__getitem__(execution, 0) is owner
+             and tuple.__getitem__(execution, 1) is registration
+             and tuple.__getitem__(execution, 2) is blueprint
+             and tuple.__getitem__(execution, 3) is origin
+             and tuple.__getitem__(resource, 0) is owner
+             and tuple.__getitem__(resource, 1) is registration
+             and tuple.__getitem__(resource, 2) is execution
+             and tuple.__getitem__(registration, 2) is scope
+             and tuple.__getitem__(scope, 5) is package_source
+             and tuple.__getitem__(scope, 6) is runtime
+             and tuple.__getitem__(scope, 9) is digest
+             and tuple.__getitem__(scope, 17) is blueprint
+             and tuple.__getitem__(scope, 18) is audit
+             and tuple.__getitem__(runtime, 0) is snapshot
+             and tuple.__getitem__(runtime, 2) is inputs
+             and tuple.__getitem__(runtime, 3) is snapshot_cell
+             and tuple.__getitem__(digest, 1) is binding
+             and tuple.__getitem__(registration, 0) is lineage
+             and tuple.__getitem__(registration, 12) is entry_module
+             and type(entry_module) is ModuleType
+             and vars(entry_module) is entry_names
+             and all(type(k) is str for k in entry_names)
+             and entry_names.get('_ENTRY_ORIGIN') is entry_origin
+             and entry_names.get('_OWNER') is entry_owner
+             and entry_names.get('_CELL') is cell
+             and entry_names.get('_STARTED') is started
+             and type(snapshot_kind) is type and type(snapshot) is snapshot_kind
+             and snapshot_kind is snapshot_class[0]
+             and snapshot_kind.__bases__ is snapshot_class[1]
+             and all(type(k) is str for k in vars(snapshot_kind))
+             and vars(snapshot_kind).get('__dict__') is snapshot_descriptor
+             and snapshot_descriptor.__get__(snapshot, snapshot_kind) is snapshot_names
+             and all(type(k) is str for k in snapshot_names)
+             and snapshot_names.get('_inputs') is inputs
+             and snapshot_names.get('_root_cell') is snapshot_cell)
+    _require(type(owner) is owner_kind is StartupArtifactOwner
+             and all(type(k) is str for k in vars(owner_kind))
+             and vars(owner_kind).get('__dict__') is owner_descriptor
+             and owner_descriptor.__get__(owner, owner_kind) is owner_names
+             and all(type(k) is str for k in owner_names)
+             and owner_names.get('_scope') is scope
+             and owner_names.get('_origin') is scope
+             and owner_names.get('_cell') is owner_cell
+             and owner_names.get('_root_cell') is owner_root
+             and owner_names.get('_native_scope_registration') is registration
+             and owner_names.get('_failed') is False
+             and owner_names.get('_unknown') is False
+             and owner_names.get('_reading') is False)
+    return scope
+
+
 def _lifetime_tail(owner, consumer):
     _require(type(consumer) in (_LinkMetadataConsumer, _LinkBytesConsumer))
     execution = tuple.__getitem__(consumer, 0)
@@ -1316,7 +1554,27 @@ def _lifetime_tail(owner, consumer):
     # extra helper-return boundary or reuse a verdict from an earlier call.
     _require(reg.scope.runtime is execution.blueprint.runtime
              and reg.scope.runtime is not None)
-    _require(StartupArtifactOwner._guard(owner) is reg.scope)
+    scope_rows = tuple(row for row in execution.origin[2]
+                       if row[0] == '_native_link_scope_current')
+    _require(len(scope_rows) == 1)
+    scope_row = scope_rows[0]
+    scope_check = _effect_pin(execution.origin, '_native_link_scope_current')
+    _require(scope_check is scope_row[1] and type(scope_check) is FunctionType
+             and scope_check.__code__ is scope_row[2]
+             and scope_check.__globals__ is scope_row[3]
+             and scope_check.__defaults__ is scope_row[4]
+             and scope_check.__kwdefaults__ is scope_row[5]
+             and scope_check.__closure__ is None)
+    operation = tuple.__getitem__(consumer, 1)
+    _require(type(operation) in (metadata._MetadataOperation, metadata._LinkBytesOperation)
+             and tuple.__getitem__(operation, 0) is owner
+             and tuple.__getitem__(operation, 2) is reg)
+    resource = tuple.__getitem__(operation, 1)
+    _require(type(resource) in (_NativeLinkMetadataResource, _NativeLinkBytesResource)
+             and tuple.__getitem__(resource, 0) is owner
+             and tuple.__getitem__(resource, 1) is reg
+             and tuple.__getitem__(resource, 2) is execution)
+    _require(scope_check(execution, resource) is reg.scope)
     _opened_chain_tail(execution)
     _native_work_origin_tail(owner, reg, reg.native_origin)
     _require(_execution_mirrors(execution) is execution
@@ -1400,7 +1658,18 @@ def _resource_tail(owner, resource):
     _native_work_registration_tail(owner, reg)
     _require(reg.scope.runtime is execution.blueprint.runtime
              and reg.scope.runtime is not None)
-    _require(StartupArtifactOwner._guard(owner) is reg.scope)
+    scope_rows = tuple(row for row in execution.origin[2]
+                       if row[0] == '_native_link_scope_current')
+    _require(len(scope_rows) == 1)
+    scope_row = scope_rows[0]
+    scope_check = _effect_pin(execution.origin, '_native_link_scope_current')
+    _require(scope_check is scope_row[1] and type(scope_check) is FunctionType
+             and scope_check.__code__ is scope_row[2]
+             and scope_check.__globals__ is scope_row[3]
+             and scope_check.__defaults__ is scope_row[4]
+             and scope_check.__kwdefaults__ is scope_row[5]
+             and scope_check.__closure__ is None)
+    _require(scope_check(execution, resource) is reg.scope)
     _native_work_origin_tail(owner, reg, reg.native_origin)
     _require(_execution_mirrors(execution) is execution
              and execution.definitions[resource.ordinal] is resource.site

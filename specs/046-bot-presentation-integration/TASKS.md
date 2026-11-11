@@ -1,3 +1,8 @@
+## November11: rooted call-route implementation stage
+
+- [ ] **RGA-01e-ROOTED-CALL-ROUTE** Draft early-retained execution/resource checker retains the FULL generic owner guard. Current17 resource-prefix cases independently verified with557 source maps; minimum17 and actual lifetime caller still pending. No optimized guard/startup/feature acceptance.
+- [ ] **RGA-01e-LIFETIME-CALLER** Actual original consumer/operation/resource ownership and held-callee/root-prefix tests; a setup-variable ordering bug in private harness corrected before execution. No direct-call substitute.
+
 ## November 11: coherent registered Scope integration
 
 - [ ] **RGA-01e-SCOPE-DISPATCH** Implement the complete rooted link-execution Scope unit in [RGA_SCOPE_DISPATCH.md](RGA_SCOPE_DISPATCH.md). Qualify actual held execution/resource/operation routes first, early-retain the new fixed callee, and keep generic _native_scope_current/_native_walk_scope unchanged. Do not bootstrap through the recursive selector or replace full guards with nine partial DATA components. Preserve non-link/active-bootstrap behavior.

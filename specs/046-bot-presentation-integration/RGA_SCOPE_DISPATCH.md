@@ -76,7 +76,7 @@ must not acquire a reduced path merely because they pass a registration value.
 | Runtime source | Current source metadata and cache/snapshot projections | _runtime_seal count owner/Scope/bytes_read, io_slot owner, before/after/reads containers, guard/code/entry class, actual input plan/link, completion_attempt and _completing |
 | Loaded shared owners | _loaded_owner_graph_mirrors | Exact input package/recipe/selection to the same approval/activation roots, original caller and function authority |
 | Approval | _approval_graph_mirrors | Actual native descriptor/read closure and fresh original API module/function/code/spec-state rejoin equivalent to gateway_approval._api_state; do not add an API invocation |
-| Cache | _cache_context_graph_mirrors | Original cache facts and full row semantics; actual cwd/getter observation when required, existing owned-cache and sealed-fact branches |
+| Cache | _cache_context_graph_mirrors | Preserve retain-time immutable row correspondence; fresh root/fact/cwd/rows identity and _seal checks, actual cwd/getter observation when required, existing owned-cache and sealed-fact branches |
 | Entry | _entry_graph_mirrors | Actual retained EntryOrigin, invocation, STARTED/CELL, actor and callee authority; interpreter/native API projections do not replace live observations |
 | Activation | _activation_graph_mirrors | Settled state only; capture-active bootstrap remains generic |
 | Interpreter/native APIs | _interpreter_graph_mirrors and _native_io_graph_mirrors | Original early functions/primitives, required exports and only current actual observations already required by the generic path |
@@ -89,6 +89,64 @@ custody, work and reserved-close accounting, and cleanup on lost return/refusal.
 Retain all existing generated metadata/closure primitive checks. Annotation
 execution has its separately recorded actual-journey boundary; static absence
 and class bootstrap are not whole-startup absence proof.
+
+## Exact runtime-plan and cache obligations
+
+A November11 reinspection distinguishes actual generic behavior from a proposed
+extra requirement. runtime_files.plan_current checks the original entry/recipe/
+plugin binding pointers, dependency/interpreter byte pointers, interpreter identity
+and recipe/link schema joins. RuntimeFilePlan.pending is an immutable tuple
+constructed by the original plan builder, not a mutable progress list. Retain
+those exact values under original execution custody; do not invent a pending-list
+state machine. Nested referenced owners, native namespaces and callable metadata
+remain mutable and still require their existing fresh checks.
+
+cache_context._rows computes immutable CacheInputData/PlannedCachePath records at
+retain time. CacheContextOwner.current_binding does not recompute _rows. It checks
+current actor context, performs _seal, calls the original current getter and
+_location only when requires_cwd is true, rejoins the original cwd value, performs
+_seal again and returns the same held fact. The replacement must preserve _seal's
+actual mutable snapshot/input/root/module/ready/failed/retired/fact/cwd/rows joins,
+getter metadata and plan_current obligations. It must not add per-call cache-path
+recomputation or new native/API observations just because the retained records
+contain those concepts. Immutable correspondence reuse does not reuse a mutable
+success verdict or relax any existing consumer's actual cache validation.
+
+### Scope-guard phase, not every cache API
+
+The actual replaced StartupArtifactOwner._guard runtime branch calls
+EntryFileSnapshotOwner._pure_current/_pure_lineage and CacheContextOwner.
+retained_binding/_seal. Its owned cache source checks also use retained_binding.
+Those routes do not call CacheContextOwner.current_binding, _context or getcwd.
+The new Scope body must not introduce those calls. Preserve native actor checks
+already required by the actual owner/activation/Entry path, and fresh getter
+metadata checks, without adding an unused getter invocation.
+
+There are two distinct cache objects. _cache_context_graph_mirrors handles the
+pre-IO CacheContextOwner. Scope.cache, when present, is the different mutable
+startup_cache._CacheSource; it can coexist with a link RuntimeSource through
+retain_from_cache_entry. Do not assume it is absent from the real linked path.
+The complete body must preserve source_current/owned_current's actual source,
+entry/inputs/cell/plan/context-fact joins; paths tuple; before/after list1; effects
+list bounded by2*paths; each _ProbeEffect source, phase/index, attempted/returned
+booleans, unknownFalse and count tuple3; and optional _Missing path/index/
+ancestor tuple2/native identity tuple5 shapes. Owned source must equal Scope.cache,
+its input io_slot must hold the same owner and Scope.expected must be plan.pending.
+
+Retain the runtime _runtime_seal count owner/Scope/bytes_read and io_slot joins,
+source guard/class/code identity, before/after/count list1 and reads list. Snapshot
+completion requires the original completion_attempt tuple4; _completingFalse
+requires no attempt on snapshot/activation, while True requires the same original
+attempt on both. Recheck actual Entry/recipe/package/activation identity joins.
+
+The post-fact path is not optional: runtime fact tuple5 and _LinkTargetObservation
+must retain original owner/Scope/source/before/after/count, reads must have2*hops,
+and both historical _link_reads_current predicates remain required. A cache fact
+also retains seal_cache_observation/_cache_seal_mirrors obligations for original
+before/after passes, phase/counts/effect order/results/descriptors and native finish
+histories, plus final owner._cache_fact. Authenticate any historical helper from
+its original Scope-owned startup-probe origin and actual held call metadata.
+First-prefix factNone evidence does not qualify a later post-fact recheck.
 
 ## Required causal acceptance
 
