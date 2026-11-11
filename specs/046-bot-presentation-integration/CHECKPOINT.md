@@ -1,3 +1,19 @@
+## November 11: definition staging for fixed prewarm
+
+Two cycle-causing imports moved below complete entry-file/cache-context defs;
+all final defining aliases preserved, no dynamic binder/repair or expanded type
+capture. Baseline3order controls had1pass2definitionmissing failures; staged3pass
+with no native owners/bootstrap/gateway activity. Final195 current/minimum cases
+pass source-bound nofail/error/skip, independent source/log/XML binding review.
+
+This only makes partial-module definitions available. Gateway-entry-first still
+captures before these modules load. Fixed prewarm under original Entry seals,
+genuine-init-only declared aliases and original type/function/constructor/source
+pins remain next, before complete transitive/caller/root/callee/actor/API/cache/
+runtime/GC/callback graph integration and unchanged native60s/fullfeature/device/
+release gates. Last dated native60s still fails; no graph reduction, character
+image delivery or installed runtime/device/grant/provider/model/job/store change.
+
 ## November 11: new graph checker code rows retained early
 
 The original helper role table now retains9 additional artifact graph functions

@@ -1,3 +1,29 @@
+## Runtime definition staging — November 11, 2026 UTC
+
+The local character startup draft now defines entry-file and cache-context types
+and helpers before following their cycle-causing imports into Entry capture.
+Only those existing imports moved to the end of their modules; their aliases and
+method behavior remain unchanged. Future annotations and method-body lookups
+permit this staging. Late-import lint exceptions are explicit and documented.
+No lazy binder, alias repair, prewarming or expanded type/code admission was added.
+
+Three isolated import-order cases observe the actual Entry capture boundary,
+require definitions in any already-partial module, then verify original aliases
+and no owner/bootstrap/gateway startup. The baseline passed only gateway-entry-
+first and failed both cyclic orders for missing definitions; the staged source
+passes all three. The same195 tests pass on actual Python3.14.9 and3.11.15 with
+unchanged source and0failures/errors/skips, including prior145 graph/Entry/
+activation cases, these3 orders,25 cache cases and22 approval import-order cases.
+Independent source and final source/log/XML review records the bounded result.
+
+This prepares original-code capture; it does not complete it. Gateway-entry-first
+still captures before these modules are imported. Fixed prewarming under the
+original Entry seal, genuine-initialization-only alias handling, original type/
+function/constructor pins, full transitive/caller-root checks and actual GC/callback
+controls remain required before the final graph is connected. Original60s,
+feature/service/device/release gates stay open. Character images remain unfinished;
+no running host/device build, grants, providers, models, jobs or release changed.
+
 ## Graph checker code capture — November 11, 2026 UTC
 
 The character startup draft now retains the nine new graph checkers in the

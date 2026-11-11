@@ -12,8 +12,6 @@ from hmp_plugin.presentation_gateway_recipe import GatewayRecipeOwner, _same_rec
 from hmp_plugin.presentation_startup_artifacts import ExpectedArtifact
 
 from .cache_candidates import PlannedCachePath, _location, planned_cache_path
-from .entry_files import EntryFileSnapshotOwner, _Inputs, _same_package
-from .gateway_entry import GatewayEntryOwner, _origin_current
 from .runtime_files import RuntimeFilePlan, RuntimePackage, plan_current
 
 _OWNER = _ROOT = _FACT = None
@@ -243,3 +241,9 @@ class CacheContextOwner:
         except BaseException:
             self._failed = True
             raise CacheContextError(self) from None
+
+
+# Future annotations and method-body lookups permit definition staging before
+# Entry capture. Keep the original defining aliases; do not add a lazy binder.
+from .entry_files import EntryFileSnapshotOwner, _Inputs, _same_package  # noqa: E402
+from .gateway_entry import GatewayEntryOwner, _origin_current  # noqa: E402

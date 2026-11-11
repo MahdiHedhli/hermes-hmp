@@ -33,9 +33,6 @@ from hmp_plugin.presentation_startup_artifacts import (
     _Scope,
 )
 
-from . import gateway_entry
-from .gateway_entry import GatewayEntryOwner
-
 
 class EntryFilesError(Exception):
     def __init__(self, owner=None):
@@ -676,3 +673,9 @@ class EntryFileSnapshotOwner:
 
     def __repr__(self):
         return "<EntryFileSnapshotOwner file-DATA not-executed-wrapper-attestation>"
+
+
+# Define the complete snapshot types/helpers before the cycle enters original
+# Entry capture. These aliases are used only by method bodies, not definitions.
+from . import gateway_entry  # noqa: E402
+from .gateway_entry import GatewayEntryOwner  # noqa: E402

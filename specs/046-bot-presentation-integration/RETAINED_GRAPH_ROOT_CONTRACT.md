@@ -486,3 +486,27 @@ late-alias injection now target the actual factory return, verify record3/layout
 packet identity, staged Entry root and alias readiness, and Entry's retained literal
 record. Corrected final386 current/minimum pass with source/log/XML verification.
 No runtime, native60s/performance/full-DAG/feature/device/release claim follows.
+
+## Cycle-safe definition staging — November 11
+
+Entry-file definitions now precede its gateway_entry imports; cache-context
+definitions precede its entry_files/gateway_entry aliases. These names occur in
+postponed annotations and method bodies, not evaluated definitions. Normal bottom
+imports preserve exact defining objects. Explicit late-import lint exceptions
+are required by this cycle-breaking placement, not a lazy dispatch mechanism.
+
+Three isolated order controls profile the actual _capture_origin call: currently
+partial entry-file/cache modules must already have their complete definitions.
+After initialization exact aliases and no owner/bootstrap/server activity remain.
+Baseline cyclic orders failed before definitions existed; staged source passes.
+Gateway-entry-first still observes neither module at that boundary, so this does
+not qualify prewarming, original class/code closure or any graph dispatch.
+
+Next is a fixed prewarm under held original Entry pre/postseals. Any declared
+missing aliases may only be bound during genuine module initialization/Entry
+origin absence to independently held defining objects; initialized repair,
+foreign nomination, extra exclusions or module __getattr__ are forbidden. Capture
+actual original type/function/constructor metadata through parent and both Scope
+seals, with import-order/foreignkey/late-code/coherent-nomination/GC causals before
+full graph integration. Final195 current/minimum field/initialization/cache tests
+are not native60s, full feature, physical or release evidence. No runtime changed.

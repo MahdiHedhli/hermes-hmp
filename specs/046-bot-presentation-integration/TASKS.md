@@ -1,3 +1,20 @@
+## November 11: cycle-safe definition staging prerequisite
+
+- [x] **RGA-01d-DEFINITION-STAGING** Move only cycle-causing Entry/entry-file
+      imports after entry-file/cache-context definitions. Original aliases and
+      method behavior unchanged; no lazy binder, alias repair or capture expansion.
+- [x] Three isolated entry/entryfiles/cachefirst import orders observe actual
+      Entry capture definition readiness and exact final aliases/no owners or
+      bootstrap. Baseline2 cyclic failures/1pass; newsource3pass.
+- [x] Same195 current/minimum regressions, nofail/error/skip, unchanged source;
+      prior145 +3staging +25cache +22approvalimportorders, independent binding review.
+- [ ] Fixed prewarm under held original Entry seal; genuine-initialization-only
+      declared alias handling, original classes/functions/constructors and source
+      pins before helpercapture and bothScope publication. Gatewayentry-first
+      still does not load these modules at capture; staging is not admission.
+- [ ] Final whole graph/caller/root/callee/transitive/actor/API/cache/runtime/GC/
+      callback integration, original60s/feature/physical/release and full roadmap.
+
 ## November 11: graph checker early code capture
 
 - [x] **RGA-01d-GRAPH-CODE-PINS** Append9 graph functions to original early
