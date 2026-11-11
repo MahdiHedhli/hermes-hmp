@@ -1,3 +1,30 @@
+## November 11: complete runtime constructor metadata
+
+- [x] **RGA-01d-RUNTIME-CONSTRUCTORS** Retain seven runtime constructors via
+      appended parent modules/types:6modules/15types, old indices unchanged.
+      Pin9→12 adds kw/kwpairs/privateglobals pairs; code/default/global/closure,
+      field/base/dispatch/native tuple checks apply at all parent/encoding/Scope
+      consumers. Engine's unrelated nine-field rows remain unchanged.
+- [x] Class dictionary key fences precede metadata lookup; exact CodeType/str
+      filename, exact defaults/kw/globals storage and duplicate-free snapshots
+      with live-to-private identity comparisons. No foreign callback in tests.
+- [x] Retain baseline42(6controls/36DIDNOTRAISE); focused58+actualScope8 pass both
+      runtimes. Additional baseline18 retains6child60s timeouts as uncertainty,
+      not an admission/foreign-execution proof; seven filename omissions and
+      class/keyword key failures remain distinct from three passing controls.
+- [x] Final853 identical cases current/minimum pass with all552 source hashes,
+      log/XML binding and independent bounded review. No native speedup claimed.
+- [ ] **RGA-01d-RUNTIME-CLASSMETHODS** Append only the eight declared source
+      classmethods with exact original native wrapper/type and raw.__func__
+      checks, preserve strict plain roles and row widths; append classmethod as
+      primitive21 through collectors/checkers/parent/Scope mirrors and authenticate
+      any new factory default independently. Cover code/default/kw, wrong wrappers,
+      hidden/coherent defaults, late returns and both publication refusals.
+- [ ] Generated helper/private-global and cache-candidate/transitive closure;
+      current census51/37 class attributes outside plain-helper+constructor records.
+- [ ] Full root/caller/callee/bothScope/GC/callback/freshgraph, native60s,
+      full feature/physical/Linux/provider/release and documentation qualification.
+
 ## November 11: persistent runtime plain-code custody
 
 - [x] **RGA-01d-RUNTIME-PLAIN** Append the three prewarmed runtime modules,

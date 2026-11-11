@@ -6111,9 +6111,38 @@ class StartupArtifactOwner:
                 if link_raw_type(link_origin) is not link_raw_tuple or link_raw_len(link_origin) != 5:
                     raise refusal from None
                 link_pin_environment, link_pin_modules, link_pin_own_functions, link_pin_policy_functions, link_pin_types = link_origin
-                if link_raw_type(link_pin_environment) is not link_raw_tuple or link_raw_len(link_pin_environment) != 8 or link_raw_type(link_pin_environment[0]) is not link_raw_module or (link_raw_type(link_pin_environment[1]) is not link_raw_dict) or (link_raw_vars(link_pin_environment[0]) is not link_pin_environment[1]) or link_raw_any((link_raw_type(link_pin_k) is not link_raw_str for link_pin_k in link_pin_environment[1])) or (link_raw_type(link_pin_environment[2]) is not link_raw_dict) or link_raw_any((link_raw_type(link_pin_k) is not link_raw_str for link_pin_k in link_pin_environment[2])) or (link_pin_environment[1].get('modules') is not link_pin_environment[2]) or (link_raw_type(link_pin_modules) is not link_raw_tuple) or (link_raw_len(link_pin_modules) != 4) or (link_raw_type(link_pin_own_functions) is not link_raw_tuple) or (link_raw_type(link_pin_policy_functions) is not link_raw_tuple) or (link_raw_type(link_pin_types) is not link_raw_tuple) or (link_raw_len(link_pin_types) != 11):
+                if (
+                    link_raw_type(link_pin_environment) is not link_raw_tuple
+                    or link_raw_len(link_pin_environment) != 8
+                    or link_raw_type(link_pin_environment[0]) is not link_raw_module
+                    or (link_raw_type(link_pin_environment[1]) is not link_raw_dict)
+                    or (link_raw_vars(link_pin_environment[0]) is not link_pin_environment[1])
+                    or link_raw_any(
+                        link_raw_type(link_pin_k) is not link_raw_str
+                        for link_pin_k in link_pin_environment[1]
+                    )
+                    or (link_raw_type(link_pin_environment[2]) is not link_raw_dict)
+                    or link_raw_any(
+                        link_raw_type(link_pin_k) is not link_raw_str
+                        for link_pin_k in link_pin_environment[2]
+                    )
+                    or (link_pin_environment[1].get("modules") is not link_pin_environment[2])
+                    or (link_raw_type(link_pin_modules) is not link_raw_tuple)
+                    or (link_raw_len(link_pin_modules) != 6)
+                    or (link_raw_type(link_pin_own_functions) is not link_raw_tuple)
+                    or (link_raw_type(link_pin_policy_functions) is not link_raw_tuple)
+                    or (link_raw_type(link_pin_types) is not link_raw_tuple)
+                    or (link_raw_len(link_pin_types) != 15)
+                ):
                     raise refusal from None
-                link_pin_names = ('hmp_startup.link_factory_origin', 'hmp_plugin.presentation_link_path_policy', 'hmp_plugin.presentation_startup_artifacts', 'hmp_startup.runtime_files')
+                link_pin_names = (
+                    "hmp_startup.link_factory_origin",
+                    "hmp_plugin.presentation_link_path_policy",
+                    "hmp_plugin.presentation_startup_artifacts",
+                    "hmp_startup.runtime_files",
+                    "hmp_startup.entry_files",
+                    "hmp_startup.cache_context",
+                )
                 for link_pin_row, link_pin_name in link_raw_zip(link_pin_modules, link_pin_names, strict=True):
                     if link_raw_type(link_pin_row) is not link_raw_tuple or link_raw_len(link_pin_row) != 3 or link_raw_type(link_pin_row[0]) is not link_raw_str or (link_pin_row[0] != link_pin_name) or (link_raw_type(link_pin_row[1]) is not link_raw_module) or (link_raw_type(link_pin_row[2]) is not link_raw_dict) or link_raw_any((link_raw_type(link_pin_k) is not link_raw_str for link_pin_k in link_pin_row[2])) or (link_pin_environment[2].get(link_pin_name) is not link_pin_row[1]) or (link_raw_vars(link_pin_row[1]) is not link_pin_row[2]) or (link_raw_type(link_pin_row[2].get('__name__')) is not link_raw_str) or (link_pin_row[2]['__name__'] != link_pin_name):
                         raise refusal from None
@@ -6135,17 +6164,143 @@ class StartupArtifactOwner:
                                 raise refusal from None
                         elif link_raw_type(link_pin_kw) is not link_raw_dict or link_raw_any((link_raw_type(link_pin_k) is not link_raw_str for link_pin_k in link_pin_kw)) or link_raw_len(link_pin_kw) != link_raw_len(link_pin_row[6]) or link_raw_any((link_raw_type(link_pin_pair) is not link_raw_tuple or link_raw_len(link_pin_pair) != 2 or link_raw_type(link_pin_pair[0]) is not link_raw_str or (link_pin_pair[0] not in link_pin_kw) or (link_pin_kw[link_pin_pair[0]] is not link_pin_pair[1]) for link_pin_pair in link_pin_row[6])):
                             raise refusal from None
-                link_pin_exports = ((1, '_LinkPathPolicy'), (1, '_LinkPathCursor'), (2, 'ExpectedArtifact'), (3, 'RuntimeFilePlan'), (3, 'ExecutableLinkPlan'), (3, 'LinkHop'), (1, '_LinkScopeBlueprint'), (2, '_RuntimeSource'), (2, '_Scope'), (0, '_FilesystemEncodingOrigin'), (0, '_EncodedBasename'))
-                for link_pin_pin, (link_pin_module_index, link_pin_name) in link_raw_zip(link_pin_types, link_pin_exports, strict=True):
-                    if link_raw_type(link_pin_pin) is not link_raw_tuple or link_raw_len(link_pin_pin) != 9 or link_raw_type(link_pin_pin[0]) is not link_raw_type or (link_pin_modules[link_pin_module_index][2].get(link_pin_name) is not link_pin_pin[0]) or (link_raw_type(link_pin_pin[1]) is not link_raw_tuple) or link_raw_any((link_raw_type(link_pin_n) is not link_raw_str for link_pin_n in link_pin_pin[1])) or (link_raw_type(link_pin_pin[2]) is not link_raw_tuple) or (link_raw_len(link_pin_pin[2]) != link_raw_len(link_pin_pin[1])) or (link_raw_type(link_pin_pin[3]) is not link_raw_function) or (link_raw_type(link_pin_pin[5]) is not link_raw_dict) or link_raw_any((link_raw_type(link_pin_k) is not link_raw_str for link_pin_k in link_pin_pin[5])) or (link_raw_type(link_pin_pin[8]) is not link_raw_tuple):
+                link_pin_exports = (
+                    (1, "_LinkPathPolicy"),
+                    (1, "_LinkPathCursor"),
+                    (2, "ExpectedArtifact"),
+                    (3, "RuntimeFilePlan"),
+                    (3, "ExecutableLinkPlan"),
+                    (3, "LinkHop"),
+                    (1, "_LinkScopeBlueprint"),
+                    (2, "_RuntimeSource"),
+                    (2, "_Scope"),
+                    (0, "_FilesystemEncodingOrigin"),
+                    (0, "_EncodedBasename"),
+                    (3, "RuntimePackage"),
+                    (4, "_Inputs"),
+                    (5, "CacheInputData"),
+                    (5, "_ContextSource"),
+                )
+                for link_pin_pin, (link_pin_module_index, link_pin_name) in link_raw_zip(
+                    link_pin_types, link_pin_exports, strict=True
+                ):
+                    if (
+                        link_raw_type(link_pin_pin) is not link_raw_tuple
+                        or link_raw_len(link_pin_pin) != 12
+                        or link_raw_type(link_pin_pin[0]) is not link_raw_type
+                        or (
+                            link_pin_modules[link_pin_module_index][2].get(link_pin_name)
+                            is not link_pin_pin[0]
+                        )
+                        or (link_raw_type(link_pin_pin[1]) is not link_raw_tuple)
+                        or link_raw_any(
+                            link_raw_type(link_pin_n) is not link_raw_str
+                            for link_pin_n in link_pin_pin[1]
+                        )
+                        or (link_raw_type(link_pin_pin[2]) is not link_raw_tuple)
+                        or (link_raw_len(link_pin_pin[2]) != link_raw_len(link_pin_pin[1]))
+                        or (link_raw_type(link_pin_pin[3]) is not link_raw_function)
+                        or (link_raw_type(link_pin_pin[5]) is not link_raw_dict)
+                        or link_raw_any(
+                            link_raw_type(link_pin_k) is not link_raw_str
+                            for link_pin_k in link_pin_pin[5]
+                        )
+                        or (link_raw_type(link_pin_pin[8]) is not link_raw_tuple)
+                    ):
                         raise refusal from None
-                    link_pin_kind, link_pin_fields, link_pin_members, link_pin_constructor, link_pin_code, link_pin_globals_, link_pin_defaults, link_pin_bases, link_pin_dispatch = link_pin_pin
+                    (
+                        link_pin_kind,
+                        link_pin_fields,
+                        link_pin_members,
+                        link_pin_constructor,
+                        link_pin_code,
+                        link_pin_globals_,
+                        link_pin_defaults,
+                        link_pin_bases,
+                        link_pin_dispatch,
+                        link_pin_constructor_kw,
+                        link_pin_constructor_kw_pairs,
+                        link_pin_constructor_global_pairs,
+                    ) = link_pin_pin
                     link_pin_namespace = link_raw_vars(link_pin_kind)
-                    link_pin_actual = link_pin_namespace.get('__new__')
+                    if link_raw_any(
+                        link_raw_type(constructor_key) is not link_raw_str
+                        for constructor_key in link_pin_namespace
+                    ):
+                        raise refusal from None
+                    link_pin_actual = link_pin_namespace.get("__new__")
                     if link_raw_type(link_pin_actual) is link_raw_staticmethod:
                         link_pin_actual = link_pin_actual.__func__
-                    if link_pin_namespace.get('_fields') is not link_pin_fields or link_pin_actual is not link_pin_constructor or link_pin_constructor.__code__ is not link_pin_code or (link_pin_constructor.__globals__ is not link_pin_globals_) or (link_pin_constructor.__defaults__ is not link_pin_defaults) or (link_pin_kind.__bases__ is not link_pin_bases) or (link_pin_globals_.get('_tuple_new') is not link_raw_tuple.__new__) or link_raw_any((link_pin_namespace.get(link_pin_n) is not link_pin_member for link_pin_n, link_pin_member in link_raw_zip(link_pin_fields, link_pin_members, strict=True))) or link_raw_any((link_raw_type(link_pin_row) is not link_raw_tuple or link_raw_len(link_pin_row) != 2 or link_raw_type(link_pin_row[0]) is not link_raw_str or (link_pin_namespace.get(link_pin_row[0]) is not link_pin_row[1]) for link_pin_row in link_pin_dispatch)):
+                    if (
+                        link_pin_namespace.get("_fields") is not link_pin_fields
+                        or link_pin_actual is not link_pin_constructor
+                        or link_pin_constructor.__code__ is not link_pin_code
+                        or (link_pin_constructor.__globals__ is not link_pin_globals_)
+                        or (link_pin_constructor.__defaults__ is not link_pin_defaults)
+                        or (link_pin_kind.__bases__ is not link_pin_bases)
+                        or (link_pin_globals_.get("_tuple_new") is not link_raw_tuple.__new__)
+                        or link_raw_any(
+                            (
+                                link_pin_namespace.get(link_pin_n) is not link_pin_member
+                                for link_pin_n, link_pin_member in link_raw_zip(
+                                    link_pin_fields, link_pin_members, strict=True
+                                )
+                            )
+                        )
+                        or link_raw_any(
+                            link_raw_type(link_pin_row) is not link_raw_tuple
+                            or link_raw_len(link_pin_row) != 2
+                            or link_raw_type(link_pin_row[0]) is not link_raw_str
+                            or (link_pin_namespace.get(link_pin_row[0]) is not link_pin_row[1])
+                            for link_pin_row in link_pin_dispatch
+                        )
+                    ):
                         raise refusal from None
+                    if (
+                        link_raw_type(link_pin_constructor) is not link_raw_function
+                        or link_pin_constructor.__kwdefaults__ is not link_pin_constructor_kw
+                        or link_pin_constructor.__closure__ is not None
+                        or link_raw_type(link_pin_constructor.__code__.co_filename)
+                        is not link_raw_str
+                        or (
+                            link_pin_defaults is not None
+                            and link_raw_type(link_pin_defaults) is not link_raw_tuple
+                        )
+                    ):
+                        raise refusal from None
+                    for constructor_namespace, constructor_pairs in (
+                        (link_pin_globals_, link_pin_constructor_global_pairs),
+                        (link_pin_constructor_kw, link_pin_constructor_kw_pairs),
+                    ):
+                        if link_raw_type(constructor_pairs) is not link_raw_tuple:
+                            raise refusal from None
+                        if constructor_namespace is None:
+                            if link_raw_len(constructor_pairs) != 0:
+                                raise refusal from None
+                            continue
+                        if link_raw_type(
+                            constructor_namespace
+                        ) is not link_raw_dict or link_raw_len(
+                            constructor_namespace
+                        ) != link_raw_len(constructor_pairs):
+                            raise refusal from None
+                        constructor_expected = {}
+                        for constructor_pair in constructor_pairs:
+                            if (
+                                link_raw_type(constructor_pair) is not link_raw_tuple
+                                or link_raw_len(constructor_pair) != 2
+                                or link_raw_type(constructor_pair[0]) is not link_raw_str
+                                or constructor_pair[0] in constructor_expected
+                            ):
+                                raise refusal from None
+                            constructor_expected[constructor_pair[0]] = constructor_pair[1]
+                        for constructor_key, constructor_value in constructor_namespace.items():
+                            if (
+                                link_raw_type(constructor_key) is not link_raw_str
+                                or constructor_key not in constructor_expected
+                                or constructor_expected[constructor_key] is not constructor_value
+                            ):
+                                raise refusal from None
                 # Original retained-helper prefix and DATA, with no final callback.
                 if (link_pin_environment[6] is not link_helper_origin
                         or link_helper_origin[7] is not link_helper_record
@@ -6672,9 +6827,38 @@ class StartupArtifactOwner:
                 if link_raw_type(link_origin) is not link_raw_tuple or link_raw_len(link_origin) != 5:
                     raise refusal from None
                 link_pin_environment, link_pin_modules, link_pin_own_functions, link_pin_policy_functions, link_pin_types = link_origin
-                if link_raw_type(link_pin_environment) is not link_raw_tuple or link_raw_len(link_pin_environment) != 8 or link_raw_type(link_pin_environment[0]) is not link_raw_module or (link_raw_type(link_pin_environment[1]) is not link_raw_dict) or (link_raw_vars(link_pin_environment[0]) is not link_pin_environment[1]) or link_raw_any((link_raw_type(link_pin_k) is not link_raw_str for link_pin_k in link_pin_environment[1])) or (link_raw_type(link_pin_environment[2]) is not link_raw_dict) or link_raw_any((link_raw_type(link_pin_k) is not link_raw_str for link_pin_k in link_pin_environment[2])) or (link_pin_environment[1].get('modules') is not link_pin_environment[2]) or (link_raw_type(link_pin_modules) is not link_raw_tuple) or (link_raw_len(link_pin_modules) != 4) or (link_raw_type(link_pin_own_functions) is not link_raw_tuple) or (link_raw_type(link_pin_policy_functions) is not link_raw_tuple) or (link_raw_type(link_pin_types) is not link_raw_tuple) or (link_raw_len(link_pin_types) != 11):
+                if (
+                    link_raw_type(link_pin_environment) is not link_raw_tuple
+                    or link_raw_len(link_pin_environment) != 8
+                    or link_raw_type(link_pin_environment[0]) is not link_raw_module
+                    or (link_raw_type(link_pin_environment[1]) is not link_raw_dict)
+                    or (link_raw_vars(link_pin_environment[0]) is not link_pin_environment[1])
+                    or link_raw_any(
+                        link_raw_type(link_pin_k) is not link_raw_str
+                        for link_pin_k in link_pin_environment[1]
+                    )
+                    or (link_raw_type(link_pin_environment[2]) is not link_raw_dict)
+                    or link_raw_any(
+                        link_raw_type(link_pin_k) is not link_raw_str
+                        for link_pin_k in link_pin_environment[2]
+                    )
+                    or (link_pin_environment[1].get("modules") is not link_pin_environment[2])
+                    or (link_raw_type(link_pin_modules) is not link_raw_tuple)
+                    or (link_raw_len(link_pin_modules) != 6)
+                    or (link_raw_type(link_pin_own_functions) is not link_raw_tuple)
+                    or (link_raw_type(link_pin_policy_functions) is not link_raw_tuple)
+                    or (link_raw_type(link_pin_types) is not link_raw_tuple)
+                    or (link_raw_len(link_pin_types) != 15)
+                ):
                     raise refusal from None
-                link_pin_names = ('hmp_startup.link_factory_origin', 'hmp_plugin.presentation_link_path_policy', 'hmp_plugin.presentation_startup_artifacts', 'hmp_startup.runtime_files')
+                link_pin_names = (
+                    "hmp_startup.link_factory_origin",
+                    "hmp_plugin.presentation_link_path_policy",
+                    "hmp_plugin.presentation_startup_artifacts",
+                    "hmp_startup.runtime_files",
+                    "hmp_startup.entry_files",
+                    "hmp_startup.cache_context",
+                )
                 for link_pin_row, link_pin_name in link_raw_zip(link_pin_modules, link_pin_names, strict=True):
                     if link_raw_type(link_pin_row) is not link_raw_tuple or link_raw_len(link_pin_row) != 3 or link_raw_type(link_pin_row[0]) is not link_raw_str or (link_pin_row[0] != link_pin_name) or (link_raw_type(link_pin_row[1]) is not link_raw_module) or (link_raw_type(link_pin_row[2]) is not link_raw_dict) or link_raw_any((link_raw_type(link_pin_k) is not link_raw_str for link_pin_k in link_pin_row[2])) or (link_pin_environment[2].get(link_pin_name) is not link_pin_row[1]) or (link_raw_vars(link_pin_row[1]) is not link_pin_row[2]) or (link_raw_type(link_pin_row[2].get('__name__')) is not link_raw_str) or (link_pin_row[2]['__name__'] != link_pin_name):
                         raise refusal from None
@@ -6696,17 +6880,143 @@ class StartupArtifactOwner:
                                 raise refusal from None
                         elif link_raw_type(link_pin_kw) is not link_raw_dict or link_raw_any((link_raw_type(link_pin_k) is not link_raw_str for link_pin_k in link_pin_kw)) or link_raw_len(link_pin_kw) != link_raw_len(link_pin_row[6]) or link_raw_any((link_raw_type(link_pin_pair) is not link_raw_tuple or link_raw_len(link_pin_pair) != 2 or link_raw_type(link_pin_pair[0]) is not link_raw_str or (link_pin_pair[0] not in link_pin_kw) or (link_pin_kw[link_pin_pair[0]] is not link_pin_pair[1]) for link_pin_pair in link_pin_row[6])):
                             raise refusal from None
-                link_pin_exports = ((1, '_LinkPathPolicy'), (1, '_LinkPathCursor'), (2, 'ExpectedArtifact'), (3, 'RuntimeFilePlan'), (3, 'ExecutableLinkPlan'), (3, 'LinkHop'), (1, '_LinkScopeBlueprint'), (2, '_RuntimeSource'), (2, '_Scope'), (0, '_FilesystemEncodingOrigin'), (0, '_EncodedBasename'))
-                for link_pin_pin, (link_pin_module_index, link_pin_name) in link_raw_zip(link_pin_types, link_pin_exports, strict=True):
-                    if link_raw_type(link_pin_pin) is not link_raw_tuple or link_raw_len(link_pin_pin) != 9 or link_raw_type(link_pin_pin[0]) is not link_raw_type or (link_pin_modules[link_pin_module_index][2].get(link_pin_name) is not link_pin_pin[0]) or (link_raw_type(link_pin_pin[1]) is not link_raw_tuple) or link_raw_any((link_raw_type(link_pin_n) is not link_raw_str for link_pin_n in link_pin_pin[1])) or (link_raw_type(link_pin_pin[2]) is not link_raw_tuple) or (link_raw_len(link_pin_pin[2]) != link_raw_len(link_pin_pin[1])) or (link_raw_type(link_pin_pin[3]) is not link_raw_function) or (link_raw_type(link_pin_pin[5]) is not link_raw_dict) or link_raw_any((link_raw_type(link_pin_k) is not link_raw_str for link_pin_k in link_pin_pin[5])) or (link_raw_type(link_pin_pin[8]) is not link_raw_tuple):
+                link_pin_exports = (
+                    (1, "_LinkPathPolicy"),
+                    (1, "_LinkPathCursor"),
+                    (2, "ExpectedArtifact"),
+                    (3, "RuntimeFilePlan"),
+                    (3, "ExecutableLinkPlan"),
+                    (3, "LinkHop"),
+                    (1, "_LinkScopeBlueprint"),
+                    (2, "_RuntimeSource"),
+                    (2, "_Scope"),
+                    (0, "_FilesystemEncodingOrigin"),
+                    (0, "_EncodedBasename"),
+                    (3, "RuntimePackage"),
+                    (4, "_Inputs"),
+                    (5, "CacheInputData"),
+                    (5, "_ContextSource"),
+                )
+                for link_pin_pin, (link_pin_module_index, link_pin_name) in link_raw_zip(
+                    link_pin_types, link_pin_exports, strict=True
+                ):
+                    if (
+                        link_raw_type(link_pin_pin) is not link_raw_tuple
+                        or link_raw_len(link_pin_pin) != 12
+                        or link_raw_type(link_pin_pin[0]) is not link_raw_type
+                        or (
+                            link_pin_modules[link_pin_module_index][2].get(link_pin_name)
+                            is not link_pin_pin[0]
+                        )
+                        or (link_raw_type(link_pin_pin[1]) is not link_raw_tuple)
+                        or link_raw_any(
+                            link_raw_type(link_pin_n) is not link_raw_str
+                            for link_pin_n in link_pin_pin[1]
+                        )
+                        or (link_raw_type(link_pin_pin[2]) is not link_raw_tuple)
+                        or (link_raw_len(link_pin_pin[2]) != link_raw_len(link_pin_pin[1]))
+                        or (link_raw_type(link_pin_pin[3]) is not link_raw_function)
+                        or (link_raw_type(link_pin_pin[5]) is not link_raw_dict)
+                        or link_raw_any(
+                            link_raw_type(link_pin_k) is not link_raw_str
+                            for link_pin_k in link_pin_pin[5]
+                        )
+                        or (link_raw_type(link_pin_pin[8]) is not link_raw_tuple)
+                    ):
                         raise refusal from None
-                    link_pin_kind, link_pin_fields, link_pin_members, link_pin_constructor, link_pin_code, link_pin_globals_, link_pin_defaults, link_pin_bases, link_pin_dispatch = link_pin_pin
+                    (
+                        link_pin_kind,
+                        link_pin_fields,
+                        link_pin_members,
+                        link_pin_constructor,
+                        link_pin_code,
+                        link_pin_globals_,
+                        link_pin_defaults,
+                        link_pin_bases,
+                        link_pin_dispatch,
+                        link_pin_constructor_kw,
+                        link_pin_constructor_kw_pairs,
+                        link_pin_constructor_global_pairs,
+                    ) = link_pin_pin
                     link_pin_namespace = link_raw_vars(link_pin_kind)
-                    link_pin_actual = link_pin_namespace.get('__new__')
+                    if link_raw_any(
+                        link_raw_type(constructor_key) is not link_raw_str
+                        for constructor_key in link_pin_namespace
+                    ):
+                        raise refusal from None
+                    link_pin_actual = link_pin_namespace.get("__new__")
                     if link_raw_type(link_pin_actual) is link_raw_staticmethod:
                         link_pin_actual = link_pin_actual.__func__
-                    if link_pin_namespace.get('_fields') is not link_pin_fields or link_pin_actual is not link_pin_constructor or link_pin_constructor.__code__ is not link_pin_code or (link_pin_constructor.__globals__ is not link_pin_globals_) or (link_pin_constructor.__defaults__ is not link_pin_defaults) or (link_pin_kind.__bases__ is not link_pin_bases) or (link_pin_globals_.get('_tuple_new') is not link_raw_tuple.__new__) or link_raw_any((link_pin_namespace.get(link_pin_n) is not link_pin_member for link_pin_n, link_pin_member in link_raw_zip(link_pin_fields, link_pin_members, strict=True))) or link_raw_any((link_raw_type(link_pin_row) is not link_raw_tuple or link_raw_len(link_pin_row) != 2 or link_raw_type(link_pin_row[0]) is not link_raw_str or (link_pin_namespace.get(link_pin_row[0]) is not link_pin_row[1]) for link_pin_row in link_pin_dispatch)):
+                    if (
+                        link_pin_namespace.get("_fields") is not link_pin_fields
+                        or link_pin_actual is not link_pin_constructor
+                        or link_pin_constructor.__code__ is not link_pin_code
+                        or (link_pin_constructor.__globals__ is not link_pin_globals_)
+                        or (link_pin_constructor.__defaults__ is not link_pin_defaults)
+                        or (link_pin_kind.__bases__ is not link_pin_bases)
+                        or (link_pin_globals_.get("_tuple_new") is not link_raw_tuple.__new__)
+                        or link_raw_any(
+                            (
+                                link_pin_namespace.get(link_pin_n) is not link_pin_member
+                                for link_pin_n, link_pin_member in link_raw_zip(
+                                    link_pin_fields, link_pin_members, strict=True
+                                )
+                            )
+                        )
+                        or link_raw_any(
+                            link_raw_type(link_pin_row) is not link_raw_tuple
+                            or link_raw_len(link_pin_row) != 2
+                            or link_raw_type(link_pin_row[0]) is not link_raw_str
+                            or (link_pin_namespace.get(link_pin_row[0]) is not link_pin_row[1])
+                            for link_pin_row in link_pin_dispatch
+                        )
+                    ):
                         raise refusal from None
+                    if (
+                        link_raw_type(link_pin_constructor) is not link_raw_function
+                        or link_pin_constructor.__kwdefaults__ is not link_pin_constructor_kw
+                        or link_pin_constructor.__closure__ is not None
+                        or link_raw_type(link_pin_constructor.__code__.co_filename)
+                        is not link_raw_str
+                        or (
+                            link_pin_defaults is not None
+                            and link_raw_type(link_pin_defaults) is not link_raw_tuple
+                        )
+                    ):
+                        raise refusal from None
+                    for constructor_namespace, constructor_pairs in (
+                        (link_pin_globals_, link_pin_constructor_global_pairs),
+                        (link_pin_constructor_kw, link_pin_constructor_kw_pairs),
+                    ):
+                        if link_raw_type(constructor_pairs) is not link_raw_tuple:
+                            raise refusal from None
+                        if constructor_namespace is None:
+                            if link_raw_len(constructor_pairs) != 0:
+                                raise refusal from None
+                            continue
+                        if link_raw_type(
+                            constructor_namespace
+                        ) is not link_raw_dict or link_raw_len(
+                            constructor_namespace
+                        ) != link_raw_len(constructor_pairs):
+                            raise refusal from None
+                        constructor_expected = {}
+                        for constructor_pair in constructor_pairs:
+                            if (
+                                link_raw_type(constructor_pair) is not link_raw_tuple
+                                or link_raw_len(constructor_pair) != 2
+                                or link_raw_type(constructor_pair[0]) is not link_raw_str
+                                or constructor_pair[0] in constructor_expected
+                            ):
+                                raise refusal from None
+                            constructor_expected[constructor_pair[0]] = constructor_pair[1]
+                        for constructor_key, constructor_value in constructor_namespace.items():
+                            if (
+                                link_raw_type(constructor_key) is not link_raw_str
+                                or constructor_key not in constructor_expected
+                                or constructor_expected[constructor_key] is not constructor_value
+                            ):
+                                raise refusal from None
                 # Original retained-helper prefix and DATA, with no final callback.
                 if (link_pin_environment[6] is not link_helper_origin
                         or link_helper_origin[7] is not link_helper_record

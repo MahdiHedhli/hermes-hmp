@@ -23,7 +23,8 @@ def test_actual_capture_return_rejoins_without_calling_policy(captured):
     assert policy._scope_blueprint_guard(captured) is captured
     assert tuple(row[0] for row in captured[1]) == (
         'hmp_startup.link_factory_origin', 'hmp_plugin.presentation_link_path_policy',
-        'hmp_plugin.presentation_startup_artifacts', 'hmp_startup.runtime_files')
+        'hmp_plugin.presentation_startup_artifacts', 'hmp_startup.runtime_files',
+        'hmp_startup.entry_files', 'hmp_startup.cache_context')
     assert all(row[1].__closure__ is None for row in captured[3])
 
 

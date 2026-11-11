@@ -8,7 +8,15 @@ Imports execute initialization; later complete source/factory gates still apply.
 from __future__ import annotations
 
 import sys
-from types import BuiltinFunctionType, FunctionType, MethodDescriptorType, ModuleType, CellType, GetSetDescriptorType
+from types import (
+    BuiltinFunctionType,
+    CellType,
+    CodeType,
+    FunctionType,
+    GetSetDescriptorType,
+    MethodDescriptorType,
+    ModuleType,
+)
 from typing import NamedTuple
 
 _CAPTURE_STARTED = False
@@ -49,25 +57,80 @@ def _pin_function(name, function, namespace, *, _type=type, _function=FunctionTy
             kw, () if kw is None else _tuple(kw.items()))
 
 
-def _pin_type(kind, *, _type=type, _vars=vars, _function=FunctionType,
-              _staticmethod=staticmethod, _tuple=tuple, _any=any, _error=RuntimeError):
+def _pin_type(
+    kind,
+    *,
+    _type=type,
+    _vars=vars,
+    _function=FunctionType,
+    _staticmethod=staticmethod,
+    _tuple=tuple,
+    _any=any,
+    _error=RuntimeError,
+    _str=str,
+    _dict=dict,
+    _code=CodeType,
+):
     if _type(kind) is not _type:
-        raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+        raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
     namespace = _vars(kind)
-    fields, constructor = namespace.get('_fields'), namespace.get('__new__')
+    if _any(_type(k) is not _str for k in namespace):
+        raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+    fields, constructor = namespace.get("_fields"), namespace.get("__new__")
     if _type(constructor) is _staticmethod:
         constructor = constructor.__func__
-    if (_type(fields) is not _tuple or _any(_type(n) is not str for n in fields)
-            or _type(constructor) is not _function
-            or _any(_type(k) is not str for k in constructor.__globals__)
-            or constructor.__globals__.get('_tuple_new') is not _tuple.__new__):
-        raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
-    dispatch = _tuple((name, namespace.get(name)) for name in (
-        '__getattribute__', '__getattr__', '__getitem__', '__len__', '__iter__',
-        '__setattr__', '__delattr__', '__eq__', '__ne__', '__hash__', '__bool__'))
-    return (kind, fields, _tuple(namespace.get(n) for n in fields), constructor,
-            constructor.__code__, constructor.__globals__, constructor.__defaults__,
-            kind.__bases__, dispatch)
+    if (
+        _type(fields) is not _tuple
+        or _any(_type(n) is not _str for n in fields)
+        or _type(constructor) is not _function
+        or _type(constructor.__code__) is not _code
+        or _type(constructor.__code__.co_filename) is not _str
+        or constructor.__closure__ is not None
+        or (constructor.__defaults__ is not None and _type(constructor.__defaults__) is not _tuple)
+        or _type(constructor.__globals__) is not _dict
+        or _any(_type(k) is not _str for k in constructor.__globals__)
+        or constructor.__globals__.get("_tuple_new") is not _tuple.__new__
+    ):
+        raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+    kw = constructor.__kwdefaults__
+    if kw is not None and (_type(kw) is not _dict or _any(_type(k) is not _str for k in kw)):
+        raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+    kw_pairs = () if kw is None else _tuple(kw.items())
+    global_pairs = _tuple(constructor.__globals__.items())
+    if _any(_type(k) is not _str for k, _ in kw_pairs) or _any(
+        _type(k) is not _str for k, _ in global_pairs
+    ):
+        raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+    dispatch = _tuple(
+        (name, namespace.get(name))
+        for name in (
+            "__getattribute__",
+            "__getattr__",
+            "__getitem__",
+            "__len__",
+            "__iter__",
+            "__setattr__",
+            "__delattr__",
+            "__eq__",
+            "__ne__",
+            "__hash__",
+            "__bool__",
+        )
+    )
+    return (
+        kind,
+        fields,
+        _tuple(namespace.get(n) for n in fields),
+        constructor,
+        constructor.__code__,
+        constructor.__globals__,
+        constructor.__defaults__,
+        kind.__bases__,
+        dispatch,
+        kw,
+        kw_pairs,
+        global_pairs,
+    )
 
 
 def current(origin, *, _type=type, _vars=vars, _tuple=tuple, _len=len,
@@ -93,13 +156,18 @@ def current(origin, *, _type=type, _vars=vars, _tuple=tuple, _len=len,
             or _type(environment[2]) is not dict
             or _any(_type(k) is not str for k in environment[2])
             or environment[1].get('modules') is not environment[2]
-            or _type(modules) is not _tuple or _len(modules) != 4
+            or _type(modules) is not _tuple or _len(modules) != 6
             or _type(own_functions) is not _tuple or _type(policy_functions) is not _tuple
-            or _type(types) is not _tuple or _len(types) != 11):
+            or _type(types) is not _tuple or _len(types) != 15):
         raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
-    names = ('hmp_startup.link_factory_origin',
-             'hmp_plugin.presentation_link_path_policy',
-             'hmp_plugin.presentation_startup_artifacts', 'hmp_startup.runtime_files')
+    names = (
+        "hmp_startup.link_factory_origin",
+        "hmp_plugin.presentation_link_path_policy",
+        "hmp_plugin.presentation_startup_artifacts",
+        "hmp_startup.runtime_files",
+        "hmp_startup.entry_files",
+        "hmp_startup.cache_context",
+    )
     for row, name in _zip(modules, names, strict=True):
         if (_type(row) is not _tuple or _len(row) != 3
                 or _type(row[0]) is not str or row[0] != name
@@ -143,34 +211,121 @@ def current(origin, *, _type=type, _vars=vars, _tuple=tuple, _len=len,
                          or pair[0] not in kw or kw[pair[0]] is not pair[1]
                          for pair in row[6])):
                 raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
-    exports = ((1, '_LinkPathPolicy'), (1, '_LinkPathCursor'),
-               (2, 'ExpectedArtifact'), (3, 'RuntimeFilePlan'),
-               (3, 'ExecutableLinkPlan'), (3, 'LinkHop'),
-               (1, '_LinkScopeBlueprint'), (2, '_RuntimeSource'), (2, '_Scope'),
-               (0, '_FilesystemEncodingOrigin'), (0, '_EncodedBasename'))
+    exports = (
+        (1, "_LinkPathPolicy"),
+        (1, "_LinkPathCursor"),
+        (2, "ExpectedArtifact"),
+        (3, "RuntimeFilePlan"),
+        (3, "ExecutableLinkPlan"),
+        (3, "LinkHop"),
+        (1, "_LinkScopeBlueprint"),
+        (2, "_RuntimeSource"),
+        (2, "_Scope"),
+        (0, "_FilesystemEncodingOrigin"),
+        (0, "_EncodedBasename"),
+        (3, "RuntimePackage"),
+        (4, "_Inputs"),
+        (5, "CacheInputData"),
+        (5, "_ContextSource"),
+    )
     for pin, (module_index, name) in _zip(types, exports, strict=True):
-        if (_type(pin) is not _tuple or _len(pin) != 9 or _type(pin[0]) is not _type
-                or modules[module_index][2].get(name) is not pin[0]
-                or _type(pin[1]) is not _tuple or _any(_type(n) is not str for n in pin[1])
-                or _type(pin[2]) is not _tuple or _len(pin[2]) != _len(pin[1])
-                or _type(pin[3]) is not _function or _type(pin[5]) is not dict
-                or _any(_type(k) is not str for k in pin[5])
-                or _type(pin[8]) is not _tuple):
-            raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
-        kind, fields, members, constructor, code, globals_, defaults, bases, dispatch = pin
+        if (
+            _type(pin) is not _tuple
+            or _len(pin) != 12
+            or _type(pin[0]) is not _type
+            or modules[module_index][2].get(name) is not pin[0]
+            or _type(pin[1]) is not _tuple
+            or _any(_type(n) is not str for n in pin[1])
+            or _type(pin[2]) is not _tuple
+            or _len(pin[2]) != _len(pin[1])
+            or _type(pin[3]) is not _function
+            or _type(pin[5]) is not dict
+            or _any(_type(k) is not str for k in pin[5])
+            or _type(pin[8]) is not _tuple
+        ):
+            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+        (
+            kind,
+            fields,
+            members,
+            constructor,
+            code,
+            globals_,
+            defaults,
+            bases,
+            dispatch,
+            constructor_kw,
+            constructor_kw_pairs,
+            constructor_global_pairs,
+        ) = pin
         namespace = _vars(kind)
-        actual = namespace.get('__new__')
+        if _any(_type(constructor_key) is not _str for constructor_key in namespace):
+            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+        actual = namespace.get("__new__")
         if _type(actual) is _staticmethod:
             actual = actual.__func__
-        if (namespace.get('_fields') is not fields or actual is not constructor
-                or constructor.__code__ is not code or constructor.__globals__ is not globals_
-                or constructor.__defaults__ is not defaults or kind.__bases__ is not bases
-                or globals_.get('_tuple_new') is not _tuple.__new__
-                or _any(namespace.get(n) is not member
-                       for n, member in _zip(fields, members, strict=True))
-                or _any(_type(row) is not _tuple or _len(row) != 2 or _type(row[0]) is not str
-                       or namespace.get(row[0]) is not row[1] for row in dispatch)):
-            raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+        if (
+            namespace.get("_fields") is not fields
+            or actual is not constructor
+            or constructor.__code__ is not code
+            or constructor.__globals__ is not globals_
+            or constructor.__defaults__ is not defaults
+            or kind.__bases__ is not bases
+            or globals_.get("_tuple_new") is not _tuple.__new__
+            or _any(
+                namespace.get(n) is not member for n, member in _zip(fields, members, strict=True)
+            )
+            or _any(
+                _type(row) is not _tuple
+                or _len(row) != 2
+                or _type(row[0]) is not str
+                or namespace.get(row[0]) is not row[1]
+                for row in dispatch
+            )
+        ):
+            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+        if (
+            _type(constructor) is not _function
+            or constructor.__kwdefaults__ is not constructor_kw
+            or constructor.__closure__ is not None
+            or _type(constructor.__code__.co_filename) is not _str
+            or (defaults is not None and _type(defaults) is not _tuple)
+        ):
+            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+        for constructor_namespace, constructor_pairs in (
+            (globals_, constructor_global_pairs),
+            (constructor_kw, constructor_kw_pairs),
+        ):
+            if _type(constructor_pairs) is not _tuple:
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            if constructor_namespace is None:
+                if _len(constructor_pairs) != 0:
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                continue
+            if _type(constructor_namespace) is not _dict or _len(constructor_namespace) != _len(
+                constructor_pairs
+            ):
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            constructor_expected = {}
+            for constructor_pair in constructor_pairs:
+                if (
+                    _type(constructor_pair) is not _tuple
+                    or _len(constructor_pair) != 2
+                    or _type(constructor_pair[0]) is not _str
+                    or constructor_pair[0] in constructor_expected
+                ):
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                constructor_expected[constructor_pair[0]] = constructor_pair[1]
+            try:
+                for constructor_key, constructor_value in constructor_namespace.items():
+                    if (
+                        _type(constructor_key) is not _str
+                        or constructor_key not in constructor_expected
+                        or constructor_expected[constructor_key] is not constructor_value
+                    ):
+                        raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            except _error:
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
     encoding_origin = environment[3]
     if (_type(encoding_origin) is not types[9][0]
             or _tuple.__len__(encoding_origin) != 7):
@@ -803,13 +958,18 @@ def current_started(origin, *, _type=type, _vars=vars, _tuple=tuple, _len=len,
             or _type(environment[2]) is not dict
             or _any(_type(k) is not str for k in environment[2])
             or environment[1].get('modules') is not environment[2]
-            or _type(modules) is not _tuple or _len(modules) != 4
+            or _type(modules) is not _tuple or _len(modules) != 6
             or _type(own_functions) is not _tuple or _type(policy_functions) is not _tuple
-            or _type(types) is not _tuple or _len(types) != 11):
+            or _type(types) is not _tuple or _len(types) != 15):
         raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
-    names = ('hmp_startup.link_factory_origin',
-             'hmp_plugin.presentation_link_path_policy',
-             'hmp_plugin.presentation_startup_artifacts', 'hmp_startup.runtime_files')
+    names = (
+        "hmp_startup.link_factory_origin",
+        "hmp_plugin.presentation_link_path_policy",
+        "hmp_plugin.presentation_startup_artifacts",
+        "hmp_startup.runtime_files",
+        "hmp_startup.entry_files",
+        "hmp_startup.cache_context",
+    )
     for row, name in _zip(modules, names, strict=True):
         if (_type(row) is not _tuple or _len(row) != 3
                 or _type(row[0]) is not str or row[0] != name
@@ -853,34 +1013,121 @@ def current_started(origin, *, _type=type, _vars=vars, _tuple=tuple, _len=len,
                          or pair[0] not in kw or kw[pair[0]] is not pair[1]
                          for pair in row[6])):
                 raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
-    exports = ((1, '_LinkPathPolicy'), (1, '_LinkPathCursor'),
-               (2, 'ExpectedArtifact'), (3, 'RuntimeFilePlan'),
-               (3, 'ExecutableLinkPlan'), (3, 'LinkHop'),
-               (1, '_LinkScopeBlueprint'), (2, '_RuntimeSource'), (2, '_Scope'),
-               (0, '_FilesystemEncodingOrigin'), (0, '_EncodedBasename'))
+    exports = (
+        (1, "_LinkPathPolicy"),
+        (1, "_LinkPathCursor"),
+        (2, "ExpectedArtifact"),
+        (3, "RuntimeFilePlan"),
+        (3, "ExecutableLinkPlan"),
+        (3, "LinkHop"),
+        (1, "_LinkScopeBlueprint"),
+        (2, "_RuntimeSource"),
+        (2, "_Scope"),
+        (0, "_FilesystemEncodingOrigin"),
+        (0, "_EncodedBasename"),
+        (3, "RuntimePackage"),
+        (4, "_Inputs"),
+        (5, "CacheInputData"),
+        (5, "_ContextSource"),
+    )
     for pin, (module_index, name) in _zip(types, exports, strict=True):
-        if (_type(pin) is not _tuple or _len(pin) != 9 or _type(pin[0]) is not _type
-                or modules[module_index][2].get(name) is not pin[0]
-                or _type(pin[1]) is not _tuple or _any(_type(n) is not str for n in pin[1])
-                or _type(pin[2]) is not _tuple or _len(pin[2]) != _len(pin[1])
-                or _type(pin[3]) is not _function or _type(pin[5]) is not dict
-                or _any(_type(k) is not str for k in pin[5])
-                or _type(pin[8]) is not _tuple):
-            raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
-        kind, fields, members, constructor, code, globals_, defaults, bases, dispatch = pin
+        if (
+            _type(pin) is not _tuple
+            or _len(pin) != 12
+            or _type(pin[0]) is not _type
+            or modules[module_index][2].get(name) is not pin[0]
+            or _type(pin[1]) is not _tuple
+            or _any(_type(n) is not str for n in pin[1])
+            or _type(pin[2]) is not _tuple
+            or _len(pin[2]) != _len(pin[1])
+            or _type(pin[3]) is not _function
+            or _type(pin[5]) is not dict
+            or _any(_type(k) is not str for k in pin[5])
+            or _type(pin[8]) is not _tuple
+        ):
+            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+        (
+            kind,
+            fields,
+            members,
+            constructor,
+            code,
+            globals_,
+            defaults,
+            bases,
+            dispatch,
+            constructor_kw,
+            constructor_kw_pairs,
+            constructor_global_pairs,
+        ) = pin
         namespace = _vars(kind)
-        actual = namespace.get('__new__')
+        if _any(_type(constructor_key) is not _str for constructor_key in namespace):
+            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+        actual = namespace.get("__new__")
         if _type(actual) is _staticmethod:
             actual = actual.__func__
-        if (namespace.get('_fields') is not fields or actual is not constructor
-                or constructor.__code__ is not code or constructor.__globals__ is not globals_
-                or constructor.__defaults__ is not defaults or kind.__bases__ is not bases
-                or globals_.get('_tuple_new') is not _tuple.__new__
-                or _any(namespace.get(n) is not member
-                       for n, member in _zip(fields, members, strict=True))
-                or _any(_type(row) is not _tuple or _len(row) != 2 or _type(row[0]) is not str
-                       or namespace.get(row[0]) is not row[1] for row in dispatch)):
-            raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+        if (
+            namespace.get("_fields") is not fields
+            or actual is not constructor
+            or constructor.__code__ is not code
+            or constructor.__globals__ is not globals_
+            or constructor.__defaults__ is not defaults
+            or kind.__bases__ is not bases
+            or globals_.get("_tuple_new") is not _tuple.__new__
+            or _any(
+                namespace.get(n) is not member for n, member in _zip(fields, members, strict=True)
+            )
+            or _any(
+                _type(row) is not _tuple
+                or _len(row) != 2
+                or _type(row[0]) is not str
+                or namespace.get(row[0]) is not row[1]
+                for row in dispatch
+            )
+        ):
+            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+        if (
+            _type(constructor) is not _function
+            or constructor.__kwdefaults__ is not constructor_kw
+            or constructor.__closure__ is not None
+            or _type(constructor.__code__.co_filename) is not _str
+            or (defaults is not None and _type(defaults) is not _tuple)
+        ):
+            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+        for constructor_namespace, constructor_pairs in (
+            (globals_, constructor_global_pairs),
+            (constructor_kw, constructor_kw_pairs),
+        ):
+            if _type(constructor_pairs) is not _tuple:
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            if constructor_namespace is None:
+                if _len(constructor_pairs) != 0:
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                continue
+            if _type(constructor_namespace) is not _dict or _len(constructor_namespace) != _len(
+                constructor_pairs
+            ):
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            constructor_expected = {}
+            for constructor_pair in constructor_pairs:
+                if (
+                    _type(constructor_pair) is not _tuple
+                    or _len(constructor_pair) != 2
+                    or _type(constructor_pair[0]) is not _str
+                    or constructor_pair[0] in constructor_expected
+                ):
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                constructor_expected[constructor_pair[0]] = constructor_pair[1]
+            try:
+                for constructor_key, constructor_value in constructor_namespace.items():
+                    if (
+                        _type(constructor_key) is not _str
+                        or constructor_key not in constructor_expected
+                        or constructor_expected[constructor_key] is not constructor_value
+                    ):
+                        raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            except _error:
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
     encoding_origin = environment[3]
     if (_type(encoding_origin) is not types[9][0]
             or _tuple.__len__(encoding_origin) != 7):
@@ -1742,9 +1989,9 @@ def capture(*,
     own_names = ('_pin_function', '_pin_type', 'capture', 'current', 'factory', 'blueprint_factory', 'encode_basename', 'current_started')
     own_functions = _tuple((pin_function(name, namespace.get(name), namespace) for name in own_names))
     from hmp_plugin import presentation_link_path_policy as policy
-    from hmp_plugin import presentation_startup_artifacts as artifacts
-    from hmp_startup import runtime_files
     from hmp_plugin import presentation_native_link as engine
+    from hmp_plugin import presentation_startup_artifacts as artifacts
+    from hmp_startup import cache_context, entry_files, runtime_files
     if (_type(_sys) is not _module
             or _type(own) is not _module
             or _vars(own) is not namespace
@@ -2084,14 +2331,25 @@ def capture(*,
             raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
         helper_seen[helper_key] = helper_value
 
-    module_names = ('hmp_startup.link_factory_origin',
-                    'hmp_plugin.presentation_link_path_policy',
-                    'hmp_plugin.presentation_startup_artifacts', 'hmp_startup.runtime_files')
-    modules = _tuple((name, module, _vars(module)) for name, module in
-                     _zip(module_names, (own, policy, artifacts, runtime_files), strict=True)
-                     if _type(module) is _module)
-    if _len(modules) != 4 or _any((_any((_type(k) is not _str for k in row[2])) for row in modules)):
-        raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+    module_names = (
+        "hmp_startup.link_factory_origin",
+        "hmp_plugin.presentation_link_path_policy",
+        "hmp_plugin.presentation_startup_artifacts",
+        "hmp_startup.runtime_files",
+        "hmp_startup.entry_files",
+        "hmp_startup.cache_context",
+    )
+    modules = _tuple(
+        (name, module, _vars(module))
+        for name, module in _zip(
+            module_names,
+            (own, policy, artifacts, runtime_files, entry_files, cache_context),
+            strict=True,
+        )
+        if _type(module) is _module
+    )
+    if _len(modules) != 6 or _any(_any(_type(k) is not _str for k in row[2]) for row in modules):
+        raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
     if _any(_type(row[2].get('__name__')) is not _str
             or row[2]['__name__'] != row[0] or registry.get(row[0]) is not row[1]
             for row in modules):
@@ -2128,7 +2386,28 @@ def capture(*,
     policy_namespace = modules[1][2]
     policy_names = ('_need', '_parts', '_policy_tail', '_new_policy', '_sites', '_directory', '_leaf', '_cursor_tail', '_start', '_action', '_advance', '_outcome', '_scope_blueprint_guard', '_scope_blueprint_cohort', '_scope_blueprint_tail', '_new_scope_blueprint')
     functions = _tuple((pin_function(name, policy_namespace.get(name), policy_namespace) for name in policy_names))
-    kinds = _tuple((pin_type(modules[index][2].get(name)) for index, name in ((1, '_LinkPathPolicy'), (1, '_LinkPathCursor'), (2, 'ExpectedArtifact'), (3, 'RuntimeFilePlan'), (3, 'ExecutableLinkPlan'), (3, 'LinkHop'), (1, '_LinkScopeBlueprint'), (2, '_RuntimeSource'), (2, '_Scope'), (0, '_FilesystemEncodingOrigin'), (0, '_EncodedBasename'))))
+    kinds = _tuple(
+        (
+            pin_type(modules[index][2].get(name))
+            for index, name in (
+                (1, "_LinkPathPolicy"),
+                (1, "_LinkPathCursor"),
+                (2, "ExpectedArtifact"),
+                (3, "RuntimeFilePlan"),
+                (3, "ExecutableLinkPlan"),
+                (3, "LinkHop"),
+                (1, "_LinkScopeBlueprint"),
+                (2, "_RuntimeSource"),
+                (2, "_Scope"),
+                (0, "_FilesystemEncodingOrigin"),
+                (0, "_EncodedBasename"),
+                (3, "RuntimePackage"),
+                (4, "_Inputs"),
+                (5, "CacheInputData"),
+                (5, "_ContextSource"),
+            )
+        )
+    )
     encoding_kind = kinds[9][0]
     get_encoding = sys_namespace.get('getfilesystemencoding')
     get_errors = sys_namespace.get('getfilesystemencodeerrors')
@@ -2168,27 +2447,104 @@ def capture(*,
                     or function.__kwdefaults__ is not kw
                     or (kw is not None and (_any((_type(k) is not _str for k in kw)) or _len(kw) != _len(pairs) or _any((k not in kw or kw[k] is not value for k, value in pairs))))):
                 raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
-        exports = ((1, '_LinkPathPolicy'), (1, '_LinkPathCursor'), (2, 'ExpectedArtifact'), (3, 'RuntimeFilePlan'), (3, 'ExecutableLinkPlan'), (3, 'LinkHop'), (1, '_LinkScopeBlueprint'), (2, '_RuntimeSource'), (2, '_Scope'), (0, '_FilesystemEncodingOrigin'), (0, '_EncodedBasename'))
+        exports = (
+            (1, "_LinkPathPolicy"),
+            (1, "_LinkPathCursor"),
+            (2, "ExpectedArtifact"),
+            (3, "RuntimeFilePlan"),
+            (3, "ExecutableLinkPlan"),
+            (3, "LinkHop"),
+            (1, "_LinkScopeBlueprint"),
+            (2, "_RuntimeSource"),
+            (2, "_Scope"),
+            (0, "_FilesystemEncodingOrigin"),
+            (0, "_EncodedBasename"),
+            (3, "RuntimePackage"),
+            (4, "_Inputs"),
+            (5, "CacheInputData"),
+            (5, "_ContextSource"),
+        )
         for pin, (module_index, name) in _zip(kinds, exports, strict=True):
-            kind, fields, members, constructor, code, globals_, defaults, bases, dispatch = pin
+            (
+                kind,
+                fields,
+                members,
+                constructor,
+                code,
+                globals_,
+                defaults,
+                bases,
+                dispatch,
+                constructor_kw,
+                constructor_kw_pairs,
+                constructor_global_pairs,
+            ) = pin
             if _type(kind) is not _type:
-                raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
             names = _vars(kind)
-            actual = names.get('__new__')
+            if _any(_type(constructor_key) is not _str for constructor_key in names):
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            actual = names.get("__new__")
             if _type(actual) is _staticmethod:
                 actual = actual.__func__
-            if (modules[module_index][2].get(name) is not kind
-                    or names.get('_fields') is not fields
-                    or actual is not constructor
-                    or constructor.__code__ is not code
-                    or constructor.__globals__ is not globals_
-                    or constructor.__defaults__ is not defaults
-                    or kind.__bases__ is not bases
-                    or _any((_type(k) is not _str for k in globals_))
-                    or globals_.get('_tuple_new') is not _tuple.__new__
-                    or _any((names.get(n) is not member for n, member in _zip(fields, members, strict=True)))
-                    or _any((names.get(n) is not member for n, member in dispatch))):
-                raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+            if (
+                modules[module_index][2].get(name) is not kind
+                or names.get("_fields") is not fields
+                or actual is not constructor
+                or constructor.__code__ is not code
+                or constructor.__globals__ is not globals_
+                or constructor.__defaults__ is not defaults
+                or kind.__bases__ is not bases
+                or _any(_type(k) is not _str for k in globals_)
+                or globals_.get("_tuple_new") is not _tuple.__new__
+                or _any(
+                    (names.get(n) is not member for n, member in _zip(fields, members, strict=True))
+                )
+                or _any((names.get(n) is not member for n, member in dispatch))
+            ):
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            if (
+                _type(constructor) is not _function
+                or constructor.__kwdefaults__ is not constructor_kw
+                or constructor.__closure__ is not None
+                or _type(constructor.__code__.co_filename) is not _str
+                or (defaults is not None and _type(defaults) is not _tuple)
+            ):
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            for constructor_namespace, constructor_pairs in (
+                (globals_, constructor_global_pairs),
+                (constructor_kw, constructor_kw_pairs),
+            ):
+                if _type(constructor_pairs) is not _tuple:
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                if constructor_namespace is None:
+                    if _len(constructor_pairs) != 0:
+                        raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                    continue
+                if _type(constructor_namespace) is not _dict or _len(constructor_namespace) != _len(
+                    constructor_pairs
+                ):
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                constructor_expected = {}
+                for constructor_pair in constructor_pairs:
+                    if (
+                        _type(constructor_pair) is not _tuple
+                        or _len(constructor_pair) != 2
+                        or _type(constructor_pair[0]) is not _str
+                        or constructor_pair[0] in constructor_expected
+                    ):
+                        raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                    constructor_expected[constructor_pair[0]] = constructor_pair[1]
+                try:
+                    for constructor_key, constructor_value in constructor_namespace.items():
+                        if (
+                            _type(constructor_key) is not _str
+                            or constructor_key not in constructor_expected
+                            or constructor_expected[constructor_key] is not constructor_value
+                        ):
+                            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                except _error:
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
         if (audit_record[0] is not engine_origin
                 or audit_record[1] is not engine_layout
                 or audit_record[2] is not engine_check
@@ -2226,17 +2582,104 @@ def capture(*,
     for name, function, code, globals_, defaults, kw, pairs in own_functions:
         if namespace.get(name) is not function or function.__code__ is not code or function.__globals__ is not globals_ or (function.__defaults__ is not defaults) or (function.__kwdefaults__ is not kw) or (kw is not None and (_any((_type(k) is not _str for k in kw)) or _len(kw) != _len(pairs) or _any((k not in kw or kw[k] is not value for k, value in pairs)))):
             raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
-    exports = ((1, '_LinkPathPolicy'), (1, '_LinkPathCursor'), (2, 'ExpectedArtifact'), (3, 'RuntimeFilePlan'), (3, 'ExecutableLinkPlan'), (3, 'LinkHop'), (1, '_LinkScopeBlueprint'), (2, '_RuntimeSource'), (2, '_Scope'), (0, '_FilesystemEncodingOrigin'), (0, '_EncodedBasename'))
+    exports = (
+        (1, "_LinkPathPolicy"),
+        (1, "_LinkPathCursor"),
+        (2, "ExpectedArtifact"),
+        (3, "RuntimeFilePlan"),
+        (3, "ExecutableLinkPlan"),
+        (3, "LinkHop"),
+        (1, "_LinkScopeBlueprint"),
+        (2, "_RuntimeSource"),
+        (2, "_Scope"),
+        (0, "_FilesystemEncodingOrigin"),
+        (0, "_EncodedBasename"),
+        (3, "RuntimePackage"),
+        (4, "_Inputs"),
+        (5, "CacheInputData"),
+        (5, "_ContextSource"),
+    )
     for pin, (module_index, name) in _zip(kinds, exports, strict=True):
-        kind, fields, members, constructor, code, globals_, defaults, bases, dispatch = pin
+        (
+            kind,
+            fields,
+            members,
+            constructor,
+            code,
+            globals_,
+            defaults,
+            bases,
+            dispatch,
+            constructor_kw,
+            constructor_kw_pairs,
+            constructor_global_pairs,
+        ) = pin
         if _type(kind) is not _type:
-            raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
         names = _vars(kind)
-        actual = names.get('__new__')
+        if _any(_type(constructor_key) is not _str for constructor_key in names):
+            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+        actual = names.get("__new__")
         if _type(actual) is _staticmethod:
             actual = actual.__func__
-        if modules[module_index][2].get(name) is not kind or names.get('_fields') is not fields or actual is not constructor or (constructor.__code__ is not code) or (constructor.__globals__ is not globals_) or (constructor.__defaults__ is not defaults) or (kind.__bases__ is not bases) or _any((_type(k) is not _str for k in globals_)) or (globals_.get('_tuple_new') is not _tuple.__new__) or _any((names.get(n) is not member for n, member in _zip(fields, members, strict=True))) or _any((names.get(n) is not member for n, member in dispatch)):
-            raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+        if (
+            modules[module_index][2].get(name) is not kind
+            or names.get("_fields") is not fields
+            or actual is not constructor
+            or (constructor.__code__ is not code)
+            or (constructor.__globals__ is not globals_)
+            or (constructor.__defaults__ is not defaults)
+            or (kind.__bases__ is not bases)
+            or _any(_type(k) is not _str for k in globals_)
+            or (globals_.get("_tuple_new") is not _tuple.__new__)
+            or _any(
+                (names.get(n) is not member for n, member in _zip(fields, members, strict=True))
+            )
+            or _any((names.get(n) is not member for n, member in dispatch))
+        ):
+            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+        if (
+            _type(constructor) is not _function
+            or constructor.__kwdefaults__ is not constructor_kw
+            or constructor.__closure__ is not None
+            or _type(constructor.__code__.co_filename) is not _str
+            or (defaults is not None and _type(defaults) is not _tuple)
+        ):
+            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+        for constructor_namespace, constructor_pairs in (
+            (globals_, constructor_global_pairs),
+            (constructor_kw, constructor_kw_pairs),
+        ):
+            if _type(constructor_pairs) is not _tuple:
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            if constructor_namespace is None:
+                if _len(constructor_pairs) != 0:
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                continue
+            if _type(constructor_namespace) is not _dict or _len(constructor_namespace) != _len(
+                constructor_pairs
+            ):
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            constructor_expected = {}
+            for constructor_pair in constructor_pairs:
+                if (
+                    _type(constructor_pair) is not _tuple
+                    or _len(constructor_pair) != 2
+                    or _type(constructor_pair[0]) is not _str
+                    or constructor_pair[0] in constructor_expected
+                ):
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                constructor_expected[constructor_pair[0]] = constructor_pair[1]
+            try:
+                for constructor_key, constructor_value in constructor_namespace.items():
+                    if (
+                        _type(constructor_key) is not _str
+                        or constructor_key not in constructor_expected
+                        or constructor_expected[constructor_key] is not constructor_value
+                    ):
+                        raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            except _error:
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
     constructor = _tuple.__getitem__(_tuple.__getitem__(kinds, 9), 3)
     encoding_origin = constructor(encoding_kind, *values)
     rejoin()
@@ -2257,17 +2700,104 @@ def capture(*,
     for name, function, code, globals_, defaults, kw, pairs in own_functions:
         if namespace.get(name) is not function or function.__code__ is not code or function.__globals__ is not globals_ or (function.__defaults__ is not defaults) or (function.__kwdefaults__ is not kw) or (kw is not None and (_any((_type(k) is not _str for k in kw)) or _len(kw) != _len(pairs) or _any((k not in kw or kw[k] is not value for k, value in pairs)))):
             raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
-    exports = ((1, '_LinkPathPolicy'), (1, '_LinkPathCursor'), (2, 'ExpectedArtifact'), (3, 'RuntimeFilePlan'), (3, 'ExecutableLinkPlan'), (3, 'LinkHop'), (1, '_LinkScopeBlueprint'), (2, '_RuntimeSource'), (2, '_Scope'), (0, '_FilesystemEncodingOrigin'), (0, '_EncodedBasename'))
+    exports = (
+        (1, "_LinkPathPolicy"),
+        (1, "_LinkPathCursor"),
+        (2, "ExpectedArtifact"),
+        (3, "RuntimeFilePlan"),
+        (3, "ExecutableLinkPlan"),
+        (3, "LinkHop"),
+        (1, "_LinkScopeBlueprint"),
+        (2, "_RuntimeSource"),
+        (2, "_Scope"),
+        (0, "_FilesystemEncodingOrigin"),
+        (0, "_EncodedBasename"),
+        (3, "RuntimePackage"),
+        (4, "_Inputs"),
+        (5, "CacheInputData"),
+        (5, "_ContextSource"),
+    )
     for pin, (module_index, name) in _zip(kinds, exports, strict=True):
-        kind, fields, members, constructor, code, globals_, defaults, bases, dispatch = pin
+        (
+            kind,
+            fields,
+            members,
+            constructor,
+            code,
+            globals_,
+            defaults,
+            bases,
+            dispatch,
+            constructor_kw,
+            constructor_kw_pairs,
+            constructor_global_pairs,
+        ) = pin
         if _type(kind) is not _type:
-            raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
         names = _vars(kind)
-        actual = names.get('__new__')
+        if _any(_type(constructor_key) is not _str for constructor_key in names):
+            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+        actual = names.get("__new__")
         if _type(actual) is _staticmethod:
             actual = actual.__func__
-        if modules[module_index][2].get(name) is not kind or names.get('_fields') is not fields or actual is not constructor or (constructor.__code__ is not code) or (constructor.__globals__ is not globals_) or (constructor.__defaults__ is not defaults) or (kind.__bases__ is not bases) or _any((_type(k) is not _str for k in globals_)) or (globals_.get('_tuple_new') is not _tuple.__new__) or _any((names.get(n) is not member for n, member in _zip(fields, members, strict=True))) or _any((names.get(n) is not member for n, member in dispatch)):
-            raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+        if (
+            modules[module_index][2].get(name) is not kind
+            or names.get("_fields") is not fields
+            or actual is not constructor
+            or (constructor.__code__ is not code)
+            or (constructor.__globals__ is not globals_)
+            or (constructor.__defaults__ is not defaults)
+            or (kind.__bases__ is not bases)
+            or _any(_type(k) is not _str for k in globals_)
+            or (globals_.get("_tuple_new") is not _tuple.__new__)
+            or _any(
+                (names.get(n) is not member for n, member in _zip(fields, members, strict=True))
+            )
+            or _any((names.get(n) is not member for n, member in dispatch))
+        ):
+            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+        if (
+            _type(constructor) is not _function
+            or constructor.__kwdefaults__ is not constructor_kw
+            or constructor.__closure__ is not None
+            or _type(constructor.__code__.co_filename) is not _str
+            or (defaults is not None and _type(defaults) is not _tuple)
+        ):
+            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+        for constructor_namespace, constructor_pairs in (
+            (globals_, constructor_global_pairs),
+            (constructor_kw, constructor_kw_pairs),
+        ):
+            if _type(constructor_pairs) is not _tuple:
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            if constructor_namespace is None:
+                if _len(constructor_pairs) != 0:
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                continue
+            if _type(constructor_namespace) is not _dict or _len(constructor_namespace) != _len(
+                constructor_pairs
+            ):
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            constructor_expected = {}
+            for constructor_pair in constructor_pairs:
+                if (
+                    _type(constructor_pair) is not _tuple
+                    or _len(constructor_pair) != 2
+                    or _type(constructor_pair[0]) is not _str
+                    or constructor_pair[0] in constructor_expected
+                ):
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                constructor_expected[constructor_pair[0]] = constructor_pair[1]
+            try:
+                for constructor_key, constructor_value in constructor_namespace.items():
+                    if (
+                        _type(constructor_key) is not _str
+                        or constructor_key not in constructor_expected
+                        or constructor_expected[constructor_key] is not constructor_value
+                    ):
+                        raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            except _error:
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
     return check(result)
 
 
@@ -2418,10 +2948,25 @@ def encode_basename(origin, name, *,
             or actual_errors != errors):
         raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
     pin = origin[4][10]
-    kind, fields, members, constructor, code, constructor_globals, defaults, bases, dispatch = pin
+    (
+        kind,
+        fields,
+        members,
+        constructor,
+        code,
+        constructor_globals,
+        defaults,
+        bases,
+        dispatch,
+        constructor_kw,
+        constructor_kw_pairs,
+        constructor_global_pairs,
+    ) = pin
     if _type(kind) is not _type:
         raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
     names = _vars(kind)
+    if _any(_type(constructor_key) is not _str for constructor_key in names):
+        raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
     actual = names.get('__new__')
     if _type(actual) is _staticmethod:actual = actual.__func__
     if (_any(_type(k) is not _str for k in origin[1][0][2])
@@ -2434,14 +2979,62 @@ def encode_basename(origin, name, *,
             or _any(names.get(n) is not member for n, member in _zip(fields, members, strict=True))
             or _any(names.get(n) is not member for n, member in dispatch)):
         raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+    if (_type(constructor) is not _function
+            or constructor.__kwdefaults__ is not constructor_kw
+            or constructor.__closure__ is not None
+            or _type(constructor.__code__.co_filename) is not _str
+            or (defaults is not None and _type(defaults) is not _tuple)):
+        raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+    for constructor_namespace, constructor_pairs in (
+        (constructor_globals, constructor_global_pairs), (constructor_kw, constructor_kw_pairs),
+    ):
+        if _type(constructor_pairs) is not _tuple:
+            raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+        if constructor_namespace is None:
+            if _len(constructor_pairs) != 0:
+                raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+            continue
+        if (_type(constructor_namespace) is not _dict
+                or _len(constructor_namespace) != _len(constructor_pairs)):
+            raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+        constructor_expected = {}
+        for constructor_pair in constructor_pairs:
+            if (_type(constructor_pair) is not _tuple or _len(constructor_pair) != 2
+                    or _type(constructor_pair[0]) is not _str
+                    or constructor_pair[0] in constructor_expected):
+                raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+            constructor_expected[constructor_pair[0]] = constructor_pair[1]
+        try:
+            for constructor_key, constructor_value in constructor_namespace.items():
+                if (_type(constructor_key) is not _str
+                        or constructor_key not in constructor_expected
+                        or constructor_expected[constructor_key] is not constructor_value):
+                    raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+        except _error:
+            raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
     values = (origin, name, data, encoding_origin)
     result = constructor(kind, *values)
     rejoin()
     pin = origin[4][10]
-    kind, fields, members, constructor, code, constructor_globals, defaults, bases, dispatch = pin
+    (
+        kind,
+        fields,
+        members,
+        constructor,
+        code,
+        constructor_globals,
+        defaults,
+        bases,
+        dispatch,
+        constructor_kw,
+        constructor_kw_pairs,
+        constructor_global_pairs,
+    ) = pin
     if _type(kind) is not _type:
         raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
     names = _vars(kind)
+    if _any(_type(constructor_key) is not _str for constructor_key in names):
+        raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
     actual = names.get('__new__')
     if _type(actual) is _staticmethod:actual = actual.__func__
     if (_any(_type(k) is not _str for k in origin[1][0][2])
@@ -2454,6 +3047,39 @@ def encode_basename(origin, name, *,
             or _any(names.get(n) is not member for n, member in _zip(fields, members, strict=True))
             or _any(names.get(n) is not member for n, member in dispatch)):
         raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+    if (_type(constructor) is not _function
+            or constructor.__kwdefaults__ is not constructor_kw
+            or constructor.__closure__ is not None
+            or _type(constructor.__code__.co_filename) is not _str
+            or (defaults is not None and _type(defaults) is not _tuple)):
+        raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+    for constructor_namespace, constructor_pairs in (
+        (constructor_globals, constructor_global_pairs), (constructor_kw, constructor_kw_pairs),
+    ):
+        if _type(constructor_pairs) is not _tuple:
+            raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+        if constructor_namespace is None:
+            if _len(constructor_pairs) != 0:
+                raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+            continue
+        if (_type(constructor_namespace) is not _dict
+                or _len(constructor_namespace) != _len(constructor_pairs)):
+            raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+        constructor_expected = {}
+        for constructor_pair in constructor_pairs:
+            if (_type(constructor_pair) is not _tuple or _len(constructor_pair) != 2
+                    or _type(constructor_pair[0]) is not _str
+                    or constructor_pair[0] in constructor_expected):
+                raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+            constructor_expected[constructor_pair[0]] = constructor_pair[1]
+        try:
+            for constructor_key, constructor_value in constructor_namespace.items():
+                if (_type(constructor_key) is not _str
+                        or constructor_key not in constructor_expected
+                        or constructor_expected[constructor_key] is not constructor_value):
+                    raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+        except _error:
+            raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
     if (_type(result) is not kind
             or _tuple.__len__(result) != _len(values)
             or _any((_tuple.__getitem__(result, i) is not value for i, value in _enumerate(values)))):

@@ -553,3 +553,32 @@ closure, original caller/root/bothScope ownership, all GC/callback causal checks
 whole fresh graph integration remain required. Pure inspection is not atomic; the
 existing live-key fences are not a claim of arbitrary-GC safety. Keep these drafts
 out of new fast admission until that work and unchanged native60s acceptance pass.
+
+## November 11: runtime constructor pin extension
+
+Parent modules append entry_files/cache_context (six total), and type roles append
+RuntimePackage/_Inputs/CacheInputData/_ContextSource (fifteen total), preserving all
+old indices. Type pins append keyword defaults, keyword pairs and full private-global
+pairs (twelve fields total). Seven parent/capture/encoding consumers and both inline
+Scope consumers retain the stronger metadata, exact storage/filename/default/closure
+checks, key-before-lookup class fences and duplicate-free live/private value joins.
+The existing native tuple, field, dispatch and base checks remain. Other engine
+nine-field schemas are unrelated and unchanged. No caller substitutes these DATA
+pins for original capture/prewarm, literal receipt or actual rooted ownership.
+
+Baseline42 gives6passingcontrols/36DIDNOTRAISE; final58focused/8actualScope cases pass
+both runtimes. The additional18baseline contains6child60s observation timeouts;
+record them as uncertainty rather than successful admission or foreign execution.
+Final853 identical current/minimum tests bind all552 source entries and log/XML hashes.
+Independent review accepts bounded constructor freshness only.
+
+Actual parent pins now cover all seven runtime constructors. Outside those and the
+plain-helper record, runtime class-callable attributes remain51current/37floor.
+Next declared-method contract: exactly eight source classmethods, exact original
+native classmethod before raw.__func__, immutable wrapper identity, existing function
+metadata, no bound-method/getattr/__get__ call and no widening plain roles. Append
+classmethod as primitive21 preserving the original20; every collector/checker/parent/
+Scope copy and any added factory default needs independent original authentication.
+Generated stdlib helpers and cache-candidate closure remain separate. Complete fresh
+original-root/transitive/GC/callback graph and unchanged native60s acceptance still
+precede any new audit dispatch, feature or release claim.
