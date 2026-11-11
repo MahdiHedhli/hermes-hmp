@@ -42,6 +42,7 @@ class NativeReadClaim:
         "_home",
         "_in_progress",
         "_owner",
+        "_rechecked",
         "_record",
         "_uid",
         "_unknown",
@@ -53,6 +54,7 @@ class NativeReadClaim:
         self._generation = owner._generation
         self._home, self._uid, self._gid, self._authority = home, uid, gid, authority
         self._used = self._in_progress = self._unknown = False
+        self._rechecked = False
 
     def __repr__(self):
         return "<NativePresentationReadClaim private>"
@@ -211,6 +213,19 @@ class NativeReadRegistry:
                 raise NativeSourceError()
             claim._unknown |= unknown
             claim._in_progress = False
+
+    def _start_recheck(self, claim):
+        self._check(claim)
+        with self._lock:
+            if (
+                not claim._used
+                or claim._in_progress
+                or claim._rechecked
+                or not claim._record.active
+                or self._retired
+            ):
+                raise NativeSourceError()
+            claim._rechecked = claim._in_progress = True
 
     def _retire(self, issuer, operation=None):
         self._issuer_check(issuer)

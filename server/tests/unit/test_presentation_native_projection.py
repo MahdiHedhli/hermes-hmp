@@ -132,7 +132,7 @@ def test_missing_metadata_uses_canonical_fallback_and_image_still_renders_descri
     source[1].unlink()
     result = run(args)
     dto = json.loads(result.metadata)
-    assert dto["display_name"] == "belac" and dto["name_source"] == "canonical_fallback"
+    assert dto["display_name"] == "Belac" and dto["name_source"] == "canonical_fallback"
     assert dto["avatar"]["mime"] == "image/png"
     result.discard()
     assert args[3].snapshot()[:2] == (0, 0)
@@ -347,3 +347,23 @@ def test_image_hash_credit_cannot_be_reset_by_projection(source):
         run(args)
     assert error.value.reason == "native_source_unavailable" and error.value.__context__ is None
     assert not args[4].live and args[3].snapshot()[:2] == (0, 0)
+
+
+@pytest.mark.parametrize("profile,expected", [("default", "Hermes"), ("school-bot", "School Bot")])
+def test_unnamed_profile_uses_same_native_roster_fallback(source, profile, expected):
+    source[1].unlink()
+    source[3].unlink()
+    reader, claim, work, memory, *_ = setup_read(source[0], profile=profile)
+    projector = NativePresentationProjector(claim._owner, reader)
+    result = projector.run(claim, work, memory, iid=IID, observed_at=123)
+    dto = json.loads(result.metadata)
+    assert dto["display_name"] == expected and dto["name_source"] == "canonical_fallback"
+    if profile == "default":
+        assert dto["character"] == {
+            "version": 1,
+            "shape": "squircle",
+            "color": "#8b5cf6",
+            "custom": None,
+        }
+    result.discard()
+    assert memory.snapshot()[:2] == (0, 0)

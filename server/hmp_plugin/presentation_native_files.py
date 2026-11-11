@@ -73,8 +73,11 @@ class NativeSourceFiles:
     metadata_signature: tuple | None
     avatar_signature: tuple | None
     directories: tuple
+    assets_signature: tuple | None
+    _claim: NativeReadClaim = field(repr=False)
     _memory: PresentationMemoryBudget = field(repr=False)
     _leases: list = field(repr=False)
+    _discarded: bool = field(default=False, init=False, repr=False)
 
     def __repr__(self):
         return "<NativePresentationSource private>"
@@ -89,6 +92,7 @@ class NativeSourceFiles:
         raise TypeError("native source cannot be serialized")
 
     def discard(self):
+        self._discarded = True
         self.metadata = self.avatar = None
         while self._leases:
             self._memory.release(self._leases.pop())
@@ -163,6 +167,41 @@ class NativePresentationFileReader:
         if result is None:
             raise NativeSourceError()
         return result
+
+    def recheck(self, claim, ledger, source):
+        """One final metadata-only observation, on the ORIGINAL claim/work credit.
+
+        No renewed read or payload is returned. The actual service must still
+        authenticate and own this original result; this check is not authority.
+        """
+        if (
+            type(claim) is not NativeReadClaim
+            or claim._owner is not self._registry
+            or type(source) is not NativeSourceFiles
+            or source._discarded
+            or source._claim is not claim
+            or type(ledger) is not PresentationWorkLedger
+        ):
+            raise NativeSourceError()
+        _, deadline, home, uid, gid = self._registry._check(claim)
+        if ledger.clock is not self._registry._clock or ledger.deadline != deadline:
+            raise NativeSourceError()
+        self._registry._start_recheck(claim)
+        tx = None
+        failed = False
+        try:
+            tx = _NativeTransaction(self._ops, claim, ledger, source._memory, home, uid, gid)
+            tx.recheck(source)
+        except BaseException:
+            failed = True
+        if tx is not None:
+            tx.close_all()
+        unknown = tx is not None and tx.unknown
+        self._registry._end_read(claim, unknown=unknown)
+        if failed or unknown:
+            raise NativeSourceError()
+        self._registry._check(claim)
+        ledger.tick()
 
 
 class _NativeTransaction:
@@ -409,6 +448,8 @@ class _NativeTransaction:
                 metadata_sig,
                 avatar_sig,
                 tuple(row[3] for row in self.chain),
+                self.assets_signature,
+                self.claim,
                 self.memory,
                 self.leases,
             )
@@ -417,3 +458,27 @@ class _NativeTransaction:
         except BaseException:
             metadata = avatar = repeated = original = result = None
             raise
+
+    def recheck(self, source):
+        home = self.open_chain()
+        if tuple(row[3] for row in self.chain) != source.directories:
+            raise NativeSourceError()
+        assets = self.named(home, "assets")
+        if source.assets_signature is None:
+            if assets is not None:
+                raise NativeSourceError()
+        else:
+            self.directory(assets, home=True)
+            if assets[:5] != source.assets_signature:
+                raise NativeSourceError()
+            self.assets = self.opening(home, "assets", self.ops.directory_flags)
+            self.assets_signature = assets[:5]
+            if self.held(self.assets)[:5] != self.assets_signature:
+                raise NativeSourceError()
+        if self.presence(home) != (
+            source.metadata_signature,
+            source.avatar_name,
+            source.avatar_signature,
+        ):
+            raise NativeSourceError()
+        self.verify_chain()

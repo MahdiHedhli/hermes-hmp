@@ -63,7 +63,7 @@ def source(tmp_path):
     return home, metadata, assets, avatar
 
 
-def setup_read(home, ops=None):
+def setup_read(home, ops=None, *, profile="belac"):
     now = [1.0]
     issuer, operation = object(), object()
 
@@ -71,7 +71,7 @@ def setup_read(home, ops=None):
         return now[0]
 
     registry = NativeReadRegistry(issuer, object(), clock)
-    registry._begin(issuer, operation, "belac", 3.0)
+    registry._begin(issuer, operation, profile, 3.0)
     claim = registry._issue(
         issuer, operation, home=str(home), uid=os.geteuid(), gid=os.getegid(), authority=object()
     )
@@ -328,3 +328,41 @@ def test_growth_byte_has_buffer_credit_before_eof_probe_and_is_discarded(source)
         reader.read(claim, work, memory)
     assert len(observed) == 1 and observed[0][0] == len(b"display_name: Unit fixture\n") + 1
     assert not ops.live and memory.snapshot()[:2] == (0, 0)
+
+
+def test_final_recheck_observes_original_source_without_new_payload_credit(source):
+    home, *_ = source
+    reader, claim, work, memory, ops, *_ = setup_read(home)
+    result = reader.read(claim, work, memory)
+    before, reads = work.snapshot(), list(ops.reads)
+    reader.recheck(claim, work, result)
+    after = work.snapshot()
+    assert ops.reads == reads and after["read_bytes"] == before["read_bytes"]
+    assert after["opens"] > before["opens"] and not ops.live
+    with pytest.raises(NativeSourceError):
+        reader.recheck(claim, work, result)
+    result.discard()
+    assert memory.snapshot()[:2] == (0, 0)
+
+
+@pytest.mark.parametrize("change", ["metadata", "avatar", "assets", "discarded"])
+def test_final_recheck_refuses_changed_or_discarded_original_source(source, change):
+    home, metadata, assets, avatar = source
+    reader, claim, work, memory, ops, *_ = setup_read(home)
+    result = reader.read(claim, work, memory)
+    if change == "metadata":
+        metadata.write_bytes(b"display_name: Changed\n")
+    elif change == "avatar":
+        avatar.unlink()
+    elif change == "assets":
+        assets.rename(home / "old-assets")
+        assets.mkdir(mode=0o700)
+        os.chown(assets, os.geteuid(), os.getegid())
+    else:
+        result.discard()
+    reads = list(ops.reads)
+    with pytest.raises(NativeSourceError):
+        reader.recheck(claim, work, result)
+    assert ops.reads == reads and not ops.live
+    result.discard()
+    assert memory.snapshot()[:2] == (0, 0)

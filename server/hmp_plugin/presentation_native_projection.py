@@ -17,6 +17,7 @@ from .presentation_native_files import NativePresentationFileReader
 from .presentation_native_raster import inspect_native_avatar
 from .presentation_native_yaml import NativePresentationYaml
 from .presentation_yaml import RawPresentationFields
+from .reads import _fallback_display_name
 
 
 class NativePresentationProjection:
@@ -123,7 +124,7 @@ class NativePresentationProjector:
                 profile=profile,
                 bot_title=fields.title,
                 profile_display_name=fields.display_name,
-                canonical_fallback=profile,
+                canonical_fallback=_fallback_display_name(profile),
                 shape=fields.shape,
                 color=fields.color,
                 custom=fields.custom,
