@@ -648,12 +648,13 @@ def test_route_table_matches_declared_routes(tmp_path: Path) -> None:
             *server.MOBILE_CRON_ROUTES,
             *server.MOBILE_MODEL_ROUTES,
             *server.S5_MEDIA_ROUTES,
+            *server.presentation_routes.ROUTES,
             *server.PUSH_REGISTRATION_ROUTES,
             *server.PUSH_RESOLVE_ROUTES,
         )
     )
     assert routes == expected
-    assert len(expected) == 37
+    assert len(expected) == 39
     assert len(expected) == len(set(expected))
 
 
@@ -676,12 +677,13 @@ def test_a1_session_routes_are_not_registered_when_the_kill_switch_is_off(
             *server.MOBILE_CRON_ROUTES,
             *server.MOBILE_MODEL_ROUTES,
             *server.S5_MEDIA_ROUTES,
+            *server.presentation_routes.ROUTES,
             *server.PUSH_REGISTRATION_ROUTES,
             *server.PUSH_RESOLVE_ROUTES,
         )
     )
     assert routes == expected
-    assert len(expected) == 34
+    assert len(expected) == 36
     assert len(expected) == len(set(expected))
 
 
@@ -701,6 +703,7 @@ def test_e10_session_routes_are_not_registered_when_browsing_is_unavailable(
             *server.MOBILE_CRON_ROUTES,
             *server.MOBILE_MODEL_ROUTES,
             *server.S5_MEDIA_ROUTES,
+            *server.presentation_routes.ROUTES,
             *server.PUSH_REGISTRATION_ROUTES,
             *server.PUSH_RESOLVE_ROUTES,
         )

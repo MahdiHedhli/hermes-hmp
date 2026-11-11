@@ -243,6 +243,10 @@ class ServerContext:
     clock: Callable[[], int] = field(default=lambda: int(time.time()))
     limiter: RateLimiter = field(default_factory=RateLimiter)
     on_identity_changed: Callable[[], None] | None = None
+    # Native startup only: routes cannot nominate/activate a service. Default
+    # closed until actual writer API/TLS/lifecycle qualification and binding.
+    presentation_service: Any = None
+    presentation_available: Callable[[], bool] = field(default=lambda: False)
     guarantee_cache: Guarantees | None = None
     # Amendment A1 (session browsing) kill switch: `gateway.platforms.hmp.extra.session_browsing`,
     # default true. When false, `server.build_app` never registers SES-1/SES-2 at all -- the same

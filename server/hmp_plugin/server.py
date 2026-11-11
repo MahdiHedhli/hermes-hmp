@@ -73,6 +73,7 @@ from . import (
     media_fetch,
     mobile_cron,
     mobile_model,
+    presentation_routes,
     prompts,
     push_registration,
     push_resolve,
@@ -786,6 +787,7 @@ async def handle_roster(request: web.Request) -> web.Response:
     # serves. `asyncio.to_thread` copies contextvars into the worker thread, so Hermes's own
     # profile secret-scope stays correct there too.
     result = await asyncio.to_thread(reads.roster, who.user_id)
+    result = presentation_routes.roster_capability(ctx, result)
     return _result_response(result)
 
 
@@ -1621,6 +1623,8 @@ def build_app(ctx: ServerContext) -> web.Application:
         "/bots/{p}/prompts/{request_id}": handle_prompt_answer,
         "/bots/{p}/phone/messages": handle_phone_send,
         "/bots/{p}/media/{ref}": handle_media_fetch,
+        "/bots/{p}/presentation": presentation_routes.serve,
+        "/bots/{p}/presentation/avatar/{revision}": presentation_routes.serve,
         "/bots/{p}/jobs": handle_cron_list,
         "/bots/{p}/jobs/{job_id}": handle_cron_edit,
         "/bots/{p}/jobs/{job_id}/pause": handle_cron_pause,
@@ -1636,6 +1640,7 @@ def build_app(ctx: ServerContext) -> web.Application:
         + list(MOBILE_CRON_ROUTES)
         + list(MOBILE_MODEL_ROUTES)
         + list(S5_MEDIA_ROUTES)
+        + list(presentation_routes.ROUTES)
         + list(PUSH_REGISTRATION_ROUTES)
         + list(PUSH_RESOLVE_ROUTES)
     )

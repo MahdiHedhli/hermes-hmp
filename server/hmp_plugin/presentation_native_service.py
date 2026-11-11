@@ -9,6 +9,7 @@ future owned HTTP writer settles. Request cancellation is not thread drain.
 from __future__ import annotations
 
 import asyncio
+import contextvars
 import json
 import os
 import threading
@@ -95,6 +96,7 @@ class _Operation:
     timer: object = None
     poll: object = None
     writer: object = None
+    native_context: object = None
 
 
 class NativePresentationOwner:
@@ -237,6 +239,10 @@ class NativePresentationService:
             revision,
             self._loop.create_future(),
         )
+        # Preserve original native instance/profile secret-scope like the other
+        # server reads. This borrows trusted runtime context references; no HMP
+        # source/result bytes are placed in ContextVars or copied into the queue.
+        op.native_context = contextvars.copy_context()
         self._registry._begin(self, op, profile, deadline)
         self._ops[handle] = op
         self._profiles[profile] = handle
@@ -265,7 +271,8 @@ class NativePresentationService:
                 op.state = "running"
                 try:
                     op.worker = self._thread_type(
-                        target=self._work, args=(op,), name="hmp-native-presentation", daemon=False
+                        target=op.native_context.run, args=(self._work, op),
+                        name="hmp-native-presentation", daemon=False
                     )
                 except BaseException:
                     op.joined = True  # no start call, no native thread/effect
@@ -386,6 +393,7 @@ class NativePresentationService:
                 op.join_unknown = True
                 return
             op.joined = True
+            op.native_context = None
         except BaseException:
             op.join_unknown = True
             return
@@ -455,6 +463,7 @@ class NativePresentationService:
         self._profiles.pop(op.profile, None)
         self._ops.pop(op.handle, None)
         op.authorization = ""
+        op.native_context = None
         return True
 
     def _retire_operation(self, op):

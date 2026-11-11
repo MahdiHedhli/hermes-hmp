@@ -203,6 +203,7 @@ class ErrorCode(StrEnum):
     MEDIA_UNAVAILABLE = "media_unavailable"
     READINESS_UNAVAILABLE = "readiness_unavailable"
     CONTROLS_REQUEST_UNAVAILABLE = "controls_request_unavailable"
+    PRESENTATION_UNAVAILABLE = "presentation_unavailable"
 
 
 class SubmitDefinitive(StrEnum):
@@ -276,6 +277,7 @@ ERROR_TABLE: Mapping[ErrorCode, ErrorSpec] = {
         _spec(ErrorCode.MEDIA_UNAVAILABLE, (503,), _NA),
         _spec(ErrorCode.READINESS_UNAVAILABLE, (503,), _NA),
         _spec(ErrorCode.CONTROLS_REQUEST_UNAVAILABLE, (503,), _NA),
+        _spec(ErrorCode.PRESENTATION_UNAVAILABLE, (503,), _NA),
     )
 }
 
@@ -324,6 +326,7 @@ ERROR_MESSAGES: Mapping[ErrorCode, str] = {
     ErrorCode.MEDIA_UNAVAILABLE: "image delivery is unavailable",
     ErrorCode.READINESS_UNAVAILABLE: "readiness unavailable",
     ErrorCode.CONTROLS_REQUEST_UNAVAILABLE: "controls request unavailable",
+    ErrorCode.PRESENTATION_UNAVAILABLE: "bot presentation is unavailable",
 }
 
 
@@ -672,6 +675,7 @@ class RosterResponse:
     guarantees: Guarantees
     write_gate: WriteGate
     bots: tuple[RosterBot, ...]
+    capabilities: Mapping[str, int] | None = field(default=None, metadata={"omit_if_none": True})
 
 
 # Additive tool-output caps (V-3). Unicode code points, not bytes. The bridge applies them
