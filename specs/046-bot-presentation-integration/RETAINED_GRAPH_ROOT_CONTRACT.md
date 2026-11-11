@@ -127,3 +127,57 @@ TimeoutExpired60s, source unchanged. Last original progress checkpoint event4
 at48.82648s:44 observed/typed, one retired capsule, work963/reserved0. No earlier
 setup refusal, skipped traversal, deadline change, speedup or full acceptance is
 claimed. The original test was run alone after both regression suites settled.
+
+
+## RGA-01c: native consumer carrier decision — November 11, 2026 UTC
+
+Read-only source and independent review on executable source
+`53e09183849f893e6c04c344a180ff13963767a8` identify the existing carrier:
+original resource or consumer -> `_LinkExecution.registration` -> actual
+`_NativeScopeRegistration.scope`. The immutable Scope's parent (field 5) retains
+the literal original `_PackageSource`; runtime (field 6) retains `_RuntimeSource`
+and its original `_Inputs`. The blueprint's runtime must be that same runtime.
+The RGA-01b publication joins establish the source pointer at Scope construction.
+No new early blueprint field or self-stored source-token is selected merely
+because the blueprint lacks a package binding.
+
+This is a source-level carrier decision, NOT completed runtime custody proof or
+an enabled reduced audit. `_resource_tail` and `_lifetime_tail` currently call
+full `_engine_origin_tail` before `_execution_mirrors`. Moving a reduced checker
+into that position would consume a proposed execution before original-root proof.
+Moving `_execution_mirrors` first is also insufficient: it calls policy helpers
+and validates mutually consistent mirrors, rather than independently selecting
+the fixed callee from the early native origin.
+
+Implementation order for RGA-01 is now concrete:
+
+1. At the actual native consumer, establish original owner/Scope/root-cell and
+   native registration's ledger/index/slot, using exact native tuple fields and
+   the existing independently anchored closed selector before any schema
+   omission. Hold the actual original Scope, source, runtime and entry-inputs.
+2. Join Scope.runtime, blueprint.runtime, runtime.entry's actual `_inputs` and
+   original entry root-cell. Join package/recipe bindings and nested selection
+   members to those original inputs; matching copies are not independent roots.
+3. Authenticate the fixed graph-audit function and immutable schema/layout from
+   original early helper/engine rows. Do not add caller-supplied trusted-source
+   parameters or a reduced fallback to the generic APIs.
+4. Implement the rooted audit's complete mutable-state predicates. Keep actor,
+   activation, package, recipe, selection, runtime, descriptor/receipt, ledger,
+   cache/completion, namespace/function/default/closure and failure-state checks
+   fresh. Reseal original roots and mutable state after every callback; preserve
+   final pre-effect checks. No currentness result survives to a later call.
+5. Exercise the actual dispatch on both supported interpreters, then the
+   unchanged 60-second native gate alone. A static carrier review is not a pass.
+
+Required causal cases include original successful dispatch; equal execution,
+blueprint/runtime/input copies with matching owner mirrors; coherent Scope/source/
+input grafts; wrong ledger registration/index/slot; copied original package or
+recipe members; post-callback source/input replacement; mutable failed/unknown/
+reading/count/close/completion drift; late function/default/closure replacement;
+and lost return/cleanup. Refusal must precede any later native effect or
+registration. Existing generic validators remain complete and tested separately.
+
+Independent read-only review agreed that the existing Scope is the carrier and
+identified the root-first boundary and coherent-copy counterexample. It neither
+ran these new dispatch causals nor certified an implementation. No executable
+source, installed host/device, permissions or native deadline changed here.
