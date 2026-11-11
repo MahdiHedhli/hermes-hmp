@@ -1025,6 +1025,303 @@ def _scope_file_graph_mirrors(scope):
     return True
 
 
+def _approval_graph_mirrors(binding):
+    """Operator owner/API/read-chain DATA; not original authority or API result.
+
+    Unintegrated final-graph component. Entry/activation provenance, native
+    descriptor closure and actual actor/API observations remain separate.
+    No production guard calls this function or treats it as approval admission.
+    """
+    if type(binding) is not tuple or len(binding) != 4:
+        return False
+    registry = sys.modules
+    if type(registry) is not dict or any(type(key) is not str for key in registry):
+        return False
+    module = dict.get(registry, "hmp_startup.gateway_approval")
+    if type(module) is not ModuleType:
+        return False
+    namespace = vars(module)
+    if any(type(key) is not str for key in namespace):
+        return False
+    kind = dict.get(namespace, "GatewayApprovalOwner")
+    source_kind = dict.get(namespace, "_RootSource")
+    data_kind = dict.get(namespace, "GatewayOperatorApproval")
+    spec_kind = dict.get(namespace, "ModuleSpec")
+    if any(
+        type(value) is not type for value in (kind, source_kind, data_kind, spec_kind)
+    ):
+        return False
+    scope, cell, root, fact = binding
+    if (
+        type(scope) is not _Scope
+        or tuple.__len__(scope) != 19
+        or type(cell) is not tuple
+        or len(cell) != 2
+        or type(root) is not tuple
+        or len(root) != 4
+        or type(fact) is not tuple
+        or len(fact) != 6
+    ):
+        return False
+    owner = cell[0]
+    if type(owner) is not kind or cell[1] is not scope:
+        return False
+    names = vars(kind)
+    if any(type(key) is not str for key in names):
+        return False
+    dictionary = names.get("__dict__")
+    if (
+        type(dictionary) is not GetSetDescriptorType
+        or dictionary.__objclass__ is not kind
+        or dictionary.__name__ != "__dict__"
+    ):
+        return False
+    state = dictionary.__get__(owner, kind)
+    required = (
+        "_origin",
+        "_scope",
+        "_cell",
+        "_root_cell",
+        "_ready",
+        "_failed",
+        "_unknown",
+        "_reading",
+        "_fact_cell",
+        "_data",
+        "_count_cell",
+        "_bytes_read",
+        "_buffer",
+    )
+    if (
+        type(state) is not dict
+        or any(type(key) is not str for key in state)
+        or any(key not in state for key in required)
+    ):
+        return False
+    activation = tuple.__getitem__(scope, 0)
+    activation_scope = tuple.__getitem__(scope, 1)
+    context = tuple.__getitem__(scope, 3)
+    records = tuple.__getitem__(scope, 4)
+    source = tuple.__getitem__(scope, 5)
+    reads = tuple.__getitem__(scope, 7)
+    expected = tuple.__getitem__(scope, 2)
+    if (
+        type(activation) is not GatewayActivationOwner
+        or type(context) is not tuple
+        or len(context) != 3
+        or any(type(value) is not int for value in context)
+        or type(records) is not list
+        or type(reads) is not list
+        or type(expected) is not tuple
+        or len(expected) != 1
+        or type(expected[0]) is not OperatorApprovalPath
+        or tuple.__len__(expected[0]) != 1
+        or type(tuple.__getitem__(expected[0], 0)) is not str
+        or type(source) is not source_kind
+    ):
+        return False
+    bases = type.__getattribute__(source_kind, "__bases__")
+    if (
+        type(bases) is not tuple
+        or len(bases) != 1
+        or bases[0] is not tuple
+        or tuple.__len__(source) != 12
+    ):
+        return False
+    names = vars(GatewayActivationOwner)
+    if any(type(key) is not str for key in names):
+        return False
+    dictionary = names.get("__dict__")
+    if (
+        type(dictionary) is not GetSetDescriptorType
+        or dictionary.__objclass__ is not GatewayActivationOwner
+        or dictionary.__name__ != "__dict__"
+    ):
+        return False
+    active = dictionary.__get__(activation, GatewayActivationOwner)
+    if type(active) is not dict or any(type(key) is not str for key in active):
+        return False
+    if (
+        dict.get(namespace, "_OWNER") is not owner
+        or dict.get(namespace, "_CELL") is not cell
+        or dict.get(namespace, "_ROOT") is not root
+        or dict.get(namespace, "_FACT") is not fact
+        or dict.get(state, "_origin") is not scope
+        or dict.get(state, "_scope") is not scope
+        or dict.get(state, "_cell") is not cell
+        or dict.get(state, "_root_cell") is not root
+        or dict.get(state, "_ready") is not True
+        or dict.get(state, "_failed") is not False
+        or dict.get(state, "_unknown") is not False
+        or dict.get(state, "_reading") is not False
+        or dict.get(state, "_fact_cell") is not fact
+        or dict.get(state, "_data") is not fact[2]
+        or root[0] is not activation
+        or root[1] is not owner
+        or root[2] is not scope
+        or type(root[3]) is not tuple
+        or len(root[3]) != 2
+        or root[3][0] is not owner
+        or type(root[3][1]) is not bytearray
+        or len(root[3][1]) != 0
+        or dict.get(state, "_buffer") is not root[3][1]
+        or dict.get(active, "_scope") is not activation_scope
+        or dict.get(active, "_retired") is not False
+        or dict.get(active, "_uncertain") is not False
+        or dict.get(active, "_approval_owner") is not owner
+        or dict.get(active, "_approval_cell") is not root
+        or dict.get(active, "_approval_fact_cell") is not fact
+        or fact[0] is not owner
+        or fact[1] is not scope
+        or type(fact[2]) is not data_kind
+    ):
+        return False
+    count, receipt, pin = fact[3:]
+    if (
+        type(count) is not tuple
+        or len(count) != 3
+        or count[0] is not owner
+        or count[1] is not scope
+        or type(count[2]) is not int
+        or not 0 < count[2] <= 4096
+        or dict.get(state, "_count_cell") is not count
+        or type(dict.get(state, "_bytes_read")) is not int
+        or dict.get(state, "_bytes_read") != count[2]
+        or type(receipt) is not _OperatorFileReceipt
+        or tuple.__len__(receipt) != 8
+        or tuple.__getitem__(receipt, 0) is not owner
+        or tuple.__getitem__(receipt, 1) is not scope
+        or tuple.__getitem__(receipt, 2) is not expected[0]
+        or tuple.__getitem__(receipt, 5) is not count
+        or type(pin) is not ExpectedArtifact
+        or tuple.__len__(pin) != 3
+        or tuple.__getitem__(pin, 0) is not tuple.__getitem__(expected[0], 0)
+        or type(tuple.__getitem__(pin, 1)) is not int
+        or tuple.__getitem__(pin, 1) != count[2]
+        or tuple.__getitem__(pin, 2) is not tuple.__getitem__(receipt, 4)
+    ):
+        return False
+    identity = tuple.__getitem__(receipt, 3)
+    descriptors, read_rows = (
+        tuple.__getitem__(receipt, 6),
+        tuple.__getitem__(receipt, 7),
+    )
+    if (
+        type(identity) is not tuple
+        or len(identity) != 9
+        or any(type(value) is not int for value in identity)
+        or identity[6] != count[2]
+        or type(descriptors) is not tuple
+        or len(descriptors) != len(records)
+        or not records
+        or any(old is not new for old, new in zip(descriptors, records, strict=True))
+        or type(read_rows) is not tuple
+        or len(read_rows) != len(reads)
+        or len(reads) < 2
+        or any(old is not new for old, new in zip(read_rows, reads, strict=True))
+    ):
+        return False
+    names = vars(_ReadEffect)
+    if any(type(key) is not str for key in names):
+        return False
+    dictionary = names.get("__dict__")
+    if (
+        type(dictionary) is not GetSetDescriptorType
+        or dictionary.__objclass__ is not _ReadEffect
+        or dictionary.__name__ != "__dict__"
+    ):
+        return False
+    previous, previous_cell = 0, None
+    for effect in read_rows:
+        if type(effect) is not _ReadEffect:
+            return False
+        current = dictionary.__get__(effect, _ReadEffect)
+        if (
+            type(current) is not dict
+            or any(type(key) is not str for key in current)
+            or dict.get(current, "returned") is not True
+            or dict.get(current, "unknown") is not False
+        ):
+            return False
+        before, after = dict.get(current, "before"), dict.get(current, "after")
+        if (
+            type(before) is not tuple
+            or len(before) != 3
+            or before[0] is not owner
+            or before[1] is not scope
+            or type(before[2]) is not int
+            or before[2] != previous
+            or (previous_cell is not None and before is not previous_cell)
+            or type(after) is not tuple
+            or len(after) != 3
+            or after[0] is not owner
+            or after[1] is not scope
+            or type(after[2]) is not int
+            or after[2] < previous
+        ):
+            return False
+        previous, previous_cell = after[2], after
+    if previous_cell is not count or previous != count[2]:
+        return False
+    # API namespace/spec/function contents, not an actual API call or root proof.
+    api, api_names, function, code = (
+        tuple.__getitem__(source, i) for i in (2, 3, 4, 5)
+    )
+    file, spec, origin, loader = (tuple.__getitem__(source, i) for i in (6, 7, 8, 9))
+    native_file = tuple.__getitem__(source, 11)
+    if (
+        type(api) is not ModuleType
+        or type(api_names) is not dict
+        or vars(api) is not api_names
+        or any(type(key) is not str for key in api_names)
+        or type(function) is not FunctionType
+        or type(code) is not CodeType
+        or type(file) is not str
+        or type(native_file) is not str
+        or file != native_file
+        or type(origin) is not str
+        or origin != native_file
+        or type(spec) is not spec_kind
+        or function.__globals__ is not api_names
+        or function.__code__ is not code
+        or type(code.co_filename) is not str
+        or code.co_filename != native_file
+        or dict.get(registry, "hermes_constants") is not api
+        or dict.get(api_names, "get_default_hermes_root") is not function
+        or dict.get(api_names, "__file__") is not file
+        or dict.get(api_names, "__spec__") is not spec
+    ):
+        return False
+    names = vars(spec_kind)
+    if any(type(key) is not str for key in names):
+        return False
+    dictionary = names.get("__dict__")
+    if (
+        type(dictionary) is not GetSetDescriptorType
+        or dictionary.__objclass__ is not spec_kind
+        or dictionary.__name__ != "__dict__"
+    ):
+        return False
+    spec_names = dictionary.__get__(spec, spec_kind)
+    if (
+        type(spec_names) is not dict
+        or any(type(key) is not str for key in spec_names)
+        or dict.get(spec_names, "origin") is not origin
+        or dict.get(spec_names, "loader") is not loader
+    ):
+        return False
+    entry_binding = tuple.__getitem__(source, 1)
+    return (
+        type(entry_binding) is tuple
+        and len(entry_binding) == 3
+        and type(entry_binding[2]) is tuple
+        and len(entry_binding[2]) == 7
+        and entry_binding[2][0] is tuple.__getitem__(source, 0)
+        and entry_binding[2][1] is entry_binding[0]
+        and entry_binding[2][2] is entry_binding[1]
+        and entry_binding[2][3] is activation
+    )
+
 def _cache_context_graph_mirrors(snapshot):
     """Retained cache-context field DATA, not original context or live cwd proof.
 

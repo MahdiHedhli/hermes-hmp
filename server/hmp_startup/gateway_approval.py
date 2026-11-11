@@ -12,7 +12,7 @@ import sys
 import threading
 from importlib.machinery import ModuleSpec
 from pathlib import PosixPath
-from types import FunctionType, GetSetDescriptorType, ModuleType
+from types import CodeType, FunctionType, GetSetDescriptorType, ModuleType
 from typing import NamedTuple
 
 from hmp_plugin.presentation_gateway_activation import _LATE_MODULES, GatewayActivationOwner
@@ -136,9 +136,11 @@ def _api_state(source, *, _spec_dict=ModuleSpec.__dict__["__dict__"]):
              and source.namespace.get("get_default_hermes_root") is source.function
              and type(source.function) is FunctionType
              and source.function.__globals__ is source.namespace
+             and type(source.code) is CodeType
              and source.function.__code__ is source.code
              and type(source.native_file) is str and type(source.file) is str
              and source.file == source.native_file
+             and type(source.code.co_filename) is str
              and source.code.co_filename == source.native_file
              and source.namespace.get("__file__") is source.file
              and source.namespace.get("__spec__") is source.spec

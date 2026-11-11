@@ -398,3 +398,27 @@ Existing14 cache lifecycle cases plus11 metadata and2 actual graph fixtures pass
 on current/minimum Python. Each graph fixture contains42 mutation/deletion cases,
 not42 complete native startup tests. Whole-startup performance is not established;
 last dated original native gate still fails60s. No installed runtime changed.
+
+## Operator field component and code filename fence — November 11
+
+`_approval_graph_mirrors` compares the retained binding's owner, module globals,
+activation references, required flags and buffer/count/data/fact state. It joins
+receipt descriptors/reads by identity and checks the read-count chain via native
+instance dictionaries. API module/namespace/function/code/file/spec-origin/loader
+metadata is compared without invoking the API. Current exact classes/ModuleSpec
+are field-inspection prerequisites, not independent original-class provenance.
+
+This component does not check native descriptor closure, original Entry/activation
+provenance or root/callee authenticity, actual actor/API results, all decoded data
+semantics, or the complete final live graph. It is not an authority verdict or
+replacement for `_seal`, `_guard`, `_closed_custody` or `current_binding`.
+No production path uses it; the complete generic implementations remain in place.
+
+CodeType.replace demonstrably preserves a str subclass in co_filename. A coherent
+synthetic field graph reached foreign __ne__ in the projection, then foreign
+__eq__ in existing gateway_approval._api_state. Both red runs are retained.
+Both sites now require an exact str filename before equality; the actual API
+validator also requires exact CodeType. Final79 tests on current/minimum include
+44 existing operator cases and4 original snapshot compositions, zero failures,
+errors or skips. This is a candidate metadata correction, not a deployed incident,
+original-object authority proof, integrated native60s or physical acceptance.

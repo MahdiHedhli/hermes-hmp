@@ -1,3 +1,18 @@
+## November 11: operator approval field component and real API correction
+
+- [x] **RGA-01d-APPROVAL-FIELDS** Unintegrated owner/module/activation/count/
+      buffer/fact/read-chain/API-metadata field projection; native dictionary and
+      tuple fences. No API call, production caller or authority granted.
+- [x] **RGA-01d-API-FILENAME** Reproduce foreign co_filename equality in both
+      new projection and existing _api_state, correct exact CodeType/str fences,
+      restore coherent synthetic graph and verify zero foreign hooks/API calls.
+- [x] Same79 current/minimum regressions: graph31, operator44 and snapshot4;
+      retain both red receipts. Independent correction review complete.
+- [ ] **RGA-01d-FRESH-DAG** Complete original Entry/activation/root/callee,
+      actor/API observations and final pure live graph, with native closure and
+      cache semantics. Integrate only after provenance and causal qualification.
+- [ ] Original60s, complete feature/service/device/release; no fast-path delivery.
+
 ## November 11: cache metadata correction and retained field component
 
 - [x] **RGA-01d-CACHE-GETTER** Correct actual cache getter validation: native

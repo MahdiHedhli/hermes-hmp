@@ -1,3 +1,29 @@
+## Operator approval graph and filename validation — November 11, 2026 UTC
+
+The local character startup draft adds an unintegrated operator-approval field
+comparison covering owner/module/activation mirrors, buffer/count/fact joins,
+receipt/read-chain continuity and native default-root API namespace/spec/code
+metadata. It does not invoke the API. The actual fixture mutates every covered
+required field, restores positives, checks copied roots/nonempty buffers/short
+coherent source storage and refuses an armed foreign API dictionary key without
+foreign equality. Native file work remains unchanged.
+
+Focused review found that a real CodeType can retain a filename str subclass.
+Two causal red runs reached foreign inequality in the new projection and foreign
+equality in the existing approval API validator. Exact CodeType/string fences
+now refuse both before comparison. No deployed incident is established. The same
+79 tests pass on Python 3.14.9 and 3.11.15, with unchanged source and no failures,
+errors or skips: the new checks plus existing owner/file/scan/cache projections,
+44 operator approval cases and four original snapshot compositions. These are
+bounded fixtures, not 79 full production launches or device tests.
+
+The new projection has no production caller. Native descriptor closure, original
+Entry/activation/root/callee authority, actual actor/API results and the complete
+final live graph remain separate prerequisites. Generic validators remain full.
+The last dated original native startup still fails the 60-second gate; this
+checkpoint makes no performance or delivered-character claim. No host update,
+device build, permission/provider/default-model/job or store action occurred.
+
 ## Cache context validation correction — November 11, 2026 UTC
 
 The local character startup draft now refuses malformed working-directory getter
