@@ -1,3 +1,40 @@
+## ColPanic gateway deployment verified — November 11, 2026
+
+ColPanicM2 now runs the exact reviewed HMP
+`9ab269583e4b99e9950e4354349a30d93c1b7814` on unchanged Hermes 0.22.7 /
+`ed1afb082eb3e46cf2edae9d8f68fb67b09ee4df`. The gateway is running under its
+existing supervisor, HMP is connected without an attention flag, and all three
+original profiles report send/jobs/model readiness. This is operator readiness,
+not proof of phone controls or actual send/job/model execution.
+
+The normal stop initially reached a combined cold-state refusal before publication.
+The original updater retained its fence; later readback proved no gateway or
+supervisor PID, clean exit 0, no answering native control identity and no HMP database holders. A
+separately reviewed continuation completed the cold private database backup and
+validated all seven authority-table digests, then used the normal pinned native PM
+transaction. Only after source/provenance/configuration/environment/schema checks
+did it release the original fence and request one non-kill supervisor resume.
+There was one planned stop, no force kill, no repeated installation and no database
+rollback. The initial refusal remains historical evidence, distinct from the
+successful continuation.
+
+Post-restart checks verify all 177 plugin files, the exact installed pin, schema 4,
+seven unchanged HMP authority tables, unchanged configuration/other-plugin metadata
+and dependency environment, and no remaining update fence. TLS 1.3 with the public
+instance-certificate pin returns ready 200; presentation metadata/avatar routes
+require authentication (401), while an unknown route returns 404. This confirms route
+and auth-guard registration, not authorized avatar delivery. Read-only operator
+checks preserve both existing active devices' legacy media entitlement, with host
+and API available. No grants, host flags, model/provider settings or jobs were
+changed by the operator procedure.
+
+The iPad has signed candidate 2026111101 installed but was not launched while locked.
+Android remains unchanged because its installed signer differs; iPhone 15 remains
+disconnected. Authenticated phone presentation/media, physical startup/persistence/
+lifecycle and the remaining release/roadmap checks stay open. LLY520 was not updated:
+its established management connection is unavailable and route clarification is
+pending. Feature/docs publication is not store submission or full-access certification.
+
 ## Device candidate and iPad installation — November 11, 2026
 
 The device candidate now pins the tested integrated HMP source
