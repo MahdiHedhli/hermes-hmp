@@ -1,3 +1,26 @@
+## File closure and scan graph mirrors — November 11, 2026 UTC
+
+The unintegrated fresh-graph component now covers canonical open/allocation/close
+receipt fields, legacy and native Scope file closures, and package scan status.
+The shared owner comparison contains the file/scan checks inline rather than
+calling project checker helpers; maintained AST checks compare both inline bodies
+with their reference predicates. No production guard, route or readiness uses it.
+
+The same23 cases pass on Python3.14.9 and3.11.15 with unchanged source, no
+failures/errors/skips. Actual loaded-owner fixtures retain80 owner field/deletion
+controls and add33 receipt/state/shape faults,6 legacy closure faults,6 scan
+change/deletion faults, bad scope-slot/ledger links, unknown records and short
+Scope storage. Each restores a positive and native work stays unchanged. Explicit
+constructed coherent receipt DATA can match both reference comparisons when a
+fake ledger is supplied: this is NOT proof of original receipt/ledger authority.
+Independent review checked predicates, native getters, final source and evidence.
+
+These remain DATA projections, not the complete final DAG or an enabled faster
+guard. Original root/callee, approval/API, cache, entry/runtime, activation/actor,
+final live reseal and integrated/native60s/device/release gates remain open.
+The last dated native startup still fails60s; it was not relabeled as a run on
+this new component source. No deployed host/device build or privilege changed.
+
 ## Shared ownership graph component — November 11, 2026 UTC
 
 The local character draft now contains an unintegrated package/recipe/selection

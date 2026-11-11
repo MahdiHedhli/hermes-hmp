@@ -1,3 +1,19 @@
+## November 11: descriptor and scan graph field components
+
+- [x] **RGA-01d-CLOSED-FIELDS** Canonical allocation/open/close receipt DATA with
+      native tuple storage fences; Scope-slot/lineage/ledger and legacy closures.
+- [x] **RGA-01d-SCAN-FIELDS** Package Scan status/key/descriptor fences and inline
+      Scope/file comparison in shared-node body, no project-checker delegation.
+- [x] Same23 current/minimum cases:80 prior owner faults,33 receipt/shape faults,
+      legacy/scan/slot/unknown/short-storage and maintained AST copies. Explicit
+      coherent fake-DATA limit prevents an original-authority claim. Independent
+      final source/evidence review complete. Components remain unintegrated DATA.
+- [ ] **RGA-01d-FRESH-DAG** Approval/API, cache, entry/runtime, activation/actor,
+      original root/callee and final complete pure live graph reseal; no guard
+      may be replaced by partial mirrors. Generic APIs stay complete.
+- [ ] Integrated differential/coherent graft/callback/GC/cleanup/broader runtimes,
+      unchanged native60s, full feature/service/device/release qualification.
+
 ## November 11: shared graph implementation component
 
 - [x] **RGA-01d-SHARED-FIELDS** Implement unintegrated native dictionary field

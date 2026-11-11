@@ -318,3 +318,61 @@ observations. Cover coherent whole-root grafts and late callback/GC mutations,
 not only the80 field cases. Generic standalone APIs remain complete. Only then
 qualify actual dispatch, matching broader runtimes, unchanged native60s, full
 native/service/image/device and release. No reduced graph guard is enabled.
+
+
+## RGA-01d canonical file/scan comparison components
+
+`_closed_file_graph_mirrors` compares canonical allocation, descriptor, registration,
+ledger, open-return and close-return fields using native tuple access. It preserves
+all joins from `_native_file_allocation_original`, `_native_descriptor_opened` and
+`_native_descriptor_closed`, including exact integer/bool/list widths and literal
+receipt identities. Native storage/base/width fences precede indexed access to
+supplied type pins. Some malformed-DATA checks are stricter than the old minimal
+helper but match canonical native schemas; no universal arbitrary-DATA equivalence
+claim is made. It neither observes a syscall nor grants close/work authority.
+
+`_scope_file_graph_mirrors` binds native registration-slot/Scope/lineage/ledger
+before the close fields, and handles legacy Descriptor closed/attempted/unknown
+fields with native instance-dictionary descriptors/key fences. The shared-owner
+comparison adds canonical Scan/list/status fields from package retained binding.
+Both receipt and Scope-file bodies are statically inline at their consumers;
+AST tests enforce canonical copy fidelity. The copies are ordinary source, not
+runtime eval or caller-supplied code. This avoids project-checker callbacks in
+those field comparisons. It is not complete final-DAG or arbitrary-concurrency/
+GC atomicity, independent original-root/callee or code-currentness evidence.
+
+Final same23 tests pass on actual Python3.14.9 and3.11.15, receipts
+`/private/tmp/hq-rmmoxqt8/receipt.json` and
+`/private/tmp/hq-lyno9a7a/receipt.json`, source unchanged and zero failures/errors/
+skips. Their actual package fixture uses a genuine original closed native row.
+It applies33 mutable receipt/state/slot/attempt/shape faults to the standalone,
+Scope and loaded-owner comparisons; restores positives; verifies6 legacy and6
+scan faults, unknown records with zero getter calls, bad native registration-slot/
+ledger links,4 short proposed Scope/owner/root mirrors, and unchanged native work.
+The earlier80 owner-field/deletion checks remain in the suite. Malformed storage
+and AST-copy cases are separate; these counts are not all separate native starts.
+
+A deliberately constructed coherent fake descriptor/allocation/close/ledger graph
+matches BOTH the old field validator and new DATA predicate when that fake ledger
+is passed as original; it refuses against the real original ledger. This limits
+qualification rather than manufacturing a receipt: the test issues no open/close/
+actor or admission operation. Scope-root and original-allocation ownership are
+external prerequisites and cannot be inferred from matching fields. Native tuple
+reads bypass modified Python getters but do not attest class code. No route,
+readiness or production guard calls these components.
+
+Independent review compared canonical predicates, Scope prefix and Scan fields,
+then verified final23 current/minimum logs/XML and all541 source hashes against
+current bytes. Root formatted only these three new functions and asserted whole-
+module AST equality before/after; review did not independently reconstruct that
+format assertion. New tests are Ruff-clean; the existing module retains386 prior
+lint diagnostics and adds none under the same filename/config. Private scan,
+closed-plugin-surface and diff checks are root-observed separately. Earlier passes
+before the final storage fences/formatting are superseded, not final acceptance.
+
+The complete fresh DAG remains open: original root/callee selection, approval/API,
+cache context, entry/runtime/fact/attempt/read state, full activation and actor
+observations, final pure live reseal, actual integrated mutation/graft/GC/cleanup
+coverage, broader source tests, original60s and full device/release acceptance.
+No enabled optimization, whole-startup speedup, host/device/grant/provider/model/
+job/release change or new original-native60s result follows from this component.

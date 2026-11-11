@@ -661,6 +661,370 @@ def _package_source(package):
 
 
 
+
+def _closed_file_graph_mirrors(descriptor, original_ledger):
+    """Open/close field comparison DATA, not a syscall or original-ledger proof.
+
+    Unintegrated reference for the fresh graph. A caller must independently own
+    the original allocation/ledger before it may interpret matching receipt DATA.
+    No production close/work/admission path uses this predicate.
+    """
+    if type(descriptor) is not _NativeOpenedDescriptor or tuple.__len__(descriptor) != 3:
+        return False
+    allocation, fd, close = (
+        tuple.__getitem__(descriptor, 0),
+        tuple.__getitem__(descriptor, 1),
+        tuple.__getitem__(descriptor, 2),
+    )
+    if (
+        type(fd) is not int
+        or fd < 0
+        or type(allocation) is not _NativeOpenAllocation
+        or tuple.__len__(allocation) != 14
+        or tuple.__getitem__(allocation, 3) is not original_ledger
+    ):
+        return False
+    registration = tuple.__getitem__(allocation, 2)
+    native = tuple.__getitem__(allocation, 6)
+    if type(registration) is not _NativeScopeRegistration or tuple.__len__(registration) != 15:
+        return False
+    pins = tuple.__getitem__(registration, 11)
+    if (
+        type(pins) is not tuple
+        or len(pins) != 3
+        or any(type(kind) is not type for kind in pins)
+        or type(original_ledger) is not pins[1]
+        or type(native) is not pins[2]
+    ):
+        return False
+    # These two families are native NamedTuples. Validate native tuple storage
+    # before indexed access; a supplied matching type pin is not that proof.
+    for kind, value, width in ((pins[1], original_ledger, 11), (pins[2], native, 9)):
+        bases = type.__getattribute__(kind, "__bases__")
+        if (
+            type(bases) is not tuple
+            or len(bases) != 1
+            or bases[0] is not tuple
+            or tuple.__len__(value) != width
+        ):
+            return False
+    owner, scope = tuple.__getitem__(allocation, 0), tuple.__getitem__(allocation, 1)
+    context, index = tuple.__getitem__(allocation, 7), tuple.__getitem__(allocation, 8)
+    attempts = tuple.__getitem__(original_ledger, 3)
+    operations, actors = tuple.__getitem__(native, 2), tuple.__getitem__(native, 8)
+    if (
+        tuple.__getitem__(registration, 1) is not owner
+        or tuple.__getitem__(registration, 2) is not scope
+        or tuple.__getitem__(registration, 9) is not original_ledger
+        or tuple.__getitem__(registration, 10) is not native
+        or tuple.__getitem__(registration, 5) is not context
+        or type(attempts) is not list
+        or type(index) is not int
+        or not 0 <= index < len(attempts)
+        or attempts[index] is not allocation
+        or type(close) is not _NativeCloseAllocation
+        or tuple.__len__(close) != 15
+        or tuple.__getitem__(allocation, 13) is not close
+        or type(operations) is not tuple
+        or len(operations) != 6
+        or type(actors) is not tuple
+        or len(actors) != 3
+    ):
+        return False
+    if (
+        tuple.__getitem__(close, 0) is not owner
+        or tuple.__getitem__(close, 1) is not scope
+        or tuple.__getitem__(close, 2) is not registration
+        or tuple.__getitem__(close, 3) is not original_ledger
+        or tuple.__getitem__(close, 4) is not tuple.__getitem__(registration, 13)
+        or tuple.__getitem__(original_ledger, 10) is not tuple.__getitem__(close, 4)
+        or tuple.__getitem__(close, 5) is not context
+        or tuple.__getitem__(close, 6) is not operations[2]
+        or tuple.__getitem__(close, 7) is not actors
+    ):
+        return False
+    actor_modules, opened = tuple.__getitem__(close, 8), tuple.__getitem__(close, 9)
+    raw, result, refused = (
+        tuple.__getitem__(allocation, 10),
+        tuple.__getitem__(allocation, 11),
+        tuple.__getitem__(allocation, 12),
+    )
+    state, closed_raw, closed_result = (
+        tuple.__getitem__(close, 11),
+        tuple.__getitem__(close, 13),
+        tuple.__getitem__(close, 14),
+    )
+    if (
+        type(actor_modules) is not tuple
+        or len(actor_modules) != 2
+        or actor_modules[0] is not tuple.__getitem__(native, 1)
+        or actor_modules[1] is not tuple.__getitem__(native, 7)
+        or type(opened) is not list
+        or len(opened) != 1
+        or opened[0] is not allocation
+        or type(raw) is not list
+        or len(raw) != 1
+        or type(result) is not list
+        or len(result) != 1
+        or type(refused) is not list
+        or len(refused) != 1
+        or type(refused[0]) is not bool
+        or type(state) is not list
+        or len(state) != 2
+        or type(state[0]) is not bool
+        or type(state[1]) is not bool
+        or type(closed_raw) is not list
+        or len(closed_raw) != 1
+        or type(closed_result) is not list
+        or len(closed_result) != 1
+    ):
+        return False
+    observed_open, observed_close = result[0], closed_result[0]
+    return (
+        raw[0] is fd
+        and type(observed_open) is tuple
+        and len(observed_open) == 2
+        and observed_open[0] is allocation
+        and observed_open[1] is descriptor
+        and refused[0] is False
+        and closed_raw[0] is None
+        and state[0] is True
+        and state[1] is False
+        and type(observed_close) is tuple
+        and len(observed_close) == 3
+        and observed_close[0] is close
+        and observed_close[1] is fd
+        and observed_close[2] is None
+    )
+
+
+def _scope_file_graph_mirrors(scope):
+    """Unintegrated scope file-closure DATA; not original scope or native authority."""
+    if type(scope) is not _Scope or tuple.__len__(scope) != 19:
+        return False
+    records = tuple.__getitem__(scope, 4)
+    if type(records) is not list:
+        return False
+    native_lineage = tuple.__getitem__(scope, 10)
+    if native_lineage is None:
+        names = vars(_Descriptor)
+        if any(type(key) is not str for key in names):
+            return False
+        dictionary = names.get("__dict__")
+        if (
+            type(dictionary) is not GetSetDescriptorType
+            or dictionary.__objclass__ is not _Descriptor
+            or dictionary.__name__ != "__dict__"
+        ):
+            return False
+        for row in records:
+            if type(row) is not _Descriptor:
+                return False
+            state = dictionary.__get__(row, _Descriptor)
+            if (
+                type(state) is not dict
+                or any(type(key) is not str for key in state)
+                or dict.get(state, "closed") is not True
+                or (dict.get(state, "close_attempted") is not True)
+                or (dict.get(state, "unknown") is not False)
+            ):
+                return False
+    else:
+        slot = tuple.__getitem__(scope, 11)
+        if (
+            type(slot) is not list
+            or len(slot) != 1
+            or type(slot[0]) is not _NativeScopeRegistration
+            or (tuple.__len__(slot[0]) != 15)
+        ):
+            return False
+        registration = slot[0]
+        pins = tuple.__getitem__(registration, 11)
+        if (
+            type(pins) is not tuple
+            or len(pins) != 3
+            or any(type(kind) is not type for kind in pins)
+            or (type(native_lineage) is not pins[0])
+        ):
+            return False
+        bases = type.__getattribute__(pins[0], "__bases__")
+        if (
+            type(bases) is not tuple
+            or len(bases) != 1
+            or bases[0] is not tuple
+            or (tuple.__len__(native_lineage) != 6)
+        ):
+            return False
+        ledger = tuple.__getitem__(registration, 9)
+        if (
+            tuple.__getitem__(registration, 2) is not scope
+            or tuple.__getitem__(registration, 0) is not native_lineage
+            or type(ledger) is not pins[1]
+            or (tuple.__getitem__(native_lineage, 3) is not ledger)
+        ):
+            return False
+        for row in records:
+            if (
+                type(row) is not _NativeOpenedDescriptor
+                or tuple.__len__(row) != 3
+                or type(tuple.__getitem__(row, 0)) is not _NativeOpenAllocation
+                or (tuple.__len__(tuple.__getitem__(row, 0)) != 14)
+                or (tuple.__getitem__(tuple.__getitem__(row, 0), 1) is not scope)
+            ):
+                return False
+            if type(row) is not _NativeOpenedDescriptor or tuple.__len__(row) != 3:
+                return False
+            closed_allocation, closed_fd, closed_close = (
+                tuple.__getitem__(row, 0),
+                tuple.__getitem__(row, 1),
+                tuple.__getitem__(row, 2),
+            )
+            if (
+                type(closed_fd) is not int
+                or closed_fd < 0
+                or type(closed_allocation) is not _NativeOpenAllocation
+                or (tuple.__len__(closed_allocation) != 14)
+                or (tuple.__getitem__(closed_allocation, 3) is not ledger)
+            ):
+                return False
+            closed_registration = tuple.__getitem__(closed_allocation, 2)
+            closed_native = tuple.__getitem__(closed_allocation, 6)
+            if (
+                type(closed_registration) is not _NativeScopeRegistration
+                or tuple.__len__(closed_registration) != 15
+            ):
+                return False
+            closed_pins = tuple.__getitem__(closed_registration, 11)
+            if (
+                type(closed_pins) is not tuple
+                or len(closed_pins) != 3
+                or any(type(closed_kind) is not type for closed_kind in closed_pins)
+                or (type(ledger) is not closed_pins[1])
+                or (type(closed_native) is not closed_pins[2])
+            ):
+                return False
+            for closed_kind, closed_value, closed_width in (
+                (closed_pins[1], ledger, 11),
+                (closed_pins[2], closed_native, 9),
+            ):
+                closed_bases = type.__getattribute__(closed_kind, "__bases__")
+                if (
+                    type(closed_bases) is not tuple
+                    or len(closed_bases) != 1
+                    or closed_bases[0] is not tuple
+                    or (tuple.__len__(closed_value) != closed_width)
+                ):
+                    return False
+            closed_owner, closed_scope = (
+                tuple.__getitem__(closed_allocation, 0),
+                tuple.__getitem__(closed_allocation, 1),
+            )
+            closed_context, closed_index = (
+                tuple.__getitem__(closed_allocation, 7),
+                tuple.__getitem__(closed_allocation, 8),
+            )
+            closed_attempts = tuple.__getitem__(ledger, 3)
+            closed_operations, closed_actors = (
+                tuple.__getitem__(closed_native, 2),
+                tuple.__getitem__(closed_native, 8),
+            )
+            if (
+                tuple.__getitem__(closed_registration, 1) is not closed_owner
+                or tuple.__getitem__(closed_registration, 2) is not closed_scope
+                or tuple.__getitem__(closed_registration, 9) is not ledger
+                or (tuple.__getitem__(closed_registration, 10) is not closed_native)
+                or (tuple.__getitem__(closed_registration, 5) is not closed_context)
+                or (type(closed_attempts) is not list)
+                or (type(closed_index) is not int)
+                or (not 0 <= closed_index < len(closed_attempts))
+                or (closed_attempts[closed_index] is not closed_allocation)
+                or (type(closed_close) is not _NativeCloseAllocation)
+                or (tuple.__len__(closed_close) != 15)
+                or (tuple.__getitem__(closed_allocation, 13) is not closed_close)
+                or (type(closed_operations) is not tuple)
+                or (len(closed_operations) != 6)
+                or (type(closed_actors) is not tuple)
+                or (len(closed_actors) != 3)
+            ):
+                return False
+            if (
+                tuple.__getitem__(closed_close, 0) is not closed_owner
+                or tuple.__getitem__(closed_close, 1) is not closed_scope
+                or tuple.__getitem__(closed_close, 2) is not closed_registration
+                or (tuple.__getitem__(closed_close, 3) is not ledger)
+                or (
+                    tuple.__getitem__(closed_close, 4)
+                    is not tuple.__getitem__(closed_registration, 13)
+                )
+                or (tuple.__getitem__(ledger, 10) is not tuple.__getitem__(closed_close, 4))
+                or (tuple.__getitem__(closed_close, 5) is not closed_context)
+                or (tuple.__getitem__(closed_close, 6) is not closed_operations[2])
+                or (tuple.__getitem__(closed_close, 7) is not closed_actors)
+            ):
+                return False
+            closed_actor_modules, closed_opened = (
+                tuple.__getitem__(closed_close, 8),
+                tuple.__getitem__(closed_close, 9),
+            )
+            closed_raw, closed_result, closed_refused = (
+                tuple.__getitem__(closed_allocation, 10),
+                tuple.__getitem__(closed_allocation, 11),
+                tuple.__getitem__(closed_allocation, 12),
+            )
+            closed_state, closed_closed_raw, closed_closed_result = (
+                tuple.__getitem__(closed_close, 11),
+                tuple.__getitem__(closed_close, 13),
+                tuple.__getitem__(closed_close, 14),
+            )
+            if (
+                type(closed_actor_modules) is not tuple
+                or len(closed_actor_modules) != 2
+                or closed_actor_modules[0] is not tuple.__getitem__(closed_native, 1)
+                or (closed_actor_modules[1] is not tuple.__getitem__(closed_native, 7))
+                or (type(closed_opened) is not list)
+                or (len(closed_opened) != 1)
+                or (closed_opened[0] is not closed_allocation)
+                or (type(closed_raw) is not list)
+                or (len(closed_raw) != 1)
+                or (type(closed_result) is not list)
+                or (len(closed_result) != 1)
+                or (type(closed_refused) is not list)
+                or (len(closed_refused) != 1)
+                or (type(closed_refused[0]) is not bool)
+                or (type(closed_state) is not list)
+                or (len(closed_state) != 2)
+                or (type(closed_state[0]) is not bool)
+                or (type(closed_state[1]) is not bool)
+                or (type(closed_closed_raw) is not list)
+                or (len(closed_closed_raw) != 1)
+                or (type(closed_closed_result) is not list)
+                or (len(closed_closed_result) != 1)
+            ):
+                return False
+            closed_observed_open, closed_observed_close = (
+                closed_result[0],
+                closed_closed_result[0],
+            )
+            if (
+                closed_raw[0] is closed_fd
+                and type(closed_observed_open) is tuple
+                and (len(closed_observed_open) == 2)
+                and (closed_observed_open[0] is closed_allocation)
+                and (closed_observed_open[1] is row)
+                and (closed_refused[0] is False)
+                and (closed_closed_raw[0] is None)
+                and (closed_state[0] is True)
+                and (closed_state[1] is False)
+                and (type(closed_observed_close) is tuple)
+                and (len(closed_observed_close) == 3)
+                and (closed_observed_close[0] is closed_close)
+                and (closed_observed_close[1] is closed_fd)
+                and (closed_observed_close[2] is None)
+            ) is not True:
+                return False
+    return True
+
+
 def _loaded_owner_graph_mirrors(package_binding, recipe_binding):
     """Fresh shared-node field comparison DATA, never a guard or admission.
 
@@ -669,25 +1033,50 @@ def _loaded_owner_graph_mirrors(package_binding, recipe_binding):
     Consistent supplied bindings do not establish original-object provenance.
     No production caller may replace a complete validator with this predicate.
     """
-    if (type(package_binding) is not tuple or len(package_binding) != 5
-            or type(recipe_binding) is not tuple or len(recipe_binding) != 6):
+    if (
+        type(package_binding) is not tuple
+        or len(package_binding) != 5
+        or type(recipe_binding) is not tuple
+        or len(recipe_binding) != 6
+    ):
         return False
     selected = package_binding[4]
-    if (type(selected) is not tuple or len(selected) != 4
-            or type(recipe_binding[5]) is not tuple or len(recipe_binding[5]) != 4
-            or any(left is not right for left, right in zip(
-                selected, recipe_binding[5], strict=True))):
+    if (
+        type(selected) is not tuple
+        or len(selected) != 4
+        or type(recipe_binding[5]) is not tuple
+        or len(recipe_binding[5]) != 4
+        or any(left is not right for left, right in zip(selected, recipe_binding[5], strict=True))
+    ):
         return False
     modules = sys.modules
     if type(modules) is not dict or any(type(key) is not str for key in modules):
         return False
     specifications = (
-        ('hmp_plugin.presentation_gateway_package', 'GatewayPackageOwner',
-         package_binding, '_package_owner', '_package_cell', '_package_fact_cell'),
-        ('hmp_plugin.presentation_gateway_recipe', 'GatewayRecipeOwner',
-         recipe_binding, '_recipe_owner', '_recipe_cell', '_recipe_fact_cell'),
-        ('hmp_plugin.presentation_startup_selection', 'StartupSelectionOwner',
-         selected, '_selection_owner', '_selection_cell', '_selection_fact_cell'),
+        (
+            "hmp_plugin.presentation_gateway_package",
+            "GatewayPackageOwner",
+            package_binding,
+            "_package_owner",
+            "_package_cell",
+            "_package_fact_cell",
+        ),
+        (
+            "hmp_plugin.presentation_gateway_recipe",
+            "GatewayRecipeOwner",
+            recipe_binding,
+            "_recipe_owner",
+            "_recipe_cell",
+            "_recipe_fact_cell",
+        ),
+        (
+            "hmp_plugin.presentation_startup_selection",
+            "StartupSelectionOwner",
+            selected,
+            "_selection_owner",
+            "_selection_cell",
+            "_selection_fact_cell",
+        ),
     )
     activation = activation_scope = None
     for module_name, class_name, binding, owner_key, root_key, fact_key in specifications:
@@ -703,14 +1092,22 @@ def _loaded_owner_graph_mirrors(package_binding, recipe_binding):
         names = vars(kind)
         if any(type(key) is not str for key in names):
             return False
-        dictionary = names.get('__dict__')
-        if (type(dictionary) is not GetSetDescriptorType
-                or dictionary.__objclass__ is not kind
-                or dictionary.__name__ != '__dict__'):
+        dictionary = names.get("__dict__")
+        if (
+            type(dictionary) is not GetSetDescriptorType
+            or dictionary.__objclass__ is not kind
+            or dictionary.__name__ != "__dict__"
+        ):
             return False
         scope, cell, root = binding[:3]
-        if (type(scope) is not _Scope or type(cell) is not tuple or len(cell) != 2
-                or type(root) is not tuple or len(root) not in (3, 4)):
+        if (
+            type(scope) is not _Scope
+            or tuple.__len__(scope) != 19
+            or type(cell) is not tuple
+            or len(cell) != 2
+            or type(root) is not tuple
+            or len(root) not in (3, 4)
+        ):
             return False
         owner = cell[0]
         if type(owner) is not kind or cell[1] is not scope:
@@ -718,96 +1115,419 @@ def _loaded_owner_graph_mirrors(package_binding, recipe_binding):
         state = dictionary.__get__(owner, kind)
         if type(state) is not dict or any(type(key) is not str for key in state):
             return False
-        required = ('_origin', '_scope', '_cell', '_root_cell', '_ready', '_failed',
-                    '_unknown', '_reading', '_count_cell', '_bytes_read')
-        if module_name == 'hmp_plugin.presentation_gateway_package':
-            required += ('_fact_cell', '_fact')
-        elif module_name == 'hmp_plugin.presentation_gateway_recipe':
-            required += ('_plan_cell', '_fact_cell', '_active', '_buffer')
+        required = (
+            "_origin",
+            "_scope",
+            "_cell",
+            "_root_cell",
+            "_ready",
+            "_failed",
+            "_unknown",
+            "_reading",
+            "_count_cell",
+            "_bytes_read",
+        )
+        if module_name == "hmp_plugin.presentation_gateway_package":
+            required += ("_fact_cell", "_fact")
+        elif module_name == "hmp_plugin.presentation_gateway_recipe":
+            required += ("_plan_cell", "_fact_cell", "_active", "_buffer")
         else:
-            required += ('_selection_cell', '_selection', '_buffer')
+            required += ("_selection_cell", "_selection", "_buffer")
         if any(key not in state for key in required):
             return False
         current_activation = tuple.__getitem__(scope, 0)
         current_activation_scope = tuple.__getitem__(scope, 1)
         if activation is None:
             activation, activation_scope = current_activation, current_activation_scope
-        if (current_activation is not activation
-                or current_activation_scope is not activation_scope
-                or type(activation) is not GatewayActivationOwner):
+        if (
+            current_activation is not activation
+            or current_activation_scope is not activation_scope
+            or type(activation) is not GatewayActivationOwner
+        ):
             return False
         activation_names = vars(GatewayActivationOwner)
         if any(type(key) is not str for key in activation_names):
             return False
-        activation_dictionary = activation_names.get('__dict__')
-        if (type(activation_dictionary) is not GetSetDescriptorType
-                or activation_dictionary.__objclass__ is not GatewayActivationOwner
-                or activation_dictionary.__name__ != '__dict__'):
+        activation_dictionary = activation_names.get("__dict__")
+        if (
+            type(activation_dictionary) is not GetSetDescriptorType
+            or activation_dictionary.__objclass__ is not GatewayActivationOwner
+            or activation_dictionary.__name__ != "__dict__"
+        ):
             return False
         active = activation_dictionary.__get__(activation, GatewayActivationOwner)
         if type(active) is not dict or any(type(key) is not str for key in active):
             return False
-        if (dict.get(state, '_origin') is not scope or dict.get(state, '_scope') is not scope
-                or dict.get(state, '_cell') is not cell or dict.get(state, '_root_cell') is not root
-                or dict.get(state, '_ready') is not True
-                or dict.get(state, '_failed') is not False
-                or dict.get(state, '_unknown') is not False
-                or dict.get(state, '_reading') is not False
-                or root[0] is not activation or root[1] is not owner or root[2] is not scope
-                or dict.get(active, '_scope') is not activation_scope
-                or dict.get(active, '_retired') is not False
-                or dict.get(active, '_uncertain') is not False
-                or dict.get(active, owner_key) is not owner
-                or dict.get(active, root_key) is not root
-                or type(tuple.__getitem__(scope, 3)) is not tuple
-                or len(tuple.__getitem__(scope, 3)) != 3
-                or any(type(value) is not int for value in tuple.__getitem__(scope, 3))
-                or type(tuple.__getitem__(scope, 4)) is not list):
+        if (
+            dict.get(state, "_origin") is not scope
+            or dict.get(state, "_scope") is not scope
+            or dict.get(state, "_cell") is not cell
+            or dict.get(state, "_root_cell") is not root
+            or dict.get(state, "_ready") is not True
+            or dict.get(state, "_failed") is not False
+            or dict.get(state, "_unknown") is not False
+            or dict.get(state, "_reading") is not False
+            or root[0] is not activation
+            or root[1] is not owner
+            or root[2] is not scope
+            or dict.get(active, "_scope") is not activation_scope
+            or dict.get(active, "_retired") is not False
+            or dict.get(active, "_uncertain") is not False
+            or dict.get(active, owner_key) is not owner
+            or dict.get(active, root_key) is not root
+            or type(tuple.__getitem__(scope, 3)) is not tuple
+            or len(tuple.__getitem__(scope, 3)) != 3
+            or any(type(value) is not int for value in tuple.__getitem__(scope, 3))
+            or type(tuple.__getitem__(scope, 4)) is not list
+        ):
             return False
-        if module_name == 'hmp_plugin.presentation_gateway_package':
+        if module_name == "hmp_plugin.presentation_gateway_package":
             fact = binding[3]
-            if (len(root) != 3 or type(fact) is not tuple or len(fact) != 3
-                    or fact[0] is not owner or fact[1] is not scope
-                    or dict.get(state, '_fact_cell') is not fact
-                    or type(fact[2]) is not tuple or len(fact[2]) != 8
-                    or dict.get(state, '_fact') is not fact[2]):
+            if (
+                len(root) != 3
+                or type(fact) is not tuple
+                or len(fact) != 3
+                or fact[0] is not owner
+                or fact[1] is not scope
+                or dict.get(state, "_fact_cell") is not fact
+                or type(fact[2]) is not tuple
+                or len(fact[2]) != 8
+                or dict.get(state, "_fact") is not fact[2]
+            ):
                 return False
             count = fact[2][7]
-        elif module_name == 'hmp_plugin.presentation_gateway_recipe':
+        elif module_name == "hmp_plugin.presentation_gateway_recipe":
             plan, fact = binding[3:5]
-            if (type(plan) is not tuple or len(plan) != 3
-                    or plan[0] is not owner or plan[1] is not scope
-                    or dict.get(state, '_plan_cell') is not plan
-                    or dict.get(active, '_recipe_plan_cell') is not plan
-                    or type(fact) is not tuple or len(fact) != 5
-                    or fact[0] is not owner or fact[1] is not scope or fact[2] is not plan
-                    or dict.get(state, '_fact_cell') is not fact
-                    or dict.get(state, '_active') is not None):
+            if (
+                type(plan) is not tuple
+                or len(plan) != 3
+                or plan[0] is not owner
+                or plan[1] is not scope
+                or dict.get(state, "_plan_cell") is not plan
+                or dict.get(active, "_recipe_plan_cell") is not plan
+                or type(fact) is not tuple
+                or len(fact) != 5
+                or fact[0] is not owner
+                or fact[1] is not scope
+                or fact[2] is not plan
+                or dict.get(state, "_fact_cell") is not fact
+                or dict.get(state, "_active") is not None
+            ):
                 return False
             count = fact[4]
         else:
             fact = binding[3]
-            if (type(fact) is not tuple or len(fact) != 4
-                    or fact[0] is not owner or fact[1] is not scope
-                    or dict.get(state, '_selection_cell') is not fact
-                    or dict.get(state, '_selection') is not fact[2]):
+            if (
+                type(fact) is not tuple
+                or len(fact) != 4
+                or fact[0] is not owner
+                or fact[1] is not scope
+                or dict.get(state, "_selection_cell") is not fact
+                or dict.get(state, "_selection") is not fact[2]
+            ):
                 return False
             count = fact[3]
-        if (dict.get(active, fact_key) is not fact
-                or type(count) is not tuple or len(count) != 3
-                or count[0] is not owner or count[1] is not scope or type(count[2]) is not int
-                or dict.get(state, '_count_cell') is not count
-                or type(dict.get(state, '_bytes_read')) is not int
-                or dict.get(state, '_bytes_read') != count[2]):
+        if (
+            dict.get(active, fact_key) is not fact
+            or type(count) is not tuple
+            or len(count) != 3
+            or count[0] is not owner
+            or count[1] is not scope
+            or type(count[2]) is not int
+            or dict.get(state, "_count_cell") is not count
+            or type(dict.get(state, "_bytes_read")) is not int
+            or dict.get(state, "_bytes_read") != count[2]
+        ):
             return False
-        if module_name != 'hmp_plugin.presentation_gateway_package':
-            if (len(root) != 4 or type(root[3]) is not tuple or len(root[3]) != 2
-                    or root[3][0] is not owner or type(root[3][1]) is not bytearray
-                    or dict.get(state, '_buffer') is not root[3][1] or len(root[3][1]) != 0):
+        if module_name != "hmp_plugin.presentation_gateway_package":
+            if (
+                len(root) != 4
+                or type(root[3]) is not tuple
+                or len(root[3]) != 2
+                or root[3][0] is not owner
+                or type(root[3][1]) is not bytearray
+                or dict.get(state, "_buffer") is not root[3][1]
+                or len(root[3][1]) != 0
+            ):
                 return False
-        if module_name == 'hmp_plugin.presentation_startup_selection':
-            if dict.get(state, '_bytes_read') is not count[2]:
+        if module_name == "hmp_plugin.presentation_startup_selection":
+            if dict.get(state, "_bytes_read") is not count[2]:
                 return False
+        # Fresh scan/file mirrors are inline: no project checker callback.
+        if module_name == "hmp_plugin.presentation_gateway_package":
+            expected = tuple.__getitem__(scope, 2)
+            manifest_kind = dict.get(namespace, "_Manifest")
+            scan_kind = dict.get(namespace, "_Scan")
+            if (
+                type(manifest_kind) is not type
+                or type(scan_kind) is not type
+                or type(expected) is not manifest_kind
+            ):
+                return False
+            bases = type.__getattribute__(manifest_kind, "__bases__")
+            if (
+                type(bases) is not tuple
+                or len(bases) != 1
+                or bases[0] is not tuple
+                or (tuple.__len__(expected) != 11)
+            ):
+                return False
+            scans = tuple.__getitem__(expected, 8)
+            scan_names = vars(scan_kind)
+            if type(scans) is not list or any(type(key) is not str for key in scan_names):
+                return False
+            scan_dictionary = scan_names.get("__dict__")
+            if (
+                type(scan_dictionary) is not GetSetDescriptorType
+                or scan_dictionary.__objclass__ is not scan_kind
+                or scan_dictionary.__name__ != "__dict__"
+            ):
+                return False
+            for scan in scans:
+                if type(scan) is not scan_kind:
+                    return False
+                scan_state = scan_dictionary.__get__(scan, scan_kind)
+                if (
+                    type(scan_state) is not dict
+                    or any(type(key) is not str for key in scan_state)
+                    or dict.get(scan_state, "closed") is not True
+                    or (dict.get(scan_state, "unknown") is not False)
+                    or (dict.get(scan_state, "close_attempted") is not True)
+                ):
+                    return False
+        if type(scope) is not _Scope or tuple.__len__(scope) != 19:
+            return False
+        files_records = tuple.__getitem__(scope, 4)
+        if type(files_records) is not list:
+            return False
+        files_native_lineage = tuple.__getitem__(scope, 10)
+        if files_native_lineage is None:
+            files_names = vars(_Descriptor)
+            if any(type(files_key) is not str for files_key in files_names):
+                return False
+            files_dictionary = files_names.get("__dict__")
+            if (
+                type(files_dictionary) is not GetSetDescriptorType
+                or files_dictionary.__objclass__ is not _Descriptor
+                or files_dictionary.__name__ != "__dict__"
+            ):
+                return False
+            for files_row in files_records:
+                if type(files_row) is not _Descriptor:
+                    return False
+                files_state = files_dictionary.__get__(files_row, _Descriptor)
+                if (
+                    type(files_state) is not dict
+                    or any(type(files_key) is not str for files_key in files_state)
+                    or dict.get(files_state, "closed") is not True
+                    or (dict.get(files_state, "close_attempted") is not True)
+                    or (dict.get(files_state, "unknown") is not False)
+                ):
+                    return False
+        else:
+            files_slot = tuple.__getitem__(scope, 11)
+            if (
+                type(files_slot) is not list
+                or len(files_slot) != 1
+                or type(files_slot[0]) is not _NativeScopeRegistration
+                or (tuple.__len__(files_slot[0]) != 15)
+            ):
+                return False
+            files_registration = files_slot[0]
+            files_pins = tuple.__getitem__(files_registration, 11)
+            if (
+                type(files_pins) is not tuple
+                or len(files_pins) != 3
+                or any(type(files_kind) is not type for files_kind in files_pins)
+                or (type(files_native_lineage) is not files_pins[0])
+            ):
+                return False
+            files_bases = type.__getattribute__(files_pins[0], "__bases__")
+            if (
+                type(files_bases) is not tuple
+                or len(files_bases) != 1
+                or files_bases[0] is not tuple
+                or (tuple.__len__(files_native_lineage) != 6)
+            ):
+                return False
+            files_ledger = tuple.__getitem__(files_registration, 9)
+            if (
+                tuple.__getitem__(files_registration, 2) is not scope
+                or tuple.__getitem__(files_registration, 0) is not files_native_lineage
+                or type(files_ledger) is not files_pins[1]
+                or (tuple.__getitem__(files_native_lineage, 3) is not files_ledger)
+            ):
+                return False
+            for files_row in files_records:
+                if (
+                    type(files_row) is not _NativeOpenedDescriptor
+                    or tuple.__len__(files_row) != 3
+                    or type(tuple.__getitem__(files_row, 0)) is not _NativeOpenAllocation
+                    or (tuple.__len__(tuple.__getitem__(files_row, 0)) != 14)
+                    or (tuple.__getitem__(tuple.__getitem__(files_row, 0), 1) is not scope)
+                ):
+                    return False
+                if type(files_row) is not _NativeOpenedDescriptor or tuple.__len__(files_row) != 3:
+                    return False
+                files_closed_allocation, files_closed_fd, files_closed_close = (
+                    tuple.__getitem__(files_row, 0),
+                    tuple.__getitem__(files_row, 1),
+                    tuple.__getitem__(files_row, 2),
+                )
+                if (
+                    type(files_closed_fd) is not int
+                    or files_closed_fd < 0
+                    or type(files_closed_allocation) is not _NativeOpenAllocation
+                    or (tuple.__len__(files_closed_allocation) != 14)
+                    or (tuple.__getitem__(files_closed_allocation, 3) is not files_ledger)
+                ):
+                    return False
+                files_closed_registration = tuple.__getitem__(files_closed_allocation, 2)
+                files_closed_native = tuple.__getitem__(files_closed_allocation, 6)
+                if (
+                    type(files_closed_registration) is not _NativeScopeRegistration
+                    or tuple.__len__(files_closed_registration) != 15
+                ):
+                    return False
+                files_closed_pins = tuple.__getitem__(files_closed_registration, 11)
+                if (
+                    type(files_closed_pins) is not tuple
+                    or len(files_closed_pins) != 3
+                    or any(
+                        type(files_closed_kind) is not type
+                        for files_closed_kind in files_closed_pins
+                    )
+                    or (type(files_ledger) is not files_closed_pins[1])
+                    or (type(files_closed_native) is not files_closed_pins[2])
+                ):
+                    return False
+                for files_closed_kind, files_closed_value, files_closed_width in (
+                    (files_closed_pins[1], files_ledger, 11),
+                    (files_closed_pins[2], files_closed_native, 9),
+                ):
+                    files_closed_bases = type.__getattribute__(files_closed_kind, "__bases__")
+                    if (
+                        type(files_closed_bases) is not tuple
+                        or len(files_closed_bases) != 1
+                        or files_closed_bases[0] is not tuple
+                        or (tuple.__len__(files_closed_value) != files_closed_width)
+                    ):
+                        return False
+                files_closed_owner, files_closed_scope = (
+                    tuple.__getitem__(files_closed_allocation, 0),
+                    tuple.__getitem__(files_closed_allocation, 1),
+                )
+                files_closed_context, files_closed_index = (
+                    tuple.__getitem__(files_closed_allocation, 7),
+                    tuple.__getitem__(files_closed_allocation, 8),
+                )
+                files_closed_attempts = tuple.__getitem__(files_ledger, 3)
+                files_closed_operations, files_closed_actors = (
+                    tuple.__getitem__(files_closed_native, 2),
+                    tuple.__getitem__(files_closed_native, 8),
+                )
+                if (
+                    tuple.__getitem__(files_closed_registration, 1) is not files_closed_owner
+                    or tuple.__getitem__(files_closed_registration, 2) is not files_closed_scope
+                    or tuple.__getitem__(files_closed_registration, 9) is not files_ledger
+                    or (tuple.__getitem__(files_closed_registration, 10) is not files_closed_native)
+                    or (tuple.__getitem__(files_closed_registration, 5) is not files_closed_context)
+                    or (type(files_closed_attempts) is not list)
+                    or (type(files_closed_index) is not int)
+                    or (not 0 <= files_closed_index < len(files_closed_attempts))
+                    or (files_closed_attempts[files_closed_index] is not files_closed_allocation)
+                    or (type(files_closed_close) is not _NativeCloseAllocation)
+                    or (tuple.__len__(files_closed_close) != 15)
+                    or (tuple.__getitem__(files_closed_allocation, 13) is not files_closed_close)
+                    or (type(files_closed_operations) is not tuple)
+                    or (len(files_closed_operations) != 6)
+                    or (type(files_closed_actors) is not tuple)
+                    or (len(files_closed_actors) != 3)
+                ):
+                    return False
+                if (
+                    tuple.__getitem__(files_closed_close, 0) is not files_closed_owner
+                    or tuple.__getitem__(files_closed_close, 1) is not files_closed_scope
+                    or tuple.__getitem__(files_closed_close, 2) is not files_closed_registration
+                    or (tuple.__getitem__(files_closed_close, 3) is not files_ledger)
+                    or (
+                        tuple.__getitem__(files_closed_close, 4)
+                        is not tuple.__getitem__(files_closed_registration, 13)
+                    )
+                    or (
+                        tuple.__getitem__(files_ledger, 10)
+                        is not tuple.__getitem__(files_closed_close, 4)
+                    )
+                    or (tuple.__getitem__(files_closed_close, 5) is not files_closed_context)
+                    or (tuple.__getitem__(files_closed_close, 6) is not files_closed_operations[2])
+                    or (tuple.__getitem__(files_closed_close, 7) is not files_closed_actors)
+                ):
+                    return False
+                files_closed_actor_modules, files_closed_opened = (
+                    tuple.__getitem__(files_closed_close, 8),
+                    tuple.__getitem__(files_closed_close, 9),
+                )
+                files_closed_raw, files_closed_result, files_closed_refused = (
+                    tuple.__getitem__(files_closed_allocation, 10),
+                    tuple.__getitem__(files_closed_allocation, 11),
+                    tuple.__getitem__(files_closed_allocation, 12),
+                )
+                files_closed_state, files_closed_closed_raw, files_closed_closed_result = (
+                    tuple.__getitem__(files_closed_close, 11),
+                    tuple.__getitem__(files_closed_close, 13),
+                    tuple.__getitem__(files_closed_close, 14),
+                )
+                if (
+                    type(files_closed_actor_modules) is not tuple
+                    or len(files_closed_actor_modules) != 2
+                    or files_closed_actor_modules[0]
+                    is not tuple.__getitem__(files_closed_native, 1)
+                    or (
+                        files_closed_actor_modules[1]
+                        is not tuple.__getitem__(files_closed_native, 7)
+                    )
+                    or (type(files_closed_opened) is not list)
+                    or (len(files_closed_opened) != 1)
+                    or (files_closed_opened[0] is not files_closed_allocation)
+                    or (type(files_closed_raw) is not list)
+                    or (len(files_closed_raw) != 1)
+                    or (type(files_closed_result) is not list)
+                    or (len(files_closed_result) != 1)
+                    or (type(files_closed_refused) is not list)
+                    or (len(files_closed_refused) != 1)
+                    or (type(files_closed_refused[0]) is not bool)
+                    or (type(files_closed_state) is not list)
+                    or (len(files_closed_state) != 2)
+                    or (type(files_closed_state[0]) is not bool)
+                    or (type(files_closed_state[1]) is not bool)
+                    or (type(files_closed_closed_raw) is not list)
+                    or (len(files_closed_closed_raw) != 1)
+                    or (type(files_closed_closed_result) is not list)
+                    or (len(files_closed_closed_result) != 1)
+                ):
+                    return False
+                files_closed_observed_open, files_closed_observed_close = (
+                    files_closed_result[0],
+                    files_closed_closed_result[0],
+                )
+                if (
+                    files_closed_raw[0] is files_closed_fd
+                    and type(files_closed_observed_open) is tuple
+                    and (len(files_closed_observed_open) == 2)
+                    and (files_closed_observed_open[0] is files_closed_allocation)
+                    and (files_closed_observed_open[1] is files_row)
+                    and (files_closed_refused[0] is False)
+                    and (files_closed_closed_raw[0] is None)
+                    and (files_closed_state[0] is True)
+                    and (files_closed_state[1] is False)
+                    and (type(files_closed_observed_close) is tuple)
+                    and (len(files_closed_observed_close) == 3)
+                    and (files_closed_observed_close[0] is files_closed_close)
+                    and (files_closed_observed_close[1] is files_closed_fd)
+                    and (files_closed_observed_close[2] is None)
+                ) is not True:
+                    return False
+        pass
     return True
 
 
