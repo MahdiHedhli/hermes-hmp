@@ -1,3 +1,14 @@
+## November 10: RGA-01 original retained-graph custody
+
+- [x] Trace blueprint, digest, original entry inputs and artifact publication.
+      Original `_Inputs` already retains package/recipe owners and bindings;
+      blueprint/digest alone do not. See [contract](RETAINED_GRAPH_ROOT_CONTRACT.md).
+- [ ] **RGA-01** Prove original entry-input/root custody at every intended reduced
+      audit consumer, then implement the fresh graph audit with pre/post callback
+      rejoins and complete generic fallback APIs. No reduced parser is enabled.
+- [ ] Qualify actual dispatch/graft/mutation/cleanup causals on both runtimes and
+      unchanged native60s, then full feature/service/device acceptance.
+
 ## November 10: RBH-02 early parent and publication binding
 
 The parent environment is now env7 with a literal retained-helper capsule;
