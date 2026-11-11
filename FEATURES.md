@@ -1,3 +1,36 @@
+## Device candidate and iPad installation — November 11, 2026
+
+The device candidate now pins the tested integrated HMP source
+`9ab269583e4b99e9950e4354349a30d93c1b7814`; mobile commit
+`7f72715855e55cc744fa8bc8832bdb86df0ae484` preserves the previously verified
+avatar lifecycle fix and screen integration. Source is published on focused HMP
+and private app branches. This pin change does not update a running gateway.
+
+The sanctioned iOS release wrapper produced development-signed build
+**2026111101**. Artifact scanning, all preserved file hashes and strict signatures
+pass; signing team, entitlements and embedded provisioning match the previous
+installed build. One supported installer attempt updated the existing iPad bundle
+from 2026110901 to 2026111101, confirmed by fresh device metadata. It was locked,
+so no launch, unlock bypass, UI/data-retention or physical-feature pass is claimed.
+The iPhone 15 was disconnected and unchanged.
+
+The Android development APK also built from this exact source, with verified APK
+signature and immutable source/log binding. Its receipt parser initially expected
+an older apksigner label; a separate verification receipt accepts the actual V2
+Signer format without rebuilding or re-signing. Its certificate differs from the
+installed main app, so no update, uninstall, data clear or replacement was attempted;
+the existing beta code 6 is also unchanged. Android upload-signing inputs remain
+unavailable. Restore the matching authorized signing configuration before replacing
+an existing app; development APK evidence is not Play/release qualification.
+
+Production API/native/Flutter avatar and chat-image checks remain verified as
+previously scoped. Physical iPad launch, persistence, images and lifecycle checks,
+Android/iPhone qualification, package-wide release gates and the full feature
+roadmap remain open. ColPanicM2's last dated installed HMP is 6796bfbb; its authorized
+integrated update still needs fresh host preflight and execution. LLY520 remains
+absent from the established management inventory. No host, grants, model/provider
+settings, jobs or store submission changed in this build/install step.
+
 ## Native-to-Flutter character checkpoint — November 11, 2026
 
 The production mobile API and Flutter chat screen now interoperate with the native
