@@ -275,3 +275,46 @@ other families keep complete generic validation. Cover coherent whole-root
 grafts, callbacks/GC/late returns, counters/descriptor cleanup and supported
 runtimes, then original60s and full feature/device qualification. No branch is
 enabled by this source contract.
+
+
+## RGA-01d shared loaded-owner field component
+
+`_loaded_owner_graph_mirrors(package_binding, recipe_binding)` is an unintegrated
+field comparison, not an authority or complete validator. It compares current
+package/recipe/selection owner states against supplied binding members. Its
+native dictionary descriptor reads bypass changed instance getters; class/code
+provenance is NOT established by a positive. Exact-string key fences precede
+lookup. Explicit required-key membership distinguishes missing fields from
+legitimate None (notably recipe `_active`). There is no production caller; every
+existing guard/audit remains unchanged. Do not use this function as an admission
+predicate or reduced dispatch. It is one reference portion of the full fresh DAG.
+
+Final same7 cases pass on Python3.14.9/3.11.15 at
+`/private/tmp/hq-qc647osb/receipt.json` and
+`/private/tmp/hq-_bzd5o63/receipt.json`, source unchanged, zero failures/errors/skips.
+Six cases reject malformed outer binding DATA. The actual operator-loaded fixture
+performs80 changes/deletions across three owners with restoration/positive controls
+and no native counts/attempts/scope growth. It observes zero instance-getter or
+foreign-collision equality calls during the projection. An armed collision is
+only armed during observation: Python3.14 split-dictionary insertion previously
+called equality during setup (`/private/tmp/hq-4u12e3ye/receipt.json`, terminal
+failure). That failed setup is not a successful predicate test. Earlier passes
+before required-key/deletion/armed-collision corrections are superseded.
+
+Independent source review identified and verified the nullable-key correction,
+and independently rehashed both final receipts/log/XML and all540 source-map
+entries. New test Ruff, private scan, closed plugin surface and diff checks are
+recorded separately by root. No original native startup rerun or new performance
+claim follows from adding this uncalled component; last actual native gate on
+cb205-source still fails60s. The current added function changes candidate bytes,
+so that dated failure is not falsely relabeled a new final-source run.
+
+Remaining RGA-01d is the coherent source/runtime DAG, not this subset. Preserve
+actual original registered Scope/Entry/STARTED/CELL/native lineage and fixed-callee
+proof before dispatch. Implement descriptor/scan/close/read receipts, approval/API,
+cache context/getter/rows, runtime/plan/input/fact/attempt/count, activation and
+native actor predicates; final pure live reseal must follow all callback
+observations. Cover coherent whole-root grafts and late callback/GC mutations,
+not only the80 field cases. Generic standalone APIs remain complete. Only then
+qualify actual dispatch, matching broader runtimes, unchanged native60s, full
+native/service/image/device and release. No reduced graph guard is enabled.

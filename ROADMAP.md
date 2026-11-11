@@ -1,3 +1,26 @@
+## Shared ownership graph component — November 11, 2026 UTC
+
+The local character draft now contains an unintegrated package/recipe/selection
+owner-field projection for the planned fresh DAG audit. It reads native instance
+dictionaries after exact type/key/descriptor fences and compares current roots,
+flags, required keys, facts, counters, buffers and activation links. Consistent
+supplied binding DATA is not original-object or code authority.
+
+The same7 tests pass on Python3.14.9 and3.11.15 with unchanged source and no
+failures/errors/skips. One actual loaded-owner fixture applies80 field-change and
+missing-field faults, restores each and checks the positive again, with unchanged
+native counts/attempts/scopes. A colliding foreign key refuses before equality;
+a changed instance getter is bypassed through the native dictionary descriptor.
+The latter is deliberately not code-currentness evidence. Review found a missing
+nullable-field key check; explicit required-key checks fix it. The first current
+collision run failed in test setup, before the predicate, and remains a failure.
+
+No production caller uses the projection. It is not a guard, a reduced audit,
+a final callback-free graph reseal or character delivery. Descriptors, approval,
+cache, entry, actor/root/callee provenance, full integration, original60s and
+physical/release acceptance remain open. Existing validators stay authoritative;
+no host, phone build, grant/provider/model/job or release changed.
+
 ## Generic link-path scan and actual audit costs — November 11, 2026 UTC
 
 The character draft uses a strict UTF-8/ASCII-control byte scan in the generic

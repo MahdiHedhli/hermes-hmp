@@ -1,3 +1,17 @@
+## November 11: shared graph implementation component
+
+- [x] **RGA-01d-SHARED-FIELDS** Implement unintegrated native dictionary field
+      comparison for package/recipe/selection; required keys/roots/flags/facts/
+      counters/buffers/activation links. DATA only, no authority or guard replacement.
+- [x] Same7 current/minimum tests, including80 actual owner changes/deletions with
+      restore/positive and no native work, foreign-key/getter refusals. Independent
+      source/final evidence review complete; prior failed setup retained separately.
+- [ ] **RGA-01d-FRESH-DAG** Complete remaining descriptor/approval/cache/entry/
+      actor/runtime/root/callee predicates and final callback-free full graph
+      reseal, then integrate after original native roots. Existing guards stayfull.
+- [ ] Actual integrated differential/coherent graft/callback/GC/cleanup/broader
+      runtime/original60s/physical/release qualification. Component is not delivery.
+
 ## November 11: measured next graph unit
 
 - [x] Measure actual native consumer full-engine/fixed-live/closed-selector costs

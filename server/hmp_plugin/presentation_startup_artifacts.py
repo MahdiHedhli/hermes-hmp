@@ -660,6 +660,157 @@ def _package_source(package):
     return _PackageSource(package, binding, binding[3][2][7], previous)
 
 
+
+def _loaded_owner_graph_mirrors(package_binding, recipe_binding):
+    """Fresh shared-node field comparison DATA, never a guard or admission.
+
+    Unintegrated RGA component. Original-root/callee authentication, descriptor,
+    approval/cache/entry/actor checks and the complete final DAG remain required.
+    Consistent supplied bindings do not establish original-object provenance.
+    No production caller may replace a complete validator with this predicate.
+    """
+    if (type(package_binding) is not tuple or len(package_binding) != 5
+            or type(recipe_binding) is not tuple or len(recipe_binding) != 6):
+        return False
+    selected = package_binding[4]
+    if (type(selected) is not tuple or len(selected) != 4
+            or type(recipe_binding[5]) is not tuple or len(recipe_binding[5]) != 4
+            or any(left is not right for left, right in zip(
+                selected, recipe_binding[5], strict=True))):
+        return False
+    modules = sys.modules
+    if type(modules) is not dict or any(type(key) is not str for key in modules):
+        return False
+    specifications = (
+        ('hmp_plugin.presentation_gateway_package', 'GatewayPackageOwner',
+         package_binding, '_package_owner', '_package_cell', '_package_fact_cell'),
+        ('hmp_plugin.presentation_gateway_recipe', 'GatewayRecipeOwner',
+         recipe_binding, '_recipe_owner', '_recipe_cell', '_recipe_fact_cell'),
+        ('hmp_plugin.presentation_startup_selection', 'StartupSelectionOwner',
+         selected, '_selection_owner', '_selection_cell', '_selection_fact_cell'),
+    )
+    activation = activation_scope = None
+    for module_name, class_name, binding, owner_key, root_key, fact_key in specifications:
+        module = dict.get(modules, module_name)
+        if type(module) is not ModuleType:
+            return False
+        namespace = vars(module)
+        if any(type(key) is not str for key in namespace):
+            return False
+        kind = dict.get(namespace, class_name)
+        if type(kind) is not type:
+            return False
+        names = vars(kind)
+        if any(type(key) is not str for key in names):
+            return False
+        dictionary = names.get('__dict__')
+        if (type(dictionary) is not GetSetDescriptorType
+                or dictionary.__objclass__ is not kind
+                or dictionary.__name__ != '__dict__'):
+            return False
+        scope, cell, root = binding[:3]
+        if (type(scope) is not _Scope or type(cell) is not tuple or len(cell) != 2
+                or type(root) is not tuple or len(root) not in (3, 4)):
+            return False
+        owner = cell[0]
+        if type(owner) is not kind or cell[1] is not scope:
+            return False
+        state = dictionary.__get__(owner, kind)
+        if type(state) is not dict or any(type(key) is not str for key in state):
+            return False
+        required = ('_origin', '_scope', '_cell', '_root_cell', '_ready', '_failed',
+                    '_unknown', '_reading', '_count_cell', '_bytes_read')
+        if module_name == 'hmp_plugin.presentation_gateway_package':
+            required += ('_fact_cell', '_fact')
+        elif module_name == 'hmp_plugin.presentation_gateway_recipe':
+            required += ('_plan_cell', '_fact_cell', '_active', '_buffer')
+        else:
+            required += ('_selection_cell', '_selection', '_buffer')
+        if any(key not in state for key in required):
+            return False
+        current_activation = tuple.__getitem__(scope, 0)
+        current_activation_scope = tuple.__getitem__(scope, 1)
+        if activation is None:
+            activation, activation_scope = current_activation, current_activation_scope
+        if (current_activation is not activation
+                or current_activation_scope is not activation_scope
+                or type(activation) is not GatewayActivationOwner):
+            return False
+        activation_names = vars(GatewayActivationOwner)
+        if any(type(key) is not str for key in activation_names):
+            return False
+        activation_dictionary = activation_names.get('__dict__')
+        if (type(activation_dictionary) is not GetSetDescriptorType
+                or activation_dictionary.__objclass__ is not GatewayActivationOwner
+                or activation_dictionary.__name__ != '__dict__'):
+            return False
+        active = activation_dictionary.__get__(activation, GatewayActivationOwner)
+        if type(active) is not dict or any(type(key) is not str for key in active):
+            return False
+        if (dict.get(state, '_origin') is not scope or dict.get(state, '_scope') is not scope
+                or dict.get(state, '_cell') is not cell or dict.get(state, '_root_cell') is not root
+                or dict.get(state, '_ready') is not True
+                or dict.get(state, '_failed') is not False
+                or dict.get(state, '_unknown') is not False
+                or dict.get(state, '_reading') is not False
+                or root[0] is not activation or root[1] is not owner or root[2] is not scope
+                or dict.get(active, '_scope') is not activation_scope
+                or dict.get(active, '_retired') is not False
+                or dict.get(active, '_uncertain') is not False
+                or dict.get(active, owner_key) is not owner
+                or dict.get(active, root_key) is not root
+                or type(tuple.__getitem__(scope, 3)) is not tuple
+                or len(tuple.__getitem__(scope, 3)) != 3
+                or any(type(value) is not int for value in tuple.__getitem__(scope, 3))
+                or type(tuple.__getitem__(scope, 4)) is not list):
+            return False
+        if module_name == 'hmp_plugin.presentation_gateway_package':
+            fact = binding[3]
+            if (len(root) != 3 or type(fact) is not tuple or len(fact) != 3
+                    or fact[0] is not owner or fact[1] is not scope
+                    or dict.get(state, '_fact_cell') is not fact
+                    or type(fact[2]) is not tuple or len(fact[2]) != 8
+                    or dict.get(state, '_fact') is not fact[2]):
+                return False
+            count = fact[2][7]
+        elif module_name == 'hmp_plugin.presentation_gateway_recipe':
+            plan, fact = binding[3:5]
+            if (type(plan) is not tuple or len(plan) != 3
+                    or plan[0] is not owner or plan[1] is not scope
+                    or dict.get(state, '_plan_cell') is not plan
+                    or dict.get(active, '_recipe_plan_cell') is not plan
+                    or type(fact) is not tuple or len(fact) != 5
+                    or fact[0] is not owner or fact[1] is not scope or fact[2] is not plan
+                    or dict.get(state, '_fact_cell') is not fact
+                    or dict.get(state, '_active') is not None):
+                return False
+            count = fact[4]
+        else:
+            fact = binding[3]
+            if (type(fact) is not tuple or len(fact) != 4
+                    or fact[0] is not owner or fact[1] is not scope
+                    or dict.get(state, '_selection_cell') is not fact
+                    or dict.get(state, '_selection') is not fact[2]):
+                return False
+            count = fact[3]
+        if (dict.get(active, fact_key) is not fact
+                or type(count) is not tuple or len(count) != 3
+                or count[0] is not owner or count[1] is not scope or type(count[2]) is not int
+                or dict.get(state, '_count_cell') is not count
+                or type(dict.get(state, '_bytes_read')) is not int
+                or dict.get(state, '_bytes_read') != count[2]):
+            return False
+        if module_name != 'hmp_plugin.presentation_gateway_package':
+            if (len(root) != 4 or type(root[3]) is not tuple or len(root[3]) != 2
+                    or root[3][0] is not owner or type(root[3][1]) is not bytearray
+                    or dict.get(state, '_buffer') is not root[3][1] or len(root[3][1]) != 0):
+                return False
+        if module_name == 'hmp_plugin.presentation_startup_selection':
+            if dict.get(state, '_bytes_read') is not count[2]:
+                return False
+    return True
+
+
 def _source_current(source):
     _require(type(source) is _PackageSource)
     actual = _package_source(source.owner)
