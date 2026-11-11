@@ -125,7 +125,7 @@ and release only after actual ownership moves or the object is dropped.
 | Retained state | Limit and ownership |
 | --- | --- |
 | Waiting descriptors |16 x4096 maximum copied header/profile/revision/lease/control bytes; zero raw YAML/image/parser/result buffers |
-| Active operation logical payload envelope |16MiB each, six slots retained across running/result/emission/unknown states; no unleased completed-result queue |
+| Active operation logical payload envelope |16MiB/64 live buffer reservations each, six slots retained across running/result/emission/unknown states; no unleased completed-result queue |
 | Read representations |Total read credit4,131,076; separately include original chunks/bytearray and simultaneous immutable conversion copies in16MiB envelope |
 | Parser state |One SafeLoader pass live at a time, raw input65,536, decoded text at most4x input scalar count; token2048/event1024/node256/depth8/scalarUTF81024 consumption caps; close/dispose both sequential scan/event passes before result publication |
 | Parser internal objects |Bounded input plus trusted parser implementation/work limits; no claimed exact Python heap cap. Qualify peak native memory under worst-case bounded inputs; no parser/traceback/future retains a completed request's raw data |
@@ -252,3 +252,13 @@ Independent character_custody_review accepts NS1 direction and fixed outcomes,
 identity-bound capability, deadlines and logical envelope. Its final lifecycle
 correction (retained debt across reconnect/replacement) is incorporated above.
 No NS2–NS7 result follows from this contract acceptance.
+
+### NS2 bookkeeping convergence
+
+presentation_memory is the first portable native-service source component. It
+performs no file read and grants no authority. Both current/minimum runtime17-case
+suites independently pass with identical cases, matching log/XML hashes and559
+source maps; identity-bound stored-size leases reject forged/changed/duplicate
+release and concurrent overbooking. Its explicit memory tickets do not prove an
+actual producer charged every buffer, nor settle worker/FD/writer debt. Those
+integration and native evidence requirements remain unchecked above.

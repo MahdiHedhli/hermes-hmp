@@ -1,3 +1,9 @@
+## Native service implementation checkpoint — November11
+
+- [x] **NS2-MEMORY** Portable16MiB/64-live-buffer logical reservations; explicit copy/conversion/result/stream accounting, identity-bound original leases, no forged/double/altered release and no automatic cancellation release. Both runtime17-case suites independently reviewed;559 source maps/log/XML/IDs verified. No actual buffer/reader/worker/authority qualification follows.
+- [ ] **NS2-READER** Implement the real authorized fixed metadata/static-avatar source transaction and full projection composition under the reviewed native capability; do not fake old worker GO.
+- [ ] **NS3–NS7** Owned worker/mailbox/debt/reconnect/drain, native factory/routes, normal/fault/client/device/release qualification remain open.
+
 ## Selected implementation — native presentation service, November11
 
 - [x] **NS1** Explicit architecture/privacy/authority/lifecycle contract independently reviewed; full character/name/blobatar/static-image parity retained. [Amendment, plan, checklist and NS2–NS7 tasks](NATIVE_PRESENTATION_SERVICE_AMENDMENT.md).
