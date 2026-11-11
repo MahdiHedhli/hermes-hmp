@@ -1,3 +1,19 @@
+## Approval-test native IPC and projection — November 10, 2026
+
+AT1 now passes a coupled synthetic macOS native integration on working HMP6796
+and Hermes ed1/0.22.7. The actual production CLI observer, kernel-authenticated
+Unix exchange and authenticated TLS HTTP card/control exercise acknowledge,
+deny, cancel and expiry. All four outcomes join cleanup, withdraw the card,
+empty the native queue and release the producer slot; the empty synthetic chat
+stays empty. All12,577 exported source hashes and cleanup evidence were
+independently rechecked. See specs/039-hmp-operator-approval-test/NATIVE_IPC_QUALIFICATION.md.
+
+This is integration evidence for the already implemented command, not a new host
+or phone build. Shell/parser/TTY, mobile widget/push/physical display, real pairing,
+Linux, full faults and release remain open. Only a new private synthetic instance
+was used. Avatar startup53 remains independently blocked by its unchanged60s
+native gate; no validator, feature, grant/provider/model/job or release was changed.
+
 ## Native image verification checkpoint — November 6, 2026
 
 The `e8653d5` base-tail batch is stopped: 201 of 301 jobs completed (296 phases), then job 201 / original pair 323 exceeded the unchanged 12-second observation limit. That refused paired Phone case used selector 16 with `deactivate:ids1` and `eligibility:ids0`. The same retained child settled to exit 0, but no completion was published and no later job started. Independent readback verified its 28 artifacts, source/Git/runtime/cache bindings, both closed phase checkpoints, 53/53 borrows and closed DB/listener/workers/hooks, with zero audit denials or sweep. These are post-expiry diagnostics, not an accepted phase pass. The timing cause is unproven; this failure is not limited to a full-prompt shape. No retry, deadline extension or data deletion occurred.

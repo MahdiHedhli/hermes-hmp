@@ -1,3 +1,11 @@
+## Coupled macOS integration — November 10, 2026
+
+The native helper sample is now complemented by real local IPC/CLI-observer and
+authenticated TLS HTTP card/control on an isolated synthetic instance. All four
+outcomes pass with joined cleanup. See [qualification](NATIVE_IPC_QUALIFICATION.md)
+and its exact source/report hashes. Physical mobile UI, parser/TTY, Linux,
+real pairing, fault and release qualification remain separate.
+
 # AT1 native callback compatibility — November 4, 2026
 
 The current exported native source ed1afb adds its captured `timeout_s` to the

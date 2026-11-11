@@ -1,0 +1,77 @@
+{
+  "native_source": "ed1afb082eb3e46cf2edae9d8f68fb67b09ee4df",
+  "hmp_source": "6796bfbb45177f86125635ff801fbc80b034a226",
+  "fixture_sha256": "1ca5949a7821bdb2bbbe73ef6354a3232c844cf82f1e236bf2e6b334ffb75f92",
+  "controller_sha256": "6fa2230991851afb0e5b013e0131bc446dc025969094d2314611288caafdf1cc",
+  "source_manifest_sha256": "cf076fe5fbf243c6e340d382be1a50f6342279701e81b23e20e6cc6bdde510af",
+  "source_count": 12577,
+  "source_unchanged": true,
+  "report_sha256": "f240d8f907179e8f0ad3e4cef717012b8393b907867ee487263cb6e7d8245cf8",
+  "log_sha256": "d3a4b43eff3d233fc154221d4d4c94e1778f98d2a19a3efb9d87050b81a974df",
+  "python_sha256": "32cf05f7a990fe21a7e7a09e82bd6fe647ba56ad7fac870229a709824a51c0dd",
+  "platform": "darwin",
+  "cases": [
+    {
+      "choice": "once",
+      "observed": "once_acknowledged",
+      "actualCliObserver": true,
+      "kernelAuthenticatedIpc": true,
+      "actualAuthenticatedHttpCard": true,
+      "joinedCompletion": true,
+      "cardWithdrawn": true,
+      "nativeQueueEmpty": true,
+      "producerSlotReleased": true
+    },
+    {
+      "choice": "deny",
+      "observed": "denied",
+      "actualCliObserver": true,
+      "kernelAuthenticatedIpc": true,
+      "actualAuthenticatedHttpCard": true,
+      "joinedCompletion": true,
+      "cardWithdrawn": true,
+      "nativeQueueEmpty": true,
+      "producerSlotReleased": true
+    },
+    {
+      "choice": "cancel",
+      "observed": "cancelled",
+      "actualCliObserver": true,
+      "kernelAuthenticatedIpc": true,
+      "actualAuthenticatedHttpCard": true,
+      "joinedCompletion": true,
+      "cardWithdrawn": true,
+      "nativeQueueEmpty": true,
+      "producerSlotReleased": true
+    },
+    {
+      "choice": "expiry",
+      "observed": "expired",
+      "actualCliObserver": true,
+      "kernelAuthenticatedIpc": true,
+      "actualAuthenticatedHttpCard": true,
+      "joinedCompletion": true,
+      "cardWithdrawn": true,
+      "nativeQueueEmpty": true,
+      "producerSlotReleased": true
+    }
+  ],
+  "production_qualified": false,
+  "physical_qualified": false,
+  "scope": "Real native loader/runner/adapter/Store plus production CLI observer function/Unix exchange and authenticated TLS HTTP card/control, synthetic authority; no parser/TTY/mobile UI/push/real pairing/Linux/fault/release/avatar acceptance.",
+  "independent_review": "Existing read-only reviewer rehashed all12577 sources and report/log/script/runtime/manifest/status bindings; no mismatch. Idle native status daemon was observed, not joined.",
+  "final_fixture_admission_tests": {
+    "passed": 5,
+    "receipt_sha256": "00a7572df14d26c70de632035d95588dd6a3fa6530451e2ddb6da6fd90bbab4a",
+    "scope": "optimized/nonisolated/wrong-home/nonfresh/public-root refuse before native imports or instance writes"
+  },
+  "lint": {
+    "version": "ruff0.16.9",
+    "new_python_files_pass": true,
+    "format_check": true
+  },
+  "predecessor": {
+    "report_sha256": "5c8eb6cb663e3a801c469e725fb8822715f47f28d628dc5d6d931ccdf5acdfc4",
+    "note": "Earlier successful pre-admission/pre-format native run retained privately; exact actual hash corrected below; no failed or ambiguous begin retried."
+  }
+}
