@@ -13,6 +13,39 @@ import weakref
 from contextlib import suppress
 
 from aiohttp import web
+from aiohttp.http_writer import StreamWriter
+
+
+def native_http_mode_available():
+    """Startup-only API/default-mode probe, with no socket or body operation.
+
+    This does not certify TLS allocation/drain or grant request authority. Actual
+    prepared responses still repeat their mode/currentness checks on each write.
+    Missing private APIs disable this optional service, never other HMP features.
+    """
+    try:
+        loop = asyncio.get_running_loop()
+        response = NATIVE_RESPONSE_TYPE(status=200)
+        response.content_length = 0
+        writer = NATIVE_WRITER_TYPE(None, loop)
+        return (
+            response.compression is False
+            and response.chunked is False
+            and response.content_length == 0
+            and response._send_headers_immediately is True
+            and response._payload_writer is None
+            and writer._compress is None
+            and writer.chunked is False
+            and writer._on_chunk_sent is None
+            and writer._headers_buf is None
+            and writer._headers_written is False
+            and all(
+                callable(getattr(writer, name, None))
+                for name in ("write", "write_eof", "write_headers", "send_headers", "drain")
+            )
+        )
+    except Exception:
+        return False
 
 
 def _detach_error_tracebacks(error):
@@ -276,3 +309,4 @@ class NativePresentationHttpWrite:
 
 # Bound at native service construction, not selected by a request.
 NATIVE_RESPONSE_TYPE = web.StreamResponse
+NATIVE_WRITER_TYPE = StreamWriter

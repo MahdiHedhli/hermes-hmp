@@ -30,6 +30,7 @@ from .presentation_native_http import (
     NATIVE_RESPONSE_TYPE,
     NativePresentationHttpWrite,
     NativePresentationStreamAbortedError,
+    native_http_mode_available,
 )
 from .presentation_native_projection import NativePresentationProjector
 
@@ -120,6 +121,8 @@ class NativePresentationOwner:
 class NativePresentationService:
     def __init__(self, ctx, *, current, worker_current):
         wire.require_iid(ctx.iid)
+        if not native_http_mode_available():
+            raise NativePresentationUnavailableError("http_mode_unavailable")
         self._ctx, self._current = ctx, current
         # Native setup must supply a cheap thread-safe original listener fence.
         # No request callback or event-loop-only predicate may substitute for it.
@@ -271,8 +274,10 @@ class NativePresentationService:
                 op.state = "running"
                 try:
                     op.worker = self._thread_type(
-                        target=op.native_context.run, args=(self._work, op),
-                        name="hmp-native-presentation", daemon=False
+                        target=op.native_context.run,
+                        args=(self._work, op),
+                        name="hmp-native-presentation",
+                        daemon=False,
                     )
                 except BaseException:
                     op.joined = True  # no start call, no native thread/effect
