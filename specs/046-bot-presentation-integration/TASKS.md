@@ -1,3 +1,20 @@
+## November 11: Entry and settled activation field checks
+
+- [x] **RGA-01d-ACTIVATION-FIELDS** Unintegrated settled-state roots/flags,
+      path/PM function/module-origin/spec/legacy-alias field comparison. No
+      native actor/bootstrap calls or original-class/code authority conferred.
+- [x] **RGA-01d-ENTRY-FIELDS** Unintegrated started/global/owner/data/argv/main,
+      activation bootstrap, native lineage/policy record/ledger shape joins.
+      Representation-valid failed ledger is not work permission.
+- [x] Same136 current/minimum cases: existing graph31 + newactivation6 +
+      originalactivation25 + newentry6 + originalentry68; source-bound final
+      suite receipts. Preserve strict settled-only and sentinel semantics.
+- [ ] Interpreter/native API currentness and fresh actor/API observations,
+      original-root/callee/code proof and complete final pure graph reseal.
+- [ ] Integrate only under rooted fixed-callee dispatch with unchanged full
+      generic guards, then actual graft/callback/GC/cleanup/original60s and full
+      feature/device/release qualification. Components are not BI1 delivery.
+
 ## November 11: operator approval field component and real API correction
 
 - [x] **RGA-01d-APPROVAL-FIELDS** Unintegrated owner/module/activation/count/

@@ -422,3 +422,27 @@ validator also requires exact CodeType. Final79 tests on current/minimum include
 44 existing operator cases and4 original snapshot compositions, zero failures,
 errors or skips. This is a candidate metadata correction, not a deployed incident,
 original-object authority proof, integrated native60s or physical acceptance.
+
+## Entry and settled activation projections — November 11
+
+`_activation_graph_mirrors` compares settled (capturing=False) activation owner/
+cell/scope/flags, current path list and exact string values, bootstrap/PM function
+and code references, observed module file/spec/origin references and retained
+legacy typing member/registry aliases. It uses native dictionary descriptors to
+inspect specs. It makes no native actor or bootstrap call. Missing-alias sentinel
+replacement can be observationally irrelevant if no absent member consults the
+sentinel; original identity is a separate provenance obligation.
+
+`_entry_graph_mirrors` compares started/global/owner/cell/data joins, current argv/
+orig_argv/main references and string values, activation bootstrap and native
+lineage/interpreter-data/policy-record/ledger storage links. Native ledger bounds
+and phase representation match the generic shape validator. A failed=True ledger
+may remain valid representation for cleanup: matching DATA does not grant work.
+
+Neither component establishes original Entry/activation/callee/code identity,
+interpreter/native API currentness, actual actor values or full activation/graph
+liveness. Neither has a production caller or replaces generic validators. Full
+rooted dispatch, original callee selection, required native observations followed
+by the complete final pure live reseal, actual causal integration and unchanged
+native60s/feature/device/release gates remain required. Final136 cases on both
+current/minimum are field/source/fixture evidence only. No runtime was updated.

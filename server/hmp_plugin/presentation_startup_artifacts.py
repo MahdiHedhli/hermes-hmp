@@ -1025,6 +1025,472 @@ def _scope_file_graph_mirrors(scope):
     return True
 
 
+def _entry_graph_mirrors(binding):
+    """Started Entry/invocation/native-storage DATA, not original authority.
+
+    Unintegrated. Interpreter/native API/code provenance, fresh actor results
+    and the final whole graph remain separate. No production guard uses this.
+    """
+    if type(binding) is not tuple or len(binding) != 3:
+        return False
+    registry = sys.modules
+    if type(registry) is not dict or any(type(key) is not str for key in registry):
+        return False
+    module = dict.get(registry, "hmp_startup.gateway_entry")
+    if type(module) is not ModuleType:
+        return False
+    names = vars(module)
+    if any(type(key) is not str for key in names):
+        return False
+    labels = (
+        "GatewayEntryOwner",
+        "_Invocation",
+        "_EntryOrigin",
+        "EntryStartupData",
+        "_InterpreterOrigin",
+        "InterpreterStartupData",
+        "_NativeFileLineage",
+        "_NativeFileLedger",
+        "_NativeFilePhase",
+        "_NativeIOOrigin",
+    )
+    kinds = tuple(dict.get(names, name) for name in labels)
+    if any(type(kind) is not type for kind in kinds):
+        return False
+    (
+        owner_kind,
+        scope_kind,
+        origin_kind,
+        data_kind,
+        interpreter_kind,
+        interpreter_data_kind,
+        lineage_kind,
+        ledger_kind,
+        phase_kind,
+        native_kind,
+    ) = kinds
+    for kind in kinds[1:]:
+        bases = type.__getattribute__(kind, "__bases__")
+        if type(bases) is not tuple or len(bases) != 1 or bases[0] is not tuple:
+            return False
+    scope, cell, started = binding
+    if (
+        type(scope) is not scope_kind
+        or tuple.__len__(scope) != 11
+        or type(cell) is not tuple
+        or len(cell) != 2
+        or cell[1] is not scope
+        or type(started) is not tuple
+        or len(started) != 7
+    ):
+        return False
+    owner = cell[0]
+    if type(owner) is not owner_kind:
+        return False
+    kind_names = vars(owner_kind)
+    if any(type(key) is not str for key in kind_names):
+        return False
+    dictionary = kind_names.get("__dict__")
+    if (
+        type(dictionary) is not GetSetDescriptorType
+        or dictionary.__objclass__ is not owner_kind
+        or dictionary.__name__ != "__dict__"
+    ):
+        return False
+    state = dictionary.__get__(owner, owner_kind)
+    if (
+        type(state) is not dict
+        or any(type(key) is not str for key in state)
+        or any(
+            key not in state
+            for key in (
+                "_scope",
+                "_ready",
+                "_failed",
+                "_started_cell",
+                "_activation",
+                "_bootstrap",
+            )
+        )
+    ):
+        return False
+    activation, bootstrap, origin, data = started[3:]
+    if (
+        dict.get(names, "_OWNER") is not owner
+        or dict.get(names, "_CELL") is not cell
+        or dict.get(names, "_STARTED") is not started
+        or dict.get(names, "_START_ATTEMPTED") is not True
+        or dict.get(state, "_scope") is not scope
+        or dict.get(state, "_ready") is not True
+        or dict.get(state, "_failed") is not False
+        or dict.get(state, "_started_cell") is not started
+        or started[0] is not owner
+        or started[1] is not scope
+        or started[2] is not cell
+        or type(activation) is not GatewayActivationOwner
+        or dict.get(state, "_activation") is not activation
+        or type(bootstrap) is not ModuleType
+        or dict.get(state, "_bootstrap") is not bootstrap
+        or dict.get(registry, "hermes_bootstrap") is not bootstrap
+        or type(origin) is not origin_kind
+        or tuple.__len__(origin) != 12
+        or dict.get(names, "_ENTRY_ORIGIN") is not origin
+        or type(data) is not data_kind
+        or tuple.__len__(data) != 8
+    ):
+        return False
+    active_module = dict.get(registry, "hmp_plugin.presentation_gateway_activation")
+    if type(active_module) is not ModuleType:
+        return False
+    active_names = vars(active_module)
+    if any(type(key) is not str for key in active_names):
+        return False
+    active_scope_kind = dict.get(active_names, "_ActivationScope")
+    active_cell = dict.get(active_names, "_ENTRY_CELL")
+    if (
+        type(active_scope_kind) is not type
+        or type(active_cell) is not tuple
+        or len(active_cell) != 2
+        or active_cell[0] is not activation
+        or type(active_cell[1]) is not active_scope_kind
+    ):
+        return False
+    bases = type.__getattribute__(active_scope_kind, "__bases__")
+    if type(bases) is not tuple or len(bases) != 1 or bases[0] is not tuple:
+        return False
+    active_scope = active_cell[1]
+    if (
+        tuple.__len__(active_scope) != 11
+        or tuple.__getitem__(active_scope, 4) is not bootstrap
+    ):
+        return False
+    context = tuple.__getitem__(scope, 0)
+    interpreter = tuple.__getitem__(scope, 8)
+    lineage, ledger = tuple.__getitem__(scope, 9), tuple.__getitem__(scope, 10)
+    if (
+        type(context) is not tuple
+        or len(context) != 3
+        or any(type(value) is not int for value in context)
+        or type(interpreter) is not interpreter_kind
+        or tuple.__len__(interpreter) != 11
+        or type(tuple.__getitem__(interpreter, 3)) is not interpreter_data_kind
+        or tuple.__len__(tuple.__getitem__(interpreter, 3)) != 5
+        or type(lineage) is not lineage_kind
+        or tuple.__len__(lineage) != 6
+        or type(ledger) is not ledger_kind
+        or tuple.__len__(ledger) != 11
+    ):
+        return False
+    native = tuple.__getitem__(interpreter, 10)
+    if (
+        type(native) is not native_kind
+        or tuple.__len__(native) != 9
+        or tuple.__getitem__(lineage, 0) is not owner
+        or tuple.__getitem__(lineage, 1) is not native
+        or tuple.__getitem__(lineage, 2) is not context
+        or tuple.__getitem__(lineage, 3) is not ledger
+        or tuple.__getitem__(ledger, 0) is not owner
+        or tuple.__getitem__(ledger, 1) is not native
+        or tuple.__getitem__(ledger, 2) is not context
+        or tuple.__getitem__(lineage, 4) is not tuple.__getitem__(origin, 10)
+        or tuple.__getitem__(lineage, 5) is not tuple.__getitem__(origin, 11)
+    ):
+        return False
+    policy, record = tuple.__getitem__(origin, 10), tuple.__getitem__(origin, 11)
+    if (
+        type(policy) is not tuple
+        or len(policy) != 5
+        or type(policy[0]) is not tuple
+        or len(policy[0]) != 8
+        or type(record) is not tuple
+        or len(record) != 3
+        or policy[0][7] is not record
+        or record[0] is not policy[0][4]
+        or record[1] is not policy[0][5]
+    ):
+        return False
+    expected_data = (
+        context,
+        tuple.__getitem__(scope, 2),
+        tuple.__getitem__(scope, 5),
+        tuple.__getitem__(scope, 7),
+        tuple.__getitem__(origin, 3),
+        tuple.__getitem__(active_scope, 8),
+        tuple.__getitem__(active_scope, 9),
+        tuple.__getitem__(interpreter, 3),
+    )
+    if any(
+        tuple.__getitem__(data, i) is not value for i, value in enumerate(expected_data)
+    ):
+        return False
+    main = tuple.__getitem__(scope, 1)
+    if type(main) is not ModuleType or dict.get(registry, "__main__") is not main:
+        return False
+    main_names = vars(main)
+    if (
+        any(type(key) is not str for key in main_names)
+        or dict.get(main_names, "__file__") is not tuple.__getitem__(scope, 2)
+        or dict.get(main_names, "__spec__") is not tuple.__getitem__(scope, 3)
+    ):
+        return False
+    for current, actual, original in (
+        (sys.argv, tuple.__getitem__(scope, 4), tuple.__getitem__(scope, 5)),
+        (sys.orig_argv, tuple.__getitem__(scope, 6), tuple.__getitem__(scope, 7)),
+    ):
+        if (
+            current is not actual
+            or type(actual) is not list
+            or type(original) is not tuple
+            or not 1 <= len(actual) <= 256
+            or len(actual) != len(original)
+            or any(
+                type(value) is not str or len(value) > 4096 or "\0" in value
+                for value in actual
+            )
+            or any(type(value) is not str for value in original)
+            or any(old != new for old, new in zip(actual, original, strict=True))
+        ):
+            return False
+    # Ledger representation only; phase/receipt authority remains at its consumer.
+    attempts, counts, inflight, failed, scopes, failure, preparation, phase = (
+        tuple.__getitem__(ledger, i) for i in range(3, 11)
+    )
+    if (
+        type(attempts) is not list
+        or len(attempts) > 1048576
+        or type(counts) is not list
+        or len(counts) != 2
+        or any(type(value) is not int for value in counts)
+        or not 0 <= counts[0] <= 1048576
+        or not 0 <= counts[1] <= 1048576 - counts[0]
+        or type(inflight) is not list
+        or len(inflight) != 1
+        or type(failed) is not list
+        or len(failed) != 1
+        or type(failed[0]) is not bool
+        or type(scopes) is not list
+        or len(scopes) > 1048576
+        or type(failure) is not list
+        or len(failure) != 1
+        or type(preparation) is not list
+        or len(preparation) != 3
+        or type(phase) is not phase_kind
+        or tuple.__len__(phase) != 6
+    ):
+        return False
+    markers = tuple(tuple.__getitem__(phase, i) for i in range(4))
+    current, result = tuple.__getitem__(phase, 4), tuple.__getitem__(phase, 5)
+    return not (
+        type(current) is not list
+        or len(current) != 1
+        or type(result) is not list
+        or (len(result) != 1)
+        or (not any(current[0] is marker for marker in markers))
+        or (
+            current[0] is markers[0]
+            and (inflight[0] is not None or result[0] is not None)
+        )
+        or (current[0] is markers[2] and (inflight[0] is not None or result[0] is None))
+        or (current[0] is markers[1] and (inflight[0] is None or result[0] is None))
+    )
+
+def _activation_graph_mirrors(owner):
+    """Settled activation/import DATA, not original provenance or actor proof.
+
+    Unintegrated graph component for the registered startup path. It performs
+    no actor or bootstrap call. Original Entry/callee authority and complete
+    pre/post-observation live graph qualification remain mandatory.
+    """
+    registry = sys.modules
+    if type(registry) is not dict or any(type(key) is not str for key in registry):
+        return False
+    module = dict.get(registry, "hmp_plugin.presentation_gateway_activation")
+    if type(module) is not ModuleType:
+        return False
+    namespace = vars(module)
+    if any(type(key) is not str for key in namespace):
+        return False
+    kind = dict.get(namespace, "GatewayActivationOwner")
+    scope_kind = dict.get(namespace, "_ActivationScope")
+    row_kind = dict.get(namespace, "_ModuleOrigin")
+    alias_kind = dict.get(namespace, "_AliasOrigin")
+    spec_kind = dict.get(namespace, "ModuleSpec")
+    if (
+        kind is not GatewayActivationOwner
+        or any(
+            type(value) is not type
+            for value in (kind, scope_kind, row_kind, alias_kind, spec_kind)
+        )
+        or type(owner) is not kind
+    ):
+        return False
+    for tuple_kind in (scope_kind, row_kind, alias_kind):
+        bases = type.__getattribute__(tuple_kind, "__bases__")
+        if type(bases) is not tuple or len(bases) != 1 or bases[0] is not tuple:
+            return False
+    names = vars(kind)
+    if any(type(key) is not str for key in names):
+        return False
+    dictionary = names.get("__dict__")
+    if (
+        type(dictionary) is not GetSetDescriptorType
+        or dictionary.__objclass__ is not kind
+        or dictionary.__name__ != "__dict__"
+    ):
+        return False
+    state = dictionary.__get__(owner, kind)
+    if (
+        type(state) is not dict
+        or any(type(key) is not str for key in state)
+        or any(
+            key not in state
+            for key in ("_scope", "_ready", "_uncertain", "_retired", "_capturing")
+        )
+    ):
+        return False
+    cell, scope = dict.get(namespace, "_ENTRY_CELL"), dict.get(state, "_scope")
+    if (
+        dict.get(namespace, "_ENTRY_OWNER") is not owner
+        or type(cell) is not tuple
+        or len(cell) != 2
+        or cell[0] is not owner
+        or cell[1] is not scope
+        or type(scope) is not scope_kind
+        or tuple.__len__(scope) != 11
+        or dict.get(state, "_ready") is not True
+        or dict.get(state, "_uncertain") is not False
+        or dict.get(state, "_retired") is not False
+        or dict.get(state, "_capturing") is not False
+    ):
+        return False
+    context, modules, paths, path_values = (
+        tuple.__getitem__(scope, i) for i in range(4)
+    )
+    bootstrap, pm, activate, code = (tuple.__getitem__(scope, i) for i in range(4, 8))
+    origins = tuple.__getitem__(scope, 10)
+    if (
+        type(context) is not tuple
+        or len(context) != 3
+        or any(type(value) is not int for value in context)
+        or modules is not registry
+        or paths is not sys.path
+        or type(paths) is not list
+        or type(path_values) is not tuple
+        or len(paths) != len(path_values)
+        or any(type(value) is not str for value in paths)
+        or any(type(value) is not str for value in path_values)
+        or any(old != new for old, new in zip(paths, path_values, strict=True))
+        or type(bootstrap) is not ModuleType
+        or dict.get(registry, "hermes_bootstrap") is not bootstrap
+        or type(pm) is not ModuleType
+        or dict.get(registry, "pm.environments") is not pm
+        or type(activate) is not FunctionType
+        or type(code) is not CodeType
+        or activate.__code__ is not code
+        or type(origins) is not tuple
+    ):
+        return False
+    pm_names = vars(pm)
+    if (
+        any(type(key) is not str for key in pm_names)
+        or activate.__globals__ is not pm_names
+        or dict.get(pm_names, "activate_dependencies") is not activate
+    ):
+        return False
+    typing_module, typing_names = (
+        dict.get(namespace, "_TYPING"),
+        dict.get(namespace, "_TYPING_NAMESPACE"),
+    )
+    members, entries = (
+        dict.get(namespace, "_TYPING_MEMBERS"),
+        dict.get(namespace, "_TYPING_ENTRIES"),
+    )
+    aliases = dict.get(namespace, "_TYPING_ALIASES")
+    if (
+        "_MISSING_ALIAS" not in namespace
+        or type(typing_module) is not ModuleType
+        or dict.get(registry, "typing") is not typing_module
+        or type(typing_names) is not dict
+        or vars(typing_module) is not typing_names
+        or any(type(key) is not str for key in typing_names)
+        or type(members) is not tuple
+        or type(entries) is not tuple
+        or type(aliases) is not tuple
+    ):
+        return False
+    missing = dict.get(namespace, "_MISSING_ALIAS")
+    for rows, current in ((members, typing_names), (entries, registry)):
+        for row in rows:
+            if (
+                type(row) is not tuple
+                or len(row) != 2
+                or type(row[0]) is not str
+                or dict.get(current, row[0], missing) is not row[1]
+            ):
+                return False
+    for alias in aliases:
+        if (
+            type(alias) is not tuple
+            or len(alias) != 3
+            or type(alias[0]) is not str
+            or type(alias[1]) is not str
+        ):
+            return False
+    names = vars(spec_kind)
+    if any(type(key) is not str for key in names):
+        return False
+    spec_dictionary = names.get("__dict__")
+    if (
+        type(spec_dictionary) is not GetSetDescriptorType
+        or spec_dictionary.__objclass__ is not spec_kind
+        or spec_dictionary.__name__ != "__dict__"
+    ):
+        return False
+    for row in origins:
+        if type(row) is alias_kind:
+            if tuple.__len__(row) != 1:
+                return False
+            binding = tuple.__getitem__(row, 0)
+            if not any(binding is alias for alias in aliases):
+                return False
+            if (
+                dict.get(registry, binding[0]) is not binding[2]
+                or dict.get(typing_names, binding[1], missing) is not binding[2]
+            ):
+                return False
+            continue
+        if type(row) is not row_kind or tuple.__len__(row) != 5:
+            return False
+        name, observed, file, spec, origin = (
+            tuple.__getitem__(row, i) for i in range(5)
+        )
+        if (
+            type(name) is not str
+            or type(observed) is not ModuleType
+            or (file is not None and type(file) is not str)
+            or (origin is not None and type(origin) is not str)
+            or dict.get(registry, name) is not observed
+        ):
+            return False
+        observed_names = vars(observed)
+        if (
+            any(type(key) is not str for key in observed_names)
+            or dict.get(observed_names, "__file__") is not file
+            or dict.get(observed_names, "__spec__") is not spec
+        ):
+            return False
+        if spec is not None:
+            if type(spec) is not spec_kind:
+                return False
+            spec_names = spec_dictionary.__get__(spec, spec_kind)
+            if (
+                type(spec_names) is not dict
+                or any(type(key) is not str for key in spec_names)
+                or dict.get(spec_names, "origin") is not origin
+            ):
+                return False
+    return True
+
 def _approval_graph_mirrors(binding):
     """Operator owner/API/read-chain DATA; not original authority or API result.
 

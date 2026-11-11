@@ -1,3 +1,30 @@
+## Entry and activation graph checks — November 11, 2026 UTC
+
+The local character startup draft now has unintegrated settled-activation and
+started-entry field checks. They cover bootstrap/module origins and specs,
+import paths and legacy typing aliases, owner/cell/started/data links, invocation
+arguments, native lineage and ledger representation. Neither calls native actor
+or bootstrap APIs. Required-field changes, colliding foreign keys, malformed
+native tuple storage and foreign string arguments/names are checked in actual
+retained-object fixtures, with restoration and unchanged native file work.
+
+The same 136 tests pass on Python 3.14.9 and 3.11.15 with unchanged source and
+no failures, errors or skips: 31 existing graph cases, six new activation cases,
+25 original activation cases, six new entry cases and 68 original entry cases.
+These are bounded source/fixture results, not full production launches. Focused
+independent source and evidence review records the exact acceptance limits.
+Activation's new comparison deliberately covers settled capturing=False only.
+A shape-valid failed native ledger remains DATA for cleanup, never permission.
+A replaced missing-alias sentinel is observationally irrelevant when no absent
+entry consults it; original sentinel/code identity still needs provenance proof.
+
+These components have no production caller and do not replace generic guards.
+Original Entry/activation/callee authority, interpreter and native API currentness,
+fresh actor/API observations, cache semantics and the complete final live graph
+remain required before integration. The last dated native startup still fails
+its unchanged 60-second gate. Character images remain unfinished; no running
+host, device build, grant, provider, model, scheduled job or release changed.
+
 ## Operator approval graph and filename validation — November 11, 2026 UTC
 
 The local character startup draft adds an unintegrated operator-approval field
