@@ -1,3 +1,28 @@
+## Native static avatar delivery checkpoint — November 11, 2026
+
+HMP `9ab269583e4b99e9950e4354349a30d93c1b7814`, including the complete deployed
+media baseline, now passes an additional real-gateway static PNG matrix against
+Hermes `ed1afb082eb3e46cf2edae9d8f68fb67b09ee4df`. Normal plugin loading,
+GatewayRunner construction/configured routes, the actual adapter factory and
+production authentication/pinned TLS 1.3 serve two temporary profiles with
+different desktop titles, classic shapes and static images. Five image responses
+match their exact expected bytes. A second authorized synthetic device reads its
+permitted profile; foreign-profile revisions return 404 and an invalid token 401.
+Replacement invalidates the old image revision, removal restores the character
+fallback and invalidates the removed image, and the other profile remains intact.
+Renaming changes the metadata revision; image-only edits correctly use the separate
+avatar revision without changing the metadata revision.
+
+The existing four-cell/twelve-refusal host-local image regression and actual
+worker/listener/Store/database/plugin cleanup also pass. All 12,838 snapshot files
+remain unchanged. Independent review verifies the exact source, scripts, runtime,
+results and cleanup. The combined-source suites previously passed 1,690 checks on
+each supported runtime. This new test covers selected classic characters and PNG
+bytes over native HTTP; it is not all-character/format parity, a real pairing
+walkthrough, Dart/Flutter decoding/display, signed physical-device, Linux/provider
+or release qualification. Those remain open. No live host, grants, model, provider,
+job or installed app changed. The full roadmap goal remains active.
+
 ## Integrated native character and media checkpoint — November 11, 2026
 
 The native character service now includes the complete deployed media baseline in
