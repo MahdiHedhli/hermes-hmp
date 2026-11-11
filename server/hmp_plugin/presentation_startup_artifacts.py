@@ -5630,6 +5630,8 @@ class StartupArtifactOwner:
         link_raw_type, link_raw_vars, link_raw_tuple, link_raw_len = type, vars, tuple, len
         link_raw_function, link_raw_module = FunctionType, ModuleType
         link_raw_cell = CellType
+        link_raw_classmethod = classmethod
+        link_raw_value_error, link_raw_error = ValueError, RuntimeError
         link_raw_staticmethod, link_raw_any, link_raw_zip = staticmethod, any, zip
         link_raw_dict, link_raw_str = dict, str
         link_raw_builtin, link_raw_descriptor = BuiltinFunctionType, MethodDescriptorType
@@ -6188,7 +6190,7 @@ class StartupArtifactOwner:
                 ):
                     if (
                         link_raw_type(link_pin_pin) is not link_raw_tuple
-                        or link_raw_len(link_pin_pin) != 12
+                        or link_raw_len(link_pin_pin) != 13
                         or link_raw_type(link_pin_pin[0]) is not link_raw_type
                         or (
                             link_pin_modules[link_pin_module_index][2].get(link_pin_name)
@@ -6223,6 +6225,7 @@ class StartupArtifactOwner:
                         link_pin_constructor_kw,
                         link_pin_constructor_kw_pairs,
                         link_pin_constructor_global_pairs,
+                        link_pin_generated_rows,
                     ) = link_pin_pin
                     link_pin_namespace = link_raw_vars(link_pin_kind)
                     if link_raw_any(
@@ -6303,6 +6306,239 @@ class StartupArtifactOwner:
                                 or constructor_expected[constructor_key] is not constructor_value
                             ):
                                 raise refusal from None
+                    link_g_registry = link_pin_environment[2]
+                    link_g_names = link_raw_vars(link_pin_kind)
+                    if (
+                        link_raw_type(link_g_registry) is not link_raw_dict
+                        or link_raw_any(
+                            (link_raw_type(k) is not link_raw_str for k in link_g_registry)
+                        )
+                        or link_raw_any(
+                            (link_raw_type(k) is not link_raw_str for k in link_g_names)
+                        )
+                        or (link_raw_type(link_pin_generated_rows) is not link_raw_tuple)
+                        or (link_raw_len(link_pin_generated_rows) != 7)
+                    ):
+                        raise refusal from None
+                    link_g_owner_name = link_g_names.get("__module__")
+                    if link_raw_type(link_g_owner_name) is not link_raw_str:
+                        raise refusal from None
+                    for link_g_row, link_g_expected_name in link_raw_zip(
+                        link_pin_generated_rows,
+                        (
+                            "_make",
+                            "_replace",
+                            "__replace__",
+                            "__repr__",
+                            "_asdict",
+                            "__getnewargs__",
+                            "__annotate_func__",
+                        ),
+                        strict=True,
+                    ):
+                        if (
+                            link_raw_type(link_g_row) is not link_raw_tuple
+                            or link_raw_len(link_g_row) != 4
+                            or link_raw_type(link_g_row[0]) is not link_raw_str
+                            or (link_g_row[0] != link_g_expected_name)
+                            or (link_g_row[1] is not True and link_g_row[1] is not False)
+                        ):
+                            raise refusal from None
+                        link_g_name, link_g_present, link_g_raw, link_g_metadata = link_g_row
+                        if link_g_present is False:
+                            if (
+                                link_g_name in link_g_names
+                                or link_g_raw is not None
+                                or link_g_metadata is not None
+                            ):
+                                raise refusal from None
+                            continue
+                        if (
+                            link_g_name not in link_g_names
+                            or link_g_names[link_g_name] is not link_g_raw
+                            or link_raw_type(link_g_metadata) is not link_raw_tuple
+                            or (link_raw_len(link_g_metadata) != 13)
+                        ):
+                            raise refusal from None
+                        if link_g_name == "_make":
+                            if link_raw_type(link_g_raw) is not link_raw_classmethod:
+                                raise refusal from None
+                            link_g_actual_function = link_g_raw.__func__
+                        else:
+                            link_g_actual_function = link_g_raw
+                        (
+                            link_g_function,
+                            link_g_code,
+                            link_g_globals,
+                            link_g_module,
+                            link_g_module_name,
+                            link_g_builtins,
+                            link_g_defaults,
+                            link_g_kw,
+                            link_g_kw_pairs,
+                            link_g_closure,
+                            link_g_cells,
+                            link_g_dict_cells,
+                            link_g_projections,
+                        ) = link_g_metadata
+                        if (
+                            link_raw_type(link_g_function) is not link_raw_function
+                            or link_g_actual_function is not link_g_function
+                            or link_g_function.__code__ is not link_g_code
+                            or (link_g_function.__globals__ is not link_g_globals)
+                            or (link_raw_type(link_g_globals) is not link_raw_dict)
+                            or (link_raw_type(link_g_module) is not link_raw_module)
+                            or (link_raw_type(link_g_module_name) is not link_raw_str)
+                            or (
+                                link_g_module_name
+                                not in (link_g_owner_name, "collections", "typing")
+                            )
+                            or (link_g_registry.get(link_g_module_name) is not link_g_module)
+                            or (link_raw_vars(link_g_module) is not link_g_globals)
+                            or (link_raw_type(link_g_builtins) is not link_raw_dict)
+                            or (link_g_function.__builtins__ is not link_g_builtins)
+                            or (link_g_function.__defaults__ is not link_g_defaults)
+                            or (
+                                link_g_defaults is not None
+                                and link_raw_type(link_g_defaults) is not link_raw_tuple
+                            )
+                            or (link_g_function.__kwdefaults__ is not link_g_kw)
+                            or (link_g_function.__closure__ is not link_g_closure)
+                            or (link_raw_type(link_g_kw_pairs) is not link_raw_tuple)
+                            or (link_raw_type(link_g_cells) is not link_raw_tuple)
+                            or (link_raw_type(link_g_dict_cells) is not link_raw_tuple)
+                            or (link_raw_len(link_g_dict_cells) != link_raw_len(link_g_cells))
+                        ):
+                            raise refusal from None
+                        link_g_builtin_module = link_g_registry.get("builtins")
+                        if (
+                            link_raw_type(link_g_builtin_module) is not link_raw_module
+                            or link_raw_vars(link_g_builtin_module) is not link_g_builtins
+                        ):
+                            raise refusal from None
+                        if link_g_closure is None:
+                            if link_raw_len(link_g_cells) != 0:
+                                raise refusal from None
+                        elif (
+                            link_raw_type(link_g_closure) is not link_raw_tuple
+                            or link_raw_len(link_g_closure) != link_raw_len(link_g_cells)
+                            or link_raw_any(
+                                (link_raw_type(c) is not link_raw_cell for c in link_g_closure)
+                            )
+                        ):
+                            raise refusal from None
+                        else:
+                            try:
+                                for link_g_cell, link_g_value in link_raw_zip(
+                                    link_g_closure, link_g_cells, strict=True
+                                ):
+                                    if link_g_cell.cell_contents is not link_g_value:
+                                        raise refusal from None
+                            except link_raw_value_error:
+                                raise refusal from None
+                        for link_g_mapping, link_g_pairs in (
+                            (link_g_kw, link_g_kw_pairs),
+                            *link_raw_zip(link_g_cells, link_g_dict_cells, strict=True),
+                        ):
+                            if link_g_pairs is None:
+                                if link_raw_type(link_g_mapping) is link_raw_dict:
+                                    raise refusal from None
+                                continue
+                            if link_raw_type(link_g_pairs) is not link_raw_tuple:
+                                raise refusal from None
+                            if link_g_mapping is None:
+                                if link_raw_len(link_g_pairs) != 0:
+                                    raise refusal from None
+                                continue
+                            if link_raw_type(link_g_mapping) is not link_raw_dict or link_raw_len(
+                                link_g_mapping
+                            ) != link_raw_len(link_g_pairs):
+                                raise refusal from None
+                            link_g_expected = {}
+                            for link_g_pair in link_g_pairs:
+                                if (
+                                    link_raw_type(link_g_pair) is not link_raw_tuple
+                                    or link_raw_len(link_g_pair) != 2
+                                    or link_raw_type(link_g_pair[0]) is not link_raw_str
+                                    or (link_g_pair[0] in link_g_expected)
+                                ):
+                                    raise refusal from None
+                                link_g_expected[link_g_pair[0]] = link_g_pair[1]
+                            try:
+                                for link_g_key, link_g_value in link_g_mapping.items():
+                                    if (
+                                        link_raw_type(link_g_key) is not link_raw_str
+                                        or link_g_key not in link_g_expected
+                                        or link_g_expected[link_g_key] is not link_g_value
+                                    ):
+                                        raise refusal from None
+                            except link_raw_error:
+                                raise refusal from None
+                        link_g_wanted = {}
+                        for link_g_key in (
+                            *link_g_code.co_names,
+                            "__name__",
+                            "__builtins__",
+                            "len",
+                            "map",
+                            "dict",
+                            "zip",
+                            "tuple",
+                            "TypeError",
+                            "list",
+                        ):
+                            if link_raw_type(link_g_key) is not link_raw_str:
+                                raise refusal from None
+                            link_g_wanted[link_g_key] = None
+                        if link_raw_type(link_g_projections) is not link_raw_tuple or link_raw_len(
+                            link_g_projections
+                        ) != link_raw_len(link_g_wanted):
+                            raise refusal from None
+                        link_g_indexes = []
+                        for link_g_mapping in (link_g_globals, link_g_builtins):
+                            link_g_index = {}
+                            try:
+                                for link_g_key, link_g_value in link_g_mapping.items():
+                                    if link_raw_type(link_g_key) is not link_raw_str:
+                                        raise refusal from None
+                                    if link_g_key in link_g_wanted:
+                                        link_g_index[link_g_key] = link_g_value
+                            except link_raw_error:
+                                raise refusal from None
+                            link_g_indexes.append(link_g_index)
+                        link_g_seen = {}
+                        for link_g_projection in link_g_projections:
+                            if (
+                                link_raw_type(link_g_projection) is not link_raw_tuple
+                                or link_raw_len(link_g_projection) != 5
+                                or link_raw_type(link_g_projection[0]) is not link_raw_str
+                                or (link_g_projection[0] not in link_g_wanted)
+                                or (link_g_projection[0] in link_g_seen)
+                            ):
+                                raise refusal from None
+                            (
+                                link_g_key,
+                                link_g_global_present,
+                                link_g_global_value,
+                                link_g_builtin_present,
+                                link_g_builtin_value,
+                            ) = link_g_projection
+                            link_g_seen[link_g_key] = None
+                            for link_g_index, link_g_present_value, link_g_held_value in (
+                                (link_g_indexes[0], link_g_global_present, link_g_global_value),
+                                (link_g_indexes[1], link_g_builtin_present, link_g_builtin_value),
+                            ):
+                                if link_g_present_value is True:
+                                    if (
+                                        link_g_key not in link_g_index
+                                        or link_g_index[link_g_key] is not link_g_held_value
+                                    ):
+                                        raise refusal from None
+                                elif link_g_present_value is False:
+                                    if link_g_key in link_g_index or link_g_held_value is not None:
+                                        raise refusal from None
+                                else:
+                                    raise refusal from None
                 # Original retained-helper prefix and DATA, with no final callback.
                 if (link_pin_environment[6] is not link_helper_origin
                         or link_helper_origin[7] is not link_helper_record
@@ -7088,7 +7324,7 @@ class StartupArtifactOwner:
                 ):
                     if (
                         link_raw_type(link_pin_pin) is not link_raw_tuple
-                        or link_raw_len(link_pin_pin) != 12
+                        or link_raw_len(link_pin_pin) != 13
                         or link_raw_type(link_pin_pin[0]) is not link_raw_type
                         or (
                             link_pin_modules[link_pin_module_index][2].get(link_pin_name)
@@ -7123,6 +7359,7 @@ class StartupArtifactOwner:
                         link_pin_constructor_kw,
                         link_pin_constructor_kw_pairs,
                         link_pin_constructor_global_pairs,
+                        link_pin_generated_rows,
                     ) = link_pin_pin
                     link_pin_namespace = link_raw_vars(link_pin_kind)
                     if link_raw_any(
@@ -7203,6 +7440,239 @@ class StartupArtifactOwner:
                                 or constructor_expected[constructor_key] is not constructor_value
                             ):
                                 raise refusal from None
+                    link_g_registry = link_pin_environment[2]
+                    link_g_names = link_raw_vars(link_pin_kind)
+                    if (
+                        link_raw_type(link_g_registry) is not link_raw_dict
+                        or link_raw_any(
+                            (link_raw_type(k) is not link_raw_str for k in link_g_registry)
+                        )
+                        or link_raw_any(
+                            (link_raw_type(k) is not link_raw_str for k in link_g_names)
+                        )
+                        or (link_raw_type(link_pin_generated_rows) is not link_raw_tuple)
+                        or (link_raw_len(link_pin_generated_rows) != 7)
+                    ):
+                        raise refusal from None
+                    link_g_owner_name = link_g_names.get("__module__")
+                    if link_raw_type(link_g_owner_name) is not link_raw_str:
+                        raise refusal from None
+                    for link_g_row, link_g_expected_name in link_raw_zip(
+                        link_pin_generated_rows,
+                        (
+                            "_make",
+                            "_replace",
+                            "__replace__",
+                            "__repr__",
+                            "_asdict",
+                            "__getnewargs__",
+                            "__annotate_func__",
+                        ),
+                        strict=True,
+                    ):
+                        if (
+                            link_raw_type(link_g_row) is not link_raw_tuple
+                            or link_raw_len(link_g_row) != 4
+                            or link_raw_type(link_g_row[0]) is not link_raw_str
+                            or (link_g_row[0] != link_g_expected_name)
+                            or (link_g_row[1] is not True and link_g_row[1] is not False)
+                        ):
+                            raise refusal from None
+                        link_g_name, link_g_present, link_g_raw, link_g_metadata = link_g_row
+                        if link_g_present is False:
+                            if (
+                                link_g_name in link_g_names
+                                or link_g_raw is not None
+                                or link_g_metadata is not None
+                            ):
+                                raise refusal from None
+                            continue
+                        if (
+                            link_g_name not in link_g_names
+                            or link_g_names[link_g_name] is not link_g_raw
+                            or link_raw_type(link_g_metadata) is not link_raw_tuple
+                            or (link_raw_len(link_g_metadata) != 13)
+                        ):
+                            raise refusal from None
+                        if link_g_name == "_make":
+                            if link_raw_type(link_g_raw) is not link_raw_classmethod:
+                                raise refusal from None
+                            link_g_actual_function = link_g_raw.__func__
+                        else:
+                            link_g_actual_function = link_g_raw
+                        (
+                            link_g_function,
+                            link_g_code,
+                            link_g_globals,
+                            link_g_module,
+                            link_g_module_name,
+                            link_g_builtins,
+                            link_g_defaults,
+                            link_g_kw,
+                            link_g_kw_pairs,
+                            link_g_closure,
+                            link_g_cells,
+                            link_g_dict_cells,
+                            link_g_projections,
+                        ) = link_g_metadata
+                        if (
+                            link_raw_type(link_g_function) is not link_raw_function
+                            or link_g_actual_function is not link_g_function
+                            or link_g_function.__code__ is not link_g_code
+                            or (link_g_function.__globals__ is not link_g_globals)
+                            or (link_raw_type(link_g_globals) is not link_raw_dict)
+                            or (link_raw_type(link_g_module) is not link_raw_module)
+                            or (link_raw_type(link_g_module_name) is not link_raw_str)
+                            or (
+                                link_g_module_name
+                                not in (link_g_owner_name, "collections", "typing")
+                            )
+                            or (link_g_registry.get(link_g_module_name) is not link_g_module)
+                            or (link_raw_vars(link_g_module) is not link_g_globals)
+                            or (link_raw_type(link_g_builtins) is not link_raw_dict)
+                            or (link_g_function.__builtins__ is not link_g_builtins)
+                            or (link_g_function.__defaults__ is not link_g_defaults)
+                            or (
+                                link_g_defaults is not None
+                                and link_raw_type(link_g_defaults) is not link_raw_tuple
+                            )
+                            or (link_g_function.__kwdefaults__ is not link_g_kw)
+                            or (link_g_function.__closure__ is not link_g_closure)
+                            or (link_raw_type(link_g_kw_pairs) is not link_raw_tuple)
+                            or (link_raw_type(link_g_cells) is not link_raw_tuple)
+                            or (link_raw_type(link_g_dict_cells) is not link_raw_tuple)
+                            or (link_raw_len(link_g_dict_cells) != link_raw_len(link_g_cells))
+                        ):
+                            raise refusal from None
+                        link_g_builtin_module = link_g_registry.get("builtins")
+                        if (
+                            link_raw_type(link_g_builtin_module) is not link_raw_module
+                            or link_raw_vars(link_g_builtin_module) is not link_g_builtins
+                        ):
+                            raise refusal from None
+                        if link_g_closure is None:
+                            if link_raw_len(link_g_cells) != 0:
+                                raise refusal from None
+                        elif (
+                            link_raw_type(link_g_closure) is not link_raw_tuple
+                            or link_raw_len(link_g_closure) != link_raw_len(link_g_cells)
+                            or link_raw_any(
+                                (link_raw_type(c) is not link_raw_cell for c in link_g_closure)
+                            )
+                        ):
+                            raise refusal from None
+                        else:
+                            try:
+                                for link_g_cell, link_g_value in link_raw_zip(
+                                    link_g_closure, link_g_cells, strict=True
+                                ):
+                                    if link_g_cell.cell_contents is not link_g_value:
+                                        raise refusal from None
+                            except link_raw_value_error:
+                                raise refusal from None
+                        for link_g_mapping, link_g_pairs in (
+                            (link_g_kw, link_g_kw_pairs),
+                            *link_raw_zip(link_g_cells, link_g_dict_cells, strict=True),
+                        ):
+                            if link_g_pairs is None:
+                                if link_raw_type(link_g_mapping) is link_raw_dict:
+                                    raise refusal from None
+                                continue
+                            if link_raw_type(link_g_pairs) is not link_raw_tuple:
+                                raise refusal from None
+                            if link_g_mapping is None:
+                                if link_raw_len(link_g_pairs) != 0:
+                                    raise refusal from None
+                                continue
+                            if link_raw_type(link_g_mapping) is not link_raw_dict or link_raw_len(
+                                link_g_mapping
+                            ) != link_raw_len(link_g_pairs):
+                                raise refusal from None
+                            link_g_expected = {}
+                            for link_g_pair in link_g_pairs:
+                                if (
+                                    link_raw_type(link_g_pair) is not link_raw_tuple
+                                    or link_raw_len(link_g_pair) != 2
+                                    or link_raw_type(link_g_pair[0]) is not link_raw_str
+                                    or (link_g_pair[0] in link_g_expected)
+                                ):
+                                    raise refusal from None
+                                link_g_expected[link_g_pair[0]] = link_g_pair[1]
+                            try:
+                                for link_g_key, link_g_value in link_g_mapping.items():
+                                    if (
+                                        link_raw_type(link_g_key) is not link_raw_str
+                                        or link_g_key not in link_g_expected
+                                        or link_g_expected[link_g_key] is not link_g_value
+                                    ):
+                                        raise refusal from None
+                            except link_raw_error:
+                                raise refusal from None
+                        link_g_wanted = {}
+                        for link_g_key in (
+                            *link_g_code.co_names,
+                            "__name__",
+                            "__builtins__",
+                            "len",
+                            "map",
+                            "dict",
+                            "zip",
+                            "tuple",
+                            "TypeError",
+                            "list",
+                        ):
+                            if link_raw_type(link_g_key) is not link_raw_str:
+                                raise refusal from None
+                            link_g_wanted[link_g_key] = None
+                        if link_raw_type(link_g_projections) is not link_raw_tuple or link_raw_len(
+                            link_g_projections
+                        ) != link_raw_len(link_g_wanted):
+                            raise refusal from None
+                        link_g_indexes = []
+                        for link_g_mapping in (link_g_globals, link_g_builtins):
+                            link_g_index = {}
+                            try:
+                                for link_g_key, link_g_value in link_g_mapping.items():
+                                    if link_raw_type(link_g_key) is not link_raw_str:
+                                        raise refusal from None
+                                    if link_g_key in link_g_wanted:
+                                        link_g_index[link_g_key] = link_g_value
+                            except link_raw_error:
+                                raise refusal from None
+                            link_g_indexes.append(link_g_index)
+                        link_g_seen = {}
+                        for link_g_projection in link_g_projections:
+                            if (
+                                link_raw_type(link_g_projection) is not link_raw_tuple
+                                or link_raw_len(link_g_projection) != 5
+                                or link_raw_type(link_g_projection[0]) is not link_raw_str
+                                or (link_g_projection[0] not in link_g_wanted)
+                                or (link_g_projection[0] in link_g_seen)
+                            ):
+                                raise refusal from None
+                            (
+                                link_g_key,
+                                link_g_global_present,
+                                link_g_global_value,
+                                link_g_builtin_present,
+                                link_g_builtin_value,
+                            ) = link_g_projection
+                            link_g_seen[link_g_key] = None
+                            for link_g_index, link_g_present_value, link_g_held_value in (
+                                (link_g_indexes[0], link_g_global_present, link_g_global_value),
+                                (link_g_indexes[1], link_g_builtin_present, link_g_builtin_value),
+                            ):
+                                if link_g_present_value is True:
+                                    if (
+                                        link_g_key not in link_g_index
+                                        or link_g_index[link_g_key] is not link_g_held_value
+                                    ):
+                                        raise refusal from None
+                                elif link_g_present_value is False:
+                                    if link_g_key in link_g_index or link_g_held_value is not None:
+                                        raise refusal from None
+                                else:
+                                    raise refusal from None
                 # Original retained-helper prefix and DATA, with no final callback.
                 if (link_pin_environment[6] is not link_helper_origin
                         or link_helper_origin[7] is not link_helper_record

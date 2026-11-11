@@ -167,7 +167,7 @@ def test_malformed_constructor_snapshots_refuse_without_protocols(fault):
     parent = entry._ENTRY_ORIGIN.link_policy
     pins = list(parent[4])
     pin = list(pins[12])
-    assert pin[0].__name__ == '_Inputs' and len(pin) == 12 and pin[9] is None
+    assert pin[0].__name__ == '_Inputs' and len(pin) == 13 and pin[9] is None
     globals_pairs = pin[11]
     if fault == 'global_tuple':
         pin[11] = ForeignTuple(globals_pairs)

@@ -1,3 +1,45 @@
+## Generated record metadata — November 11, 2026 UTC
+
+The character-image startup draft now appends generated-helper metadata as the
+thirteenth type-pin field, preserving the previous twelve positions, all99 declared
+HMP function roles, ordinary-function globals checks and the separate engine record. All sixteen retained types
+record seven supported attribute roles with actual presence/absence, original raw
+members and native wrapper checks before function inspection. Function/code/global/
+builtins/default/keyword/closure identities and shallow dictionary-cell snapshots
+are fresh at nine parent/capture/codec consumers and both Scope publication checks.
+Owner/collections/typing module bindings and code-referenced export projections
+remain checked without freezing unrelated standard-library module values. Capture
+does not invoke generated helpers or evaluate annotations. No native effect or
+shorter admission path is enabled by this metadata DATA.
+
+Baseline runtime-type suites expose228/132 missing refusals. Independent review
+also caught a new collector lookup before its system-namespace key fence; its
+one-case red control invokes foreign equality, and the corrected control proves
+fixed refusal with zero hooks. The old-source four Scope controls hit unchanged
+child60s deadlines: uncertainty, not admission or foreign execution. An earlier
+minimum-runtime collection had two empty-parameter skips; corrected collection
+has none and that setup result is retained separately.
+
+Focused all-sixteen-type checks pass469 cases on Python3.14.9 and277 on3.11.15,
+covering97/65 actual generated attributes, mutable annotation dictionaries where
+present, late checker returns and both publication points. Final suites pass1533
+and1341 respectively, zero failures/errors/skips, unchanged source and all555
+source hashes bound to the tested candidate. All1074 common ordered case IDs match;
+the generated459/267 cohorts differ by actual helper/annotation support and are
+not treated as interchangeable. No exact-version feature allowlist was added.
+Independent review verifies the bounded result, log/XML hashes and source binding;
+plugin/private-data/diff checks pass and the new test file is lint-clean.
+
+Metadata freshness is not independent native-primitive authority, deep annotation
+validity or approval of legitimate annotation-cache evolution. Those dependencies,
+lazy annotation helpers, original root/caller/callee/GC/callback/freshgraph checks
+and unchanged native60s acceptance remain open. The last dated native startup
+still fails; no speedup is claimed. Character delivery remains unfinished. Existing
+host-local image source/native/Dart/Flutter evidence is preserved, while signed
+physical image display and Linux/provider/release qualification remain pending.
+No build was installed or host/grant/model/provider/job/store changed. The complete
+feature goal stays active.
+
 ## Cache planner and final constructor freshness — November 11, 2026 UTC
 
 The character-image startup draft now prewarms and retains cache_candidates before

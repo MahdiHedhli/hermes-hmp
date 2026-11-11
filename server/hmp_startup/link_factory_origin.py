@@ -70,6 +70,12 @@ def _pin_type(
     _str=str,
     _dict=dict,
     _code=CodeType,
+    _classmethod=classmethod,
+    _cell=CellType,
+    _module=ModuleType,
+    _sys=sys,
+    _len=len,
+    _value_error=ValueError,
 ):
     if _type(kind) is not _type:
         raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
@@ -117,6 +123,145 @@ def _pin_type(
             "__bool__",
         )
     )
+    generated_rows = []
+    if _type(_sys) is not _module:
+        raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+    g_sys_names = _vars(_sys)
+    if _type(g_sys_names) is not _dict or _any(_type(k) is not _str for k in g_sys_names):
+        raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+    g_registry = g_sys_names.get("modules")
+    if _type(g_registry) is not _dict or _any(_type(k) is not _str for k in g_registry):
+        raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+    g_owner_name = namespace.get("__module__")
+    if _type(g_owner_name) is not _str:
+        raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+    g_builtin_module = g_registry.get("builtins")
+    if _type(g_builtin_module) is not _module:
+        raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+    g_builtins = _vars(g_builtin_module)
+    if _type(g_builtins) is not _dict or _any(_type(k) is not _str for k in g_builtins):
+        raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+    for g_name in (
+        "_make",
+        "_replace",
+        "__replace__",
+        "__repr__",
+        "_asdict",
+        "__getnewargs__",
+        "__annotate_func__",
+    ):
+        if g_name not in namespace:
+            generated_rows.append((g_name, False, None, None))
+            continue
+        g_raw = namespace[g_name]
+        if g_name == "_make":
+            if _type(g_raw) is not _classmethod:
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            g_function = g_raw.__func__
+        else:
+            g_function = g_raw
+        if (
+            _type(g_function) is not _function
+            or _type(g_function.__code__) is not _code
+            or _type(g_function.__code__.co_filename) is not _str
+            or g_function.__builtins__ is not g_builtins
+        ):
+            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+        g_globals = g_function.__globals__
+        g_module = g_module_name = None
+        for g_candidate_name in (g_owner_name, "collections", "typing"):
+            g_candidate = g_registry.get(g_candidate_name)
+            if _type(g_candidate) is _module and _vars(g_candidate) is g_globals:
+                g_module, g_module_name = g_candidate, g_candidate_name
+                break
+        if g_module is None or _type(g_globals) is not _dict:
+            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+        g_defaults, g_kw, g_closure = (
+            g_function.__defaults__,
+            g_function.__kwdefaults__,
+            g_function.__closure__,
+        )
+        if (
+            (g_defaults is not None and _type(g_defaults) is not _tuple)
+            or (
+                g_kw is not None
+                and (_type(g_kw) is not _dict or _any(_type(k) is not _str for k in g_kw))
+            )
+            or (
+                g_closure is not None
+                and (
+                    _type(g_closure) is not _tuple or _any(_type(c) is not _cell for c in g_closure)
+                )
+            )
+        ):
+            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+        try:
+            g_cells = () if g_closure is None else _tuple(c.cell_contents for c in g_closure)
+        except _value_error:
+            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+        g_dict_cells = []
+        for g_value in g_cells:
+            if _type(g_value) is _dict:
+                if _any(_type(k) is not _str for k in g_value):
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                g_dict_cells.append(_tuple(g_value.items()))
+            else:
+                g_dict_cells.append(None)
+        g_wanted = {}
+        for g_key in (
+            *g_function.__code__.co_names,
+            "__name__",
+            "__builtins__",
+            "len",
+            "map",
+            "dict",
+            "zip",
+            "tuple",
+            "TypeError",
+            "list",
+        ):
+            if _type(g_key) is not _str:
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            g_wanted[g_key] = None
+        g_indexes = []
+        for g_mapping in (g_globals, g_builtins):
+            g_index = {}
+            try:
+                for g_key, g_value in g_mapping.items():
+                    if _type(g_key) is not _str:
+                        raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                    if g_key in g_wanted:
+                        g_index[g_key] = g_value
+            except _error:
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            g_indexes.append(g_index)
+        g_projections = _tuple(
+            (k, k in g_indexes[0], g_indexes[0].get(k), k in g_indexes[1], g_indexes[1].get(k))
+            for k in g_wanted
+        )
+        generated_rows.append(
+            (
+                g_name,
+                True,
+                g_raw,
+                (
+                    g_function,
+                    g_function.__code__,
+                    g_globals,
+                    g_module,
+                    g_module_name,
+                    g_builtins,
+                    g_defaults,
+                    g_kw,
+                    () if g_kw is None else _tuple(g_kw.items()),
+                    g_closure,
+                    g_cells,
+                    _tuple(g_dict_cells),
+                    g_projections,
+                ),
+            )
+        )
+    generated_rows = _tuple(generated_rows)
     return (
         kind,
         fields,
@@ -130,6 +275,7 @@ def _pin_type(
         kw,
         kw_pairs,
         global_pairs,
+        generated_rows,
     )
 
 
@@ -257,7 +403,7 @@ def current(
     for pin, (module_index, name) in _zip(types, exports, strict=True):
         if (
             _type(pin) is not _tuple
-            or _len(pin) != 12
+            or _len(pin) != 13
             or _type(pin[0]) is not _type
             or modules[module_index][2].get(name) is not pin[0]
             or _type(pin[1]) is not _tuple
@@ -283,6 +429,7 @@ def current(
             constructor_kw,
             constructor_kw_pairs,
             constructor_global_pairs,
+            generated_rows,
         ) = pin
         namespace = _vars(kind)
         if _any(_type(constructor_key) is not _str for constructor_key in namespace):
@@ -352,6 +499,207 @@ def current(
                         raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
             except _error:
                 raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+        g_registry = environment[2]
+        g_names = _vars(kind)
+        if (
+            _type(g_registry) is not _dict
+            or _any((_type(k) is not _str for k in g_registry))
+            or _any((_type(k) is not _str for k in g_names))
+            or (_type(generated_rows) is not _tuple)
+            or (_len(generated_rows) != 7)
+        ):
+            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+        g_owner_name = g_names.get("__module__")
+        if _type(g_owner_name) is not _str:
+            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+        for g_row, g_expected_name in _zip(
+            generated_rows,
+            (
+                "_make",
+                "_replace",
+                "__replace__",
+                "__repr__",
+                "_asdict",
+                "__getnewargs__",
+                "__annotate_func__",
+            ),
+            strict=True,
+        ):
+            if (
+                _type(g_row) is not _tuple
+                or _len(g_row) != 4
+                or _type(g_row[0]) is not _str
+                or (g_row[0] != g_expected_name)
+                or (g_row[1] is not True and g_row[1] is not False)
+            ):
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            g_name, g_present, g_raw, g_metadata = g_row
+            if g_present is False:
+                if g_name in g_names or g_raw is not None or g_metadata is not None:
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                continue
+            if (
+                g_name not in g_names
+                or g_names[g_name] is not g_raw
+                or _type(g_metadata) is not _tuple
+                or (_len(g_metadata) != 13)
+            ):
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            if g_name == "_make":
+                if _type(g_raw) is not _classmethod:
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                g_actual_function = g_raw.__func__
+            else:
+                g_actual_function = g_raw
+            (
+                g_function,
+                g_code,
+                g_globals,
+                g_module,
+                g_module_name,
+                g_builtins,
+                g_defaults,
+                g_kw,
+                g_kw_pairs,
+                g_closure,
+                g_cells,
+                g_dict_cells,
+                g_projections,
+            ) = g_metadata
+            if (
+                _type(g_function) is not _function
+                or g_actual_function is not g_function
+                or g_function.__code__ is not g_code
+                or (g_function.__globals__ is not g_globals)
+                or (_type(g_globals) is not _dict)
+                or (_type(g_module) is not _module)
+                or (_type(g_module_name) is not _str)
+                or (g_module_name not in (g_owner_name, "collections", "typing"))
+                or (g_registry.get(g_module_name) is not g_module)
+                or (_vars(g_module) is not g_globals)
+                or (_type(g_builtins) is not _dict)
+                or (g_function.__builtins__ is not g_builtins)
+                or (g_function.__defaults__ is not g_defaults)
+                or (g_defaults is not None and _type(g_defaults) is not _tuple)
+                or (g_function.__kwdefaults__ is not g_kw)
+                or (g_function.__closure__ is not g_closure)
+                or (_type(g_kw_pairs) is not _tuple)
+                or (_type(g_cells) is not _tuple)
+                or (_type(g_dict_cells) is not _tuple)
+                or (_len(g_dict_cells) != _len(g_cells))
+            ):
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            g_builtin_module = g_registry.get("builtins")
+            if _type(g_builtin_module) is not _module or _vars(g_builtin_module) is not g_builtins:
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            if g_closure is None:
+                if _len(g_cells) != 0:
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            elif (
+                _type(g_closure) is not _tuple
+                or _len(g_closure) != _len(g_cells)
+                or _any((_type(c) is not _cell for c in g_closure))
+            ):
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            else:
+                try:
+                    for g_cell, g_value in _zip(g_closure, g_cells, strict=True):
+                        if g_cell.cell_contents is not g_value:
+                            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                except _value_error:
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            for g_mapping, g_pairs in (
+                (g_kw, g_kw_pairs),
+                *_zip(g_cells, g_dict_cells, strict=True),
+            ):
+                if g_pairs is None:
+                    if _type(g_mapping) is _dict:
+                        raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                    continue
+                if _type(g_pairs) is not _tuple:
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                if g_mapping is None:
+                    if _len(g_pairs) != 0:
+                        raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                    continue
+                if _type(g_mapping) is not _dict or _len(g_mapping) != _len(g_pairs):
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                g_expected = {}
+                for g_pair in g_pairs:
+                    if (
+                        _type(g_pair) is not _tuple
+                        or _len(g_pair) != 2
+                        or _type(g_pair[0]) is not _str
+                        or (g_pair[0] in g_expected)
+                    ):
+                        raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                    g_expected[g_pair[0]] = g_pair[1]
+                try:
+                    for g_key, g_value in g_mapping.items():
+                        if (
+                            _type(g_key) is not _str
+                            or g_key not in g_expected
+                            or g_expected[g_key] is not g_value
+                        ):
+                            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                except _error:
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            g_wanted = {}
+            for g_key in (
+                *g_code.co_names,
+                "__name__",
+                "__builtins__",
+                "len",
+                "map",
+                "dict",
+                "zip",
+                "tuple",
+                "TypeError",
+                "list",
+            ):
+                if _type(g_key) is not _str:
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                g_wanted[g_key] = None
+            if _type(g_projections) is not _tuple or _len(g_projections) != _len(g_wanted):
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            g_indexes = []
+            for g_mapping in (g_globals, g_builtins):
+                g_index = {}
+                try:
+                    for g_key, g_value in g_mapping.items():
+                        if _type(g_key) is not _str:
+                            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                        if g_key in g_wanted:
+                            g_index[g_key] = g_value
+                except _error:
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                g_indexes.append(g_index)
+            g_seen = {}
+            for g_projection in g_projections:
+                if (
+                    _type(g_projection) is not _tuple
+                    or _len(g_projection) != 5
+                    or _type(g_projection[0]) is not _str
+                    or (g_projection[0] not in g_wanted)
+                    or (g_projection[0] in g_seen)
+                ):
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                g_key, g_global_present, g_global_value, g_builtin_present, g_builtin_value = (
+                    g_projection
+                )
+                g_seen[g_key] = None
+                for g_index, g_present_value, g_held_value in (
+                    (g_indexes[0], g_global_present, g_global_value),
+                    (g_indexes[1], g_builtin_present, g_builtin_value),
+                ):
+                    if g_present_value is True:
+                        if g_key not in g_index or g_index[g_key] is not g_held_value:
+                            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                    elif g_present_value is False:
+                        if g_key in g_index or g_held_value is not None:
+                            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                    else:
+                        raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
     encoding_origin = environment[3]
     if (_type(encoding_origin) is not types[9][0]
             or _tuple.__len__(encoding_origin) != 7):
@@ -1193,7 +1541,7 @@ def current(
     for pin, (module_index, name) in _zip(types, exports, strict=True):
         if (
             _type(pin) is not _tuple
-            or _len(pin) != 12
+            or _len(pin) != 13
             or _type(pin[0]) is not _type
             or modules[module_index][2].get(name) is not pin[0]
             or _type(pin[1]) is not _tuple
@@ -1219,6 +1567,7 @@ def current(
             constructor_kw,
             constructor_kw_pairs,
             constructor_global_pairs,
+            generated_rows,
         ) = pin
         namespace = _vars(kind)
         if _any(_type(constructor_key) is not _str for constructor_key in namespace):
@@ -1288,6 +1637,207 @@ def current(
                         raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
             except _error:
                 raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+        g_registry = environment[2]
+        g_names = _vars(kind)
+        if (
+            _type(g_registry) is not _dict
+            or _any((_type(k) is not _str for k in g_registry))
+            or _any((_type(k) is not _str for k in g_names))
+            or (_type(generated_rows) is not _tuple)
+            or (_len(generated_rows) != 7)
+        ):
+            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+        g_owner_name = g_names.get("__module__")
+        if _type(g_owner_name) is not _str:
+            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+        for g_row, g_expected_name in _zip(
+            generated_rows,
+            (
+                "_make",
+                "_replace",
+                "__replace__",
+                "__repr__",
+                "_asdict",
+                "__getnewargs__",
+                "__annotate_func__",
+            ),
+            strict=True,
+        ):
+            if (
+                _type(g_row) is not _tuple
+                or _len(g_row) != 4
+                or _type(g_row[0]) is not _str
+                or (g_row[0] != g_expected_name)
+                or (g_row[1] is not True and g_row[1] is not False)
+            ):
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            g_name, g_present, g_raw, g_metadata = g_row
+            if g_present is False:
+                if g_name in g_names or g_raw is not None or g_metadata is not None:
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                continue
+            if (
+                g_name not in g_names
+                or g_names[g_name] is not g_raw
+                or _type(g_metadata) is not _tuple
+                or (_len(g_metadata) != 13)
+            ):
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            if g_name == "_make":
+                if _type(g_raw) is not _classmethod:
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                g_actual_function = g_raw.__func__
+            else:
+                g_actual_function = g_raw
+            (
+                g_function,
+                g_code,
+                g_globals,
+                g_module,
+                g_module_name,
+                g_builtins,
+                g_defaults,
+                g_kw,
+                g_kw_pairs,
+                g_closure,
+                g_cells,
+                g_dict_cells,
+                g_projections,
+            ) = g_metadata
+            if (
+                _type(g_function) is not _function
+                or g_actual_function is not g_function
+                or g_function.__code__ is not g_code
+                or (g_function.__globals__ is not g_globals)
+                or (_type(g_globals) is not _dict)
+                or (_type(g_module) is not _module)
+                or (_type(g_module_name) is not _str)
+                or (g_module_name not in (g_owner_name, "collections", "typing"))
+                or (g_registry.get(g_module_name) is not g_module)
+                or (_vars(g_module) is not g_globals)
+                or (_type(g_builtins) is not _dict)
+                or (g_function.__builtins__ is not g_builtins)
+                or (g_function.__defaults__ is not g_defaults)
+                or (g_defaults is not None and _type(g_defaults) is not _tuple)
+                or (g_function.__kwdefaults__ is not g_kw)
+                or (g_function.__closure__ is not g_closure)
+                or (_type(g_kw_pairs) is not _tuple)
+                or (_type(g_cells) is not _tuple)
+                or (_type(g_dict_cells) is not _tuple)
+                or (_len(g_dict_cells) != _len(g_cells))
+            ):
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            g_builtin_module = g_registry.get("builtins")
+            if _type(g_builtin_module) is not _module or _vars(g_builtin_module) is not g_builtins:
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            if g_closure is None:
+                if _len(g_cells) != 0:
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            elif (
+                _type(g_closure) is not _tuple
+                or _len(g_closure) != _len(g_cells)
+                or _any((_type(c) is not _cell for c in g_closure))
+            ):
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            else:
+                try:
+                    for g_cell, g_value in _zip(g_closure, g_cells, strict=True):
+                        if g_cell.cell_contents is not g_value:
+                            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                except _value_error:
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            for g_mapping, g_pairs in (
+                (g_kw, g_kw_pairs),
+                *_zip(g_cells, g_dict_cells, strict=True),
+            ):
+                if g_pairs is None:
+                    if _type(g_mapping) is _dict:
+                        raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                    continue
+                if _type(g_pairs) is not _tuple:
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                if g_mapping is None:
+                    if _len(g_pairs) != 0:
+                        raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                    continue
+                if _type(g_mapping) is not _dict or _len(g_mapping) != _len(g_pairs):
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                g_expected = {}
+                for g_pair in g_pairs:
+                    if (
+                        _type(g_pair) is not _tuple
+                        or _len(g_pair) != 2
+                        or _type(g_pair[0]) is not _str
+                        or (g_pair[0] in g_expected)
+                    ):
+                        raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                    g_expected[g_pair[0]] = g_pair[1]
+                try:
+                    for g_key, g_value in g_mapping.items():
+                        if (
+                            _type(g_key) is not _str
+                            or g_key not in g_expected
+                            or g_expected[g_key] is not g_value
+                        ):
+                            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                except _error:
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            g_wanted = {}
+            for g_key in (
+                *g_code.co_names,
+                "__name__",
+                "__builtins__",
+                "len",
+                "map",
+                "dict",
+                "zip",
+                "tuple",
+                "TypeError",
+                "list",
+            ):
+                if _type(g_key) is not _str:
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                g_wanted[g_key] = None
+            if _type(g_projections) is not _tuple or _len(g_projections) != _len(g_wanted):
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            g_indexes = []
+            for g_mapping in (g_globals, g_builtins):
+                g_index = {}
+                try:
+                    for g_key, g_value in g_mapping.items():
+                        if _type(g_key) is not _str:
+                            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                        if g_key in g_wanted:
+                            g_index[g_key] = g_value
+                except _error:
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                g_indexes.append(g_index)
+            g_seen = {}
+            for g_projection in g_projections:
+                if (
+                    _type(g_projection) is not _tuple
+                    or _len(g_projection) != 5
+                    or _type(g_projection[0]) is not _str
+                    or (g_projection[0] not in g_wanted)
+                    or (g_projection[0] in g_seen)
+                ):
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                g_key, g_global_present, g_global_value, g_builtin_present, g_builtin_value = (
+                    g_projection
+                )
+                g_seen[g_key] = None
+                for g_index, g_present_value, g_held_value in (
+                    (g_indexes[0], g_global_present, g_global_value),
+                    (g_indexes[1], g_builtin_present, g_builtin_value),
+                ):
+                    if g_present_value is True:
+                        if g_key not in g_index or g_index[g_key] is not g_held_value:
+                            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                    elif g_present_value is False:
+                        if g_key in g_index or g_held_value is not None:
+                            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                    else:
+                        raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
     return origin
 
 
@@ -1415,7 +1965,7 @@ def current_started(
     for pin, (module_index, name) in _zip(types, exports, strict=True):
         if (
             _type(pin) is not _tuple
-            or _len(pin) != 12
+            or _len(pin) != 13
             or _type(pin[0]) is not _type
             or modules[module_index][2].get(name) is not pin[0]
             or _type(pin[1]) is not _tuple
@@ -1441,6 +1991,7 @@ def current_started(
             constructor_kw,
             constructor_kw_pairs,
             constructor_global_pairs,
+            generated_rows,
         ) = pin
         namespace = _vars(kind)
         if _any(_type(constructor_key) is not _str for constructor_key in namespace):
@@ -1510,6 +2061,207 @@ def current_started(
                         raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
             except _error:
                 raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+        g_registry = environment[2]
+        g_names = _vars(kind)
+        if (
+            _type(g_registry) is not _dict
+            or _any((_type(k) is not _str for k in g_registry))
+            or _any((_type(k) is not _str for k in g_names))
+            or (_type(generated_rows) is not _tuple)
+            or (_len(generated_rows) != 7)
+        ):
+            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+        g_owner_name = g_names.get("__module__")
+        if _type(g_owner_name) is not _str:
+            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+        for g_row, g_expected_name in _zip(
+            generated_rows,
+            (
+                "_make",
+                "_replace",
+                "__replace__",
+                "__repr__",
+                "_asdict",
+                "__getnewargs__",
+                "__annotate_func__",
+            ),
+            strict=True,
+        ):
+            if (
+                _type(g_row) is not _tuple
+                or _len(g_row) != 4
+                or _type(g_row[0]) is not _str
+                or (g_row[0] != g_expected_name)
+                or (g_row[1] is not True and g_row[1] is not False)
+            ):
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            g_name, g_present, g_raw, g_metadata = g_row
+            if g_present is False:
+                if g_name in g_names or g_raw is not None or g_metadata is not None:
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                continue
+            if (
+                g_name not in g_names
+                or g_names[g_name] is not g_raw
+                or _type(g_metadata) is not _tuple
+                or (_len(g_metadata) != 13)
+            ):
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            if g_name == "_make":
+                if _type(g_raw) is not _classmethod:
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                g_actual_function = g_raw.__func__
+            else:
+                g_actual_function = g_raw
+            (
+                g_function,
+                g_code,
+                g_globals,
+                g_module,
+                g_module_name,
+                g_builtins,
+                g_defaults,
+                g_kw,
+                g_kw_pairs,
+                g_closure,
+                g_cells,
+                g_dict_cells,
+                g_projections,
+            ) = g_metadata
+            if (
+                _type(g_function) is not _function
+                or g_actual_function is not g_function
+                or g_function.__code__ is not g_code
+                or (g_function.__globals__ is not g_globals)
+                or (_type(g_globals) is not _dict)
+                or (_type(g_module) is not _module)
+                or (_type(g_module_name) is not _str)
+                or (g_module_name not in (g_owner_name, "collections", "typing"))
+                or (g_registry.get(g_module_name) is not g_module)
+                or (_vars(g_module) is not g_globals)
+                or (_type(g_builtins) is not _dict)
+                or (g_function.__builtins__ is not g_builtins)
+                or (g_function.__defaults__ is not g_defaults)
+                or (g_defaults is not None and _type(g_defaults) is not _tuple)
+                or (g_function.__kwdefaults__ is not g_kw)
+                or (g_function.__closure__ is not g_closure)
+                or (_type(g_kw_pairs) is not _tuple)
+                or (_type(g_cells) is not _tuple)
+                or (_type(g_dict_cells) is not _tuple)
+                or (_len(g_dict_cells) != _len(g_cells))
+            ):
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            g_builtin_module = g_registry.get("builtins")
+            if _type(g_builtin_module) is not _module or _vars(g_builtin_module) is not g_builtins:
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            if g_closure is None:
+                if _len(g_cells) != 0:
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            elif (
+                _type(g_closure) is not _tuple
+                or _len(g_closure) != _len(g_cells)
+                or _any((_type(c) is not _cell for c in g_closure))
+            ):
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            else:
+                try:
+                    for g_cell, g_value in _zip(g_closure, g_cells, strict=True):
+                        if g_cell.cell_contents is not g_value:
+                            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                except _value_error:
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            for g_mapping, g_pairs in (
+                (g_kw, g_kw_pairs),
+                *_zip(g_cells, g_dict_cells, strict=True),
+            ):
+                if g_pairs is None:
+                    if _type(g_mapping) is _dict:
+                        raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                    continue
+                if _type(g_pairs) is not _tuple:
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                if g_mapping is None:
+                    if _len(g_pairs) != 0:
+                        raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                    continue
+                if _type(g_mapping) is not _dict or _len(g_mapping) != _len(g_pairs):
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                g_expected = {}
+                for g_pair in g_pairs:
+                    if (
+                        _type(g_pair) is not _tuple
+                        or _len(g_pair) != 2
+                        or _type(g_pair[0]) is not _str
+                        or (g_pair[0] in g_expected)
+                    ):
+                        raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                    g_expected[g_pair[0]] = g_pair[1]
+                try:
+                    for g_key, g_value in g_mapping.items():
+                        if (
+                            _type(g_key) is not _str
+                            or g_key not in g_expected
+                            or g_expected[g_key] is not g_value
+                        ):
+                            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                except _error:
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            g_wanted = {}
+            for g_key in (
+                *g_code.co_names,
+                "__name__",
+                "__builtins__",
+                "len",
+                "map",
+                "dict",
+                "zip",
+                "tuple",
+                "TypeError",
+                "list",
+            ):
+                if _type(g_key) is not _str:
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                g_wanted[g_key] = None
+            if _type(g_projections) is not _tuple or _len(g_projections) != _len(g_wanted):
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            g_indexes = []
+            for g_mapping in (g_globals, g_builtins):
+                g_index = {}
+                try:
+                    for g_key, g_value in g_mapping.items():
+                        if _type(g_key) is not _str:
+                            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                        if g_key in g_wanted:
+                            g_index[g_key] = g_value
+                except _error:
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                g_indexes.append(g_index)
+            g_seen = {}
+            for g_projection in g_projections:
+                if (
+                    _type(g_projection) is not _tuple
+                    or _len(g_projection) != 5
+                    or _type(g_projection[0]) is not _str
+                    or (g_projection[0] not in g_wanted)
+                    or (g_projection[0] in g_seen)
+                ):
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                g_key, g_global_present, g_global_value, g_builtin_present, g_builtin_value = (
+                    g_projection
+                )
+                g_seen[g_key] = None
+                for g_index, g_present_value, g_held_value in (
+                    (g_indexes[0], g_global_present, g_global_value),
+                    (g_indexes[1], g_builtin_present, g_builtin_value),
+                ):
+                    if g_present_value is True:
+                        if g_key not in g_index or g_index[g_key] is not g_held_value:
+                            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                    elif g_present_value is False:
+                        if g_key in g_index or g_held_value is not None:
+                            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                    else:
+                        raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
     encoding_origin = environment[3]
     if (_type(encoding_origin) is not types[9][0]
             or _tuple.__len__(encoding_origin) != 7):
@@ -2554,7 +3306,7 @@ def current_started(
     for pin, (module_index, name) in _zip(types, exports, strict=True):
         if (
             _type(pin) is not _tuple
-            or _len(pin) != 12
+            or _len(pin) != 13
             or _type(pin[0]) is not _type
             or modules[module_index][2].get(name) is not pin[0]
             or _type(pin[1]) is not _tuple
@@ -2580,6 +3332,7 @@ def current_started(
             constructor_kw,
             constructor_kw_pairs,
             constructor_global_pairs,
+            generated_rows,
         ) = pin
         namespace = _vars(kind)
         if _any(_type(constructor_key) is not _str for constructor_key in namespace):
@@ -2649,6 +3402,207 @@ def current_started(
                         raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
             except _error:
                 raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+        g_registry = environment[2]
+        g_names = _vars(kind)
+        if (
+            _type(g_registry) is not _dict
+            or _any((_type(k) is not _str for k in g_registry))
+            or _any((_type(k) is not _str for k in g_names))
+            or (_type(generated_rows) is not _tuple)
+            or (_len(generated_rows) != 7)
+        ):
+            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+        g_owner_name = g_names.get("__module__")
+        if _type(g_owner_name) is not _str:
+            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+        for g_row, g_expected_name in _zip(
+            generated_rows,
+            (
+                "_make",
+                "_replace",
+                "__replace__",
+                "__repr__",
+                "_asdict",
+                "__getnewargs__",
+                "__annotate_func__",
+            ),
+            strict=True,
+        ):
+            if (
+                _type(g_row) is not _tuple
+                or _len(g_row) != 4
+                or _type(g_row[0]) is not _str
+                or (g_row[0] != g_expected_name)
+                or (g_row[1] is not True and g_row[1] is not False)
+            ):
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            g_name, g_present, g_raw, g_metadata = g_row
+            if g_present is False:
+                if g_name in g_names or g_raw is not None or g_metadata is not None:
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                continue
+            if (
+                g_name not in g_names
+                or g_names[g_name] is not g_raw
+                or _type(g_metadata) is not _tuple
+                or (_len(g_metadata) != 13)
+            ):
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            if g_name == "_make":
+                if _type(g_raw) is not _classmethod:
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                g_actual_function = g_raw.__func__
+            else:
+                g_actual_function = g_raw
+            (
+                g_function,
+                g_code,
+                g_globals,
+                g_module,
+                g_module_name,
+                g_builtins,
+                g_defaults,
+                g_kw,
+                g_kw_pairs,
+                g_closure,
+                g_cells,
+                g_dict_cells,
+                g_projections,
+            ) = g_metadata
+            if (
+                _type(g_function) is not _function
+                or g_actual_function is not g_function
+                or g_function.__code__ is not g_code
+                or (g_function.__globals__ is not g_globals)
+                or (_type(g_globals) is not _dict)
+                or (_type(g_module) is not _module)
+                or (_type(g_module_name) is not _str)
+                or (g_module_name not in (g_owner_name, "collections", "typing"))
+                or (g_registry.get(g_module_name) is not g_module)
+                or (_vars(g_module) is not g_globals)
+                or (_type(g_builtins) is not _dict)
+                or (g_function.__builtins__ is not g_builtins)
+                or (g_function.__defaults__ is not g_defaults)
+                or (g_defaults is not None and _type(g_defaults) is not _tuple)
+                or (g_function.__kwdefaults__ is not g_kw)
+                or (g_function.__closure__ is not g_closure)
+                or (_type(g_kw_pairs) is not _tuple)
+                or (_type(g_cells) is not _tuple)
+                or (_type(g_dict_cells) is not _tuple)
+                or (_len(g_dict_cells) != _len(g_cells))
+            ):
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            g_builtin_module = g_registry.get("builtins")
+            if _type(g_builtin_module) is not _module or _vars(g_builtin_module) is not g_builtins:
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            if g_closure is None:
+                if _len(g_cells) != 0:
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            elif (
+                _type(g_closure) is not _tuple
+                or _len(g_closure) != _len(g_cells)
+                or _any((_type(c) is not _cell for c in g_closure))
+            ):
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            else:
+                try:
+                    for g_cell, g_value in _zip(g_closure, g_cells, strict=True):
+                        if g_cell.cell_contents is not g_value:
+                            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                except _value_error:
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            for g_mapping, g_pairs in (
+                (g_kw, g_kw_pairs),
+                *_zip(g_cells, g_dict_cells, strict=True),
+            ):
+                if g_pairs is None:
+                    if _type(g_mapping) is _dict:
+                        raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                    continue
+                if _type(g_pairs) is not _tuple:
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                if g_mapping is None:
+                    if _len(g_pairs) != 0:
+                        raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                    continue
+                if _type(g_mapping) is not _dict or _len(g_mapping) != _len(g_pairs):
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                g_expected = {}
+                for g_pair in g_pairs:
+                    if (
+                        _type(g_pair) is not _tuple
+                        or _len(g_pair) != 2
+                        or _type(g_pair[0]) is not _str
+                        or (g_pair[0] in g_expected)
+                    ):
+                        raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                    g_expected[g_pair[0]] = g_pair[1]
+                try:
+                    for g_key, g_value in g_mapping.items():
+                        if (
+                            _type(g_key) is not _str
+                            or g_key not in g_expected
+                            or g_expected[g_key] is not g_value
+                        ):
+                            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                except _error:
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            g_wanted = {}
+            for g_key in (
+                *g_code.co_names,
+                "__name__",
+                "__builtins__",
+                "len",
+                "map",
+                "dict",
+                "zip",
+                "tuple",
+                "TypeError",
+                "list",
+            ):
+                if _type(g_key) is not _str:
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                g_wanted[g_key] = None
+            if _type(g_projections) is not _tuple or _len(g_projections) != _len(g_wanted):
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            g_indexes = []
+            for g_mapping in (g_globals, g_builtins):
+                g_index = {}
+                try:
+                    for g_key, g_value in g_mapping.items():
+                        if _type(g_key) is not _str:
+                            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                        if g_key in g_wanted:
+                            g_index[g_key] = g_value
+                except _error:
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                g_indexes.append(g_index)
+            g_seen = {}
+            for g_projection in g_projections:
+                if (
+                    _type(g_projection) is not _tuple
+                    or _len(g_projection) != 5
+                    or _type(g_projection[0]) is not _str
+                    or (g_projection[0] not in g_wanted)
+                    or (g_projection[0] in g_seen)
+                ):
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                g_key, g_global_present, g_global_value, g_builtin_present, g_builtin_value = (
+                    g_projection
+                )
+                g_seen[g_key] = None
+                for g_index, g_present_value, g_held_value in (
+                    (g_indexes[0], g_global_present, g_global_value),
+                    (g_indexes[1], g_builtin_present, g_builtin_value),
+                ):
+                    if g_present_value is True:
+                        if g_key not in g_index or g_index[g_key] is not g_held_value:
+                            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                    elif g_present_value is False:
+                        if g_key in g_index or g_held_value is not None:
+                            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                    else:
+                        raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
     return origin
 
 
@@ -3228,7 +4182,9 @@ def capture(
     functions = _tuple((pin_function(name, policy_namespace.get(name), policy_namespace) for name in policy_names))
     kinds = _tuple(
         (
-            pin_type(modules[index][2].get(name))
+            pin_type(modules[index][2].get(name), _classmethod=_classmethod,
+                         _cell=_cell, _module=_module, _sys=_sys, _len=_len,
+                         _value_error=_value_error)
             for index, name in (
                 (1, "_LinkPathPolicy"),
                 (1, "_LinkPathCursor"),
@@ -3320,6 +4276,7 @@ def capture(
                 constructor_kw,
                 constructor_kw_pairs,
                 constructor_global_pairs,
+                generated_rows,
             ) = pin
             if _type(kind) is not _type:
                 raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
@@ -3387,6 +4344,210 @@ def capture(
                             raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
                 except _error:
                     raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            g_registry = registry
+            g_names = _vars(kind)
+            if (
+                _type(g_registry) is not _dict
+                or _any((_type(k) is not _str for k in g_registry))
+                or _any((_type(k) is not _str for k in g_names))
+                or (_type(generated_rows) is not _tuple)
+                or (_len(generated_rows) != 7)
+            ):
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            g_owner_name = g_names.get("__module__")
+            if _type(g_owner_name) is not _str:
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            for g_row, g_expected_name in _zip(
+                generated_rows,
+                (
+                    "_make",
+                    "_replace",
+                    "__replace__",
+                    "__repr__",
+                    "_asdict",
+                    "__getnewargs__",
+                    "__annotate_func__",
+                ),
+                strict=True,
+            ):
+                if (
+                    _type(g_row) is not _tuple
+                    or _len(g_row) != 4
+                    or _type(g_row[0]) is not _str
+                    or (g_row[0] != g_expected_name)
+                    or (g_row[1] is not True and g_row[1] is not False)
+                ):
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                g_name, g_present, g_raw, g_metadata = g_row
+                if g_present is False:
+                    if g_name in g_names or g_raw is not None or g_metadata is not None:
+                        raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                    continue
+                if (
+                    g_name not in g_names
+                    or g_names[g_name] is not g_raw
+                    or _type(g_metadata) is not _tuple
+                    or (_len(g_metadata) != 13)
+                ):
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                if g_name == "_make":
+                    if _type(g_raw) is not _classmethod:
+                        raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                    g_actual_function = g_raw.__func__
+                else:
+                    g_actual_function = g_raw
+                (
+                    g_function,
+                    g_code,
+                    g_globals,
+                    g_module,
+                    g_module_name,
+                    g_builtins,
+                    g_defaults,
+                    g_kw,
+                    g_kw_pairs,
+                    g_closure,
+                    g_cells,
+                    g_dict_cells,
+                    g_projections,
+                ) = g_metadata
+                if (
+                    _type(g_function) is not _function
+                    or g_actual_function is not g_function
+                    or g_function.__code__ is not g_code
+                    or (g_function.__globals__ is not g_globals)
+                    or (_type(g_globals) is not _dict)
+                    or (_type(g_module) is not _module)
+                    or (_type(g_module_name) is not _str)
+                    or (g_module_name not in (g_owner_name, "collections", "typing"))
+                    or (g_registry.get(g_module_name) is not g_module)
+                    or (_vars(g_module) is not g_globals)
+                    or (_type(g_builtins) is not _dict)
+                    or (g_function.__builtins__ is not g_builtins)
+                    or (g_function.__defaults__ is not g_defaults)
+                    or (g_defaults is not None and _type(g_defaults) is not _tuple)
+                    or (g_function.__kwdefaults__ is not g_kw)
+                    or (g_function.__closure__ is not g_closure)
+                    or (_type(g_kw_pairs) is not _tuple)
+                    or (_type(g_cells) is not _tuple)
+                    or (_type(g_dict_cells) is not _tuple)
+                    or (_len(g_dict_cells) != _len(g_cells))
+                ):
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                g_builtin_module = g_registry.get("builtins")
+                if (
+                    _type(g_builtin_module) is not _module
+                    or _vars(g_builtin_module) is not g_builtins
+                ):
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                if g_closure is None:
+                    if _len(g_cells) != 0:
+                        raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                elif (
+                    _type(g_closure) is not _tuple
+                    or _len(g_closure) != _len(g_cells)
+                    or _any((_type(c) is not _cell for c in g_closure))
+                ):
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                else:
+                    try:
+                        for g_cell, g_value in _zip(g_closure, g_cells, strict=True):
+                            if g_cell.cell_contents is not g_value:
+                                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                    except _value_error:
+                        raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                for g_mapping, g_pairs in (
+                    (g_kw, g_kw_pairs),
+                    *_zip(g_cells, g_dict_cells, strict=True),
+                ):
+                    if g_pairs is None:
+                        if _type(g_mapping) is _dict:
+                            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                        continue
+                    if _type(g_pairs) is not _tuple:
+                        raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                    if g_mapping is None:
+                        if _len(g_pairs) != 0:
+                            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                        continue
+                    if _type(g_mapping) is not _dict or _len(g_mapping) != _len(g_pairs):
+                        raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                    g_expected = {}
+                    for g_pair in g_pairs:
+                        if (
+                            _type(g_pair) is not _tuple
+                            or _len(g_pair) != 2
+                            or _type(g_pair[0]) is not _str
+                            or (g_pair[0] in g_expected)
+                        ):
+                            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                        g_expected[g_pair[0]] = g_pair[1]
+                    try:
+                        for g_key, g_value in g_mapping.items():
+                            if (
+                                _type(g_key) is not _str
+                                or g_key not in g_expected
+                                or g_expected[g_key] is not g_value
+                            ):
+                                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                    except _error:
+                        raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                g_wanted = {}
+                for g_key in (
+                    *g_code.co_names,
+                    "__name__",
+                    "__builtins__",
+                    "len",
+                    "map",
+                    "dict",
+                    "zip",
+                    "tuple",
+                    "TypeError",
+                    "list",
+                ):
+                    if _type(g_key) is not _str:
+                        raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                    g_wanted[g_key] = None
+                if _type(g_projections) is not _tuple or _len(g_projections) != _len(g_wanted):
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                g_indexes = []
+                for g_mapping in (g_globals, g_builtins):
+                    g_index = {}
+                    try:
+                        for g_key, g_value in g_mapping.items():
+                            if _type(g_key) is not _str:
+                                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                            if g_key in g_wanted:
+                                g_index[g_key] = g_value
+                    except _error:
+                        raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                    g_indexes.append(g_index)
+                g_seen = {}
+                for g_projection in g_projections:
+                    if (
+                        _type(g_projection) is not _tuple
+                        or _len(g_projection) != 5
+                        or _type(g_projection[0]) is not _str
+                        or (g_projection[0] not in g_wanted)
+                        or (g_projection[0] in g_seen)
+                    ):
+                        raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                    g_key, g_global_present, g_global_value, g_builtin_present, g_builtin_value = (
+                        g_projection
+                    )
+                    g_seen[g_key] = None
+                    for g_index, g_present_value, g_held_value in (
+                        (g_indexes[0], g_global_present, g_global_value),
+                        (g_indexes[1], g_builtin_present, g_builtin_value),
+                    ):
+                        if g_present_value is True:
+                            if g_key not in g_index or g_index[g_key] is not g_held_value:
+                                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                        elif g_present_value is False:
+                            if g_key in g_index or g_held_value is not None:
+                                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                        else:
+                            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
         if (audit_record[0] is not engine_origin
                 or audit_record[1] is not engine_layout
                 or audit_record[2] is not engine_check
@@ -3456,6 +4617,7 @@ def capture(
             constructor_kw,
             constructor_kw_pairs,
             constructor_global_pairs,
+            generated_rows,
         ) = pin
         if _type(kind) is not _type:
             raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
@@ -3523,6 +4685,207 @@ def capture(
                         raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
             except _error:
                 raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+        g_registry = registry
+        g_names = _vars(kind)
+        if (
+            _type(g_registry) is not _dict
+            or _any((_type(k) is not _str for k in g_registry))
+            or _any((_type(k) is not _str for k in g_names))
+            or (_type(generated_rows) is not _tuple)
+            or (_len(generated_rows) != 7)
+        ):
+            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+        g_owner_name = g_names.get("__module__")
+        if _type(g_owner_name) is not _str:
+            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+        for g_row, g_expected_name in _zip(
+            generated_rows,
+            (
+                "_make",
+                "_replace",
+                "__replace__",
+                "__repr__",
+                "_asdict",
+                "__getnewargs__",
+                "__annotate_func__",
+            ),
+            strict=True,
+        ):
+            if (
+                _type(g_row) is not _tuple
+                or _len(g_row) != 4
+                or _type(g_row[0]) is not _str
+                or (g_row[0] != g_expected_name)
+                or (g_row[1] is not True and g_row[1] is not False)
+            ):
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            g_name, g_present, g_raw, g_metadata = g_row
+            if g_present is False:
+                if g_name in g_names or g_raw is not None or g_metadata is not None:
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                continue
+            if (
+                g_name not in g_names
+                or g_names[g_name] is not g_raw
+                or _type(g_metadata) is not _tuple
+                or (_len(g_metadata) != 13)
+            ):
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            if g_name == "_make":
+                if _type(g_raw) is not _classmethod:
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                g_actual_function = g_raw.__func__
+            else:
+                g_actual_function = g_raw
+            (
+                g_function,
+                g_code,
+                g_globals,
+                g_module,
+                g_module_name,
+                g_builtins,
+                g_defaults,
+                g_kw,
+                g_kw_pairs,
+                g_closure,
+                g_cells,
+                g_dict_cells,
+                g_projections,
+            ) = g_metadata
+            if (
+                _type(g_function) is not _function
+                or g_actual_function is not g_function
+                or g_function.__code__ is not g_code
+                or (g_function.__globals__ is not g_globals)
+                or (_type(g_globals) is not _dict)
+                or (_type(g_module) is not _module)
+                or (_type(g_module_name) is not _str)
+                or (g_module_name not in (g_owner_name, "collections", "typing"))
+                or (g_registry.get(g_module_name) is not g_module)
+                or (_vars(g_module) is not g_globals)
+                or (_type(g_builtins) is not _dict)
+                or (g_function.__builtins__ is not g_builtins)
+                or (g_function.__defaults__ is not g_defaults)
+                or (g_defaults is not None and _type(g_defaults) is not _tuple)
+                or (g_function.__kwdefaults__ is not g_kw)
+                or (g_function.__closure__ is not g_closure)
+                or (_type(g_kw_pairs) is not _tuple)
+                or (_type(g_cells) is not _tuple)
+                or (_type(g_dict_cells) is not _tuple)
+                or (_len(g_dict_cells) != _len(g_cells))
+            ):
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            g_builtin_module = g_registry.get("builtins")
+            if _type(g_builtin_module) is not _module or _vars(g_builtin_module) is not g_builtins:
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            if g_closure is None:
+                if _len(g_cells) != 0:
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            elif (
+                _type(g_closure) is not _tuple
+                or _len(g_closure) != _len(g_cells)
+                or _any((_type(c) is not _cell for c in g_closure))
+            ):
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            else:
+                try:
+                    for g_cell, g_value in _zip(g_closure, g_cells, strict=True):
+                        if g_cell.cell_contents is not g_value:
+                            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                except _value_error:
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            for g_mapping, g_pairs in (
+                (g_kw, g_kw_pairs),
+                *_zip(g_cells, g_dict_cells, strict=True),
+            ):
+                if g_pairs is None:
+                    if _type(g_mapping) is _dict:
+                        raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                    continue
+                if _type(g_pairs) is not _tuple:
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                if g_mapping is None:
+                    if _len(g_pairs) != 0:
+                        raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                    continue
+                if _type(g_mapping) is not _dict or _len(g_mapping) != _len(g_pairs):
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                g_expected = {}
+                for g_pair in g_pairs:
+                    if (
+                        _type(g_pair) is not _tuple
+                        or _len(g_pair) != 2
+                        or _type(g_pair[0]) is not _str
+                        or (g_pair[0] in g_expected)
+                    ):
+                        raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                    g_expected[g_pair[0]] = g_pair[1]
+                try:
+                    for g_key, g_value in g_mapping.items():
+                        if (
+                            _type(g_key) is not _str
+                            or g_key not in g_expected
+                            or g_expected[g_key] is not g_value
+                        ):
+                            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                except _error:
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            g_wanted = {}
+            for g_key in (
+                *g_code.co_names,
+                "__name__",
+                "__builtins__",
+                "len",
+                "map",
+                "dict",
+                "zip",
+                "tuple",
+                "TypeError",
+                "list",
+            ):
+                if _type(g_key) is not _str:
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                g_wanted[g_key] = None
+            if _type(g_projections) is not _tuple or _len(g_projections) != _len(g_wanted):
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            g_indexes = []
+            for g_mapping in (g_globals, g_builtins):
+                g_index = {}
+                try:
+                    for g_key, g_value in g_mapping.items():
+                        if _type(g_key) is not _str:
+                            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                        if g_key in g_wanted:
+                            g_index[g_key] = g_value
+                except _error:
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                g_indexes.append(g_index)
+            g_seen = {}
+            for g_projection in g_projections:
+                if (
+                    _type(g_projection) is not _tuple
+                    or _len(g_projection) != 5
+                    or _type(g_projection[0]) is not _str
+                    or (g_projection[0] not in g_wanted)
+                    or (g_projection[0] in g_seen)
+                ):
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                g_key, g_global_present, g_global_value, g_builtin_present, g_builtin_value = (
+                    g_projection
+                )
+                g_seen[g_key] = None
+                for g_index, g_present_value, g_held_value in (
+                    (g_indexes[0], g_global_present, g_global_value),
+                    (g_indexes[1], g_builtin_present, g_builtin_value),
+                ):
+                    if g_present_value is True:
+                        if g_key not in g_index or g_index[g_key] is not g_held_value:
+                            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                    elif g_present_value is False:
+                        if g_key in g_index or g_held_value is not None:
+                            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                    else:
+                        raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
     constructor = _tuple.__getitem__(_tuple.__getitem__(kinds, 9), 3)
     encoding_origin = constructor(encoding_kind, *values)
     rejoin()
@@ -3575,6 +4938,7 @@ def capture(
             constructor_kw,
             constructor_kw_pairs,
             constructor_global_pairs,
+            generated_rows,
         ) = pin
         if _type(kind) is not _type:
             raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
@@ -3642,6 +5006,207 @@ def capture(
                         raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
             except _error:
                 raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+        g_registry = registry
+        g_names = _vars(kind)
+        if (
+            _type(g_registry) is not _dict
+            or _any((_type(k) is not _str for k in g_registry))
+            or _any((_type(k) is not _str for k in g_names))
+            or (_type(generated_rows) is not _tuple)
+            or (_len(generated_rows) != 7)
+        ):
+            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+        g_owner_name = g_names.get("__module__")
+        if _type(g_owner_name) is not _str:
+            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+        for g_row, g_expected_name in _zip(
+            generated_rows,
+            (
+                "_make",
+                "_replace",
+                "__replace__",
+                "__repr__",
+                "_asdict",
+                "__getnewargs__",
+                "__annotate_func__",
+            ),
+            strict=True,
+        ):
+            if (
+                _type(g_row) is not _tuple
+                or _len(g_row) != 4
+                or _type(g_row[0]) is not _str
+                or (g_row[0] != g_expected_name)
+                or (g_row[1] is not True and g_row[1] is not False)
+            ):
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            g_name, g_present, g_raw, g_metadata = g_row
+            if g_present is False:
+                if g_name in g_names or g_raw is not None or g_metadata is not None:
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                continue
+            if (
+                g_name not in g_names
+                or g_names[g_name] is not g_raw
+                or _type(g_metadata) is not _tuple
+                or (_len(g_metadata) != 13)
+            ):
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            if g_name == "_make":
+                if _type(g_raw) is not _classmethod:
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                g_actual_function = g_raw.__func__
+            else:
+                g_actual_function = g_raw
+            (
+                g_function,
+                g_code,
+                g_globals,
+                g_module,
+                g_module_name,
+                g_builtins,
+                g_defaults,
+                g_kw,
+                g_kw_pairs,
+                g_closure,
+                g_cells,
+                g_dict_cells,
+                g_projections,
+            ) = g_metadata
+            if (
+                _type(g_function) is not _function
+                or g_actual_function is not g_function
+                or g_function.__code__ is not g_code
+                or (g_function.__globals__ is not g_globals)
+                or (_type(g_globals) is not _dict)
+                or (_type(g_module) is not _module)
+                or (_type(g_module_name) is not _str)
+                or (g_module_name not in (g_owner_name, "collections", "typing"))
+                or (g_registry.get(g_module_name) is not g_module)
+                or (_vars(g_module) is not g_globals)
+                or (_type(g_builtins) is not _dict)
+                or (g_function.__builtins__ is not g_builtins)
+                or (g_function.__defaults__ is not g_defaults)
+                or (g_defaults is not None and _type(g_defaults) is not _tuple)
+                or (g_function.__kwdefaults__ is not g_kw)
+                or (g_function.__closure__ is not g_closure)
+                or (_type(g_kw_pairs) is not _tuple)
+                or (_type(g_cells) is not _tuple)
+                or (_type(g_dict_cells) is not _tuple)
+                or (_len(g_dict_cells) != _len(g_cells))
+            ):
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            g_builtin_module = g_registry.get("builtins")
+            if _type(g_builtin_module) is not _module or _vars(g_builtin_module) is not g_builtins:
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            if g_closure is None:
+                if _len(g_cells) != 0:
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            elif (
+                _type(g_closure) is not _tuple
+                or _len(g_closure) != _len(g_cells)
+                or _any((_type(c) is not _cell for c in g_closure))
+            ):
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            else:
+                try:
+                    for g_cell, g_value in _zip(g_closure, g_cells, strict=True):
+                        if g_cell.cell_contents is not g_value:
+                            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                except _value_error:
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            for g_mapping, g_pairs in (
+                (g_kw, g_kw_pairs),
+                *_zip(g_cells, g_dict_cells, strict=True),
+            ):
+                if g_pairs is None:
+                    if _type(g_mapping) is _dict:
+                        raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                    continue
+                if _type(g_pairs) is not _tuple:
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                if g_mapping is None:
+                    if _len(g_pairs) != 0:
+                        raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                    continue
+                if _type(g_mapping) is not _dict or _len(g_mapping) != _len(g_pairs):
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                g_expected = {}
+                for g_pair in g_pairs:
+                    if (
+                        _type(g_pair) is not _tuple
+                        or _len(g_pair) != 2
+                        or _type(g_pair[0]) is not _str
+                        or (g_pair[0] in g_expected)
+                    ):
+                        raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                    g_expected[g_pair[0]] = g_pair[1]
+                try:
+                    for g_key, g_value in g_mapping.items():
+                        if (
+                            _type(g_key) is not _str
+                            or g_key not in g_expected
+                            or g_expected[g_key] is not g_value
+                        ):
+                            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                except _error:
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            g_wanted = {}
+            for g_key in (
+                *g_code.co_names,
+                "__name__",
+                "__builtins__",
+                "len",
+                "map",
+                "dict",
+                "zip",
+                "tuple",
+                "TypeError",
+                "list",
+            ):
+                if _type(g_key) is not _str:
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                g_wanted[g_key] = None
+            if _type(g_projections) is not _tuple or _len(g_projections) != _len(g_wanted):
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            g_indexes = []
+            for g_mapping in (g_globals, g_builtins):
+                g_index = {}
+                try:
+                    for g_key, g_value in g_mapping.items():
+                        if _type(g_key) is not _str:
+                            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                        if g_key in g_wanted:
+                            g_index[g_key] = g_value
+                except _error:
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                g_indexes.append(g_index)
+            g_seen = {}
+            for g_projection in g_projections:
+                if (
+                    _type(g_projection) is not _tuple
+                    or _len(g_projection) != 5
+                    or _type(g_projection[0]) is not _str
+                    or (g_projection[0] not in g_wanted)
+                    or (g_projection[0] in g_seen)
+                ):
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                g_key, g_global_present, g_global_value, g_builtin_present, g_builtin_value = (
+                    g_projection
+                )
+                g_seen[g_key] = None
+                for g_index, g_present_value, g_held_value in (
+                    (g_indexes[0], g_global_present, g_global_value),
+                    (g_indexes[1], g_builtin_present, g_builtin_value),
+                ):
+                    if g_present_value is True:
+                        if g_key not in g_index or g_index[g_key] is not g_held_value:
+                            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                    elif g_present_value is False:
+                        if g_key in g_index or g_held_value is not None:
+                            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                    else:
+                        raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
     return check(result)
 
 
@@ -3715,7 +5280,11 @@ def encode_basename(origin, name, *,
             _vars=vars,
             _staticmethod=staticmethod,
             _zip=zip,
-            _error=RuntimeError):
+            _error=RuntimeError,
+            _classmethod=classmethod,
+            _cell=CellType,
+            _module=ModuleType,
+            _value_error=ValueError):
     """Encode one exact basename with original interpreter settings and C method.
 
     No os.fsencode lookup or UTF-8 substitution. Caller must hold the actual
@@ -3805,6 +5374,7 @@ def encode_basename(origin, name, *,
         constructor_kw,
         constructor_kw_pairs,
         constructor_global_pairs,
+        generated_rows,
     ) = pin
     if _type(kind) is not _type:
         raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
@@ -3856,6 +5426,204 @@ def encode_basename(origin, name, *,
                     raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
         except _error:
             raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+    g_registry = origin[0][2]
+    g_names = _vars(kind)
+    if (
+        _type(g_registry) is not _dict
+        or _any((_type(k) is not _str for k in g_registry))
+        or _any((_type(k) is not _str for k in g_names))
+        or (_type(generated_rows) is not _tuple)
+        or (_len(generated_rows) != 7)
+    ):
+        raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+    g_owner_name = g_names.get("__module__")
+    if _type(g_owner_name) is not _str:
+        raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+    for g_row, g_expected_name in _zip(
+        generated_rows,
+        (
+            "_make",
+            "_replace",
+            "__replace__",
+            "__repr__",
+            "_asdict",
+            "__getnewargs__",
+            "__annotate_func__",
+        ),
+        strict=True,
+    ):
+        if (
+            _type(g_row) is not _tuple
+            or _len(g_row) != 4
+            or _type(g_row[0]) is not _str
+            or (g_row[0] != g_expected_name)
+            or (g_row[1] is not True and g_row[1] is not False)
+        ):
+            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+        g_name, g_present, g_raw, g_metadata = g_row
+        if g_present is False:
+            if g_name in g_names or g_raw is not None or g_metadata is not None:
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            continue
+        if (
+            g_name not in g_names
+            or g_names[g_name] is not g_raw
+            or _type(g_metadata) is not _tuple
+            or (_len(g_metadata) != 13)
+        ):
+            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+        if g_name == "_make":
+            if _type(g_raw) is not _classmethod:
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            g_actual_function = g_raw.__func__
+        else:
+            g_actual_function = g_raw
+        (
+            g_function,
+            g_code,
+            g_globals,
+            g_module,
+            g_module_name,
+            g_builtins,
+            g_defaults,
+            g_kw,
+            g_kw_pairs,
+            g_closure,
+            g_cells,
+            g_dict_cells,
+            g_projections,
+        ) = g_metadata
+        if (
+            _type(g_function) is not _function
+            or g_actual_function is not g_function
+            or g_function.__code__ is not g_code
+            or (g_function.__globals__ is not g_globals)
+            or (_type(g_globals) is not _dict)
+            or (_type(g_module) is not _module)
+            or (_type(g_module_name) is not _str)
+            or (g_module_name not in (g_owner_name, "collections", "typing"))
+            or (g_registry.get(g_module_name) is not g_module)
+            or (_vars(g_module) is not g_globals)
+            or (_type(g_builtins) is not _dict)
+            or (g_function.__builtins__ is not g_builtins)
+            or (g_function.__defaults__ is not g_defaults)
+            or (g_defaults is not None and _type(g_defaults) is not _tuple)
+            or (g_function.__kwdefaults__ is not g_kw)
+            or (g_function.__closure__ is not g_closure)
+            or (_type(g_kw_pairs) is not _tuple)
+            or (_type(g_cells) is not _tuple)
+            or (_type(g_dict_cells) is not _tuple)
+            or (_len(g_dict_cells) != _len(g_cells))
+        ):
+            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+        g_builtin_module = g_registry.get("builtins")
+        if _type(g_builtin_module) is not _module or _vars(g_builtin_module) is not g_builtins:
+            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+        if g_closure is None:
+            if _len(g_cells) != 0:
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+        elif (
+            _type(g_closure) is not _tuple
+            or _len(g_closure) != _len(g_cells)
+            or _any((_type(c) is not _cell for c in g_closure))
+        ):
+            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+        else:
+            try:
+                for g_cell, g_value in _zip(g_closure, g_cells, strict=True):
+                    if g_cell.cell_contents is not g_value:
+                        raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            except _value_error:
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+        for g_mapping, g_pairs in ((g_kw, g_kw_pairs), *_zip(g_cells, g_dict_cells, strict=True)):
+            if g_pairs is None:
+                if _type(g_mapping) is _dict:
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                continue
+            if _type(g_pairs) is not _tuple:
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            if g_mapping is None:
+                if _len(g_pairs) != 0:
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                continue
+            if _type(g_mapping) is not _dict or _len(g_mapping) != _len(g_pairs):
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            g_expected = {}
+            for g_pair in g_pairs:
+                if (
+                    _type(g_pair) is not _tuple
+                    or _len(g_pair) != 2
+                    or _type(g_pair[0]) is not _str
+                    or (g_pair[0] in g_expected)
+                ):
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                g_expected[g_pair[0]] = g_pair[1]
+            try:
+                for g_key, g_value in g_mapping.items():
+                    if (
+                        _type(g_key) is not _str
+                        or g_key not in g_expected
+                        or g_expected[g_key] is not g_value
+                    ):
+                        raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            except _error:
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+        g_wanted = {}
+        for g_key in (
+            *g_code.co_names,
+            "__name__",
+            "__builtins__",
+            "len",
+            "map",
+            "dict",
+            "zip",
+            "tuple",
+            "TypeError",
+            "list",
+        ):
+            if _type(g_key) is not _str:
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            g_wanted[g_key] = None
+        if _type(g_projections) is not _tuple or _len(g_projections) != _len(g_wanted):
+            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+        g_indexes = []
+        for g_mapping in (g_globals, g_builtins):
+            g_index = {}
+            try:
+                for g_key, g_value in g_mapping.items():
+                    if _type(g_key) is not _str:
+                        raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                    if g_key in g_wanted:
+                        g_index[g_key] = g_value
+            except _error:
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            g_indexes.append(g_index)
+        g_seen = {}
+        for g_projection in g_projections:
+            if (
+                _type(g_projection) is not _tuple
+                or _len(g_projection) != 5
+                or _type(g_projection[0]) is not _str
+                or (g_projection[0] not in g_wanted)
+                or (g_projection[0] in g_seen)
+            ):
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            g_key, g_global_present, g_global_value, g_builtin_present, g_builtin_value = (
+                g_projection
+            )
+            g_seen[g_key] = None
+            for g_index, g_present_value, g_held_value in (
+                (g_indexes[0], g_global_present, g_global_value),
+                (g_indexes[1], g_builtin_present, g_builtin_value),
+            ):
+                if g_present_value is True:
+                    if g_key not in g_index or g_index[g_key] is not g_held_value:
+                        raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                elif g_present_value is False:
+                    if g_key in g_index or g_held_value is not None:
+                        raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                else:
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
     values = (origin, name, data, encoding_origin)
     result = constructor(kind, *values)
     rejoin()
@@ -3873,6 +5641,7 @@ def encode_basename(origin, name, *,
         constructor_kw,
         constructor_kw_pairs,
         constructor_global_pairs,
+        generated_rows,
     ) = pin
     if _type(kind) is not _type:
         raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
@@ -3924,6 +5693,204 @@ def encode_basename(origin, name, *,
                     raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
         except _error:
             raise _error('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+    g_registry = origin[0][2]
+    g_names = _vars(kind)
+    if (
+        _type(g_registry) is not _dict
+        or _any((_type(k) is not _str for k in g_registry))
+        or _any((_type(k) is not _str for k in g_names))
+        or (_type(generated_rows) is not _tuple)
+        or (_len(generated_rows) != 7)
+    ):
+        raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+    g_owner_name = g_names.get("__module__")
+    if _type(g_owner_name) is not _str:
+        raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+    for g_row, g_expected_name in _zip(
+        generated_rows,
+        (
+            "_make",
+            "_replace",
+            "__replace__",
+            "__repr__",
+            "_asdict",
+            "__getnewargs__",
+            "__annotate_func__",
+        ),
+        strict=True,
+    ):
+        if (
+            _type(g_row) is not _tuple
+            or _len(g_row) != 4
+            or _type(g_row[0]) is not _str
+            or (g_row[0] != g_expected_name)
+            or (g_row[1] is not True and g_row[1] is not False)
+        ):
+            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+        g_name, g_present, g_raw, g_metadata = g_row
+        if g_present is False:
+            if g_name in g_names or g_raw is not None or g_metadata is not None:
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            continue
+        if (
+            g_name not in g_names
+            or g_names[g_name] is not g_raw
+            or _type(g_metadata) is not _tuple
+            or (_len(g_metadata) != 13)
+        ):
+            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+        if g_name == "_make":
+            if _type(g_raw) is not _classmethod:
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            g_actual_function = g_raw.__func__
+        else:
+            g_actual_function = g_raw
+        (
+            g_function,
+            g_code,
+            g_globals,
+            g_module,
+            g_module_name,
+            g_builtins,
+            g_defaults,
+            g_kw,
+            g_kw_pairs,
+            g_closure,
+            g_cells,
+            g_dict_cells,
+            g_projections,
+        ) = g_metadata
+        if (
+            _type(g_function) is not _function
+            or g_actual_function is not g_function
+            or g_function.__code__ is not g_code
+            or (g_function.__globals__ is not g_globals)
+            or (_type(g_globals) is not _dict)
+            or (_type(g_module) is not _module)
+            or (_type(g_module_name) is not _str)
+            or (g_module_name not in (g_owner_name, "collections", "typing"))
+            or (g_registry.get(g_module_name) is not g_module)
+            or (_vars(g_module) is not g_globals)
+            or (_type(g_builtins) is not _dict)
+            or (g_function.__builtins__ is not g_builtins)
+            or (g_function.__defaults__ is not g_defaults)
+            or (g_defaults is not None and _type(g_defaults) is not _tuple)
+            or (g_function.__kwdefaults__ is not g_kw)
+            or (g_function.__closure__ is not g_closure)
+            or (_type(g_kw_pairs) is not _tuple)
+            or (_type(g_cells) is not _tuple)
+            or (_type(g_dict_cells) is not _tuple)
+            or (_len(g_dict_cells) != _len(g_cells))
+        ):
+            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+        g_builtin_module = g_registry.get("builtins")
+        if _type(g_builtin_module) is not _module or _vars(g_builtin_module) is not g_builtins:
+            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+        if g_closure is None:
+            if _len(g_cells) != 0:
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+        elif (
+            _type(g_closure) is not _tuple
+            or _len(g_closure) != _len(g_cells)
+            or _any((_type(c) is not _cell for c in g_closure))
+        ):
+            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+        else:
+            try:
+                for g_cell, g_value in _zip(g_closure, g_cells, strict=True):
+                    if g_cell.cell_contents is not g_value:
+                        raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            except _value_error:
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+        for g_mapping, g_pairs in ((g_kw, g_kw_pairs), *_zip(g_cells, g_dict_cells, strict=True)):
+            if g_pairs is None:
+                if _type(g_mapping) is _dict:
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                continue
+            if _type(g_pairs) is not _tuple:
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            if g_mapping is None:
+                if _len(g_pairs) != 0:
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                continue
+            if _type(g_mapping) is not _dict or _len(g_mapping) != _len(g_pairs):
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            g_expected = {}
+            for g_pair in g_pairs:
+                if (
+                    _type(g_pair) is not _tuple
+                    or _len(g_pair) != 2
+                    or _type(g_pair[0]) is not _str
+                    or (g_pair[0] in g_expected)
+                ):
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                g_expected[g_pair[0]] = g_pair[1]
+            try:
+                for g_key, g_value in g_mapping.items():
+                    if (
+                        _type(g_key) is not _str
+                        or g_key not in g_expected
+                        or g_expected[g_key] is not g_value
+                    ):
+                        raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            except _error:
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+        g_wanted = {}
+        for g_key in (
+            *g_code.co_names,
+            "__name__",
+            "__builtins__",
+            "len",
+            "map",
+            "dict",
+            "zip",
+            "tuple",
+            "TypeError",
+            "list",
+        ):
+            if _type(g_key) is not _str:
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            g_wanted[g_key] = None
+        if _type(g_projections) is not _tuple or _len(g_projections) != _len(g_wanted):
+            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+        g_indexes = []
+        for g_mapping in (g_globals, g_builtins):
+            g_index = {}
+            try:
+                for g_key, g_value in g_mapping.items():
+                    if _type(g_key) is not _str:
+                        raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                    if g_key in g_wanted:
+                        g_index[g_key] = g_value
+            except _error:
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            g_indexes.append(g_index)
+        g_seen = {}
+        for g_projection in g_projections:
+            if (
+                _type(g_projection) is not _tuple
+                or _len(g_projection) != 5
+                or _type(g_projection[0]) is not _str
+                or (g_projection[0] not in g_wanted)
+                or (g_projection[0] in g_seen)
+            ):
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            g_key, g_global_present, g_global_value, g_builtin_present, g_builtin_value = (
+                g_projection
+            )
+            g_seen[g_key] = None
+            for g_index, g_present_value, g_held_value in (
+                (g_indexes[0], g_global_present, g_global_value),
+                (g_indexes[1], g_builtin_present, g_builtin_value),
+            ):
+                if g_present_value is True:
+                    if g_key not in g_index or g_index[g_key] is not g_held_value:
+                        raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                elif g_present_value is False:
+                    if g_key in g_index or g_held_value is not None:
+                        raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                else:
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
     if (_type(result) is not kind
             or _tuple.__len__(result) != _len(values)
             or _any((_tuple.__getitem__(result, i) is not value for i, value in _enumerate(values)))):

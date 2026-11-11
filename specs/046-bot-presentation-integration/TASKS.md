@@ -1,3 +1,10 @@
+## November 11: generated method metadata (bounded source acceptance)
+
+- [x] **RGA-01d-GENERATED-METADATA** Append generated-role metadata after original12 typepin fields, all16 types, preserve all99 declared roles and ordinary-function rules/native wrapper checks/final reseals. Focused469/277 and final1533/1341 pass,555 source hashes, common1074 IDs and independent bounded review; no native-effect authority.
+- [x] **RGA-01d-GENERATED-SYS-KEY-FENCE** New collector red foreign-equality control corrected to native namespace/key fence before lookup, fixed refusal/zero hooks. OldScope4 child60s timeouts remain uncertainty, not admission proof.
+- [ ] **RGA-01d-GENERATED-PRIMITIVES** Independent native primitive joins and field correspondence; deep annotation DATA/lazy dependencies and legitimate cache-state lifecycle. Metadata identity does not establish these requirements.
+- [ ] Full original root/caller/callee/GC/callback/freshgraph, unchanged native60s and all feature/physical/Linux/provider/release qualification remain required.
+
 ## November 11: cache planner and final constructor freshness
 
 - [x] **RGA-01d-CACHE-CANDIDATES** Prewarm cache_candidates; append its two classes/five source functions and PlannedCachePath constructor. Helper11/55/99, parent7/16, existing indices/widths preserved; five aliases joined at all six mirrors.
