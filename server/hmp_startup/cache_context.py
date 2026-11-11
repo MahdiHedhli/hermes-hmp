@@ -63,17 +63,32 @@ def _context():
 
 
 def _getter_current(source):
-    if source.requires_cwd is False:
-        _require(source.getter is source.os_module is source.posix_module is None)
+    # Exact native storage before field access: current class getters are not
+    # inspection primitives, and a nominal NamedTuple can have short storage.
+    if type(source) is not _ContextSource or tuple.__len__(source) != 9:
+        _require(False)
         return
-    _require(source.requires_cwd is True and type(source.getter) is BuiltinFunctionType
-             and type(source.os_module) is type(source.posix_module) is ModuleType
-             and source.os_module is os and sys.modules.get("os") is source.os_module
-             and sys.modules.get("posix") is source.posix_module
-             and vars(source.os_module).get("getcwd") is source.getter
-             and vars(source.posix_module).get("getcwd") is source.getter
-             and source.getter.__self__ is source.posix_module
-             and source.getter.__name__ == "getcwd" and source.getter.__module__ == "posix")
+    requires = tuple.__getitem__(source, 5)
+    getter = tuple.__getitem__(source, 6)
+    os_module = tuple.__getitem__(source, 7)
+    posix_module = tuple.__getitem__(source, 8)
+    if requires is False:
+        _require(getter is os_module is posix_module is None)
+        return
+    if (requires is not True or type(getter) is not BuiltinFunctionType
+            or type(os_module) is not ModuleType or type(posix_module) is not ModuleType):
+        _require(False)
+        return
+    registry, namespace, original = sys.modules, vars(os_module), vars(posix_module)
+    _require(type(registry) is dict and all(type(key) is str for key in registry)
+             and all(type(key) is str for key in namespace)
+             and all(type(key) is str for key in original)
+             and os_module is os and registry.get("os") is os_module
+             and registry.get("posix") is posix_module
+             and namespace.get("getcwd") is getter and original.get("getcwd") is getter
+             and getter.__self__ is posix_module
+             and type(getter.__name__) is str and getter.__name__ == "getcwd"
+             and type(getter.__module__) is str and getter.__module__ == "posix")
 
 
 def _rows(source, cwd):

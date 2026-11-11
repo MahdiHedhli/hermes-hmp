@@ -1025,6 +1025,209 @@ def _scope_file_graph_mirrors(scope):
     return True
 
 
+def _cache_context_graph_mirrors(snapshot):
+    """Retained cache-context field DATA, not original context or live cwd proof.
+
+    Unintegrated graph component. Native actor, entry/code/root, shared owners,
+    cache row semantics and live cwd observations remain separate requirements.
+    No guard or admission path uses this predicate.
+    """
+    registry = sys.modules
+    if type(registry) is not dict or any(type(key) is not str for key in registry):
+        return False
+    namespaces = []
+    for name in (
+        "hmp_startup.entry_files",
+        "hmp_startup.cache_context",
+        "hmp_startup.runtime_files",
+    ):
+        module = dict.get(registry, name)
+        if type(module) is not ModuleType:
+            return False
+        namespace = vars(module)
+        if any(type(key) is not str for key in namespace):
+            return False
+        namespaces.append(namespace)
+    entry_names, cache_names, runtime_names = namespaces
+    snapshot_kind = dict.get(entry_names, "EntryFileSnapshotOwner")
+    input_kind = dict.get(entry_names, "_Inputs")
+    cache_kind = dict.get(cache_names, "CacheContextOwner")
+    source_kind = dict.get(cache_names, "_ContextSource")
+    plan_kind = dict.get(runtime_names, "RuntimeFilePlan")
+    if any(
+        type(kind) is not type
+        for kind in (snapshot_kind, input_kind, cache_kind, source_kind, plan_kind)
+    ):
+        return False
+    if type(snapshot) is not snapshot_kind:
+        return False
+    names = vars(snapshot_kind)
+    if any(type(key) is not str for key in names):
+        return False
+    dictionary = names.get("__dict__")
+    if (
+        type(dictionary) is not GetSetDescriptorType
+        or dictionary.__objclass__ is not snapshot_kind
+        or dictionary.__name__ != "__dict__"
+    ):
+        return False
+    state = dictionary.__get__(snapshot, snapshot_kind)
+    if type(state) is not dict or any(type(key) is not str for key in state):
+        return False
+    required = ("_inputs", "_root_cell", "_cache_context_cell", "_failed", "_unknown")
+    if (
+        any(key not in state for key in required)
+        or dict.get(state, "_failed") is not False
+        or dict.get(state, "_unknown") is not False
+    ):
+        return False
+    inputs = dict.get(state, "_inputs")
+    if type(inputs) is not input_kind:
+        return False
+    bases = type.__getattribute__(input_kind, "__bases__")
+    if (
+        type(bases) is not tuple
+        or len(bases) != 1
+        or bases[0] is not tuple
+        or tuple.__len__(inputs) != 16
+    ):
+        return False
+    slot = tuple.__getitem__(inputs, 15)
+    if type(slot) is not list or len(slot) != 1 or type(slot[0]) is not tuple or len(slot[0]) != 4:
+        return False
+    fact = slot[0]
+    owner = fact[0]
+    if type(owner) is not cache_kind:
+        return False
+    names = vars(cache_kind)
+    if any(type(key) is not str for key in names):
+        return False
+    dictionary = names.get("__dict__")
+    if (
+        type(dictionary) is not GetSetDescriptorType
+        or dictionary.__objclass__ is not cache_kind
+        or dictionary.__name__ != "__dict__"
+    ):
+        return False
+    current = dictionary.__get__(owner, cache_kind)
+    if type(current) is not dict or any(type(key) is not str for key in current):
+        return False
+    required = ("_source", "_root", "_failed", "_retired", "_ready", "_fact", "_cwd", "_rows")
+    if any(key not in current for key in required):
+        return False
+    source, root = dict.get(current, "_source"), dict.get(current, "_root")
+    if (
+        dict.get(cache_names, "_OWNER") is not owner
+        or dict.get(cache_names, "_ROOT") is not root
+        or dict.get(cache_names, "_FACT") is not fact
+        or dict.get(current, "_failed") is not False
+        or dict.get(current, "_retired") is not False
+        or dict.get(current, "_ready") is not True
+        or dict.get(current, "_fact") is not fact
+        or type(root) is not tuple
+        or len(root) != 2
+        or root[0] is not owner
+        or root[1] is not source
+        or fact[1] is not root
+        or fact[2] is not dict.get(current, "_cwd")
+        or fact[3] is not dict.get(current, "_rows")
+        or type(fact[3]) is not tuple
+        or type(source) is not source_kind
+    ):
+        return False
+    bases = type.__getattribute__(source_kind, "__bases__")
+    if (
+        type(bases) is not tuple
+        or len(bases) != 1
+        or bases[0] is not tuple
+        or tuple.__len__(source) != 9
+    ):
+        return False
+    cell, plan = tuple.__getitem__(source, 2), tuple.__getitem__(source, 3)
+    if (
+        tuple.__getitem__(source, 0) is not snapshot
+        or tuple.__getitem__(source, 1) is not inputs
+        or type(cell) is not tuple
+        or len(cell) != 2
+        or cell[0] is not snapshot
+        or cell[1] is not inputs
+        or dict.get(state, "_root_cell") is not cell
+        or dict.get(state, "_cache_context_cell") is not root
+        or tuple.__getitem__(inputs, 12) is not plan
+        or type(plan) is not plan_kind
+    ):
+        return False
+    bases = type.__getattribute__(plan_kind, "__bases__")
+    if (
+        type(bases) is not tuple
+        or len(bases) != 1
+        or bases[0] is not tuple
+        or tuple.__len__(plan) != 15
+    ):
+        return False
+    if (
+        tuple.__getitem__(plan, 0) is not tuple.__getitem__(inputs, 1)
+        or tuple.__getitem__(plan, 1) is not tuple.__getitem__(inputs, 3)
+        or tuple.__getitem__(plan, 2) is not tuple.__getitem__(inputs, 5)
+    ):
+        return False
+    recipe_binding = tuple.__getitem__(inputs, 3)
+    if type(recipe_binding) is not tuple or len(recipe_binding) != 6:
+        return False
+    scope = recipe_binding[0]
+    if type(scope) is not _Scope or tuple.__len__(scope) != 19:
+        return False
+    activation = tuple.__getitem__(scope, 0)
+    if type(activation) is not GatewayActivationOwner:
+        return False
+    names = vars(GatewayActivationOwner)
+    if any(type(key) is not str for key in names):
+        return False
+    dictionary = names.get("__dict__")
+    if (
+        type(dictionary) is not GetSetDescriptorType
+        or dictionary.__objclass__ is not GatewayActivationOwner
+        or dictionary.__name__ != "__dict__"
+    ):
+        return False
+    active = dictionary.__get__(activation, GatewayActivationOwner)
+    if (
+        type(active) is not dict
+        or any(type(key) is not str for key in active)
+        or dict.get(active, "_entry_files_owner") is not snapshot
+        or dict.get(active, "_entry_files_cell") is not cell
+    ):
+        return False
+    # Getter metadata only. Never invoke cwd from a retained comparison.
+    requires, getter = tuple.__getitem__(source, 5), tuple.__getitem__(source, 6)
+    os_module, posix_module = tuple.__getitem__(source, 7), tuple.__getitem__(source, 8)
+    if requires is False:
+        return getter is os_module is posix_module is None
+    if (
+        requires is not True
+        or type(getter) is not BuiltinFunctionType
+        or type(os_module) is not ModuleType
+        or type(posix_module) is not ModuleType
+    ):
+        return False
+    namespace, original = vars(os_module), vars(posix_module)
+    if any(type(key) is not str for key in namespace) or any(
+        type(key) is not str for key in original
+    ):
+        return False
+    return (
+        os_module is dict.get(cache_names, "os")
+        and dict.get(registry, "os") is os_module
+        and dict.get(registry, "posix") is posix_module
+        and dict.get(namespace, "getcwd") is getter
+        and dict.get(original, "getcwd") is getter
+        and getter.__self__ is posix_module
+        and type(getter.__name__) is str
+        and getter.__name__ == "getcwd"
+        and type(getter.__module__) is str
+        and getter.__module__ == "posix"
+    )
+
 def _loaded_owner_graph_mirrors(package_binding, recipe_binding):
     """Fresh shared-node field comparison DATA, never a guard or admission.
 

@@ -376,3 +376,25 @@ observations, final pure live reseal, actual integrated mutation/graft/GC/cleanu
 coverage, broader source tests, original60s and full device/release acceptance.
 No enabled optimization, whole-startup speedup, host/device/grant/provider/model/
 job/release change or new original-native60s result follows from this component.
+
+## Cache field component and actual getter correction — November 11
+
+`_cache_context_graph_mirrors` is an unintegrated retained-field projection.
+It fences module registries and native owner dictionaries before lookups, joins
+snapshot inputs/root/cache cell, current fact/root/slot/module mirrors, plan
+binding members and activation snapshot references. Exact native tuple widths
+precede indexed reads. Required keys distinguish an absent `_cwd` from an
+explicit None. Getter metadata checks do not invoke cwd.
+
+This projection omits original root/callee/entry authority, full plan and cache
+row semantics, actor observations and actual cwd. Coherent graph data is not
+provenance. It cannot replace `CacheContextOwner._seal`, `current_binding`, or a
+complete final live audit, and has no production caller.
+
+The existing `_getter_current` itself was corrected after11 causal cases showed
+seven failures under foreign module metadata/colliding keys/short source storage.
+Exact native storage and key/string fences now precede protocol-sensitive reads.
+Existing14 cache lifecycle cases plus11 metadata and2 actual graph fixtures pass
+on current/minimum Python. Each graph fixture contains42 mutation/deletion cases,
+not42 complete native startup tests. Whole-startup performance is not established;
+last dated original native gate still fails60s. No installed runtime changed.

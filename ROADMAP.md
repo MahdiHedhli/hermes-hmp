@@ -1,3 +1,30 @@
+## Cache context validation correction — November 11, 2026 UTC
+
+The local character startup draft now refuses malformed working-directory getter
+metadata before foreign equality or getter protocols can run. Eleven causal
+cases include exact/subclass foreign metadata, colliding dictionary keys, short
+native tuple storage and valid dependent/independent controls. The first run
+reproduced seven failures; the correction preserves the existing full validator.
+No deployed incident has been established.
+
+The same 27 cases pass on Python 3.14.9 and 3.11.15 with unchanged source and no
+failures, errors or skips: 11 getter cases, 14 existing cache lifecycle cases,
+and two actual retained-object graph fixtures. Each graph fixture applies 42
+change/deletion/malformed-state controls, restores the positive, and observes
+no cwd calls or added native file work. An initial combined run failed only the
+two new fixtures' final row-count assertion (46 written, 42 exercised); that
+failed evidence is retained separately. Focused independent source review found
+no blocker; evidence verification is recorded with the local checkpoint.
+
+The new cache graph comparison remains unintegrated DATA. It checks retained
+fields and links, not original-object authority, row semantics or live cwd.
+It does not replace the complete cache seal or any production guard. Remaining
+work includes original root/callee provenance, approval/API, entry/runtime and
+activation/actor checks, a complete final live graph seal, safe integration,
+the unchanged native 60-second startup gate, physical devices and release
+qualification. Character images are not delivered by this checkpoint. No
+installed runtime, device build, grant, provider, default model or job changed.
+
 ## File closure and scan graph mirrors — November 11, 2026 UTC
 
 The unintegrated fresh-graph component now covers canonical open/allocation/close

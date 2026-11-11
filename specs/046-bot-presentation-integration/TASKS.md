@@ -1,3 +1,18 @@
+## November 11: cache metadata correction and retained field component
+
+- [x] **RGA-01d-CACHE-GETTER** Correct actual cache getter validation: native
+      source storage/type, exact registry/module keys and exact string metadata
+      before equality. Eleven causal cases reproduced seven failures before fix.
+- [x] **RGA-01d-CACHE-FIELDS** Unintegrated retained cache/snapshot/input/plan/
+      activation joins; required nullable keys and getter metadata. DATA only,
+      no production guard or original authority and no live cwd observation.
+- [x] Same 27 current/minimum cases: getter11 + existing lifecycle14 + two
+      actual retained fixtures with42 field faults each. No extra native work;
+      initial wrong final row-count assertion preserved as failed evidence.
+- [ ] Complete original-root/callee, approval/API, entry/runtime/activation/actor
+      and final full pure live DAG; retain full generic validators and integrate
+      only after provenance/causal review. Original60s/device/release remain open.
+
 ## November 11: descriptor and scan graph field components
 
 - [x] **RGA-01d-CLOSED-FIELDS** Canonical allocation/open/close receipt DATA with
