@@ -53,6 +53,39 @@ def _rules(pkg: Path) -> list[tuple[str, str]]:
     return [(v.rule, v.path) for v in surface.check_package(pkg)]
 
 
+@pytest.mark.parametrize(
+    "statement", ["from yaml import error, events, tokens", "from yaml.loader import SafeLoader"]
+)
+def test_native_yaml_fixed_imports_are_allowed_only_at_startup(pkg, statement):
+    _write(
+        pkg,
+        "presentation_native_yaml.py",
+        f"class NativePresentationYaml:\n    def __init__(self):\n        {statement}\n",
+    )
+    assert ("S1", "presentation_native_yaml.py") not in _rules(pkg)
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "from yaml.loader import SafeLoader\n",
+        "def request():\n    from yaml.loader import SafeLoader\n",
+        "class NativePresentationYaml:\n    def request(self):\n"
+        "        from yaml.loader import SafeLoader\n",
+        "class Other:\n    def __init__(self):\n        from yaml.loader import SafeLoader\n",
+        "class NativePresentationYaml:\n    def __init__(self):\n        from yaml import load\n",
+        "class NativePresentationYaml:\n    def __init__(self):\n"
+        "        from yaml.loader import UnsafeLoader\n",
+        "class NativePresentationYaml:\n    def __init__(self):\n        import yaml\n",
+        "class NativePresentationYaml:\n    def __init__(self):\n"
+        "        from yaml import error, events, tokens, constructor\n",
+    ],
+)
+def test_native_yaml_no_general_module_or_request_import_exemption(pkg, body):
+    _write(pkg, "presentation_native_yaml.py", body)
+    assert ("S1", "presentation_native_yaml.py") in _rules(pkg)
+
+
 # --- S1 imports ---------------------------------------------------------------------------------
 
 

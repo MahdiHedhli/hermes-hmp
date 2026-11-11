@@ -59,7 +59,8 @@ THIRD_PARTY_ALLOWED: frozenset[str] = frozenset({"aiohttp", "cryptography"})
 # renderer (T032; reviews/dependencies.md): only `cli.py` may import it.
 CLI_MODULE = "cli.py"
 # The BI1 worker uses only bounded scanner/parser events, never yaml.load/config reads.
-# Keep this exception local and lazy; every other import, including bridge.py, refuses.
+# The native adapter has its separate exact startup-constructor rule below. Keep
+# these exceptions local and lazy; every other import, including bridge.py, refuses.
 MODULE_ONLY_THIRD_PARTY: dict[str, str] = {
     "qrcode": CLI_MODULE,
     "yaml": "presentation_yaml_adapter.py",
@@ -184,6 +185,20 @@ class _ModuleScanner(ast.NodeVisitor):
     # --- S1 / S3 ---
     def _check_absolute(self, node: ast.AST, module: str, names: list[str] | None) -> None:
         root = module.split(".", 1)[0]
+        if root == "yaml" and self.name == "presentation_native_yaml.py":
+            # Separate native-service adapter: dependency binding only in its
+            # fixed startup constructor. No general YAML import/call exemption.
+            allowed = (
+                self._func_stack == ["NativePresentationYaml", "__init__"]
+                and self._function_depth == 1
+                and (
+                    (module == "yaml" and names == ["error", "events", "tokens"])
+                    or (module == "yaml.loader" and names == ["SafeLoader"])
+                )
+            )
+            if not allowed:
+                self._add("S1", node, "native yaml permits only fixed startup dependency binding")
+            return
         if root == "yaml":
             allowed = (
                 module in {"yaml", "yaml.error", "yaml.events", "yaml.tokens"} and names is None
