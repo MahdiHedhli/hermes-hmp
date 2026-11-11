@@ -624,6 +624,12 @@ class HmpAdapter(BasePlatformAdapter):
     def __init__(self, config: Any) -> None:
         super().__init__(config=config, platform=Platform(PLATFORM_NAME))
         self._server: server.HmpServer | None = None
+        self._connect_lock = asyncio.Lock()
+        self._presentation_owner = server.presentation_native_service.NativePresentationOwner()
+        self._start_cleanup_task: asyncio.Task[None] | None = None
+        self._failed_start_server: server.HmpServer | None = None
+        self._dependency_closers: set[asyncio.Task[None]] = set()
+        self._dependency_close_unknown: server.HmpServer | None = None
         self._record: Path | None = None
         # Live-bug fix: the nonce this incarnation's record was written with (SR-7 -- a fresh
         # value per listener START, not per record write) and the last `profiles` this adapter
@@ -676,9 +682,26 @@ class HmpAdapter(BasePlatformAdapter):
         return tuple(rows)
 
     async def connect(self, *, is_reconnect: bool = False) -> bool:
+        async with self._connect_lock:
+            return await self._connect_once(is_reconnect=is_reconnect)
+
+    async def _connect_once(self, *, is_reconnect: bool = False) -> bool:
         """Run the compat gate, then start the TLS listener (server-modules.md "Startup order")."""
         if self._server is not None:
-            return True
+            return (self._server._stop_owner is None and self._server._stopping is None
+                    and not self._server.closed.is_set())
+        if self._dependency_close_unknown is not None or any(
+            task.done() and (task.cancelled() or task.exception() is not None)
+            for task in self._dependency_closers
+        ):
+            return False
+        cleanup = self._start_cleanup_task
+        if self._failed_start_server is not None:
+            if cleanup is None or not cleanup.done() or cleanup.cancelled():
+                return False
+            if cleanup.exception() is not None:
+                return False  # retain failed teardown; never close underneath unknown work
+            self._failed_start_server = self._start_cleanup_task = None
         try:
             settings = server.listener_settings(getattr(self.config, "extra", None))
         except server.ListenerConfigError:
@@ -692,18 +715,37 @@ class HmpAdapter(BasePlatformAdapter):
         srv = server.HmpServer(
             ctx,
             settings,
-            on_closed=self._listener_closed,
+            on_closed=lambda: self._listener_closed(srv),
             push_relay_factory=lambda: RelayClient(ctx.identity),
             approval_test_owners=(_AT1_PLUGIN_MODULE, _AT1_ADAPTER_MODULE),
+            presentation_owner=self._presentation_owner,
         )
         try:
             await srv.start()
-        except Exception as exc:
-            self._close_generation(ctx)
-            ctx.store.close()
+            self._require_start_current(srv)
+            return await self._finish_connect(srv, ctx)
+        except BaseException as exc:
+            # Adopt the actual failed listener before starting cleanup. Caller
+            # cancellation does not release its dependencies or permit a reset.
+            self._failed_start_server = srv
+            cleanup = asyncio.get_running_loop().create_task(self._cleanup_failed_start(srv))
+            self._start_cleanup_task = cleanup
+            try:
+                await asyncio.shield(cleanup)
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                log_event('adapter_cleanup', outcome='unavailable')
+            if isinstance(exc, asyncio.CancelledError):
+                raise
+            if not isinstance(exc, Exception):
+                raise
             log_event("adapter_connect", outcome="listener_failed")
             raise ConnectionError("HMP listener did not start") from exc
+
+    async def _finish_connect(self, srv: server.HmpServer, ctx: server.ServerContext) -> bool:
         self._server = srv
+        self._require_start_current(srv, published=True)
         anchor = ctx.identity.custody.anchor_dir  # type: ignore[attr-defined]
         self._record = listener_record_path(anchor)
         # SR-7: one nonce for this listener incarnation, generated once here and reused by every
@@ -717,6 +759,7 @@ class HmpAdapter(BasePlatformAdapter):
             await srv.start_operator_read(anchor, self._nonce)
         except Exception:
             log_event("operator_read_start", outcome="unavailable")
+        self._require_start_current(srv, published=True)
         if srv.bound is not None:
             # OD-F8 (2026-09-27): the served profiles, so `pair offer`'s one-command flow can
             # list bots by name without importing Hermes (S1). Best-effort only -- the bridge is
@@ -749,6 +792,7 @@ class HmpAdapter(BasePlatformAdapter):
             else:
                 self._known_profiles = tuple(profiles) if profiles is not None else None
                 await srv.start_approval_test(self._record, self._nonce)
+                self._require_start_current(srv, published=True)
             if ctx.bridge is not None:
                 # Live-bug fix: the multiplexer brings secondary profiles online strictly AFTER
                 # this `connect()` returns, so the record just written above can already be stale
@@ -759,8 +803,21 @@ class HmpAdapter(BasePlatformAdapter):
                 self._profile_refresh_task = asyncio.get_running_loop().create_task(
                     self._periodic_profile_refresh()
                 )
+        self._require_start_current(srv, published=True)
         self._mark_connected()
         return True
+
+    def _require_start_current(self, srv: server.HmpServer, *, published: bool = False) -> None:
+        try:
+            current = (
+                srv._runner is not None and srv._stop_owner is None and srv._stopping is None
+                and not srv.closed.is_set() and srv.ctx.identity.still_current() is True
+                and (not published or self._server is srv)
+            )
+        except Exception:
+            current = False
+        if not current:
+            raise ConnectionError('listener stopped during startup')
 
     # ------------------------------------------------------------------------------------------
     # Live-bug fix: keep the listener record's `profiles` current while the listener runs.
@@ -873,7 +930,9 @@ class HmpAdapter(BasePlatformAdapter):
             if record is not None:
                 cli.remove_listener_record(record)
 
-    def _listener_closed(self) -> None:
+    def _listener_closed(self, expected: server.HmpServer | None = None) -> None:
+        if expected is not None and self._server is not expected:
+            return  # unpublished startup/deferred old owner cannot retire another listener
         srv, self._server = self._server, None
         if srv is None:
             return
@@ -881,16 +940,27 @@ class HmpAdapter(BasePlatformAdapter):
         if task is not None:
             task.cancel()  # fire-and-forget: this callback itself is synchronous (server.py)
         self._drop_record()
-        if srv.operator_worker_debt:
-            asyncio.get_running_loop().create_task(self._close_after_operator_drain(srv))
-        else:
-            self._close_generation(srv.ctx)
-            srv.ctx.store.close()
+        try:
+            if srv.operator_worker_debt or srv.presentation_worker_debt:
+                self._defer_dependency_close(srv)
+            else:
+                self._close_dependencies(srv)
+        except Exception:
+            log_event('adapter_cleanup', outcome='unavailable')
         # PR7-6 step 3: stay closed until the gateway restarts (a later `connect` would load the
         # new key and start a new listener; nothing here restarts it).
         self._set_fatal_error(IDENTITY_CHANGED_CODE, IDENTITY_CHANGED_MESSAGE, retryable=False)
 
     async def disconnect(self) -> None:
+        async with self._connect_lock:
+            if self._failed_start_server is not None:
+                cleanup = self._start_cleanup_task
+                if cleanup is None:
+                    raise RuntimeError('listener cleanup unavailable')
+                await asyncio.shield(cleanup)
+            await self._disconnect_once()
+
+    async def _disconnect_once(self) -> None:
         await self._cancel_profile_refresh()
         srv = self._server
         if srv is not None:
@@ -900,19 +970,62 @@ class HmpAdapter(BasePlatformAdapter):
             if self._server is srv:
                 self._server = None
             self._drop_record()
-            if srv.operator_worker_debt:
-                asyncio.get_running_loop().create_task(self._close_after_operator_drain(srv))
+            self._mark_disconnected()
+            if srv.operator_worker_debt or srv.presentation_worker_debt:
+                self._defer_dependency_close(srv)
             else:
-                self._close_generation(srv.ctx)
-                srv.ctx.store.close()
+                self._close_dependencies(srv)
         else:
             self._drop_record()
-        self._mark_disconnected()
+            self._mark_disconnected()
 
     async def _close_after_operator_drain(self, srv: server.HmpServer) -> None:
         await srv.wait_operator_drain()
+        await srv.wait_presentation_drain()
+        self._close_dependencies(srv)
+
+    def _close_dependencies(self, srv: server.HmpServer) -> None:
+        if srv._dependencies_closed:
+            return
+        if self._dependency_close_unknown is not None or srv._dependencies_close_unknown:
+            raise RuntimeError('dependency cleanup unavailable')
+        self._dependency_close_unknown = srv  # retain before first possible partial effect
+        srv._dependencies_close_unknown = True
         self._close_generation(srv.ctx)
         srv.ctx.store.close()
+        srv._dependencies_closed = True
+        srv._dependencies_close_unknown = False
+        self._dependency_close_unknown = None
+
+    def _defer_dependency_close(self, srv: server.HmpServer) -> None:
+        if srv._dependencies_closed or srv._dependency_close_task is not None:
+            return
+        if self._dependency_close_unknown is not None:
+            raise RuntimeError('dependency cleanup unavailable')
+        self._dependency_close_unknown = srv  # adopt before any task/start/registration effect
+        task = asyncio.get_running_loop().create_task(self._close_after_operator_drain(srv))
+        srv._dependency_close_task = task
+        self._dependency_closers.add(task)
+        # Keep failed/cancelled owners too: their outcome is not a dependency
+        # close proof, and no automatic replay is safe after an uncertain close.
+        task.add_done_callback(self._dependency_close_finished)
+        self._dependency_close_unknown = None
+
+    def _dependency_close_finished(self, task: asyncio.Task[None]) -> None:
+        if not task.cancelled() and task.exception() is None:
+            self._dependency_closers.discard(task)
+
+    async def _cleanup_failed_start(self, srv: server.HmpServer) -> None:
+        await self._cancel_profile_refresh()
+        await srv.stop(notify=False)
+        if self._server is srv:
+            self._server = None
+        self._drop_record()
+        self._mark_disconnected()
+        if srv.operator_worker_debt or srv.presentation_worker_debt:
+            self._defer_dependency_close(srv)
+        else:
+            self._close_dependencies(srv)
 
     @staticmethod
     def _close_generation(ctx: server.ServerContext) -> None:

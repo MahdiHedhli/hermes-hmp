@@ -49,6 +49,7 @@ import os
 import re
 import ssl
 import sys
+import threading
 import time
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, replace
@@ -73,6 +74,7 @@ from . import (
     media_fetch,
     mobile_cron,
     mobile_model,
+    presentation_native_service,
     presentation_routes,
     prompts,
     push_registration,
@@ -1828,6 +1830,7 @@ class HmpServer:
         on_closed: Callable[[], None] | None = None,
         push_relay_factory: Callable[[], RelayPort] | None = None,
         approval_test_owners: tuple[Any, Any] | None = None,
+        presentation_owner: Any = None,
     ) -> None:
         self.ctx = ctx
         self.settings = settings
@@ -1838,12 +1841,24 @@ class HmpServer:
         self._push_relay_factory = push_relay_factory
         self._push_dispatcher: PushDispatcher | None = None
         self._runner: web.AppRunner | None = None
+        self._runner_cleanup_attempted = False
+        self._runner_cleanup_unknown = False
+        self._start_owner: asyncio.Task[None] | None = None
         self._watch: asyncio.Task[None] | None = None
         self._push_watch: asyncio.Task[None] | None = None
         self._stopping: asyncio.Task[None] | None = None
         self._operator_read: Any = None
         self._operator_read_drained: Any = None
         self.operator_worker_debt = 0
+        # The actual adapter retains the owner across reconnects. A standalone
+        # server without that owner never silently creates a replacement pool.
+        self._presentation_owner = presentation_owner
+        self._presentation_service: Any = None
+        self._presentation_live = threading.Event()
+        self.presentation_worker_debt = False
+        self._dependencies_closed = False
+        self._dependencies_close_unknown = False
+        self._dependency_close_task: Any = None
         self._stop_owner: asyncio.Task[None] | None = None
         self._at1_owners = approval_test_owners
         self._at1_attempted = False
@@ -1855,6 +1870,19 @@ class HmpServer:
         ctx.on_identity_changed = self._identity_changed
 
     async def start(self) -> None:
+        if (self._start_owner is not None or self._runner is not None
+                or self._stop_owner is not None
+                or self.closed.is_set() or self._runner_cleanup_attempted):
+            raise ListenerConfigError('listener lifecycle already used')
+        self._start_owner = asyncio.get_running_loop().create_task(self._start_owned())
+        await asyncio.shield(self._start_owner)
+
+    def _require_setup_current(self, runner: web.AppRunner) -> None:
+        if (self._runner is not runner or self._stop_owner is not None
+                or self._stopping is not None or self.closed.is_set()):
+            raise ConnectionError('listener stopped during startup')
+
+    async def _start_owned(self) -> None:
         if not address_allowed(self.settings.bind):
             raise ListenerConfigError("bind must be a loopback or tailnet IP address (TR-4)")
         ssl_ctx = server_ssl_context(self.ctx.identity, self._identity_changed)
@@ -1867,15 +1895,20 @@ class HmpServer:
             shutdown_timeout=SHUTDOWN_TIMEOUT_S,
             handle_signals=False,
         )
-        await runner.setup()
-        site = web.TCPSite(
-            runner, self.settings.bind, self.settings.port, ssl_context=ssl_ctx, reuse_address=True
-        )
+        self._runner = runner  # adopt before any setup/partial-start await
         try:
+            await runner.setup()
+            self._require_setup_current(runner)
+            site = web.TCPSite(
+                runner, self.settings.bind, self.settings.port,
+                ssl_context=ssl_ctx, reuse_address=True
+            )
             await self._purge_push_once()
+            self._require_setup_current(runner)
             await site.start()
+            self._require_setup_current(runner)
         except BaseException:
-            await runner.cleanup()
+            await self._cleanup_runner()
             raise
         self._runner = runner
         sockets = getattr(site._server, "sockets", None) or ()
@@ -1885,7 +1918,41 @@ class HmpServer:
         self._watch = asyncio.get_running_loop().create_task(self._watchdog())
         self._push_watch = asyncio.get_running_loop().create_task(self._push_purge_loop())
         await self._start_push_dispatcher()
+        self._require_setup_current(runner)
+        self._start_presentation()
         log_event("listener_start", outcome="ok")
+
+    def _presentation_current(self) -> bool:
+        return (
+            self._presentation_live.is_set()
+            and self._runner is not None
+            and self._stop_owner is None
+            and self.ctx.presentation_service is self._presentation_service
+            and self._presentation_service is not None
+        )
+
+    def _start_presentation(self) -> None:
+        """Normal native startup only; no request can create or nominate an owner."""
+        if (self._runner is None or self._stop_owner is not None
+                or self._stopping is not None or self.closed.is_set()
+                or self._presentation_service is not None):
+            return
+        if (type(self._presentation_owner)
+                is not presentation_native_service.NativePresentationOwner
+                or not self.ctx.compat.supported):
+            return
+        self._presentation_live.set()
+        try:
+            service = self._presentation_owner.bind(
+                self.ctx, current=self._presentation_current,
+                worker_current=self._presentation_live.is_set,
+            )
+        except Exception:
+            self._presentation_live.clear()
+            log_event('presentation_start', outcome='unavailable')
+            return
+        self._presentation_service = self.ctx.presentation_service = service
+        self.ctx.presentation_available = self._presentation_current
 
     async def start_operator_read(self, anchor_dir: Path, nonce: str) -> None:
         from .operator_read import OperatorReadService
@@ -1893,8 +1960,8 @@ class HmpServer:
         if self._operator_read is not None or self._runner is None:
             raise RuntimeError("operator read listener unavailable")
         service = OperatorReadService(self.ctx, anchor_dir, nonce)
+        self._operator_read = service  # cancellation must not orphan this dependency owner
         await service.start()
-        self._operator_read = service
     async def start_approval_test(self, record: Path, nonce: str) -> None:
         """One optional service after the owner wrote this listener's same-nonce record.
 
@@ -2040,6 +2107,7 @@ class HmpServer:
                 return
 
     def _identity_changed(self) -> None:
+        self._presentation_live.clear()
         self._at1_live = False
         if self._stopping is None:
             log_event("identity_changed", outcome="listener_closed")
@@ -2049,6 +2117,28 @@ class HmpServer:
         service = self._operator_read_drained
         if service is not None:
             await service.wait_drained()
+
+    async def wait_presentation_drain(self) -> None:
+        service = self._presentation_service
+        if service is not None:
+            await service.wait_drained()
+
+    async def _cleanup_runner(self) -> None:
+        """One original cleanup attempt; exceptions/cancellation retain ownership."""
+        if self._runner_cleanup_unknown or self._runner_cleanup_attempted:
+            if self._runner is not None:
+                raise RuntimeError('listener cleanup unavailable')
+            return
+        runner = self._runner
+        if runner is None:
+            return
+        self._runner_cleanup_attempted = True
+        try:
+            await runner.cleanup()
+        except BaseException:
+            self._runner_cleanup_unknown = True
+            raise
+        self._runner = None
 
     async def _cancel_pending_sends(self) -> None:
         """Review round 3: cancel in-flight direct sends and wait, bounded, so a stop does not
@@ -2063,13 +2153,32 @@ class HmpServer:
     async def stop(self, *, notify: bool = True) -> None:
         """Fence immediately; retain and shield the single actual teardown owner."""
         self._at1_live = False
+        self._presentation_live.clear()
         if not notify:
             self._on_closed = None
         if self._stop_owner is None:
             self._stop_owner = asyncio.get_running_loop().create_task(self._stop_joined())
+        if asyncio.current_task() is self._start_owner:
+            raise RuntimeError('startup cannot await its own shutdown')
         await asyncio.shield(self._stop_owner)
 
     async def _stop_joined(self) -> None:
+        startup = self._start_owner
+        if startup is not None and not startup.done():
+            if not self._runner_cleanup_attempted:
+                startup.cancel()
+            try:
+                await asyncio.shield(startup)
+            except asyncio.CancelledError:
+                if not startup.done():
+                    raise
+            except Exception:
+                log_event('listener_start', outcome='unavailable')
+        presentation = self._presentation_service
+        if presentation is not None:
+            self.presentation_worker_debt = not await presentation.close_and_join()
+            if self.presentation_worker_debt:
+                log_event('presentation_stop', outcome='worker_debt')
         service, self._operator_read = self._operator_read, None
         if service is not None:
             debt = await service.stop()
@@ -2100,9 +2209,7 @@ class HmpServer:
             watch.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await watch
-        runner, self._runner = self._runner, None
-        if runner is not None:
-            await runner.cleanup()
+        await self._cleanup_runner()
         if not self.closed.is_set():
             self.closed.set()
             if self._on_closed is not None:

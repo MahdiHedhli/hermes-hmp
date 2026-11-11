@@ -1,6 +1,6 @@
 """Native fixed reader + full closed character projection; no HTTP/auth API.
 
-Only the future actual native service may issue claims and authorize emission.
+Only the actual native service may issue claims and authorize emission.
 This owner retains source/result memory until explicit discard. A completed
 object is not permission to emit, or proof a native thread/handler was drained.
 """

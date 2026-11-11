@@ -1,9 +1,9 @@
-"""Owned native presentation acquisition; not yet wired to HTTP or the adapter.
+"""Owned native presentation acquisition/HTTP, bound by the adapter and server.
 
 Original bearer auth is on the owning loop; real per-bot policy/home and fixed
 source/projection work run in one retained native thread. Futures carry status
 only. A result stays in its operation slot until explicitly abandoned or the
-future owned HTTP writer settles. Request cancellation is not thread drain.
+owned HTTP writer settles. Request cancellation is not thread drain.
 """
 
 from __future__ import annotations
@@ -104,7 +104,7 @@ class NativePresentationOwner:
     """Retain this on the actual adapter across listener replacement.
 
     A new six-slot generation is forbidden while any old thread/result/debt
-    survives. The eventual adapter must adopt this owner before service binding.
+    survives. The actual adapter retains this owner before service binding.
     """
 
     def __init__(self):
@@ -134,6 +134,7 @@ class NativePresentationService:
         if not callable(self._bridge.authz_state) or not callable(self._bridge._profile_home):
             raise NativePresentationUnavailableError()
         self._retired = False
+        self._drain_event = asyncio.Event()
         self._ops = {}
         self._queue = deque()
         self._profiles = {}
@@ -469,6 +470,8 @@ class NativePresentationService:
         self._ops.pop(op.handle, None)
         op.authorization = ""
         op.native_context = None
+        if self.drained:
+            self._drain_event.set()
         return True
 
     def _retire_operation(self, op):
@@ -634,6 +637,8 @@ class NativePresentationService:
         self._registry._retire(self)
         for op in tuple(self._ops.values()):
             self._retire_operation(op)
+        if self.drained:
+            self._drain_event.set()
 
     async def close_and_join(self, wait_seconds=2.0):
         if type(wait_seconds) is not float or not 0 <= wait_seconds <= 2.0:
@@ -645,3 +650,15 @@ class NativePresentationService:
                 self._reap(handle)
             await asyncio.sleep(0.005)
         return self.drained
+
+    async def wait_drained(self):
+        """Dependency owner waits without renewing work or retrying unknown cleanup.
+
+        Actual worker/writer completion callbacks settle known work. Unknown
+        start/join/close debt deliberately keeps this original generation alive.
+        """
+        if not self._retired:
+            raise NativePresentationUnavailableError("service_not_retired")
+        await self._drain_event.wait()
+        if not self.drained:
+            raise NativePresentationUnavailableError("drain_unavailable")

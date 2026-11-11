@@ -244,7 +244,7 @@ class ServerContext:
     limiter: RateLimiter = field(default_factory=RateLimiter)
     on_identity_changed: Callable[[], None] | None = None
     # Native startup only: routes cannot nominate/activate a service. Default
-    # closed until actual writer API/TLS/lifecycle qualification and binding.
+    # closed until supported writer APIs and the owned lifetime are bound.
     presentation_service: Any = None
     presentation_available: Callable[[], bool] = field(default=lambda: False)
     guarantee_cache: Guarantees | None = None
