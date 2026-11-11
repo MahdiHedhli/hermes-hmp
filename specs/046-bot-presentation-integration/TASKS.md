@@ -1,3 +1,9 @@
+## Selected implementation — native presentation service, November11
+
+- [x] **NS1** Explicit architecture/privacy/authority/lifecycle contract independently reviewed; full character/name/blobatar/static-image parity retained. [Amendment, plan, checklist and NS2–NS7 tasks](NATIVE_PRESENTATION_SERVICE_AMENDMENT.md).
+- [ ] **NS2–NS7** Implement and qualify the native reader, owned service, adapter/routes and actual client/device/release journeys. No production feature/capability is enabled by NS1.
+- Historical RGA/broker tasks below remain unfinished for that alternative. Do not treat their source-prefix passes as character delivery or as prerequisites waived inside the broker boundary.
+
 ## November11: rooted call-route implementation stage
 
 - [ ] **RGA-01e-ROOTED-CALL-ROUTE** Draft early-retained execution/resource checker retains the FULL generic owner guard. Current17 resource-prefix cases independently verified with557 source maps; minimum17 and actual lifetime caller still pending. No optimized guard/startup/feature acceptance.

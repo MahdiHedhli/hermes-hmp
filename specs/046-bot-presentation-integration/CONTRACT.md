@@ -1,3 +1,18 @@
+# Current BI1 integration decision — November11,2026
+
+The independently accepted [native presentation service amendment](NATIVE_PRESENTATION_SERVICE_AMENDMENT.md)
+is the selected implementation route for the SAME complete Desktop name/character/
+blobatar/static-avatar feature. It uses the existing trusted installed native
+runtime premise and original HMP/native authority; it creates no delegated broker
+boundary and therefore does not adopt/fake that boundary's GO/credential/reaper
+receipts. Native-source, authority, filesystem, lifecycle, client and physical/
+release qualification remain mandatory and unfinished. No route is enabled here.
+
+The broker architecture below is preserved as an unqualified alternative. Its
+RGA/startup/credential gates still apply if that architecture is used; they are
+not marked passed and are not silent fallbacks for the new native service.
+Existing validated029 media delivery is independent of either incomplete046 route.
+
 # Desktop presentation integration contract — proposed, activation closed
 
 This completes the concrete transport/custody plan for the existing BI1 scope.
