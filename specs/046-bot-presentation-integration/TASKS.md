@@ -1,3 +1,20 @@
+## November 11: interpreter and native API field checks
+
+- [x] **RGA-01d-INTERPRETER-FIELDS** Unintegrated runtime/cache/hash/compiler/
+      decoder metadata comparison; proper SimpleNamespace member descriptor and
+      class mappingproxy access; exact primitive/key/metadata fences.
+- [x] **RGA-01d-NATIVE-API-FIELDS** Unintegrated native export/flags/errors/actor
+      reference checks. No native operation, decoder/compiler/loader or actor call.
+- [x] **RGA-01d-REQUIRED-SYS-EXPORTS** Actual nullablepycache_prefix deletion red
+      corrected with required-key fences; retained evidence, no deployed incident.
+- [x] Same145 current/minimum: prior136 +9 new cases,130 export mutations and
+      foreignmetadata/key/shortstorage/copyDATA controls, no native/loader work.
+- [ ] Bind selected new predicates to original early-held code and caller/Scope/
+      Entry roots, fresh actor/API observations and full final live graph; cache/
+      runtime semantic closure still required. No partial guard replacement.
+- [ ] Actual integration/graft/callback/GC/cleanup/original60s/fullfeature/device/
+      release acceptance and remaining original roadmap, no new deployment.
+
 ## November 11: Entry and settled activation field checks
 
 - [x] **RGA-01d-ACTIVATION-FIELDS** Unintegrated settled-state roots/flags,

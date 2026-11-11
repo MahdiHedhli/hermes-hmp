@@ -1,3 +1,34 @@
+## Interpreter and native API graph checks — November 11, 2026 UTC
+
+The local character startup draft now includes unintegrated interpreter/cache/
+compiler/decoder metadata and native API field checks. They compare saved runtime
+values with current exports, fixed loader/code/global references, cache mode and
+prefix, version-specific source-hash keys, builtin metadata, file functions,
+flags, error types and process/thread identity functions. No compiler, loader,
+decoder, file syscall or actor function is invoked by these checks.
+
+An actual retained-object fixture checks 65 exports by replacement and deletion
+(130 controls), foreign function metadata and a colliding dictionary key, malformed
+native tuple storage and copied-DATA positives, with zero observed native/loader
+calls and unchanged file work. A missing nullable sys.pycache_prefix initially
+matched None; the specific red case is retained and explicit required-key checks
+now refuse it. Earlier canonical failures corrected the actual SimpleNamespace
+member descriptor and native class mapping-proxy access; these failures are not
+passes or deployed incidents.
+
+The same145 tests pass on actual Python3.14.9 and3.11.15, unchanged source,
+0failures/errors/skips: prior136 graph/Entry/activation cases plus9 new cases.
+Independent source and final source/log/XML verification found no blocker or
+mismatch. New tests are lint-clean; existing diagnostic counts are unchanged.
+These are bounded field and fixture results, not full native startup acceptance.
+
+Neither new component has a production caller. Current-export DATA is not
+original-root/callee/code authority or work permission. Original custody and
+fixed-callee authentication, fresh actor/API results, cache/runtime semantics and
+the complete final pure live graph must precede safe integration and the unchanged
+native60s/fullfeature/device/release gates. Character images remain unfinished.
+No running host/device build, grant, provider, model, job or release changed.
+
 ## Entry and activation graph checks — November 11, 2026 UTC
 
 The local character startup draft now has unintegrated settled-activation and

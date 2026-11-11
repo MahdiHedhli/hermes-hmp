@@ -446,3 +446,21 @@ rooted dispatch, original callee selection, required native observations followe
 by the complete final pure live reseal, actual causal integration and unchanged
 native60s/feature/device/release gates remain required. Final136 cases on both
 current/minimum are field/source/fixture evidence only. No runtime was updated.
+
+## Interpreter/native export components — November 11
+
+`_interpreter_graph_mirrors` checks current interpreter/cache/compiler/hash/decoder
+export DATA against a supplied native origin. It uses the actual SimpleNamespace
+member descriptor and native tuple access, fences keys and primitive metadata
+before equality, supports the observed 3.14 versus3.11 source-hash key layouts,
+and requires mandatory sys exports even when a saved value is None. The actual
+nullable-prefix deletion red case is retained. No decoding/compiler/hash runs.
+
+`_native_io_graph_mirrors` checks native operation/flag/error/actor references,
+namespace exports and safe builtin/type metadata. It performs no syscall or actor
+observation. Both preserve coherent copied-DATA positives and grant no original
+root/callee/code or work authority. No production path calls them. Complete early
+code/caller/root custody, actor/API results and final full live graph composition
+are still required. Existing generic interfaces stay complete. Final145 tests on
+both supported actual Python runtimes are field/fixture evidence, not native60s,
+feature delivery, physical-device or release acceptance. No runtime changed.

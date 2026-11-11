@@ -13,7 +13,7 @@ import stat
 import sys
 import threading
 from dataclasses import dataclass
-from types import BuiltinFunctionType, CodeType, FunctionType, MethodDescriptorType, ModuleType, CellType, GetSetDescriptorType, MethodWrapperType
+from types import BuiltinFunctionType, CodeType, FunctionType, MethodDescriptorType, ModuleType, CellType, GetSetDescriptorType, MethodWrapperType, MemberDescriptorType
 from typing import NamedTuple
 
 from .presentation_gateway_activation import GatewayActivationOwner
@@ -1024,6 +1024,528 @@ def _scope_file_graph_mirrors(scope):
                 return False
     return True
 
+
+def _interpreter_graph_mirrors(origin):
+    """Interpreter/cache/compiler/decoder DATA; not full native or code authority.
+
+    Unintegrated. Native IO exports, original root/callee provenance and actual
+    actor results are separate components. No compiler, loader or decoder runs.
+    """
+    if type(sys) is not ModuleType:
+        return False
+    sys_names = vars(sys)
+    if any(type(key) is not str for key in sys_names):
+        return False
+    required = ("modules", "implementation", "version_info", "flags", "hexversion",
+                "executable", "prefix", "exec_prefix", "base_prefix", "base_exec_prefix",
+                "_stdlib_dir", "platform", "pycache_prefix", "dont_write_bytecode")
+    if any(key not in sys_names for key in required):
+        return False
+    registry = dict.get(sys_names, "modules")
+    if type(registry) is not dict or any(type(key) is not str for key in registry):
+        return False
+    module = dict.get(registry, "hmp_startup.gateway_entry")
+    if type(module) is not ModuleType:
+        return False
+    names = vars(module)
+    if any(type(key) is not str for key in names):
+        return False
+    labels = (
+        "_InterpreterOrigin",
+        "InterpreterStartupData",
+        "_CachePolicyOrigin",
+        "_SourceHashOrigin",
+        "_SourceCompileOrigin",
+        "_CacheDecodeOrigin",
+    )
+    kinds = tuple(dict.get(names, name) for name in labels)
+    if any(type(kind) is not type for kind in kinds):
+        return False
+    for kind in kinds:
+        bases = type.__getattribute__(kind, "__bases__")
+        if type(bases) is not tuple or len(bases) != 1 or bases[0] is not tuple:
+            return False
+    if type(origin) is not kinds[0] or tuple.__len__(origin) != 11:
+        return False
+    (
+        implementation,
+        version,
+        flags,
+        data,
+        bytecode,
+        magic,
+        cache,
+        source_hash,
+        compile_source,
+        decode,
+    ) = (tuple.__getitem__(origin, i) for i in range(10))
+    for value, kind, width in (
+        (data, kinds[1], 5),
+        (cache, kinds[2], 4),
+        (source_hash, kinds[3], 8),
+        (compile_source, kinds[4], 7),
+        (decode, kinds[5], 8),
+    ):
+        if type(value) is not kind or tuple.__len__(value) != width:
+            return False
+    implementation_kind = dict.get(names, "SimpleNamespace")
+    version_kind, flags_kind = (
+        dict.get(names, "_VERSION_TYPE"),
+        dict.get(names, "_FLAGS_TYPE"),
+    )
+    if (
+        any(
+            type(kind) is not type
+            for kind in (implementation_kind, version_kind, flags_kind)
+        )
+        or type(implementation) is not implementation_kind
+        or type(version) is not version_kind
+        or (type(flags) is not flags_kind)
+        or (dict.get(sys_names, "implementation") is not implementation)
+        or (dict.get(sys_names, "version_info") is not version)
+        or (dict.get(sys_names, "flags") is not flags)
+    ):
+        return False
+    for kind in (version_kind, flags_kind):
+        bases = type.__getattribute__(kind, "__bases__")
+        if type(bases) is not tuple or len(bases) != 1 or bases[0] is not tuple:
+            return False
+    implementation_names = vars(implementation_kind)
+    if any(type(key) is not str for key in implementation_names):
+        return False
+    dictionary = implementation_names.get("__dict__")
+    if (
+        type(dictionary) is not MemberDescriptorType
+        or dictionary.__objclass__ is not implementation_kind
+        or dictionary.__name__ != "__dict__"
+    ):
+        return False
+    current = dictionary.__get__(implementation, implementation_kind)
+    if type(current) is not dict or any(type(key) is not str for key in current):
+        return False
+    name, tag, hexversion = (
+        dict.get(current, "name"),
+        dict.get(current, "cache_tag"),
+        dict.get(sys_names, "hexversion"),
+    )
+    if (
+        type(name) is not str
+        or not 0 < len(name) <= 128
+        or type(tag) is not str
+        or (not 0 < len(tag) <= 128)
+        or (type(hexversion) is not int)
+    ):
+        return False
+    paths, saved_version, saved_flags, saved_implementation, platform = (
+        tuple.__getitem__(data, i) for i in range(5)
+    )
+    actual_paths = tuple(
+        dict.get(sys_names, key)
+        for key in (
+            "executable",
+            "prefix",
+            "exec_prefix",
+            "base_prefix",
+            "base_exec_prefix",
+            "_stdlib_dir",
+        )
+    )
+    if type(paths) is not tuple or len(paths) != 6:
+        return False
+    for old, new in zip(paths, actual_paths, strict=True):
+        if (
+            type(old) is not str
+            or type(new) is not str
+            or (not 0 < len(new) <= 4096)
+            or (not new.startswith("/"))
+            or any(not 32 <= ord(char) != 127 for char in new)
+            or (old != new)
+        ):
+            return False
+    if (
+        type(saved_version) is not tuple
+        or len(saved_version) != 5
+        or tuple.__len__(version) != 5
+        or any(
+            type(saved_version[i]) is not int
+            or type(tuple.__getitem__(version, i)) is not int
+            for i in (0, 1, 2, 4)
+        )
+        or (type(saved_version[3]) is not str)
+        or (type(tuple.__getitem__(version, 3)) is not str)
+        or (len(tuple.__getitem__(version, 3)) > 32)
+        or any(saved_version[i] != tuple.__getitem__(version, i) for i in range(5))
+        or (type(saved_flags) is not tuple)
+        or (not 0 < len(saved_flags) <= 64)
+        or (tuple.__len__(flags) != len(saved_flags))
+        or any(type(value) not in (int, bool) for value in saved_flags)
+        or any(
+            type(tuple.__getitem__(flags, i)) not in (int, bool)
+            for i in range(len(saved_flags))
+        )
+        or any(
+            saved_flags[i] != tuple.__getitem__(flags, i)
+            for i in range(len(saved_flags))
+        )
+        or (type(saved_implementation) is not tuple)
+        or (len(saved_implementation) != 3)
+        or (type(saved_implementation[0]) is not str)
+        or (type(saved_implementation[1]) is not str)
+        or (type(saved_implementation[2]) is not int)
+        or (saved_implementation != (name, tag, hexversion))
+        or (type(platform) is not str)
+        or (type(dict.get(sys_names, "platform")) is not str)
+        or (not 0 < len(platform) <= 64)
+        or (dict.get(sys_names, "platform") != platform)
+    ):
+        return False
+    loaded = []
+    for key in (
+        "importlib",
+        "importlib.util",
+        "_frozen_importlib_external",
+        "_imp",
+        "builtins",
+        "marshal",
+    ):
+        value = dict.get(registry, key)
+        if type(value) is not ModuleType:
+            return False
+        namespace = vars(value)
+        if any(type(key) is not str for key in namespace):
+            return False
+        loaded.append((value, namespace))
+    (
+        (importlib_module, importlib_names),
+        (util, util_names),
+        (frozen, frozen_names),
+        (native, native_names),
+        (builtin_module, builtin_names),
+        (marshal_module, marshal_names),
+    ) = loaded
+    if (
+        dict.get(names, "sys") is not sys
+        or dict.get(names, "importlib") is not importlib_module
+        or dict.get(names, "_imp") is not native
+        or (dict.get(names, "builtins") is not builtin_module)
+        or (builtin_module is not builtins)
+        or (dict.get(names, "marshal") is not marshal_module)
+        or (dict.get(importlib_names, "util") is not util)
+        or (dict.get(importlib_names, "_bootstrap_external") is not frozen)
+        or (dict.get(registry, "importlib._bootstrap_external") is not frozen)
+        or (bytecode is not util)
+        or (type(magic) is not bytes)
+        or (len(magic) != 4)
+        or (dict.get(util_names, "MAGIC_NUMBER") is not magic)
+        or (tuple.__getitem__(cache, 0) is not native)
+    ):
+        return False
+    mode, prefix, dont_write = (tuple.__getitem__(cache, i) for i in range(1, 4))
+    actual_mode, actual_prefix, actual_write = (
+        dict.get(native_names, "check_hash_based_pycs"),
+        dict.get(sys_names, "pycache_prefix"),
+        dict.get(sys_names, "dont_write_bytecode"),
+    )
+    if (
+        type(mode) is not str
+        or type(actual_mode) is not str
+        or mode not in ("default", "always", "never")
+        or (actual_mode != mode)
+        or (type(dont_write) is not bool)
+        or (actual_write is not dont_write)
+    ):
+        return False
+    for value in (prefix, actual_prefix):
+        if value is not None and (
+            type(value) is not str
+            or not 0 < len(value) <= 4096
+            or (not value.startswith("/"))
+            or any(
+                not 32 <= ord(char) != 127 or 55296 <= ord(char) <= 57343
+                for char in value
+            )
+            or (len(value.encode("utf-8")) > 4096)
+            or (
+                value != "/"
+                and any(part in ("", ".", "..") for part in value[1:].split("/"))
+            )
+        ):
+            return False
+    if prefix != actual_prefix:
+        return False
+    loader = tuple.__getitem__(source_hash, 1)
+    hash_function, hash_code = (
+        tuple.__getitem__(source_hash, 2),
+        tuple.__getitem__(source_hash, 3),
+    )
+    compiler_function, compiler_code = (
+        tuple.__getitem__(compile_source, 2),
+        tuple.__getitem__(compile_source, 3),
+    )
+    decoder_function, decoder_code = (
+        tuple.__getitem__(decode, 1),
+        tuple.__getitem__(decode, 2),
+    )
+    if type(loader) is not type or dict.get(frozen_names, "SourceLoader") is not loader:
+        return False
+    loader_names = vars(loader)
+    if any(type(key) is not str for key in loader_names):
+        return False
+    for function, code, namespace, key in (
+        (hash_function, hash_code, loader_names, "get_code"),
+        (compiler_function, compiler_code, loader_names, "source_to_code"),
+        (decoder_function, decoder_code, frozen_names, "_compile_bytecode"),
+    ):
+        if (
+            type(function) is not FunctionType
+            or type(code) is not CodeType
+            or function.__globals__ is not frozen_names
+            or (function.__code__ is not code)
+            or (namespace.get(key) is not function)
+            or (type(function.__module__) is not str)
+            or (function.__module__ != "_frozen_importlib_external")
+            or (type(code.co_names) is not tuple)
+            or any(type(name) is not str for name in code.co_names)
+        ):
+            return False
+    hash_names = hash_code.co_names
+    if (
+        tuple.__getitem__(source_hash, 0) is not frozen
+        or dict.get(frozen_names, "_imp") is not native
+        or "source_hash" not in hash_names
+    ):
+        return False
+    if "pyc_magic_number_token" in hash_names:
+        if "_RAW_MAGIC_NUMBER" in hash_names:
+            return False
+        key_owner, key_name = (native, "pyc_magic_number_token")
+    else:
+        if "_RAW_MAGIC_NUMBER" not in hash_names:
+            return False
+        key_owner, key_name = (frozen, "_RAW_MAGIC_NUMBER")
+    key, actual_key = (
+        tuple.__getitem__(source_hash, 7),
+        dict.get(native_names if key_owner is native else frozen_names, key_name),
+    )
+    if (
+        tuple.__getitem__(source_hash, 5) is not key_owner
+        or type(tuple.__getitem__(source_hash, 6)) is not str
+        or tuple.__getitem__(source_hash, 6) != key_name
+        or (type(key) is not int)
+        or (not 0 <= key < 2**64)
+        or (type(actual_key) is not int)
+        or (key != actual_key)
+        or (tuple.__getitem__(compile_source, 0) is not frozen)
+        or (tuple.__getitem__(compile_source, 1) is not loader)
+        or (tuple.__getitem__(compile_source, 4) is not builtin_module)
+        or (tuple.__getitem__(compile_source, 5) is not builtin_names)
+        or (compiler_function.__builtins__ is not builtin_names)
+        or ("compile" in frozen_names)
+        or ("compile" not in compiler_code.co_names)
+        or (tuple.__getitem__(decode, 0) is not frozen)
+        or (tuple.__getitem__(decode, 3) is not marshal_module)
+        or (tuple.__getitem__(decode, 5) is not CodeType)
+        or (tuple.__getitem__(decode, 6) is not native)
+        or (dict.get(frozen_names, "marshal") is not marshal_module)
+        or (dict.get(frozen_names, "_code_type") is not CodeType)
+        or any(
+            name not in decoder_code.co_names
+            for name in ("marshal", "loads", "_code_type", "_imp", "_fix_co_filename")
+        )
+    ):
+        return False
+    for function, owner, namespace, name, module_name in (
+        (
+            tuple.__getitem__(source_hash, 4),
+            native,
+            native_names,
+            "source_hash",
+            "_imp",
+        ),
+        (
+            tuple.__getitem__(compile_source, 6),
+            builtin_module,
+            builtin_names,
+            "compile",
+            "builtins",
+        ),
+        (
+            tuple.__getitem__(decode, 4),
+            marshal_module,
+            marshal_names,
+            "loads",
+            "marshal",
+        ),
+        (
+            tuple.__getitem__(decode, 7),
+            native,
+            native_names,
+            "_fix_co_filename",
+            "_imp",
+        ),
+    ):
+        if (
+            type(function) is not BuiltinFunctionType
+            or function.__self__ is not owner
+            or dict.get(namespace, name) is not function
+            or (type(function.__name__) is not str)
+            or (function.__name__ != name)
+            or (type(function.__module__) is not str)
+            or (function.__module__ != module_name)
+        ):
+            return False
+    return True
+
+def _native_io_graph_mirrors(origin):
+    """Native API export/metadata DATA; no syscall or original-code authority.
+
+    Unintegrated final-graph component. Fresh actor returns, caller/root/callee
+    provenance, work admission and complete post-observation seal remain separate.
+    """
+    if type(sys) is not ModuleType:
+        return False
+    sys_names = vars(sys)
+    if any(type(key) is not str for key in sys_names):
+        return False
+    registry = dict.get(sys_names, "modules")
+    if type(registry) is not dict or any(type(key) is not str for key in registry):
+        return False
+    entry = dict.get(registry, "hmp_startup.gateway_entry")
+    if type(entry) is not ModuleType:
+        return False
+    entry_names = vars(entry)
+    if any(type(key) is not str for key in entry_names):
+        return False
+    kind = dict.get(entry_names, "_NativeIOOrigin")
+    if type(kind) is not type or type(origin) is not kind:
+        return False
+    bases = type.__getattribute__(kind, "__bases__")
+    if (
+        type(bases) is not tuple
+        or len(bases) != 1
+        or bases[0] is not tuple
+        or tuple.__len__(origin) != 9
+    ):
+        return False
+    (
+        os_module,
+        native,
+        operations,
+        flags,
+        result_kind,
+        errors,
+        thread_module,
+        thread_native,
+        actors,
+    ) = (tuple.__getitem__(origin, i) for i in range(9))
+    namespaces = []
+    for name, module in (
+        ("os", os_module),
+        ("posix", native),
+        ("builtins", builtins),
+        ("threading", thread_module),
+        ("_thread", thread_native),
+    ):
+        if type(module) is not ModuleType or dict.get(registry, name) is not module:
+            return False
+        namespace = vars(module)
+        if any(type(key) is not str for key in namespace):
+            return False
+        namespaces.append(namespace)
+    os_names, native_names, builtin_names, thread_names, thread_native_names = (
+        namespaces
+    )
+    if (
+        dict.get(entry_names, "os") is not os_module
+        or os_module is not os
+        or dict.get(entry_names, "builtins") is not builtins
+        or dict.get(entry_names, "threading") is not thread_module
+        or thread_module is not threading
+        or type(dict.get(os_names, "name")) is not str
+        or dict.get(os_names, "name") != "posix"
+        or type(operations) is not tuple
+        or len(operations) != 6
+        or type(flags) is not tuple
+        or len(flags) != 5
+        or type(errors) is not tuple
+        or len(errors) != 3
+        or type(actors) is not tuple
+        or len(actors) != 3
+    ):
+        return False
+    for name, function in zip(
+        ("open", "read", "close", "stat", "fstat", "readlink"), operations, strict=True
+    ):
+        if (
+            type(function) is not BuiltinFunctionType
+            or function.__self__ is not native
+            or type(function.__name__) is not str
+            or function.__name__ != name
+            or type(function.__module__) is not str
+            or function.__module__ != "posix"
+            or dict.get(native_names, name) is not function
+            or dict.get(os_names, name) is not function
+        ):
+            return False
+    for index, name in enumerate(
+        ("O_RDONLY", "O_NOFOLLOW", "O_CLOEXEC", "O_NONBLOCK", "O_DIRECTORY")
+    ):
+        value = flags[index]
+        if (
+            type(value) is not int
+            or (value != 0 if index == 0 else value <= 0)
+            or dict.get(native_names, name) is not value
+            or dict.get(os_names, name) is not value
+        ):
+            return False
+    if (
+        type(result_kind) is not type
+        or dict.get(native_names, "stat_result") is not result_kind
+        or dict.get(os_names, "stat_result") is not result_kind
+        or type(type.__getattribute__(result_kind, "__name__")) is not str
+        or type.__getattribute__(result_kind, "__name__") != "stat_result"
+    ):
+        return False
+    base = dict.get(native_names, "error")
+    if (
+        type(base) is not type
+        or dict.get(os_names, "error") is not base
+        or dict.get(builtin_names, "OSError") is not base
+    ):
+        return False
+    for name, error_kind in zip(
+        ("OSError", "FileNotFoundError", "PermissionError"), errors, strict=True
+    ):
+        if type(error_kind) is not type:
+            return False
+        name_value = type.__getattribute__(error_kind, "__name__")
+        module_value = type.__getattribute__(error_kind, "__module__")
+        mro = type.__getattribute__(error_kind, "__mro__")
+        if (
+            dict.get(builtin_names, name) is not error_kind
+            or type(name_value) is not str
+            or name_value != name
+            or type(module_value) is not str
+            or module_value != "builtins"
+            or type(mro) is not tuple
+            or not any(value is base for value in mro)
+        ):
+            return False
+    for function, module, namespace, alias, name in (
+        (actors[0], native, native_names, os_names, "getpid"),
+        (actors[1], native, native_names, os_names, "geteuid"),
+        (actors[2], thread_native, thread_native_names, thread_names, "get_ident"),
+    ):
+        if (
+            type(function) is not BuiltinFunctionType
+            or function.__self__ is not module
+            or type(function.__name__) is not str
+            or function.__name__ != name
+            or dict.get(namespace, name) is not function
+            or dict.get(alias, name) is not function
+        ):
+            return False
+    return True
 
 def _entry_graph_mirrors(binding):
     """Started Entry/invocation/native-storage DATA, not original authority.

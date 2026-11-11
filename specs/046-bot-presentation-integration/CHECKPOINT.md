@@ -1,3 +1,21 @@
+## November 11: interpreter/native field checkpoint
+
+Latest source adds unintegrated interpreter/cache/compiler/decoder and native API
+export comparison alongside the prior graph components. Same145 current/minimum
+cases pass with unchanged source and nofail/error/skip, independent all547 source/
+log/XML verification. Actual65exports×replacement/deletion=130 controls, zero
+native/loader calls and unchanged file work. Initial nullable sys.pycache_prefix
+absence matched None; required-key fence fixes it, no deployed incident established.
+Canonical member-descriptor/mappingproxy corrections and failed preflight runs
+remain distinct from passing acceptance. Public FEATURES/status gist updated.
+
+No production guard uses these components. Complete original-root/callee/code
+custody and new-predicate early capture, actual actor/API results, cache/runtime
+semantic closure and final full live graph before reduced dispatch; then actual
+integrated adversarial/cleanup/original60s/feature/device/release gates. Last dated
+native startup still fails60s. Full original goal active; no runtime/grant/provider/
+model/job/device/release changes. Components are not character-image delivery.
+
 ## November 11: current rooted-graph implementation checkpoint
 
 Code checkpoint `bc118ba1c389d855dce9312f9405255419d8203c` retains full
