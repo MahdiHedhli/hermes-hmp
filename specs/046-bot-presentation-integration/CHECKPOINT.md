@@ -1,3 +1,30 @@
+## November 11: current rooted-graph implementation checkpoint
+
+Code checkpoint `bc118ba1c389d855dce9312f9405255419d8203c` retains full
+production guards. Unintegrated field projections now cover shared owners,
+closed file/scan fields, cache context, operator approval/read-chain/API metadata,
+settled activation/import origins and started Entry/invocation/native ledger
+representation. These do not establish original-object or current-code authority.
+Actual cache getter and approval filename metadata hook findings were corrected
+in the candidate and causally checked; no deployed incident is established.
+
+Latest matching current/minimum suite:136 tests each on actual Python3.14.9 and
+3.11.15, unchanged source,0fail/error/skip, independent all546 source/log/XML
+verification. This suite is not136 full native launches. Earlier cache27 and
+approval79 bounded runs remain separate exact-source evidence. Source, test,
+lint/scanner/surface and publication receipts remain private.
+
+Next: complete interpreter/native API and fresh actor/API observations, bind the
+fixed callee and original caller/Scope/Entry roots before reduced dispatch, and
+compose the complete final pure live graph without ordinary project callbacks.
+New helper definitions must be included in the original early held-code record
+before any selected dispatch; current-export identity alone cannot qualify them.
+Preserve full generic/pre-publication/non-native validators. Then run actual
+coherent-graft/late-callback/GC/counter/cleanup differentials, original60s and full
+normal/native/service/physical/release acceptance. The last dated native startup
+still fails60s. No character delivery, host/deployment/device build or grant/
+provider/model/job/store change occurred at this checkpoint. Full goal is active.
+
 ## November 10: RBH-02 early parent and publication binding
 
 The parent environment is now env7 with a literal retained-helper capsule;
