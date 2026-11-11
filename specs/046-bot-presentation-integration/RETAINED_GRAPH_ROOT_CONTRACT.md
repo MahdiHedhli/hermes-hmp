@@ -510,3 +510,20 @@ actual original type/function/constructor metadata through parent and both Scope
 seals, with import-order/foreignkey/late-code/coherent-nomination/GC causals before
 full graph integration. Final195 current/minimum field/initialization/cache tests
 are not native60s, full feature, physical or release evidence. No runtime changed.
+
+## November 11: transient runtime prewarm implemented
+
+Entry now prewarms the fixed runtime_files/entry_files/cache_context modules,
+retains their namespaces/specs/declared class and code metadata through later
+imports/capture, and binds only explicit defining aliases during genuine active
+initialization. Exact existing modules are inspected directly before importlib's
+spec reads. Held native spec dictionary access and exact-string class key fences
+close the two demonstrated candidate protocol paths; malformed paths refuse
+without foreign calls in the bounded tests. Final same224 current/minimum tests
+pass. Independent review accepts this initialization delta only.
+
+The persistent retained helper record remains7modules/41classes/42functions; it
+still lacks these modules' complete runtime class/code closure. Original-root
+record expansion, constructor/transitive/source/caller/callee/bothScope checks
+and complete fresh graph reseal remain next. No arbitrary-GC atomicity, native
+startup speedup,60s success, feature delivery or release qualification follows.

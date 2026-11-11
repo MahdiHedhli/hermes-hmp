@@ -15,7 +15,14 @@ import os
 import sys
 import threading
 from importlib.machinery import ModuleSpec
-from types import BuiltinFunctionType, CodeType, FunctionType, ModuleType, SimpleNamespace
+from types import (
+    BuiltinFunctionType,
+    CodeType,
+    FunctionType,
+    GetSetDescriptorType,
+    ModuleType,
+    SimpleNamespace,
+)
 from typing import NamedTuple
 
 from hmp_plugin.presentation_gateway_activation import GatewayActivationOwner
@@ -884,6 +891,12 @@ def _capture_origin():
                                    for f in (constructor, _NativeFileLineage.__new__))
     origin_kind, owner_kind, guard = _EntryOrigin, GatewayEntryOwner, _link_policy_current
     registry, sys_namespace = sys.modules, vars_of(sys)
+    spec_dictionary = vars_of(ModuleSpec).get('__dict__')
+    if (type_of(spec_dictionary) is not GetSetDescriptorType
+            or spec_dictionary.__objclass__ is not ModuleSpec
+            or type_of(spec_dictionary.__name__) is not str
+            or spec_dictionary.__name__ != '__dict__'):
+        raise refused('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
 
     def seal():
         if (type_of(module) is not module_kind or type_of(sys_module) is not module_kind
@@ -1063,6 +1076,165 @@ def _capture_origin():
                 or not all_of(k in selection_values and selection_values[k] is v
                               for k, v in selection_items)):
             raise refused('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+
+    # Fixed runtime definitions must be held before later imports can nominate
+    # replacements. This transient seal is not the persistent runtime-origin
+    # record and does not itself authorize a shorter admission path.
+    runtime_rows = []
+    entry_values = {}
+    runtime_parent_seal = seal
+
+    def seal():
+        runtime_parent_seal()
+        for runtime_module, runtime_name, namespace, items, spec_values, spec_items in runtime_rows:
+            if (type_of(runtime_module) is not module_kind
+                    or registry.get(runtime_name) is not runtime_module
+                    or vars_of(runtime_module) is not namespace
+                    or len_of(namespace) != len_of(items)
+                    or not all_of(type_of(k) is str for k in namespace)
+                    or not all_of(k in namespace and namespace[k] is v for k, v in items)
+                    or len_of(spec_values) != len_of(spec_items)
+                    or not all_of(type_of(k) is str for k in spec_values)
+                    or not all_of(k in spec_values and spec_values[k] is v
+                                  for k, v in spec_items)):
+                raise refused('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+
+    for short_name, class_names, helper_names in (
+        ('runtime_files', ('RuntimeFilesError', 'RuntimePackage', 'LinkHop',
+                           'ExecutableLinkPlan', 'RuntimeFilePlan'),
+         ('_require', '_pairs', '_document', '_path', '_inside', '_typed_equal',
+          '_library_name', '_link_plan', 'build_runtime_plan', 'build_runtime_link_plan',
+          '_build_runtime_plan', 'plan_current', 'loaded_origins')),
+        ('entry_files', ('EntryFilesError', '_Inputs', 'EntryFileSnapshotOwner'),
+         ('_require', '_same_package', '_pairs', '_decode')),
+        ('cache_context', ('CacheContextError', 'CacheInputData', '_ContextSource',
+                           'CacheContextOwner'),
+         ('_require', '_context', '_getter_current', '_rows')),
+    ):
+        seal()
+        runtime_name = 'hmp_startup.' + short_name
+        runtime_module = registry.get(runtime_name)
+        # Importlib itself reads an existing module's spec. Fence a partial
+        # module directly before allowing any import machinery to inspect it.
+        if runtime_module is None:
+            if short_name == 'runtime_files':
+                from . import runtime_files as runtime_module
+            elif short_name == 'entry_files':
+                from . import entry_files as runtime_module
+            else:
+                from . import cache_context as runtime_module
+        seal()
+        runtime_file = file.rsplit('/', 1)[0] + '/' + short_name + '.py'
+        if (type_of(runtime_module) is not module_kind
+                or registry.get(runtime_name) is not runtime_module):
+            raise refused('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+        namespace = vars_of(runtime_module)
+        if not all_of(type_of(k) is str for k in namespace):
+            raise refused('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+        label, path = namespace.get('__name__'), namespace.get('__file__')
+        runtime_spec = namespace.get('__spec__')
+        if (type_of(label) is not str or label != runtime_name
+                or type_of(path) is not str or path != runtime_file
+                or type_of(runtime_spec) is not ModuleSpec):
+            raise refused('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+        spec_values = spec_dictionary.__get__(runtime_spec, ModuleSpec)
+        if type_of(spec_values) is not dict:
+            raise refused('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+        if not all_of(type_of(k) is str for k in spec_values):
+            raise refused('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+        spec_origin = spec_values.get('origin')
+        if type_of(spec_origin) is not str or spec_origin != runtime_file:
+            raise refused('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+        for name in class_names:
+            kind = namespace.get(name)
+            if type_of(kind) is not type_of:
+                raise refused('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+            class_namespace = vars_of(kind)
+            if not all_of(type_of(k) is str for k in class_namespace):
+                raise refused('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+            label = class_namespace.get('__module__')
+            if type_of(label) is not str or label != runtime_name:
+                raise refused('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+        for name in helper_names:
+            helper = namespace.get(name)
+            if (type_of(helper) is not FunctionType or helper.__globals__ is not namespace
+                    or type_of(helper.__code__) is not CodeType
+                    or type_of(helper.__code__.co_filename) is not str
+                    or helper.__code__.co_filename != runtime_file):
+                raise refused('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+        if short_name == 'entry_files':
+            aliases = (('gateway_entry', module), ('GatewayEntryOwner', owner_kind))
+        elif short_name == 'cache_context':
+            aliases = (('EntryFileSnapshotOwner', entry_values['EntryFileSnapshotOwner']),
+                       ('_Inputs', entry_values['_Inputs']),
+                       ('_same_package', entry_values['_same_package']),
+                       ('GatewayEntryOwner', owner_kind),
+                       ('_origin_current', values['_origin_current']))
+        else:
+            aliases = ()
+        for name, expected in aliases:
+            if name not in namespace:
+                frame = getframe()
+                initializing_frame = False
+                for _ in range(128):
+                    if frame is None:
+                        break
+                    code = frame.f_code
+                    if (frame.f_globals is namespace and type_of(code.co_name) is str
+                            and code.co_name == '<module>'
+                            and type_of(code.co_filename) is str
+                            and code.co_filename == runtime_file):
+                        initializing_frame = True
+                        break
+                    frame = frame.f_back
+                del frame
+                if (spec_values.get('_initializing') is not True
+                        or initializing_frame is not True
+                        or values.get('_ENTRY_ORIGIN') is not None):
+                    raise refused('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+                namespace[name] = expected
+            if namespace[name] is not expected:
+                raise refused('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+        runtime_class_rows = []
+        for name in class_names:
+            kind = namespace[name]
+            class_namespace = vars_of(kind)
+            if not all_of(type_of(k) is str for k in class_namespace):
+                raise refused('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+            items = tuple_of(class_namespace.items())
+            if not all_of(type_of(k) is str for k, _ in items):
+                raise refused('BI1_LINK_FACTORY_ORIGIN_REFUSED') from None
+            runtime_class_rows.append((kind, items, kind.__bases__))
+        runtime_class_rows = tuple_of(runtime_class_rows)
+        class_rows = (*class_rows, *runtime_class_rows)
+        runtime_functions = [namespace[name] for name in helper_names]
+        for _, items, _ in runtime_class_rows:
+            for _, item in items:
+                if type_of(item) in (classmethod, staticmethod):
+                    item = item.__func__
+                if type_of(item) is FunctionType:
+                    runtime_functions.append(item)
+        function_rows = (*function_rows, *tuple_of(
+            (f, f.__code__, f.__defaults__, f.__kwdefaults__,
+             () if f.__kwdefaults__ is None else tuple_of(f.__kwdefaults__.items()),
+             f.__closure__, () if f.__closure__ is None else
+             tuple_of(cell.cell_contents for cell in f.__closure__)) for f in runtime_functions))
+        # Generated NamedTuple constructors have private globals separate from
+        # the defining module; retain those too, without freezing collections.
+        for _, items, _ in runtime_class_rows:
+            for name, item in items:
+                if name != '__new__':
+                    continue
+                if type_of(item) is staticmethod:
+                    item = item.__func__
+                if type_of(item) is FunctionType and item.__globals__ is not namespace:
+                    constructor_globals = (*constructor_globals,
+                        (item.__globals__, tuple_of(item.__globals__.items())))
+        runtime_rows.append((runtime_module, runtime_name, namespace, tuple_of(namespace.items()),
+                             spec_values, tuple_of(spec_values.items())))
+        if short_name == 'entry_files':
+            entry_values = namespace
+        seal()
 
     from . import link_factory_origin
 

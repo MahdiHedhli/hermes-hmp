@@ -1,3 +1,21 @@
+## November 11: fixed runtime prewarm custody
+
+- [x] **RGA-01d-PREWARM-TRANSIENT** Prepare runtime_files, entry_files and
+      cache_context under the original Entry seals before helper capture; retain
+      their declared classes/functions/generated constructors across callbacks.
+- [x] Bind only declared missing aliases during genuine initialization with an
+      active matching module frame and unpublished Entry origin. Reject stale or
+      foreign aliases, malformed class/module/spec keys before protocol lookup;
+      inspect existing modules before importlib and use held native spec getter.
+- [x] Original parent three readiness controls fail; corrected29 focused and
+      final224 identical current/minimum cases pass, nofail/error/skip/source drift.
+      Independent review accepts transient custody; earlier222 predates class-key fix.
+- [ ] **RGA-01d-PREWARM-PERSISTENT** Extend the actual early helper module/type/
+      function/constructor/source record and original parent/bothScope checks.
+      Current packet7modules/41classes/42functions is unchanged. No fast dispatch.
+- [ ] Full graph/caller/callee/runtime/actor/API/cache/GC integration, native60s,
+      feature/device/release acceptance; retain all existing roadmap requirements.
+
 ## November 11: cycle-safe definition staging prerequisite
 
 - [x] **RGA-01d-DEFINITION-STAGING** Move only cycle-causing Entry/entry-file

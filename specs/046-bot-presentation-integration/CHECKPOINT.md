@@ -1,3 +1,35 @@
+## Fixed runtime prewarming — November 11, 2026 UTC
+
+The character startup draft now prepares the fixed runtime-file, entry-file and
+cache-context modules before original helper capture. Entry retains their module
+and spec namespaces, declared classes, function code/defaults/closures and generated
+constructor globals across later imports and capture callbacks. Only declared
+aliases missing from a genuinely initializing module with a matching active module
+frame may be supplied from held defining objects. Foreign aliases and attempts to
+repair an initialized module refuse. Existing modules are inspected directly before
+importlib can read malformed metadata; native spec-dictionary access and class-key
+fences avoid foreign comparison/getter dispatch in the tested refusal paths.
+
+The unchanged parent fails all three new readiness controls. The corrected source
+passes29 new cases: three import orders, twelve later class/code/default/keyword
+default mutations, and fourteen partial-alias/initialization/module/spec/class-key
+cases. Two retained red runs distinguish a fixture-arming error from an actual
+importlib spec lookup gap; a separate class-key red demonstrates the class metadata
+lookup gap. Both candidate gaps are corrected. The final same224-case startup and
+cache regression set passes on actual Python3.14.9 and3.11.15, with unchanged source
+and zero failures, errors or skips. Independent review accepts transient capture
+custody only; the initial222-case greens predate the final class-key correction.
+
+This is initialization custody, not persistent runtime provenance or a fast
+admission path. The early persistent helper packet still omits these three modules'
+full class/code closure. Expanding and authenticating that record through the
+original caller/root and both Scope checks, complete graph integration, actual
+GC/callback causal checks and unchanged native60s startup acceptance remain open.
+No startup speedup, character image delivery, host-local image display, device or
+release qualification is claimed. No host restart, install, grant, provider, model,
+job or store release changed in this source step. The broader feature goal remains
+active; LLY520 is absent from the current management inventory.
+
 ## November 11: definition staging for fixed prewarm
 
 Two cycle-causing imports moved below complete entry-file/cache-context defs;
