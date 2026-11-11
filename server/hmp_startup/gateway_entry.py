@@ -1105,6 +1105,8 @@ def _capture_origin():
          ('_require', '_pairs', '_document', '_path', '_inside', '_typed_equal',
           '_library_name', '_link_plan', 'build_runtime_plan', 'build_runtime_link_plan',
           '_build_runtime_plan', 'plan_current', 'loaded_origins')),
+        ('cache_candidates', ('CacheCandidateError', 'PlannedCachePath'),
+         ('_require', '_location', 'planned_cache_path')),
         ('entry_files', ('EntryFilesError', '_Inputs', 'EntryFileSnapshotOwner'),
          ('_require', '_same_package', '_pairs', '_decode')),
         ('cache_context', ('CacheContextError', 'CacheInputData', '_ContextSource',
@@ -1119,6 +1121,8 @@ def _capture_origin():
         if runtime_module is None:
             if short_name == 'runtime_files':
                 from . import runtime_files as runtime_module
+            elif short_name == 'cache_candidates':
+                from . import cache_candidates as runtime_module
             elif short_name == 'entry_files':
                 from . import entry_files as runtime_module
             else:

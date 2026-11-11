@@ -1,3 +1,77 @@
+## Cache planner and final constructor freshness — November 11, 2026 UTC
+
+The character-image startup draft now prewarms and retains cache_candidates before
+later imports. Its two classes and five source functions extend the helper record
+to 11 modules, 55 classes and 99 functions. PlannedCachePath extends the parent to
+seven modules and sixteen types using the existing twelve-field constructor pins.
+Old indices and packet widths remain unchanged. Five imported aliases join their
+original definitions in both helper checks, both parent checks and both Scope
+publication checks. No filesystem read, provider or permission surface was added.
+
+The tests exposed a source freshness gap: constructor metadata changed after a
+selected checker callback could survive to a successful parent return. Three
+explicit diagnostics observe that invalid return with zero changed-constructor
+calls and one original pure engine audit. Both parent paths now repeat the full
+native module and sixteen-constructor validation after the last checker callback;
+this is not a special-case planner check. The failing cases remain evidence of the
+gap, not successful controls. No deployed incident or foreign execution is claimed.
+
+Baseline26 all fail for missing refusals; corrected26 and then50 pass. Expanded110
+pass on Python3.14.9 and3.11.15, including five planner functions and all eight
+runtime constructors changed after generic/started checker returns, code/default/
+keyword drift and six actual Scope publication cases. The final1070 regression
+cases pass on both interpreters with identical ordered IDs, zero failures/errors/
+skips and unchanged source. Private-data and plugin-surface checks pass. Source
+fingerprints and log/XML hashes bind the tested bytes; initial collection failure
+was a test import mistake and is excluded from causal failure evidence.
+
+This remains bounded source qualification. Fresh inventories find49/33 callable
+class attributes outside the helper and constructor records on current/minimum
+Python. Generated helpers use collections/typing globals, and newer annotation
+helpers contain mutable dictionary closure cells; these need explicit custody,
+not a relaxed HMP-function check. Full original-root/caller/callee/GC/callback/fresh
+graph integration, unchanged native60s acceptance, character-image delivery and
+physical/Linux/provider/release qualification remain open. Host-local images have
+an existing source delivery candidate and separately recorded native/Dart/Flutter
+evidence; actual display on a signed physical candidate remains unverified. This
+constructor step does not replace that earlier evidence. The last dated native
+startup still fails. No fast audit, speedup, installed build,
+host restart/update, device grant, model, provider, job or store change is claimed.
+The complete roadmap goal remains active.
+
+## Generated callable custody design — pending implementation, November 11
+
+Keep the 99 declared HMP function rows unchanged and require their defining HMP
+module globals. Generated callable metadata belongs in separate per-type rows
+rooted in the original early capture. Retain each literal attribute name, actual
+raw wrapper, exact native wrapper kind, underlying function/code/globals/builtins,
+defaults, keyword pairs, closure identity and strongly held cell data. Join raw
+class members before native unwrapping; never invoke a descriptor or annotation
+getter during capture. Authenticate the canonical collections/typing module,
+registry binding and code-referenced export projection with original native roots.
+Do not freeze unrelated mutable module state. Both parent paths and both Scope
+mirrors require fresh native reseals after callbacks, including final constructor
+and generated rows. Preserve all existing caller/root/GC and source prerequisites.
+
+Derive supported generated-role presence from the actual original class namespace
+and retain absence explicitly; do not gate features on an exact interpreter
+version allowlist. Unknown callable shapes require an explicit unsupported-shape
+diagnostic and reviewed dependency decision, never silent generic admission.
+Collections helper closure contents must correspond to original native len/map/
+dict/zip/tuple operations, actual field_names and num_fields. _replace calls
+self._make, so these identities and member dispatch must join the same held type.
+
+Python3.14 typing annotation helpers additionally retain mutable checked_types and
+types dictionaries. Cell identity does not prove content freshness. Hold literal
+snapshots, then check exact dictionary/key types, cardinality and original value
+identities without foreign equality or repr; nested values need a closed DATA
+schema. The lazy annotationlib Format/annotations_to_string dependency is a
+separate transitive prerequisite. Do not evaluate annotations or claim complete
+callable execution closure until that prerequisite is supported. A bounded
+collections-only step must leave annotation custody explicitly incomplete.
+None of these Python checks establishes general GC atomicity or native/physical
+feature qualification by itself.
+
 ## Declared runtime classmethods — November 11, 2026 UTC
 
 The character-image startup draft now retains eight declared source classmethods

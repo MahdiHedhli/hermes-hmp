@@ -6128,11 +6128,11 @@ class StartupArtifactOwner:
                     )
                     or (link_pin_environment[1].get("modules") is not link_pin_environment[2])
                     or (link_raw_type(link_pin_modules) is not link_raw_tuple)
-                    or (link_raw_len(link_pin_modules) != 6)
+                    or (link_raw_len(link_pin_modules) != 7)
                     or (link_raw_type(link_pin_own_functions) is not link_raw_tuple)
                     or (link_raw_type(link_pin_policy_functions) is not link_raw_tuple)
                     or (link_raw_type(link_pin_types) is not link_raw_tuple)
-                    or (link_raw_len(link_pin_types) != 15)
+                    or (link_raw_len(link_pin_types) != 16)
                 ):
                     raise refusal from None
                 link_pin_names = (
@@ -6142,6 +6142,7 @@ class StartupArtifactOwner:
                     "hmp_startup.runtime_files",
                     "hmp_startup.entry_files",
                     "hmp_startup.cache_context",
+                    "hmp_startup.cache_candidates",
                 )
                 for link_pin_row, link_pin_name in link_raw_zip(link_pin_modules, link_pin_names, strict=True):
                     if link_raw_type(link_pin_row) is not link_raw_tuple or link_raw_len(link_pin_row) != 3 or link_raw_type(link_pin_row[0]) is not link_raw_str or (link_pin_row[0] != link_pin_name) or (link_raw_type(link_pin_row[1]) is not link_raw_module) or (link_raw_type(link_pin_row[2]) is not link_raw_dict) or link_raw_any((link_raw_type(link_pin_k) is not link_raw_str for link_pin_k in link_pin_row[2])) or (link_pin_environment[2].get(link_pin_name) is not link_pin_row[1]) or (link_raw_vars(link_pin_row[1]) is not link_pin_row[2]) or (link_raw_type(link_pin_row[2].get('__name__')) is not link_raw_str) or (link_pin_row[2]['__name__'] != link_pin_name):
@@ -6180,6 +6181,7 @@ class StartupArtifactOwner:
                     (4, "_Inputs"),
                     (5, "CacheInputData"),
                     (5, "_ContextSource"),
+                    (6, "PlannedCachePath"),
                 )
                 for link_pin_pin, (link_pin_module_index, link_pin_name) in link_raw_zip(
                     link_pin_types, link_pin_exports, strict=True
@@ -6700,6 +6702,11 @@ class StartupArtifactOwner:
                     (9, "_same_package", 8, "_same_package"),
                     (9, "GatewayEntryOwner", 6, "GatewayEntryOwner"),
                     (9, "_origin_current", 6, "_origin_current"),
+                    (9, "PlannedCachePath", 10, "PlannedCachePath"),
+                    (9, "_location", 10, "_location"),
+                    (9, "planned_cache_path", 10, "planned_cache_path"),
+                    (10, "RuntimeFilesError", 7, "RuntimeFilesError"),
+                    (10, "_path", 7, "_path"),
                 ):
                     link_runtime_consumer_names = link_hdata_modules[link_runtime_consumer][1]
                     link_runtime_definition_names = link_hdata_modules[link_runtime_definition][1]
@@ -7021,11 +7028,11 @@ class StartupArtifactOwner:
                     )
                     or (link_pin_environment[1].get("modules") is not link_pin_environment[2])
                     or (link_raw_type(link_pin_modules) is not link_raw_tuple)
-                    or (link_raw_len(link_pin_modules) != 6)
+                    or (link_raw_len(link_pin_modules) != 7)
                     or (link_raw_type(link_pin_own_functions) is not link_raw_tuple)
                     or (link_raw_type(link_pin_policy_functions) is not link_raw_tuple)
                     or (link_raw_type(link_pin_types) is not link_raw_tuple)
-                    or (link_raw_len(link_pin_types) != 15)
+                    or (link_raw_len(link_pin_types) != 16)
                 ):
                     raise refusal from None
                 link_pin_names = (
@@ -7035,6 +7042,7 @@ class StartupArtifactOwner:
                     "hmp_startup.runtime_files",
                     "hmp_startup.entry_files",
                     "hmp_startup.cache_context",
+                    "hmp_startup.cache_candidates",
                 )
                 for link_pin_row, link_pin_name in link_raw_zip(link_pin_modules, link_pin_names, strict=True):
                     if link_raw_type(link_pin_row) is not link_raw_tuple or link_raw_len(link_pin_row) != 3 or link_raw_type(link_pin_row[0]) is not link_raw_str or (link_pin_row[0] != link_pin_name) or (link_raw_type(link_pin_row[1]) is not link_raw_module) or (link_raw_type(link_pin_row[2]) is not link_raw_dict) or link_raw_any((link_raw_type(link_pin_k) is not link_raw_str for link_pin_k in link_pin_row[2])) or (link_pin_environment[2].get(link_pin_name) is not link_pin_row[1]) or (link_raw_vars(link_pin_row[1]) is not link_pin_row[2]) or (link_raw_type(link_pin_row[2].get('__name__')) is not link_raw_str) or (link_pin_row[2]['__name__'] != link_pin_name):
@@ -7073,6 +7081,7 @@ class StartupArtifactOwner:
                     (4, "_Inputs"),
                     (5, "CacheInputData"),
                     (5, "_ContextSource"),
+                    (6, "PlannedCachePath"),
                 )
                 for link_pin_pin, (link_pin_module_index, link_pin_name) in link_raw_zip(
                     link_pin_types, link_pin_exports, strict=True
@@ -7593,6 +7602,11 @@ class StartupArtifactOwner:
                     (9, "_same_package", 8, "_same_package"),
                     (9, "GatewayEntryOwner", 6, "GatewayEntryOwner"),
                     (9, "_origin_current", 6, "_origin_current"),
+                    (9, "PlannedCachePath", 10, "PlannedCachePath"),
+                    (9, "_location", 10, "_location"),
+                    (9, "planned_cache_path", 10, "planned_cache_path"),
+                    (10, "RuntimeFilesError", 7, "RuntimeFilesError"),
+                    (10, "_path", 7, "_path"),
                 ):
                     link_runtime_consumer_names = link_hdata_modules[link_runtime_consumer][1]
                     link_runtime_definition_names = link_hdata_modules[link_runtime_definition][1]

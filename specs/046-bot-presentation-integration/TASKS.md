@@ -1,3 +1,11 @@
+## November 11: cache planner and final constructor freshness
+
+- [x] **RGA-01d-CACHE-CANDIDATES** Prewarm cache_candidates; append its two classes/five source functions and PlannedCachePath constructor. Helper11/55/99, parent7/16, existing indices/widths preserved; five aliases joined at all six mirrors.
+- [x] **RGA-01d-CONSTRUCTOR-FINAL-SEAL** Both parent paths repeat all native module/16 constructor pins after last checker callback; retain actual successful-return counterexamples before repair.
+- [x] Baseline26 missing-refusal controls, corrected110 both interpreters and final1070 identical cases/source maps; no failure/error/skip. Original-root and other security requirements preserved.
+- [ ] **RGA-01d-RUNTIME-GENERATED**49/33 remaining callable attributes; independently held collections/typing globals and closure contents, no plain-function widening or exact-version feature allowlist.
+- [ ] Full original-root/caller/callee/GC/callback/freshgraph, native60s and complete feature/device/Linux/provider/release qualification.
+
 ## November 11: declared runtime classmethods
 
 - [x] **RGA-01d-RUNTIME-CLASSMETHODS** Eight exact native wrappers/functions, 94 helper roles, primitive21; old roles and indices preserved.

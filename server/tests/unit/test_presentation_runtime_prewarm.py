@@ -23,6 +23,7 @@ def observe(frame,event,value):
     from hmp_startup import gateway_entry as entry
     required={
         'runtime_files':('RuntimeFilePlan','build_runtime_plan'),
+        'cache_candidates':('PlannedCachePath','planned_cache_path'),
         'entry_files':('EntryFileSnapshotOwner','_same_package'),
         'cache_context':('CacheContextOwner','_getter_current'),
     }
@@ -86,7 +87,7 @@ def test_fixed_runtime_modules_and_aliases_ready_before_helper_capture(tmp_path,
     }
 
 
-@pytest.mark.parametrize('module', ('runtime_files', 'entry_files', 'cache_context'))
+@pytest.mark.parametrize('module', ('runtime_files', 'entry_files', 'cache_context', 'cache_candidates'))
 @pytest.mark.parametrize('kind', ('code', 'defaults', 'kwdefaults', 'class'))
 def test_prepared_runtime_drift_during_later_capture_refuses_without_dispatch(
         tmp_path, module, kind):

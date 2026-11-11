@@ -1,3 +1,44 @@
+## Cache planner and final constructor freshness — November 11, 2026 UTC
+
+The character-image startup draft now prewarms and retains cache_candidates before
+later imports. Its two classes and five source functions extend the helper record
+to 11 modules, 55 classes and 99 functions. PlannedCachePath extends the parent to
+seven modules and sixteen types using the existing twelve-field constructor pins.
+Old indices and packet widths remain unchanged. Five imported aliases join their
+original definitions in both helper checks, both parent checks and both Scope
+publication checks. No filesystem read, provider or permission surface was added.
+
+The tests exposed a source freshness gap: constructor metadata changed after a
+selected checker callback could survive to a successful parent return. Three
+explicit diagnostics observe that invalid return with zero changed-constructor
+calls and one original pure engine audit. Both parent paths now repeat the full
+native module and sixteen-constructor validation after the last checker callback;
+this is not a special-case planner check. The failing cases remain evidence of the
+gap, not successful controls. No deployed incident or foreign execution is claimed.
+
+Baseline26 all fail for missing refusals; corrected26 and then50 pass. Expanded110
+pass on Python3.14.9 and3.11.15, including five planner functions and all eight
+runtime constructors changed after generic/started checker returns, code/default/
+keyword drift and six actual Scope publication cases. The final1070 regression
+cases pass on both interpreters with identical ordered IDs, zero failures/errors/
+skips and unchanged source. Private-data and plugin-surface checks pass. Source
+fingerprints and log/XML hashes bind the tested bytes; initial collection failure
+was a test import mistake and is excluded from causal failure evidence.
+
+This remains bounded source qualification. Fresh inventories find49/33 callable
+class attributes outside the helper and constructor records on current/minimum
+Python. Generated helpers use collections/typing globals, and newer annotation
+helpers contain mutable dictionary closure cells; these need explicit custody,
+not a relaxed HMP-function check. Full original-root/caller/callee/GC/callback/fresh
+graph integration, unchanged native60s acceptance, character-image delivery and
+physical/Linux/provider/release qualification remain open. Host-local images have
+an existing source delivery candidate and separately recorded native/Dart/Flutter
+evidence; actual display on a signed physical candidate remains unverified. This
+constructor step does not replace that earlier evidence. The last dated native
+startup still fails. No fast audit, speedup, installed build,
+host restart/update, device grant, model, provider, job or store change is claimed.
+The complete roadmap goal remains active.
+
 ## Declared runtime classmethods — November 11, 2026 UTC
 
 The character-image startup draft now retains eight declared source classmethods

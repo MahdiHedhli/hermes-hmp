@@ -20,6 +20,7 @@ _MODULES = (
     "hmp_startup.runtime_files",
     "hmp_startup.entry_files",
     "hmp_startup.cache_context",
+    "hmp_startup.cache_candidates",
 )
 # Only the listed activation/approval/entry/cache values change during allocation. Their
 # keys remain required; the original retained-scope body freshly joins their
@@ -35,6 +36,7 @@ _LIVE_GLOBALS = (
     (),
     (),
     ("_OWNER", "_ROOT", "_FACT"),
+    (),
 )
 _CLASSES = (
     (0, "GatewayPackageOwner"),
@@ -90,6 +92,8 @@ _CLASSES = (
     (9, "CacheInputData"),
     (9, "_ContextSource"),
     (9, "CacheContextOwner"),
+    (10, "CacheCandidateError"),
+    (10, "PlannedCachePath"),
 )
 _FUNCTIONS = (
     (0, "GatewayPackageOwner", "_retained_binding"),
@@ -186,6 +190,11 @@ _FUNCTIONS = (
     (8, "EntryFileSnapshotOwner", "_retain"),
     (8, "EntryFileSnapshotOwner", "complete"),
     (9, "CacheContextOwner", "retain"),
+    (10, "CacheCandidateError", "__init__"),
+    (10, None, "_require"),
+    (10, None, "_location"),
+    (10, None, "planned_cache_path"),
+    (10, "PlannedCachePath", "__repr__"),
 )
 
 
@@ -584,6 +593,11 @@ def current(packet, *, _classmethod=classmethod):
         (9, "_same_package", 8, "_same_package"),
         (9, "GatewayEntryOwner", 6, "GatewayEntryOwner"),
         (9, "_origin_current", 6, "_origin_current"),
+        (9, "PlannedCachePath", 10, "PlannedCachePath"),
+        (9, "_location", 10, "_location"),
+        (9, "planned_cache_path", 10, "planned_cache_path"),
+        (10, "RuntimeFilesError", 7, "RuntimeFilesError"),
+        (10, "_path", 7, "_path"),
     ):
         runtime_consumer_names = modules[runtime_consumer][1]
         runtime_definition_names = modules[runtime_definition][1]
@@ -858,6 +872,11 @@ def current_live(packet, bound_layout, *, _error=RuntimeError, _classmethod=clas
         (9, "_same_package", 8, "_same_package"),
         (9, "GatewayEntryOwner", 6, "GatewayEntryOwner"),
         (9, "_origin_current", 6, "_origin_current"),
+        (9, "PlannedCachePath", 10, "PlannedCachePath"),
+        (9, "_location", 10, "_location"),
+        (9, "planned_cache_path", 10, "planned_cache_path"),
+        (10, "RuntimeFilesError", 7, "RuntimeFilesError"),
+        (10, "_path", 7, "_path"),
     ):
         runtime_consumer_names = modules[runtime_consumer][1]
         runtime_definition_names = modules[runtime_definition][1]
