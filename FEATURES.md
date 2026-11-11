@@ -1,3 +1,39 @@
+## Native-to-Flutter character checkpoint — November 11, 2026
+
+The production mobile API and Flutter chat screen now interoperate with the native
+character service in HMP `9ab269583e4b99e9950e4354349a30d93c1b7814` on Hermes
+`ed1afb082eb3e46cf2edae9d8f68fb67b09ee4df`. The client negotiates the authenticated
+roster capability and reads both profiles' names, classic shapes and exact static
+PNG bytes through production metadata/avatar APIs, pinned TLS and the token manager.
+The separate Dart journey retains wrong-pin refusal, one actual synthetic P5 refresh,
+foreign-profile media refusals and pool/key cleanup.
+
+The new Flutter journey uses production ActiveContext, AppScope, BotChatScreen and
+HostBotAvatar. Both avatars decode to the expected red/blue pixels and dimensions,
+and native desktop titles appear in the screen. Existing chat images still require
+one tap/one host fetch and never fall back to a public URL. Both journeys settle
+actual native workers/databases/listener/Store/plugin ownership with unchanged
+source/runtime bindings and no forbidden writes or cleanup errors. Independent
+review verifies these bounded results.
+
+Review exposed a foreground lifecycle gap: decoded avatars could remain during
+inactivity, and late fetches could paint. Commit `c6dac5eb9a8da73a2d66734fe8590c62f27a14b6`
+registers/removes a lifecycle observer, disposes retained images and invalidates
+pending generations on nonforeground states, blocks background loads and resumes
+through the current authorized reader. Outstanding fetch/decode reservations remain
+held until actual settlement. Both new causal tests fail before the fix; all 11
+avatar/budget tests pass afterward. The native Flutter screen confirms disposal on
+simulated framework inactivity. Candidate `52fa3321079b81df6e78c1e6f4901e36677017d0`
+includes the fix and durable screen qualification tool; analysis reports no issues.
+
+This qualifies selected classic/PNG API and framework-rendering paths with synthetic
+keys/storage/authority, not real pairing, all image/character formats, physical OS
+lifecycle, signed iOS/Android devices, Linux/provider output or release acceptance.
+The fix is committed but not installed on devices. No live host, device grants,
+models, providers or jobs changed. Build/install, physical checks and the full
+remaining roadmap stay active; LLY520 update still needs an available established
+management connection.
+
 ## Native static avatar delivery checkpoint — November 11, 2026
 
 HMP `9ab269583e4b99e9950e4354349a30d93c1b7814`, including the complete deployed
