@@ -1,3 +1,14 @@
+## November 11: RGA-01c input-pointer prerequisite
+
+- [x] Hold registered Scope parent/runtime and original snapshot inputs/rootcell
+      before validators; native dictionary reads and post-callback identity seals.
+- [x] Actual prefix9 current/minimum checks distinguish original/equal-copy inputs
+      and rootcells at before/parent-return/engine-return boundaries; no work growth.
+- [ ] Complete independent original-root/callee bootstrap and coherent graft tests
+      before any reduced dispatch; keep all full audits until then.
+- [ ] Full fresh mutable graph audit, matching broader regressions, original60s,
+      complete native/service/device character acceptance. Prefix9 is not startup.
+
 ## November 11: RGA-01 native consumer dispatch decision
 
 - [x] **RGA-01c-CARRIER-DECISION** Source and independent read-only review

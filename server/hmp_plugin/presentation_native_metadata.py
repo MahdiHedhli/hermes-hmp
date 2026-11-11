@@ -55,6 +55,8 @@ from .presentation_startup_artifacts import (
     _prepare_native_metadata_resource,
     _require,
     _Scope,
+    _PackageSource,
+    _RuntimeSource,
 )
 
 
@@ -688,6 +690,30 @@ def _closed_link_engine_origin(owner, resource):
              and tuple.__getitem__(entry_origin, 11) is audit_record
              and tuple.__getitem__(tuple.__getitem__(registration, 2), 18) is audit_record
              and tuple.__getitem__(tuple.__getitem__(registration, 0), 5) is audit_record)
+    # Original registered Scope is the carrier, not a proposed execution mirror.
+    # Hold its immutable source/runtime/input pointers before either validator.
+    original_scope = scope
+    package_source = tuple.__getitem__(scope, 5)
+    runtime_source = tuple.__getitem__(scope, 6)
+    _require(type(package_source) is _PackageSource
+             and type(runtime_source) is _RuntimeSource)
+    original_inputs = tuple.__getitem__(runtime_source, 2)
+    snapshot_owner = tuple.__getitem__(runtime_source, 0)
+    snapshot_kind = tuple.__getitem__(runtime_source, 1)
+    snapshot_cell = tuple.__getitem__(runtime_source, 3)
+    _require(type(snapshot_kind) is type and type(snapshot_owner) is snapshot_kind
+             and type(snapshot_cell) is tuple and len(snapshot_cell) == 2
+             and snapshot_cell[0] is snapshot_owner and snapshot_cell[1] is original_inputs)
+    snapshot_kind_names = vars(snapshot_kind)
+    _require(all(type(k) is str for k in snapshot_kind_names))
+    snapshot_descriptor = snapshot_kind_names.get('__dict__')
+    _require(type(snapshot_descriptor) is GetSetDescriptorType
+             and snapshot_descriptor.__objclass__ is snapshot_kind
+             and snapshot_descriptor.__name__ == '__dict__')
+    snapshot_names = snapshot_descriptor.__get__(snapshot_owner, snapshot_kind)
+    _require(type(snapshot_names) is dict and all(type(k) is str for k in snapshot_names)
+             and snapshot_names.get('_inputs') is original_inputs
+             and snapshot_names.get('_root_cell') is snapshot_cell)
     current_row = own[7]
     _require(type(current_row) is tuple and len(current_row) == 7)
     # Authenticate the first retained validator with primitives. Calling the
@@ -722,6 +748,17 @@ def _closed_link_engine_origin(owner, resource):
             or validator.__kwdefaults__ is not kw):
         raise ArtifactObservationError from None
     _require(validator(parent) is parent)
+    _require(tuple.__getitem__(registration, 2) is original_scope
+             and tuple.__getitem__(original_scope, 5) is package_source
+             and tuple.__getitem__(original_scope, 6) is runtime_source
+             and tuple.__getitem__(runtime_source, 2) is original_inputs
+             and type(snapshot_kind) is type and type(snapshot_owner) is snapshot_kind
+             and all(type(k) is str for k in snapshot_kind_names)
+             and snapshot_kind_names.get('__dict__') is snapshot_descriptor
+             and snapshot_descriptor.__get__(snapshot_owner, snapshot_kind) is snapshot_names
+             and all(type(k) is str for k in snapshot_names)
+             and snapshot_names.get('_inputs') is original_inputs
+             and snapshot_names.get('_root_cell') is snapshot_cell)
     _require(type(parent_namespace) is dict and all(type(k) is str for k in parent_namespace)
              and parent_namespace.get('current_started') is validator
              and validator.__code__ is current_row[2]
@@ -805,6 +842,17 @@ def _closed_link_engine_origin(owner, resource):
             or check.__kwdefaults__ is not kw):
         raise ArtifactObservationError from None
     _require(check(origin, audit_record[1]) is origin)
+    _require(tuple.__getitem__(registration, 2) is original_scope
+             and tuple.__getitem__(original_scope, 5) is package_source
+             and tuple.__getitem__(original_scope, 6) is runtime_source
+             and tuple.__getitem__(runtime_source, 2) is original_inputs
+             and type(snapshot_kind) is type and type(snapshot_owner) is snapshot_kind
+             and all(type(k) is str for k in snapshot_kind_names)
+             and snapshot_kind_names.get('__dict__') is snapshot_descriptor
+             and snapshot_descriptor.__get__(snapshot_owner, snapshot_kind) is snapshot_names
+             and all(type(k) is str for k in snapshot_names)
+             and snapshot_names.get('_inputs') is original_inputs
+             and snapshot_names.get('_root_cell') is snapshot_cell)
     _require(type(origin[0]) is ModuleType and vars(origin[0]) is namespace
              and all(type(k) is str for k in namespace)
              and namespace.get('_engine_live_tail') is check
@@ -881,6 +929,17 @@ def _closed_link_engine_origin(owner, resource):
              and tuple.__getitem__(tuple.__getitem__(registration, 0), 5) is audit_record
              and entry_names.get('_ENTRY_ORIGIN') is entry_origin
              and tuple.__getitem__(entry_origin, 11) is audit_record)
+    _require(tuple.__getitem__(registration, 2) is original_scope
+             and tuple.__getitem__(original_scope, 5) is package_source
+             and tuple.__getitem__(original_scope, 6) is runtime_source
+             and tuple.__getitem__(runtime_source, 2) is original_inputs
+             and type(snapshot_kind) is type and type(snapshot_owner) is snapshot_kind
+             and all(type(k) is str for k in snapshot_kind_names)
+             and snapshot_kind_names.get('__dict__') is snapshot_descriptor
+             and snapshot_descriptor.__get__(snapshot_owner, snapshot_kind) is snapshot_names
+             and all(type(k) is str for k in snapshot_names)
+             and snapshot_names.get('_inputs') is original_inputs
+             and snapshot_names.get('_root_cell') is snapshot_cell)
     return origin
 
 

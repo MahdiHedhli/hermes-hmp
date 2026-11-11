@@ -1,3 +1,17 @@
+## Native consumer input identity — November 11, 2026 UTC
+
+The bot-character draft now holds the registered Scope's original runtime inputs
+and snapshot root cell across parent/engine validator callbacks. Actual prefix
+checks reject equal copied input records and root cells at three boundaries.
+The same9 cases pass on Python3.14.9 and3.11.15 with unchanged source and no
+failures/errors/skips. Independent review checked the current-runtime evidence.
+
+This is a prerequisite for the startup optimization, not character delivery or a
+speedup. Every full audit stays enabled; coherent graph/reduced-dispatch/broad
+regression/native60s/device/release acceptance remain open. No host, phone build,
+grant, model, provider or job changed. See
+specs/046-bot-presentation-integration/RETAINED_GRAPH_ROOT_CONTRACT.md.
+
 ## Original package source across callbacks — November 10, 2026
 
 The local bot-character draft now retains the original package-source identity

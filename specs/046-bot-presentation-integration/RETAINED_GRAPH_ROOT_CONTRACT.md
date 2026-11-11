@@ -181,3 +181,33 @@ Independent read-only review agreed that the existing Scope is the carrier and
 identified the root-first boundary and coherent-copy counterexample. It neither
 ran these new dispatch causals nor certified an implementation. No executable
 source, installed host/device, permissions or native deadline changed here.
+
+
+## RGA-01c input pointer custody implementation
+
+The closed native engine selector now holds actual registered Scope.parent,
+Scope.runtime, runtime.inputs, the snapshot owner and its original two-field root
+cell before its first validator. Exact source/runtime types and the owner's native
+instance-dictionary descriptor precede reads. It rejoins those original pointers,
+that descriptor and the same actual owner dictionary after the parent callback,
+after the engine callback and at final return. All existing full audits remain.
+No reduced graph/engine dispatch, new carrier or saved currentness verdict exists.
+
+The same nine actual-selector prefix cases pass on Python 3.14.9 and 3.11.15:
+normal, equal copied input record and equal copied root cell, each before the
+first callback, after the parent return and after the engine return. They mutate
+the actual snapshot owner dictionary, assert the injection reached its target,
+check exact failed-owner propagation and unchanged native counts/attempts/scopes.
+Normal deliberately stops immediately after the selected seal. It is not a
+successful selector return or completed native startup. Receipts:
+`/private/tmp/hq-mgmivfx0/receipt.json` and
+`/private/tmp/hq-r2s82__l/receipt.json`; each has unchanged before/after source maps,
+zero failures/errors/skips. Independent review verified current9 source bindings,
+XML/log hashes and scope; floor execution is root-observed, not independently run.
+
+The new test passes Ruff; the modified existing module retains the same 28 prior
+lint diagnostics under identical filename/configuration, with none added. Closed
+plugin surface and diff checks pass. Remaining coherent Scope/source/registration
+grafts, hostile protocol, actual reduced dispatch, full fresh mutable graph,
+current/minimum broad regressions and original native60s acceptance are not
+closed by these nine cases. No runtime, phone build or permission changed.
