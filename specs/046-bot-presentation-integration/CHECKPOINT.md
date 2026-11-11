@@ -1,3 +1,26 @@
+## Generated closure primitives — bounded checks passed, November 11
+
+Candidate checks join canonical collections closure values to independently held
+native len/map/dict/zip/tuple operations, exact integer field counts and the original
+_fields tuple. Repr-format closure values must be exact strings. Canonical role /
+free-variable shapes precede comparisons; non-collections roles cannot impersonate
+these helpers. Parent own-function default carriers retain map; original capture
+explicitly forwards held map/int/zip/len references before callbacks can nominate
+new defaults. The shared helper21 and thirteen-field typepin layouts stay unchanged.
+
+Baseline161/129 cases fail their missing initial-refusal assertions. An initial
+apply script failed before writing source; two subsequent draft runs simply repeat
+that unchanged baseline, not a product regression. Corrected166/134 focused suites
+pass, including coherent export/default/cell changes, an actual pre-call nomination
+with original arguments observed at collector entry, and map drift at both Scope
+publication points. A later test-only explanatory noqa preserves forced distinct
+equal-tuple construction. Final1698/1474 pass on the frozen final source with zero failures, errors or skips. All556 source files match; the common1076 ordered cases match while generated-role cohorts remain version-specific.
+
+This remains bounded primitive/field correspondence, not full executable standard-
+library authority or admission. Annotation execution exclusion still needs actual-journey observation; specific deep evaluation review is conditional on an observed path, with all existing predicates retained. Original-root/caller/callee/GC/callback/freshgraph and unchanged native60s gates are
+open, as are character delivery, physical image and Linux/provider/release checks.
+No native shortcut, build, host, permission, provider, model, job or store changed.
+
 ## Generated record metadata — November 11, 2026 UTC
 
 The character-image startup draft now appends generated-helper metadata as the

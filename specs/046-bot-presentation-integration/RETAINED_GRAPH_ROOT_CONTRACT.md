@@ -1,3 +1,15 @@
+## Annotation execution boundary clarification — November 11
+
+[The source-backed boundary decision](ANNOTATION_EXECUTION_BOUNDARY.md) preserves
+all existing metadata, primitive and captured dictionary-content checks. Deep /lazy
+annotation execution is not an established dependency of the fixed graph and does
+not block implementing its coherent unit. Actual final-journey observer proof is
+still required; any observed evaluation needs a specific closure review. The
+prior cache-evolution wording is a conditional concern, not an approved allowance
+for changed schema data. Original-root dispatch, complete fresh mutable predicates,
+callback/GC reseals, accounting/custody and unchanged native60s remain required.
+No reduced branch or annotation execution is qualified by this clarification.
+
 ## Generated record metadata — November 11, 2026 UTC
 
 The character-image startup draft now appends generated-helper metadata as the

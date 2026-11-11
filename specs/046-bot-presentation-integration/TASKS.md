@@ -1,3 +1,9 @@
+## November 11: generated closure primitive candidate
+
+- [x] **RGA-01d-GENERATED-COLLECTIONS-PRIMITIVES** Original default/caller primitive joins and actual field-count/name identity, canonical roles, no foreign primitive invocation. Focused166/134 and broad1698/1474 pass; independent final review verifies556 source maps, unique IDs and common1076 ordering. Bounded primitive acceptance only.
+- [ ] **RGA-01d-ANNOTATION-JOURNEY-BOUNDARY** Preserve current checks; inventory fixed/transitive calls and observe original annotation/lazy evaluator entries during actual final graph/native journey. Zero calls required for exclusion; any observed evaluation requires specific closure review. Deep evaluation is conditional, not a new prerequisite to implement the coherent DAG; see ANNOTATION_EXECUTION_BOUNDARY.md.
+- [ ] Full original-root/caller/callee/GC/callback/freshgraph, unchanged native60s, full feature/physical/Linux/provider/release qualification remain required.
+
 ## November 11: generated method metadata (bounded source acceptance)
 
 - [x] **RGA-01d-GENERATED-METADATA** Append generated-role metadata after original12 typepin fields, all16 types, preserve all99 declared roles and ordinary-function rules/native wrapper checks/final reseals. Focused469/277 and final1533/1341 pass,555 source hashes, common1074 IDs and independent bounded review; no native-effect authority.

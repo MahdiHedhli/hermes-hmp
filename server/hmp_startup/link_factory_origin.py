@@ -76,6 +76,9 @@ def _pin_type(
     _sys=sys,
     _len=len,
     _value_error=ValueError,
+    _map=map,
+    _int=int,
+    _zip=zip,
 ):
     if _type(kind) is not _type:
         raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
@@ -199,6 +202,58 @@ def _pin_type(
             g_cells = () if g_closure is None else _tuple(c.cell_contents for c in g_closure)
         except _value_error:
             raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+        if g_module_name == "collections":
+            if g_name == "_make":
+                g_expected_freevars = ("_len", "num_fields", "tuple_new")
+            elif g_name in ("_replace", "__replace__"):
+                g_expected_freevars = ("_map", "field_names")
+            elif g_name == "_asdict":
+                g_expected_freevars = ("_dict", "_zip")
+            elif g_name == "__getnewargs__":
+                g_expected_freevars = ("_tuple",)
+            elif g_name == "__repr__":
+                g_expected_freevars = ("repr_fmt",)
+            else:
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            g_freevars = g_function.__code__.co_freevars
+            if (
+                _type(g_freevars) is not _tuple
+                or _any((_type(n) is not _str for n in g_freevars))
+                or g_freevars != g_expected_freevars
+                or (_len(g_cells) != _len(g_expected_freevars))
+            ):
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            for g_freevar, g_primitive in _zip(g_expected_freevars, g_cells, strict=True):
+                if g_freevar == "num_fields":
+                    if _type(g_primitive) is not _int or g_primitive != _len(fields):
+                        raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                elif g_freevar == "field_names":
+                    if g_primitive is not fields:
+                        raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                elif g_freevar == "repr_fmt":
+                    if _type(g_primitive) is not _str:
+                        raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                else:
+                    g_expected_primitive = (
+                        _len
+                        if g_freevar == "_len"
+                        else _tuple.__new__
+                        if g_freevar == "tuple_new"
+                        else _map
+                        if g_freevar == "_map"
+                        else _dict
+                        if g_freevar == "_dict"
+                        else _zip
+                        if g_freevar == "_zip"
+                        else _tuple
+                    )
+                    if g_primitive is not g_expected_primitive:
+                        raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+        elif g_name == "__annotate_func__":
+            if g_module_name != "typing":
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+        elif g_name != "__repr__" or g_module_name != g_owner_name:
+            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
         g_dict_cells = []
         for g_value in g_cells:
             if _type(g_value) is _dict:
@@ -309,6 +364,7 @@ def current(
     _super=super,
     _classmethod=classmethod,
     _error=RuntimeError,
+    _map=map,
 ):
     """Seal captured references; never nominate a current exported helper.
 
@@ -608,6 +664,58 @@ def current(
                             raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
                 except _value_error:
                     raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            if g_module_name == "collections":
+                if g_name == "_make":
+                    g_expected_freevars = ("_len", "num_fields", "tuple_new")
+                elif g_name in ("_replace", "__replace__"):
+                    g_expected_freevars = ("_map", "field_names")
+                elif g_name == "_asdict":
+                    g_expected_freevars = ("_dict", "_zip")
+                elif g_name == "__getnewargs__":
+                    g_expected_freevars = ("_tuple",)
+                elif g_name == "__repr__":
+                    g_expected_freevars = ("repr_fmt",)
+                else:
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                g_freevars = g_function.__code__.co_freevars
+                if (
+                    _type(g_freevars) is not _tuple
+                    or _any((_type(n) is not _str for n in g_freevars))
+                    or g_freevars != g_expected_freevars
+                    or (_len(g_cells) != _len(g_expected_freevars))
+                ):
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                for g_freevar, g_primitive in _zip(g_expected_freevars, g_cells, strict=True):
+                    if g_freevar == "num_fields":
+                        if _type(g_primitive) is not _int or g_primitive != _len(fields):
+                            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                    elif g_freevar == "field_names":
+                        if g_primitive is not fields:
+                            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                    elif g_freevar == "repr_fmt":
+                        if _type(g_primitive) is not _str:
+                            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                    else:
+                        g_expected_primitive = (
+                            _len
+                            if g_freevar == "_len"
+                            else _tuple.__new__
+                            if g_freevar == "tuple_new"
+                            else _map
+                            if g_freevar == "_map"
+                            else _dict
+                            if g_freevar == "_dict"
+                            else _zip
+                            if g_freevar == "_zip"
+                            else _tuple
+                        )
+                        if g_primitive is not g_expected_primitive:
+                            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            elif g_name == "__annotate_func__":
+                if g_module_name != "typing":
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            elif g_name != "__repr__" or g_module_name != g_owner_name:
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
             for g_mapping, g_pairs in (
                 (g_kw, g_kw_pairs),
                 *_zip(g_cells, g_dict_cells, strict=True),
@@ -1746,6 +1854,58 @@ def current(
                             raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
                 except _value_error:
                     raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            if g_module_name == "collections":
+                if g_name == "_make":
+                    g_expected_freevars = ("_len", "num_fields", "tuple_new")
+                elif g_name in ("_replace", "__replace__"):
+                    g_expected_freevars = ("_map", "field_names")
+                elif g_name == "_asdict":
+                    g_expected_freevars = ("_dict", "_zip")
+                elif g_name == "__getnewargs__":
+                    g_expected_freevars = ("_tuple",)
+                elif g_name == "__repr__":
+                    g_expected_freevars = ("repr_fmt",)
+                else:
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                g_freevars = g_function.__code__.co_freevars
+                if (
+                    _type(g_freevars) is not _tuple
+                    or _any((_type(n) is not _str for n in g_freevars))
+                    or g_freevars != g_expected_freevars
+                    or (_len(g_cells) != _len(g_expected_freevars))
+                ):
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                for g_freevar, g_primitive in _zip(g_expected_freevars, g_cells, strict=True):
+                    if g_freevar == "num_fields":
+                        if _type(g_primitive) is not _int or g_primitive != _len(fields):
+                            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                    elif g_freevar == "field_names":
+                        if g_primitive is not fields:
+                            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                    elif g_freevar == "repr_fmt":
+                        if _type(g_primitive) is not _str:
+                            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                    else:
+                        g_expected_primitive = (
+                            _len
+                            if g_freevar == "_len"
+                            else _tuple.__new__
+                            if g_freevar == "tuple_new"
+                            else _map
+                            if g_freevar == "_map"
+                            else _dict
+                            if g_freevar == "_dict"
+                            else _zip
+                            if g_freevar == "_zip"
+                            else _tuple
+                        )
+                        if g_primitive is not g_expected_primitive:
+                            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            elif g_name == "__annotate_func__":
+                if g_module_name != "typing":
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            elif g_name != "__repr__" or g_module_name != g_owner_name:
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
             for g_mapping, g_pairs in (
                 (g_kw, g_kw_pairs),
                 *_zip(g_cells, g_dict_cells, strict=True),
@@ -1872,6 +2032,7 @@ def current_started(
     _classmethod=classmethod,
     _getset=GetSetDescriptorType,
     _error=RuntimeError,
+    _map=map,
 ):
     """Strict original-started-root audit; never a missing-root generic fallback.
 
@@ -2170,6 +2331,58 @@ def current_started(
                             raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
                 except _value_error:
                     raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            if g_module_name == "collections":
+                if g_name == "_make":
+                    g_expected_freevars = ("_len", "num_fields", "tuple_new")
+                elif g_name in ("_replace", "__replace__"):
+                    g_expected_freevars = ("_map", "field_names")
+                elif g_name == "_asdict":
+                    g_expected_freevars = ("_dict", "_zip")
+                elif g_name == "__getnewargs__":
+                    g_expected_freevars = ("_tuple",)
+                elif g_name == "__repr__":
+                    g_expected_freevars = ("repr_fmt",)
+                else:
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                g_freevars = g_function.__code__.co_freevars
+                if (
+                    _type(g_freevars) is not _tuple
+                    or _any((_type(n) is not _str for n in g_freevars))
+                    or g_freevars != g_expected_freevars
+                    or (_len(g_cells) != _len(g_expected_freevars))
+                ):
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                for g_freevar, g_primitive in _zip(g_expected_freevars, g_cells, strict=True):
+                    if g_freevar == "num_fields":
+                        if _type(g_primitive) is not _int or g_primitive != _len(fields):
+                            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                    elif g_freevar == "field_names":
+                        if g_primitive is not fields:
+                            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                    elif g_freevar == "repr_fmt":
+                        if _type(g_primitive) is not _str:
+                            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                    else:
+                        g_expected_primitive = (
+                            _len
+                            if g_freevar == "_len"
+                            else _tuple.__new__
+                            if g_freevar == "tuple_new"
+                            else _map
+                            if g_freevar == "_map"
+                            else _dict
+                            if g_freevar == "_dict"
+                            else _zip
+                            if g_freevar == "_zip"
+                            else _tuple
+                        )
+                        if g_primitive is not g_expected_primitive:
+                            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            elif g_name == "__annotate_func__":
+                if g_module_name != "typing":
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            elif g_name != "__repr__" or g_module_name != g_owner_name:
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
             for g_mapping, g_pairs in (
                 (g_kw, g_kw_pairs),
                 *_zip(g_cells, g_dict_cells, strict=True),
@@ -3511,6 +3724,58 @@ def current_started(
                             raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
                 except _value_error:
                     raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            if g_module_name == "collections":
+                if g_name == "_make":
+                    g_expected_freevars = ("_len", "num_fields", "tuple_new")
+                elif g_name in ("_replace", "__replace__"):
+                    g_expected_freevars = ("_map", "field_names")
+                elif g_name == "_asdict":
+                    g_expected_freevars = ("_dict", "_zip")
+                elif g_name == "__getnewargs__":
+                    g_expected_freevars = ("_tuple",)
+                elif g_name == "__repr__":
+                    g_expected_freevars = ("repr_fmt",)
+                else:
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                g_freevars = g_function.__code__.co_freevars
+                if (
+                    _type(g_freevars) is not _tuple
+                    or _any((_type(n) is not _str for n in g_freevars))
+                    or g_freevars != g_expected_freevars
+                    or (_len(g_cells) != _len(g_expected_freevars))
+                ):
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                for g_freevar, g_primitive in _zip(g_expected_freevars, g_cells, strict=True):
+                    if g_freevar == "num_fields":
+                        if _type(g_primitive) is not _int or g_primitive != _len(fields):
+                            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                    elif g_freevar == "field_names":
+                        if g_primitive is not fields:
+                            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                    elif g_freevar == "repr_fmt":
+                        if _type(g_primitive) is not _str:
+                            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                    else:
+                        g_expected_primitive = (
+                            _len
+                            if g_freevar == "_len"
+                            else _tuple.__new__
+                            if g_freevar == "tuple_new"
+                            else _map
+                            if g_freevar == "_map"
+                            else _dict
+                            if g_freevar == "_dict"
+                            else _zip
+                            if g_freevar == "_zip"
+                            else _tuple
+                        )
+                        if g_primitive is not g_expected_primitive:
+                            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            elif g_name == "__annotate_func__":
+                if g_module_name != "typing":
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            elif g_name != "__repr__" or g_module_name != g_owner_name:
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
             for g_mapping, g_pairs in (
                 (g_kw, g_kw_pairs),
                 *_zip(g_cells, g_dict_cells, strict=True),
@@ -3637,6 +3902,7 @@ def capture(
     _super=super,
     _classmethod=classmethod,
     _error=RuntimeError,
+    _map=map,
 ):
     """Capture once at the future trusted entry boundary, before callbacks."""
     global _CAPTURE_STARTED
@@ -4184,7 +4450,7 @@ def capture(
         (
             pin_type(modules[index][2].get(name), _classmethod=_classmethod,
                          _cell=_cell, _module=_module, _sys=_sys, _len=_len,
-                         _value_error=_value_error)
+                         _value_error=_value_error, _map=_map, _int=_int, _zip=_zip)
             for index, name in (
                 (1, "_LinkPathPolicy"),
                 (1, "_LinkPathCursor"),
@@ -4456,6 +4722,58 @@ def capture(
                                 raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
                     except _value_error:
                         raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                if g_module_name == "collections":
+                    if g_name == "_make":
+                        g_expected_freevars = ("_len", "num_fields", "tuple_new")
+                    elif g_name in ("_replace", "__replace__"):
+                        g_expected_freevars = ("_map", "field_names")
+                    elif g_name == "_asdict":
+                        g_expected_freevars = ("_dict", "_zip")
+                    elif g_name == "__getnewargs__":
+                        g_expected_freevars = ("_tuple",)
+                    elif g_name == "__repr__":
+                        g_expected_freevars = ("repr_fmt",)
+                    else:
+                        raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                    g_freevars = g_function.__code__.co_freevars
+                    if (
+                        _type(g_freevars) is not _tuple
+                        or _any((_type(n) is not _str for n in g_freevars))
+                        or g_freevars != g_expected_freevars
+                        or (_len(g_cells) != _len(g_expected_freevars))
+                    ):
+                        raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                    for g_freevar, g_primitive in _zip(g_expected_freevars, g_cells, strict=True):
+                        if g_freevar == "num_fields":
+                            if _type(g_primitive) is not _int or g_primitive != _len(fields):
+                                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                        elif g_freevar == "field_names":
+                            if g_primitive is not fields:
+                                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                        elif g_freevar == "repr_fmt":
+                            if _type(g_primitive) is not _str:
+                                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                        else:
+                            g_expected_primitive = (
+                                _len
+                                if g_freevar == "_len"
+                                else _tuple.__new__
+                                if g_freevar == "tuple_new"
+                                else _map
+                                if g_freevar == "_map"
+                                else _dict
+                                if g_freevar == "_dict"
+                                else _zip
+                                if g_freevar == "_zip"
+                                else _tuple
+                            )
+                            if g_primitive is not g_expected_primitive:
+                                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                elif g_name == "__annotate_func__":
+                    if g_module_name != "typing":
+                        raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                elif g_name != "__repr__" or g_module_name != g_owner_name:
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
                 for g_mapping, g_pairs in (
                     (g_kw, g_kw_pairs),
                     *_zip(g_cells, g_dict_cells, strict=True),
@@ -4794,6 +5112,58 @@ def capture(
                             raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
                 except _value_error:
                     raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            if g_module_name == "collections":
+                if g_name == "_make":
+                    g_expected_freevars = ("_len", "num_fields", "tuple_new")
+                elif g_name in ("_replace", "__replace__"):
+                    g_expected_freevars = ("_map", "field_names")
+                elif g_name == "_asdict":
+                    g_expected_freevars = ("_dict", "_zip")
+                elif g_name == "__getnewargs__":
+                    g_expected_freevars = ("_tuple",)
+                elif g_name == "__repr__":
+                    g_expected_freevars = ("repr_fmt",)
+                else:
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                g_freevars = g_function.__code__.co_freevars
+                if (
+                    _type(g_freevars) is not _tuple
+                    or _any((_type(n) is not _str for n in g_freevars))
+                    or g_freevars != g_expected_freevars
+                    or (_len(g_cells) != _len(g_expected_freevars))
+                ):
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                for g_freevar, g_primitive in _zip(g_expected_freevars, g_cells, strict=True):
+                    if g_freevar == "num_fields":
+                        if _type(g_primitive) is not _int or g_primitive != _len(fields):
+                            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                    elif g_freevar == "field_names":
+                        if g_primitive is not fields:
+                            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                    elif g_freevar == "repr_fmt":
+                        if _type(g_primitive) is not _str:
+                            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                    else:
+                        g_expected_primitive = (
+                            _len
+                            if g_freevar == "_len"
+                            else _tuple.__new__
+                            if g_freevar == "tuple_new"
+                            else _map
+                            if g_freevar == "_map"
+                            else _dict
+                            if g_freevar == "_dict"
+                            else _zip
+                            if g_freevar == "_zip"
+                            else _tuple
+                        )
+                        if g_primitive is not g_expected_primitive:
+                            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            elif g_name == "__annotate_func__":
+                if g_module_name != "typing":
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            elif g_name != "__repr__" or g_module_name != g_owner_name:
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
             for g_mapping, g_pairs in (
                 (g_kw, g_kw_pairs),
                 *_zip(g_cells, g_dict_cells, strict=True),
@@ -5115,6 +5485,58 @@ def capture(
                             raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
                 except _value_error:
                     raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            if g_module_name == "collections":
+                if g_name == "_make":
+                    g_expected_freevars = ("_len", "num_fields", "tuple_new")
+                elif g_name in ("_replace", "__replace__"):
+                    g_expected_freevars = ("_map", "field_names")
+                elif g_name == "_asdict":
+                    g_expected_freevars = ("_dict", "_zip")
+                elif g_name == "__getnewargs__":
+                    g_expected_freevars = ("_tuple",)
+                elif g_name == "__repr__":
+                    g_expected_freevars = ("repr_fmt",)
+                else:
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                g_freevars = g_function.__code__.co_freevars
+                if (
+                    _type(g_freevars) is not _tuple
+                    or _any((_type(n) is not _str for n in g_freevars))
+                    or g_freevars != g_expected_freevars
+                    or (_len(g_cells) != _len(g_expected_freevars))
+                ):
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                for g_freevar, g_primitive in _zip(g_expected_freevars, g_cells, strict=True):
+                    if g_freevar == "num_fields":
+                        if _type(g_primitive) is not _int or g_primitive != _len(fields):
+                            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                    elif g_freevar == "field_names":
+                        if g_primitive is not fields:
+                            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                    elif g_freevar == "repr_fmt":
+                        if _type(g_primitive) is not _str:
+                            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                    else:
+                        g_expected_primitive = (
+                            _len
+                            if g_freevar == "_len"
+                            else _tuple.__new__
+                            if g_freevar == "tuple_new"
+                            else _map
+                            if g_freevar == "_map"
+                            else _dict
+                            if g_freevar == "_dict"
+                            else _zip
+                            if g_freevar == "_zip"
+                            else _tuple
+                        )
+                        if g_primitive is not g_expected_primitive:
+                            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            elif g_name == "__annotate_func__":
+                if g_module_name != "typing":
+                    raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            elif g_name != "__repr__" or g_module_name != g_owner_name:
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
             for g_mapping, g_pairs in (
                 (g_kw, g_kw_pairs),
                 *_zip(g_cells, g_dict_cells, strict=True),
@@ -5266,25 +5688,31 @@ def blueprint_factory(origin, *, _type=type, _tuple=tuple, _len=len, _error=Runt
     return origin[3][15][1]
 
 
-def encode_basename(origin, name, *,
-            _type=type,
-            _tuple=tuple,
-            _len=len,
-            _function=FunctionType,
-            _any=any,
-            _str=str,
-            _bytes=bytes,
-            _dict=dict,
-            _ord=ord,
-            _enumerate=enumerate,
-            _vars=vars,
-            _staticmethod=staticmethod,
-            _zip=zip,
-            _error=RuntimeError,
-            _classmethod=classmethod,
-            _cell=CellType,
-            _module=ModuleType,
-            _value_error=ValueError):
+def encode_basename(
+    origin,
+    name,
+    *,
+    _type=type,
+    _tuple=tuple,
+    _len=len,
+    _function=FunctionType,
+    _any=any,
+    _str=str,
+    _bytes=bytes,
+    _dict=dict,
+    _ord=ord,
+    _enumerate=enumerate,
+    _vars=vars,
+    _staticmethod=staticmethod,
+    _zip=zip,
+    _error=RuntimeError,
+    _classmethod=classmethod,
+    _cell=CellType,
+    _module=ModuleType,
+    _value_error=ValueError,
+    _map=map,
+    _int=int,
+):
     """Encode one exact basename with original interpreter settings and C method.
 
     No os.fsencode lookup or UTF-8 substitution. Caller must hold the actual
@@ -5535,6 +5963,58 @@ def encode_basename(origin, name, *,
                         raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
             except _value_error:
                 raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+        if g_module_name == "collections":
+            if g_name == "_make":
+                g_expected_freevars = ("_len", "num_fields", "tuple_new")
+            elif g_name in ("_replace", "__replace__"):
+                g_expected_freevars = ("_map", "field_names")
+            elif g_name == "_asdict":
+                g_expected_freevars = ("_dict", "_zip")
+            elif g_name == "__getnewargs__":
+                g_expected_freevars = ("_tuple",)
+            elif g_name == "__repr__":
+                g_expected_freevars = ("repr_fmt",)
+            else:
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            g_freevars = g_function.__code__.co_freevars
+            if (
+                _type(g_freevars) is not _tuple
+                or _any((_type(n) is not _str for n in g_freevars))
+                or g_freevars != g_expected_freevars
+                or (_len(g_cells) != _len(g_expected_freevars))
+            ):
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            for g_freevar, g_primitive in _zip(g_expected_freevars, g_cells, strict=True):
+                if g_freevar == "num_fields":
+                    if _type(g_primitive) is not _int or g_primitive != _len(fields):
+                        raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                elif g_freevar == "field_names":
+                    if g_primitive is not fields:
+                        raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                elif g_freevar == "repr_fmt":
+                    if _type(g_primitive) is not _str:
+                        raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                else:
+                    g_expected_primitive = (
+                        _len
+                        if g_freevar == "_len"
+                        else _tuple.__new__
+                        if g_freevar == "tuple_new"
+                        else _map
+                        if g_freevar == "_map"
+                        else _dict
+                        if g_freevar == "_dict"
+                        else _zip
+                        if g_freevar == "_zip"
+                        else _tuple
+                    )
+                    if g_primitive is not g_expected_primitive:
+                        raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+        elif g_name == "__annotate_func__":
+            if g_module_name != "typing":
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+        elif g_name != "__repr__" or g_module_name != g_owner_name:
+            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
         for g_mapping, g_pairs in ((g_kw, g_kw_pairs), *_zip(g_cells, g_dict_cells, strict=True)):
             if g_pairs is None:
                 if _type(g_mapping) is _dict:
@@ -5802,6 +6282,58 @@ def encode_basename(origin, name, *,
                         raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
             except _value_error:
                 raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+        if g_module_name == "collections":
+            if g_name == "_make":
+                g_expected_freevars = ("_len", "num_fields", "tuple_new")
+            elif g_name in ("_replace", "__replace__"):
+                g_expected_freevars = ("_map", "field_names")
+            elif g_name == "_asdict":
+                g_expected_freevars = ("_dict", "_zip")
+            elif g_name == "__getnewargs__":
+                g_expected_freevars = ("_tuple",)
+            elif g_name == "__repr__":
+                g_expected_freevars = ("repr_fmt",)
+            else:
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            g_freevars = g_function.__code__.co_freevars
+            if (
+                _type(g_freevars) is not _tuple
+                or _any((_type(n) is not _str for n in g_freevars))
+                or g_freevars != g_expected_freevars
+                or (_len(g_cells) != _len(g_expected_freevars))
+            ):
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+            for g_freevar, g_primitive in _zip(g_expected_freevars, g_cells, strict=True):
+                if g_freevar == "num_fields":
+                    if _type(g_primitive) is not _int or g_primitive != _len(fields):
+                        raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                elif g_freevar == "field_names":
+                    if g_primitive is not fields:
+                        raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                elif g_freevar == "repr_fmt":
+                    if _type(g_primitive) is not _str:
+                        raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+                else:
+                    g_expected_primitive = (
+                        _len
+                        if g_freevar == "_len"
+                        else _tuple.__new__
+                        if g_freevar == "tuple_new"
+                        else _map
+                        if g_freevar == "_map"
+                        else _dict
+                        if g_freevar == "_dict"
+                        else _zip
+                        if g_freevar == "_zip"
+                        else _tuple
+                    )
+                    if g_primitive is not g_expected_primitive:
+                        raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+        elif g_name == "__annotate_func__":
+            if g_module_name != "typing":
+                raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
+        elif g_name != "__repr__" or g_module_name != g_owner_name:
+            raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
         for g_mapping, g_pairs in ((g_kw, g_kw_pairs), *_zip(g_cells, g_dict_cells, strict=True)):
             if g_pairs is None:
                 if _type(g_mapping) is _dict:

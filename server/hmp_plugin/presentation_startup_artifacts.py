@@ -5631,6 +5631,7 @@ class StartupArtifactOwner:
         link_raw_function, link_raw_module = FunctionType, ModuleType
         link_raw_cell = CellType
         link_raw_classmethod = classmethod
+        link_raw_map, link_raw_int = map, int
         link_raw_value_error, link_raw_error = ValueError, RuntimeError
         link_raw_staticmethod, link_raw_any, link_raw_zip = staticmethod, any, zip
         link_raw_dict, link_raw_str = dict, str
@@ -6436,6 +6437,69 @@ class StartupArtifactOwner:
                                         raise refusal from None
                             except link_raw_value_error:
                                 raise refusal from None
+                        if link_g_module_name == "collections":
+                            if link_g_name == "_make":
+                                link_g_expected_freevars = ("_len", "num_fields", "tuple_new")
+                            elif link_g_name in ("_replace", "__replace__"):
+                                link_g_expected_freevars = ("_map", "field_names")
+                            elif link_g_name == "_asdict":
+                                link_g_expected_freevars = ("_dict", "_zip")
+                            elif link_g_name == "__getnewargs__":
+                                link_g_expected_freevars = ("_tuple",)
+                            elif link_g_name == "__repr__":
+                                link_g_expected_freevars = ("repr_fmt",)
+                            else:
+                                raise refusal from None
+                            link_g_freevars = link_g_function.__code__.co_freevars
+                            if (
+                                link_raw_type(link_g_freevars) is not link_raw_tuple
+                                or link_raw_any(
+                                    (link_raw_type(n) is not link_raw_str for n in link_g_freevars)
+                                )
+                                or link_g_freevars != link_g_expected_freevars
+                                or (
+                                    link_raw_len(link_g_cells)
+                                    != link_raw_len(link_g_expected_freevars)
+                                )
+                            ):
+                                raise refusal from None
+                            for link_g_freevar, link_g_primitive in link_raw_zip(
+                                link_g_expected_freevars, link_g_cells, strict=True
+                            ):
+                                if link_g_freevar == "num_fields":
+                                    if link_raw_type(
+                                        link_g_primitive
+                                    ) is not link_raw_int or link_g_primitive != link_raw_len(
+                                        link_pin_fields
+                                    ):
+                                        raise refusal from None
+                                elif link_g_freevar == "field_names":
+                                    if link_g_primitive is not link_pin_fields:
+                                        raise refusal from None
+                                elif link_g_freevar == "repr_fmt":
+                                    if link_raw_type(link_g_primitive) is not link_raw_str:
+                                        raise refusal from None
+                                else:
+                                    link_g_expected_primitive = (
+                                        link_raw_len
+                                        if link_g_freevar == "_len"
+                                        else link_raw_tuple.__new__
+                                        if link_g_freevar == "tuple_new"
+                                        else link_raw_map
+                                        if link_g_freevar == "_map"
+                                        else link_raw_dict
+                                        if link_g_freevar == "_dict"
+                                        else link_raw_zip
+                                        if link_g_freevar == "_zip"
+                                        else link_raw_tuple
+                                    )
+                                    if link_g_primitive is not link_g_expected_primitive:
+                                        raise refusal from None
+                        elif link_g_name == "__annotate_func__":
+                            if link_g_module_name != "typing":
+                                raise refusal from None
+                        elif link_g_name != "__repr__" or link_g_module_name != link_g_owner_name:
+                            raise refusal from None
                         for link_g_mapping, link_g_pairs in (
                             (link_g_kw, link_g_kw_pairs),
                             *link_raw_zip(link_g_cells, link_g_dict_cells, strict=True),
@@ -7570,6 +7634,69 @@ class StartupArtifactOwner:
                                         raise refusal from None
                             except link_raw_value_error:
                                 raise refusal from None
+                        if link_g_module_name == "collections":
+                            if link_g_name == "_make":
+                                link_g_expected_freevars = ("_len", "num_fields", "tuple_new")
+                            elif link_g_name in ("_replace", "__replace__"):
+                                link_g_expected_freevars = ("_map", "field_names")
+                            elif link_g_name == "_asdict":
+                                link_g_expected_freevars = ("_dict", "_zip")
+                            elif link_g_name == "__getnewargs__":
+                                link_g_expected_freevars = ("_tuple",)
+                            elif link_g_name == "__repr__":
+                                link_g_expected_freevars = ("repr_fmt",)
+                            else:
+                                raise refusal from None
+                            link_g_freevars = link_g_function.__code__.co_freevars
+                            if (
+                                link_raw_type(link_g_freevars) is not link_raw_tuple
+                                or link_raw_any(
+                                    (link_raw_type(n) is not link_raw_str for n in link_g_freevars)
+                                )
+                                or link_g_freevars != link_g_expected_freevars
+                                or (
+                                    link_raw_len(link_g_cells)
+                                    != link_raw_len(link_g_expected_freevars)
+                                )
+                            ):
+                                raise refusal from None
+                            for link_g_freevar, link_g_primitive in link_raw_zip(
+                                link_g_expected_freevars, link_g_cells, strict=True
+                            ):
+                                if link_g_freevar == "num_fields":
+                                    if link_raw_type(
+                                        link_g_primitive
+                                    ) is not link_raw_int or link_g_primitive != link_raw_len(
+                                        link_pin_fields
+                                    ):
+                                        raise refusal from None
+                                elif link_g_freevar == "field_names":
+                                    if link_g_primitive is not link_pin_fields:
+                                        raise refusal from None
+                                elif link_g_freevar == "repr_fmt":
+                                    if link_raw_type(link_g_primitive) is not link_raw_str:
+                                        raise refusal from None
+                                else:
+                                    link_g_expected_primitive = (
+                                        link_raw_len
+                                        if link_g_freevar == "_len"
+                                        else link_raw_tuple.__new__
+                                        if link_g_freevar == "tuple_new"
+                                        else link_raw_map
+                                        if link_g_freevar == "_map"
+                                        else link_raw_dict
+                                        if link_g_freevar == "_dict"
+                                        else link_raw_zip
+                                        if link_g_freevar == "_zip"
+                                        else link_raw_tuple
+                                    )
+                                    if link_g_primitive is not link_g_expected_primitive:
+                                        raise refusal from None
+                        elif link_g_name == "__annotate_func__":
+                            if link_g_module_name != "typing":
+                                raise refusal from None
+                        elif link_g_name != "__repr__" or link_g_module_name != link_g_owner_name:
+                            raise refusal from None
                         for link_g_mapping, link_g_pairs in (
                             (link_g_kw, link_g_kw_pairs),
                             *link_raw_zip(link_g_cells, link_g_dict_cells, strict=True),
