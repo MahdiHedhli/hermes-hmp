@@ -1,3 +1,8 @@
+## November 11: coherent registered Scope integration
+
+- [ ] **RGA-01e-SCOPE-DISPATCH** Implement the complete rooted link-execution Scope unit in [RGA_SCOPE_DISPATCH.md](RGA_SCOPE_DISPATCH.md). Qualify actual held execution/resource/operation routes first, early-retain the new fixed callee, and keep generic _native_scope_current/_native_walk_scope unchanged. Do not bootstrap through the recursive selector or replace full guards with nine partial DATA components. Preserve non-link/active-bootstrap behavior.
+- [ ] **RGA-01e-CAUSAL-NATIVE** Actual dispatch/root graft/callback/GC/lifecycle/cleanup causals on both runtimes, then unchanged native60s alone. No physical/feature/release pass inferred.
+
 ## November 11: generated closure primitive candidate
 
 - [x] **RGA-01d-GENERATED-COLLECTIONS-PRIMITIVES** Original default/caller primitive joins and actual field-count/name identity, canonical roles, no foreign primitive invocation. Focused166/134 and broad1698/1474 pass; independent final review verifies556 source maps, unique IDs and common1076 ordering. Bounded primitive acceptance only.
