@@ -233,7 +233,9 @@ def tool_ids(body: bytes) -> list[int]:
 
 
 def caller(rig: Rig, device_id: str) -> Any:
-    return real_registry.Caller(device_id, USER, rig.env.iid, PROFILE)
+    decision = rig.env.store.media_read_decision(rig.env.iid, device_id)
+    return real_registry.Caller(device_id, USER, rig.env.iid, PROFILE,
+                                () if decision is None else decision.generation)
 
 
 # ---------------------------------------------------------------------------------------------
@@ -1467,15 +1469,17 @@ def _scenario_thread_context(tmp_path: Path, mp: pytest.MonkeyPatch) -> bool:
 
 MUTANTS = {
     "owner_recheck": (
-        "    if not ctx.is_approval_owner_device(who.device_id) or not ctx.media_enabled():\n"
+        "    if (not ctx.media_read_current(permission) or permission.user_id != who.user_id\n"
+        "            or not ctx.media_enabled()):\n        return {}\n    final",
+        "    if permission.user_id != who.user_id or not ctx.media_enabled():\n"
         "        return {}\n    final",
-        "    final",
         _scenario_owner_removed_during_bind,
     ),
     "flag_recheck": (
-        "    if not ctx.is_approval_owner_device(who.device_id) or not ctx.media_enabled():\n"
+        "    if (not ctx.media_read_current(permission) or permission.user_id != who.user_id\n"
+        "            or not ctx.media_enabled()):\n        return {}\n    final",
+        "    if not ctx.media_read_current(permission) or permission.user_id != who.user_id:\n"
         "        return {}\n    final",
-        "    if not ctx.is_approval_owner_device(who.device_id):\n        return {}\n    final",
         _scenario_flag_off_during_bind,
     ),
     "binding_type": (
@@ -1489,7 +1493,8 @@ MUTANTS = {
         _scenario_binding_for_other_sidecar,
     ),
     "initial_selection": (
-        "        bound is None\n        or twin is None",
+        "        permission is None or permission.user_id != who.user_id or bound is None\n"
+        "        or twin is None",
         "        twin is None",
         _scenario_non_owner_never_reads_media,
     ),
@@ -1688,8 +1693,14 @@ R1_REVERSES = {
 }
 
 
-@pytest.mark.parametrize("name", sorted(set(BASE_HASHES) - {"bridge.py"} - set(R1_GUARD_HASHES)))
+@pytest.mark.parametrize(
+    "name", sorted(set(BASE_HASHES) - {"bridge.py", "local_media_registry.py"}
+                   - set(R1_GUARD_HASHES)),
+)
 def test_the_reads_and_unchanged_helpers_are_byte_identical_to_the_base(name: str) -> None:
+    # LM-ENT1 intentionally extends registry bindings with permission generations.
+    # Its primitive/privacy/isolation behavior is covered by registry + runtime tests;
+    # keep the original baseline hash as history, never bless it with a replacement hash.
     assert _sha(name) == BASE_HASHES[name]
 
 

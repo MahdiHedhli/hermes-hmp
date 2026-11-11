@@ -572,7 +572,7 @@ def _reader_value(value):
 def _mutate_reader_target(conn: sqlite3.Connection, name: str) -> None:
     """Change the exact row/predicate consumed by each named public reader."""
     sql = {
-        "request_schema_ready": "UPDATE meta SET schema_version=4 WHERE id=1",
+        "request_schema_ready": "UPDATE meta SET schema_version=? WHERE id=1",
         "instance_epoch": "UPDATE meta SET instance_epoch=1 WHERE id=1",
         "revocation_epoch": "UPDATE meta SET store_revocation_epoch=1 WHERE id=1",
         "get_offer": "UPDATE offers SET expires_at=101 WHERE oid='offer'",
@@ -608,6 +608,7 @@ def _mutate_reader_target(conn: sqlite3.Connection, name: str) -> None:
     }
     assert set(sql) == READERS
     parameters = {
+        "request_schema_ready": (SCHEMA_VERSION + 1,),
         "get_refresh_token": (b"r" * 32,),
         "get_access_token": (b"a" * 32,),
     }.get(name, ())
@@ -654,7 +655,8 @@ def test_each_reader_exposes_only_its_own_committed_value(
         if name == "request_schema_ready" and commit:
             # The committed future-version marker must not be reopened by old code.
             with sqlite3.connect(store._path) as conn:
-                assert conn.execute("SELECT schema_version FROM meta WHERE id=1").fetchone()[0] == 4
+                assert (conn.execute("SELECT schema_version FROM meta WHERE id=1").fetchone()[0]
+                        == SCHEMA_VERSION + 1)
         else:
             reopened = Store(store._path)
             reopened.migrate()

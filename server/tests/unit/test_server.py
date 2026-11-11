@@ -654,7 +654,7 @@ def test_route_table_matches_declared_routes(tmp_path: Path) -> None:
         )
     )
     assert routes == expected
-    assert len(expected) == 39
+    assert len(expected) == 41
     assert len(expected) == len(set(expected))
 
 
@@ -683,7 +683,7 @@ def test_a1_session_routes_are_not_registered_when_the_kill_switch_is_off(
         )
     )
     assert routes == expected
-    assert len(expected) == 36
+    assert len(expected) == 38
     assert len(expected) == len(set(expected))
 
 

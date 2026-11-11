@@ -125,6 +125,8 @@ MUTATING_COMMANDS: frozenset[tuple[str, str | None]] = frozenset(
         ("devices", "revoke"),
         ("devices", "grant-controls"),
         ("devices", "deny-controls"),
+        ("devices", "grant-media-read"),
+        ("devices", "deny-media-read"),
         ("devices", "controls-requests"),
         ("instance", "rotate-key"),
         ("approval-test", "begin"),
@@ -749,6 +751,12 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
         "deny-controls", help="Remove jobs and default-model control from one phone"
     )
     deny_controls.add_argument("device_id")
+    for action, help_text in (
+        ("media-read", "Inspect one phone's independent media-read decision"),
+        ("grant-media-read", "Allow host-local images only; no approval or Controls grant"),
+        ("deny-media-read", "Deny host-local image access only"),
+    ):
+        devices.add_parser(action, help=help_text).add_argument("device_id")
     requests = devices.add_parser(
         "controls-requests", help="Inspect and decide a phone's Controls request at this TTY"
     ).add_subparsers(dest="controls_requests_command")
@@ -1917,6 +1925,96 @@ def _cmd_devices_deny_controls(ctx: _Context, args: argparse.Namespace) -> int:
     return _cmd_devices_controls(ctx, args, allowed=False)
 
 
+def _media_operator_context(ctx: _Context, device_id: str, iid: str) -> dict[str, Any]:
+    from .media_permissions import MediaReadDecision
+    from .operator_read import SOCKET_NAME, OperatorUnavailableError, read_media_context
+
+    try:
+        record = read_listener_record(
+            listener_record_path(ctx.custody.anchor_dir), iid=iid, pid_alive=ctx.env.pid_alive,
+        )
+        if not ctx.env.verify_listener_live(record, iid):
+            raise OperatorUnavailableError("operator listener unavailable")
+        response = read_media_context(
+            listener_record_path(ctx.custody.anchor_dir).parent / SOCKET_NAME,
+            iid=iid, nonce=record.nonce, device_id=device_id,
+        )
+        current = ctx.store.media_read_decision(iid, device_id)
+        if type(current) is not MediaReadDecision:
+            raise OperatorUnavailableError("operator device unavailable")
+        current.validate()
+        if current._asdict() != response["decision"]:
+            raise OperatorUnavailableError("operator device changed")
+        if _load_identity(ctx).iid != iid:
+            raise OperatorUnavailableError("operator instance changed")
+        return response
+    except (ListenerRecordError, OperatorUnavailableError, OSError, ValueError,
+            TypeError, RuntimeError, sqlite3.Error) as exc:
+        raise RefusedError(
+            "refused: current media-permission runtime unavailable; inspect or restart HMP"
+        ) from exc
+
+
+def _cmd_devices_media(ctx: _Context, args: argparse.Namespace) -> int:
+    from .media_permissions import MediaReadDecision
+
+    iid = _load_identity(ctx).iid
+    before = _media_operator_context(ctx, args.device_id, iid)
+    decision = MediaReadDecision(**before["decision"])
+    decision.validate()
+    ctx.out.write(json.dumps({
+        "device_id": args.device_id, "explicit_media_read": decision.allowed,
+        "effective_entitlement": before["effective"], "revision": decision.revision,
+        "host_enabled": before["host_enabled"], "api_available": before["api_available"],
+        "per_bot_authorization": "required separately",
+    }, sort_keys=True) + "\n")
+    if args.devices_command == "media-read":
+        return EXIT_OK
+    allowed = args.devices_command == "grant-media-read"
+    ctx.out.write(
+        "Scope: eligible host-local images for this device's authorized bots now or later. "
+        "No approval answers, jobs, models, bot membership or host flags are changed. "
+        "Host settings are sampled, not fenced atomically with the permission commit.\n"
+    )
+    token = ("ALLOW" if allowed else "DENY") + f" MEDIA_READ {args.device_id}"
+    if not _host_request_confirmation(ctx, token):
+        raise RefusedError("refused: exact typed media-read decision required")
+    after = _media_operator_context(ctx, args.device_id, iid)
+    if any(after[key] != before[key] for key in (
+        "decision", "nonce", "generation", "host_enabled", "api_available", "effective",
+    )) or int(time.monotonic() * 1_000) >= after["expires_ms"]:
+        raise RefusedError("refused: media decision context changed; inspect before retrying")
+    try:
+        written = ctx.store.set_media_read(decision, allowed=allowed, now=ctx.now())
+    except BaseException:
+        raise RefusedError(
+            "media decision outcome unknown; inspect with devices media-read; do not replay"
+        ) from None
+    if written is None:
+        raise RefusedError("refused: device or media decision changed; no decision saved")
+    try:
+        if type(written) is not MediaReadDecision:
+            raise ValueError("write outcome unavailable")
+        written.validate()
+        readback = ctx.store.media_read_decision(iid, args.device_id)
+        if type(readback) is not MediaReadDecision:
+            raise ValueError("readback unavailable")
+        readback.validate()
+        if readback != written:
+            raise ValueError("decision superseded")
+        live = _media_operator_context(ctx, args.device_id, iid)
+        if (live["decision"] != written._asdict() or live["effective"] is not allowed
+                or live["nonce"] != after["nonce"] or live["generation"] != after["generation"]):
+            raise ValueError("live readback changed")
+    except Exception:
+        raise RefusedError(
+            "media decision committed; live readback uncertain; inspect; do not replay"
+        ) from None
+    ctx.out.write(f"Media-read decision saved at revision {written.revision}; "
+                  "host and per-bot availability remain separate.\n")
+    return EXIT_OK
+
+
 def _host_request_line(record: Any) -> str:
     """A bounded ASCII-only host snapshot, never a bearer token or a grant."""
     fields = {
@@ -2485,6 +2583,9 @@ _STORE_COMMANDS: dict[tuple[str, str], Callable[[_Context, argparse.Namespace], 
     ("devices", "revoke"): _cmd_devices_revoke,
     ("devices", "grant-controls"): _cmd_devices_grant_controls,
     ("devices", "deny-controls"): _cmd_devices_deny_controls,
+    ("devices", "media-read"): _cmd_devices_media,
+    ("devices", "grant-media-read"): _cmd_devices_media,
+    ("devices", "deny-media-read"): _cmd_devices_media,
     ("devices", "controls-requests"): _cmd_controls_requests,
     ("instance", "show"): _cmd_show,
     ("instance", "rotate-key"): _cmd_rotate,
@@ -2495,6 +2596,7 @@ _STORE_COMMANDS: dict[tuple[str, str], Callable[[_Context, argparse.Namespace], 
 IDENTITY_COMMANDS: frozenset[tuple[str, str]] = frozenset(
     {("pair", "offer"), ("instance", "show"), ("instance", "rotate-key"),
      ("devices", "controls-requests")}
+    | {("devices", action) for action in ("media-read", "grant-media-read", "deny-media-read")}
 )
 
 

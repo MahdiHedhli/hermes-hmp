@@ -129,15 +129,23 @@ class Caller:
     user_id: str
     instance_id: str
     profile: str
+    permission_generation: tuple[int, ...] = ()
 
     def __post_init__(self) -> None:
         for name in ("device_id", "user_id", "instance_id", "profile"):
             _text(getattr(self, name))
+        _permission_generation(self.permission_generation)
 
     def __repr__(self) -> str:
         return "Caller()"
 
     __str__ = __repr__
+
+
+def _permission_generation(value: tuple[int, ...]) -> None:
+    if (type(value) is not tuple or len(value) not in (0, 4)
+            or any(type(item) is not int or not -1 <= item <= 2 ** 63 - 1 for item in value)):
+        raise RegistryRefusal from None
 
 
 @dataclass(frozen=True, slots=True, repr=False)
@@ -153,12 +161,14 @@ class Binding:
     tip: str
     tool_row_id: int
     raw_digest: bytes
+    permission_generation: tuple[int, ...] = ()
 
     def __post_init__(self) -> None:
         for name in ("device_id", "user_id", "instance_id", "profile", "session_id", "tip"):
             _text(getattr(self, name))
         _row_id(self.tool_row_id)
         _digest(self.raw_digest)
+        _permission_generation(self.permission_generation)
         if type(self.kind) is not SessionKind:
             raise RegistryRefusal from None
 
@@ -173,6 +183,7 @@ class Binding:
             and self.user_id == caller.user_id
             and self.instance_id == caller.instance_id
             and self.profile == caller.profile
+            and self.permission_generation == caller.permission_generation
         )
 
 

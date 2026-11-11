@@ -6,7 +6,9 @@ listener, repeat the read after confirmation, and use Store's final origin/CAS g
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 import contextlib
+import contextvars
 import ctypes
 import json
 import os
@@ -22,6 +24,7 @@ from typing import Any
 
 from .contract import AuthzState
 from .controls_requests import ControlsRequestStore
+from .media_permissions import MediaReadDecision, validate_media_scope
 
 SOCKET_NAME = "controls-operator.sock"
 MAX_REQUEST = 512
@@ -175,6 +178,20 @@ def _request(raw: bytes, *, iid: str, nonce: str) -> tuple[str, str]:
     return obj["request_id"], obj["challenge"]
 
 
+def _media_request(raw: bytes, *, iid: str, nonce: str) -> tuple[str, str]:
+    obj = _closed_json(
+        raw, frozenset({"protocol", "operation", "request_id", "iid", "nonce", "challenge"}),
+    )
+    validate_media_scope(iid, obj["request_id"])
+    if (type(obj["protocol"]) is not int or obj["protocol"] != 1
+            or obj["operation"] != "host_media_read_context"
+            or obj["iid"] != iid or obj["nonce"] != nonce
+            or type(obj["challenge"]) is not str
+            or _NONCE.fullmatch(obj["challenge"]) is None):
+        raise OperatorUnavailableError("operator context unavailable")
+    return obj["request_id"], obj["challenge"]
+
+
 def _source_snapshot(
     ctx: Any, record: Any, deadline: float, generation: str,
 ) -> tuple[dict[str, object], frozenset[str]]:
@@ -260,6 +277,39 @@ def _collect(ctx: Any, request_id: str, challenge: str, nonce: str,
     }
 
 
+def _collect_media(ctx: Any, device_id: str, challenge: str, nonce: str,
+                   generation: str, deadline: float) -> dict[str, object]:
+    def current() -> None:
+        if (ctx.identity.still_current() is not True or time.monotonic() >= deadline
+                or ctx.readiness_generation != generation):
+            raise OperatorUnavailableError("operator context unavailable")
+
+    current()
+    first = ctx.store.media_read_decision(ctx.iid, device_id)
+    if type(first) is not MediaReadDecision:
+        raise OperatorUnavailableError("operator device unavailable")
+    first.validate()
+    enabled, available = ctx.media_enabled(), ctx.media_snapshot() is not None
+    effective = ctx.media_read_permission(device_id) is not None
+    second = ctx.store.media_read_decision(ctx.iid, device_id)
+    if type(second) is not MediaReadDecision:
+        raise OperatorUnavailableError("operator device unavailable")
+    second.validate()
+    if (second != first or enabled != ctx.media_enabled()
+            or available != (ctx.media_snapshot() is not None)
+            or effective != (ctx.media_read_permission(device_id) is not None)):
+        raise OperatorUnavailableError("operator context changed")
+    current()
+    sampled = int(time.monotonic() * 1_000)
+    return {
+        "protocol": 1, "operation": "host_media_read_context", "request_id": device_id,
+        "challenge": challenge, "iid": ctx.iid, "nonce": nonce, "generation": generation,
+        "decision": first._asdict(), "host_enabled": enabled, "api_available": available,
+        "effective": effective,
+        "sample_ms": sampled, "expires_ms": int(deadline * 1_000),
+    }
+
+
 class OperatorReadService:
     def __init__(self, ctx: Any, anchor_dir: Path, nonce: str) -> None:
         self.ctx = ctx
@@ -272,7 +322,11 @@ class OperatorReadService:
         self._stopping = False
         self._active = 0
         self._drained = asyncio.Event()
-        self._outstanding = 0
+        self._read_origin_ctx = ctx
+        self._read_budget = getattr(ctx, "read_worker_budget", None)
+        self._read_loop = None
+        self._read_operations: dict[object, concurrent.futures.Future | None] = {}
+        self._read_pool = concurrent.futures.ThreadPoolExecutor(max_workers=2)
 
     async def start(self) -> None:
         if _NONCE.fullmatch(self.nonce) is None or len(os.fsencode(self.path)) >= 104:
@@ -337,6 +391,10 @@ class OperatorReadService:
             os.close(fd)
             raise
 
+    def _operator_debt(self) -> int:
+        """Actual retained work; mutation subclasses use their original-intent ledger."""
+        return len(self._read_operations)
+
     async def stop(self) -> int:
         self._stopping = True
         listener, self._server = self._server, None
@@ -357,43 +415,89 @@ class OperatorReadService:
                 pass
             finally:
                 os.close(fd)
-        debt = self._outstanding
+        debt = self._operator_debt()
         if debt == 0:
             self._drained.set()
+        self._read_pool.shutdown(wait=False, cancel_futures=False)
         return debt
 
     async def wait_drained(self) -> None:
         """A timed-out synchronous callback retains its Store until it actually returns."""
         await self._drained.wait()
 
-    async def _context(self, request_id: str, challenge: str) -> dict[str, object]:
+    def _retire_read(self, intent, original) -> None:
+        if self._read_operations.get(intent) is not original:
+            return
+        del self._read_operations[intent]
+        self._read_budget.release(operator=True)
+        if self._stopping and not self._read_operations:
+            self._drained.set()
+
+    async def _context(self, request_id: str, challenge: str,
+                       *, media: bool = False) -> dict[str, object]:
         ctx = self.ctx
-        if self._stopping or not ctx.read_worker_budget.reserve(operator=True):
-            raise OperatorUnavailableError("operator capacity unavailable")
-        self._outstanding += 1
+        loop = asyncio.get_running_loop()
+        if self._read_loop is None:
+            self._read_loop = loop
+        if (self._stopping or self._read_pool is None or self._read_loop is not loop
+                or ctx is not self._read_origin_ctx or self._read_budget is None
+                or ctx.read_worker_budget is not self._read_budget):
+            raise OperatorUnavailableError("operator context unavailable")
+        execution_context = contextvars.copy_context()
         generation = ctx.readiness_generation
         deadline = time.monotonic() + DEADLINE_S
+        intent = object()  # preconditions/allocations precede capacity acquisition
         try:
-            work = asyncio.create_task(asyncio.to_thread(
-                _collect, ctx, request_id, challenge, self.nonce, generation, deadline,
-            ))
+            self._read_operations[intent] = None
         except BaseException:
-            ctx.read_worker_budget.release(operator=True)
-            self._outstanding -= 1
-            raise
-        def release(done: asyncio.Task[Any]) -> None:
-            with contextlib.suppress(BaseException):
-                done.exception()
-            ctx.read_worker_budget.release(operator=True)
-            self._outstanding -= 1
-            if self._stopping and self._outstanding == 0:
-                self._drained.set()
-        work.add_done_callback(release)
-        try:
-            return await asyncio.wait_for(asyncio.shield(work), DEADLINE_S)
-        except (TimeoutError, asyncio.CancelledError):
+            self._read_operations.pop(intent, None)  # acquisition was never called
             raise OperatorUnavailableError("operator context unavailable") from None
+        try:
+            reserved = self._read_budget.reserve(operator=True)
+        except BaseException:
+            self._read_budget.poisoned = True
+            self._stopping = True
+            raise OperatorUnavailableError("operator context unavailable") from None
+        if reserved is False:
+            self._read_operations.pop(intent)
+            raise OperatorUnavailableError("operator capacity unavailable")
+        if reserved is not True:
+            self._read_budget.poisoned = True
+            self._stopping = True
+            raise OperatorUnavailableError("operator context unavailable")
+        try:
+            original = self._read_pool.submit(
+                execution_context.run,
+                _collect_media if media else _collect,
+                ctx, request_id, challenge, self.nonce, generation, deadline,
+            )
+            self._read_operations[intent] = original
 
+            def release(future):
+                with contextlib.suppress(RuntimeError):
+                    loop.call_soon_threadsafe(self._retire_read, intent, future)
+
+            original.add_done_callback(release)
+        except BaseException:
+            self._stopping = True  # possibly queued; never refund an unknown submit
+            raise OperatorUnavailableError("operator context unavailable") from None
+        try:
+            wrapped = asyncio.wrap_future(original)
+
+            def consume_late_error(future):
+                with contextlib.suppress(BaseException):
+                    future.exception()  # no debt retirement authority
+
+            wrapped.add_done_callback(consume_late_error)
+            result = await asyncio.wait_for(asyncio.shield(wrapped),
+                                            max(0, deadline - time.monotonic()))
+            if (self._stopping or self.ctx is not ctx
+                    or ctx.read_worker_budget is not self._read_budget
+                    or ctx.readiness_generation != generation or time.monotonic() >= deadline):
+                raise OperatorUnavailableError("operator context unavailable")
+            return result
+        except BaseException:
+            raise OperatorUnavailableError("operator context unavailable") from None
     async def _handle(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         task = asyncio.current_task()
         assert task is not None
@@ -408,8 +512,15 @@ class OperatorReadService:
             raw = await asyncio.wait_for(reader.readline(), DEADLINE_S)
             if not raw.endswith(b"\n") or len(raw) > MAX_REQUEST:
                 return
-            request_id, challenge = _request(raw[:-1], iid=self.ctx.iid, nonce=self.nonce)
-            payload = await self._context(request_id, challenge)
+            try:
+                request_id, challenge = _request(raw[:-1], iid=self.ctx.iid, nonce=self.nonce)
+            except OperatorUnavailableError:
+                device_id, challenge = _media_request(
+                    raw[:-1], iid=self.ctx.iid, nonce=self.nonce,
+                )
+                payload = await self._context(device_id, challenge, media=True)
+            else:
+                payload = await self._context(request_id, challenge)
             if not _safe_ijson(payload):
                 return
             body = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True,
@@ -430,22 +541,19 @@ class OperatorReadService:
                 await asyncio.wait_for(writer.wait_closed(), DEADLINE_S)
 
 
-def read_context(path: Path, *, iid: str, nonce: str, request_id: str) -> dict[str, Any]:
-    """CLI-side fresh read. Caller checks TTY, listener and TLS identity first."""
-    if (_IID.fullmatch(iid) is None or _NONCE.fullmatch(nonce) is None
-            or _REQUEST_ID.fullmatch(request_id) is None):
-        raise OperatorUnavailableError("operator context unavailable")
+def _exchange(path: Path, message: dict[str, object],
+              response_keys: frozenset[str]) -> dict[str, Any]:
+    """Shared bounded same-UID transport; individual operations validate closed replies."""
     fd, parent = _parent_fd(path)
     try:
         before = _entry(fd)
         if (not stat.S_ISSOCK(before.st_mode) or before.st_uid != os.getuid()
                 or stat.S_IMODE(before.st_mode) & 0o077):
             raise OperatorUnavailableError("operator socket unsafe")
-        challenge = os.urandom(16).hex()
-        request = json.dumps({
-            "protocol": 1, "operation": "host_controls_decision_context", "request_id": request_id,
-            "iid": iid, "nonce": nonce, "challenge": challenge,
-        }, sort_keys=True, separators=(",", ":")).encode("ascii") + b"\n"
+        request = json.dumps(message, sort_keys=True, separators=(",", ":"),
+                             ensure_ascii=True, allow_nan=False).encode("ascii") + b"\n"
+        if len(request) > MAX_REQUEST:
+            raise OperatorUnavailableError("operator request unavailable")
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
             client.settimeout(DEADLINE_S)
             client.connect(str(path))
@@ -472,7 +580,25 @@ def read_context(path: Path, *, iid: str, nonce: str, request_id: str) -> dict[s
                     break
         if len(chunks) > MAX_RESPONSE or chunks.count(b"\n") != 1 or not chunks.endswith(b"\n"):
             raise OperatorUnavailableError("operator response unavailable")
-        result = _closed_json(bytes(chunks[:-1]), frozenset({
+        return _closed_json(bytes(chunks[:-1]), response_keys)
+    except (OSError, ValueError, TypeError, KeyError) as exc:
+        raise OperatorUnavailableError("operator context unavailable") from exc
+    finally:
+        os.close(fd)
+
+
+def read_context(path: Path, *, iid: str, nonce: str, request_id: str) -> dict[str, Any]:
+    """CLI-side fresh read. Caller checks TTY, listener and TLS identity first."""
+    if (_IID.fullmatch(iid) is None or _NONCE.fullmatch(nonce) is None
+            or _REQUEST_ID.fullmatch(request_id) is None):
+        raise OperatorUnavailableError("operator context unavailable")
+    challenge = os.urandom(16).hex()
+    message = {
+        "protocol": 1, "operation": "host_controls_decision_context", "request_id": request_id,
+        "iid": iid, "nonce": nonce, "challenge": challenge,
+    }
+    try:
+        result = _exchange(path, message, frozenset({
             "protocol", "operation", "request_id", "challenge", "iid", "nonce", "generation",
             "record", "sources", "sample_ms", "expires_ms",
         }))
@@ -521,5 +647,45 @@ def read_context(path: Path, *, iid: str, nonce: str, request_id: str) -> dict[s
         return result
     except (OSError, ValueError, TypeError, KeyError) as exc:
         raise OperatorUnavailableError("operator context unavailable") from exc
-    finally:
-        os.close(fd)
+
+
+def read_media_context(path: Path, *, iid: str, nonce: str, device_id: str) -> dict[str, Any]:
+    """Fresh current-policy proof, read-only; it never grants the selected device anything."""
+    try:
+        validate_media_scope(iid, device_id)
+        if type(nonce) is not str or _NONCE.fullmatch(nonce) is None:
+            raise OperatorUnavailableError("operator context unavailable")
+        challenge = os.urandom(16).hex()
+        message = {
+            "protocol": 1, "operation": "host_media_read_context", "request_id": device_id,
+            "iid": iid, "nonce": nonce, "challenge": challenge,
+        }
+        result = _exchange(path, message, frozenset({
+            "protocol", "operation", "request_id", "challenge", "iid", "nonce", "generation",
+            "decision", "host_enabled", "api_available", "effective", "sample_ms", "expires_ms",
+        }))
+        if (type(result["protocol"]) is not int or result["protocol"] != 1
+                or result["operation"] != "host_media_read_context"
+                or result["request_id"] != device_id or result["challenge"] != challenge
+                or result["iid"] != iid or result["nonce"] != nonce
+                or type(result["generation"]) is not str
+                or _NONCE.fullmatch(result["generation"]) is None
+                or type(result["host_enabled"]) is not bool
+                or type(result["api_available"]) is not bool
+                or type(result["effective"]) is not bool
+                or type(result["decision"]) is not dict
+                or frozenset(result["decision"]) != frozenset(MediaReadDecision._fields)
+                or type(result["sample_ms"]) is not int
+                or type(result["expires_ms"]) is not int
+                or not 0 <= result["sample_ms"] < result["expires_ms"]
+                or result["expires_ms"] - result["sample_ms"] > 2_000
+                or not result["sample_ms"] <= int(time.monotonic() * 1_000) < result["expires_ms"]
+                or not _safe_ijson(result)):
+            raise OperatorUnavailableError("operator context unavailable")
+        decision = MediaReadDecision(**result["decision"])
+        decision.validate()
+        if decision.iid != iid or decision.device_id != device_id:
+            raise OperatorUnavailableError("operator context unavailable")
+        return result
+    except (OSError, ValueError, TypeError, KeyError) as exc:
+        raise OperatorUnavailableError("operator context unavailable") from exc

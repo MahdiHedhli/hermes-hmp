@@ -807,11 +807,31 @@ def test_registry_stores_no_path_or_name_field() -> None:
     names = {f.name for f in dataclasses.fields(Binding)}
     assert names == {
         "device_id", "user_id", "instance_id", "profile", "kind",
-        "session_id", "tip", "tool_row_id", "raw_digest",
+        "session_id", "tip", "tool_row_id", "raw_digest", "permission_generation",
     }  # fmt: skip
     assert {f.name for f in dataclasses.fields(reg.EntrySnapshot)} == {
         "binding", "minted_at", "first_served", "_token",
     }  # fmt: skip
+
+
+def test_permission_generation_cannot_reuse_a_reference_after_regrant() -> None:
+    registry, _clock = make()
+    old = (0, 0, 1, -1)
+    new = (0, 0, 3, -1)
+    ref = registry.mint(binding(permission_generation=old))
+    original = Caller('dev-a', 'usr-a', 'ins-a', 'prof-a', old)
+    changed = Caller('dev-a', 'usr-a', 'ins-a', 'prof-a', new)
+    assert registry.lookup(ref, original) is not None
+    assert registry.lookup(ref, changed) is None
+    assert registry.mint(binding(permission_generation=new)) != ref
+
+
+@pytest.mark.parametrize('generation', (
+    [0, 0, 1, -1], (0, 0, 1), (0, 0, True, -1), (0, 0, 2 ** 63, -1),
+))
+def test_permission_generation_is_bounded_primitive_data(generation) -> None:
+    with pytest.raises(RegistryRefusal):
+        binding(permission_generation=generation)
 
 
 def test_new_instance_starts_empty() -> None:

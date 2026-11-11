@@ -1,7 +1,7 @@
 """Descriptor emission for the four read routes (spec 011 S4; HMP v1 §7e LM-4, LM-5, LM-9).
 
 One entry point, `read`, serves RO-3, RO-6, SES-2 (snapshot and paged) and SES-2a. It chooses the
-read ONCE, from the owner device, the exact-true host flag and the listener's availability
+read ONCE, from the media-entitled device, the exact-true host flag and the listener's availability
 snapshot. Any closed input runs the old read untouched: no media twin, no batch, no registry
 call, and exactly the old response bytes.
 
@@ -12,7 +12,8 @@ native scan. A failure of the twin keeps its original semantics. Any optional fa
 (a foreign sidecar or binding, a refused batch, grant revocation, a gate change) keeps the
 successful public text exactly and mints nothing; nothing here reruns a read.
 
-Minting is a synchronous section on the loop with no await: owner, exact-true flag, availability
+Minting is a synchronous section on the loop with no await: current permission generation,
+exact-true flag, availability
 snapshot and registry identity are rechecked and then each accepted row is minted newest first,
 at most 128. Authority comes from the fresh batch alone. A returned `role:"tool"`,
 `tool_name:"image_generate"` message whose row id the batch accepted gets a `WireMediaDescriptor`;
@@ -52,8 +53,8 @@ _PUBLIC_WITH_MESSAGES: Final = (SnapshotResponse, HistoryPage, SessionSnapshot)
 
 
 def _select(ctx: ServerContext, device_id: str) -> MediaBound | None:
-    """The one read selection: owner device, exact-true flag, availability snapshot."""
-    if not ctx.is_approval_owner_device(device_id) or not ctx.media_enabled():
+    """The one read selection: media permission, exact-true flag, availability snapshot."""
+    if ctx.media_read_permission(device_id) is None or not ctx.media_enabled():
         return None
     return ctx.media_snapshot()
 
@@ -73,11 +74,12 @@ async def read(
 ) -> Any:
     """`old_call(*args)` or its media twin plus descriptors. `name` is the `Reads` method name;
     `args` always begins `(user_id, profile, ...)`."""
+    permission = ctx.media_read_permission(who.device_id)
     bound = _select(ctx, who.device_id)
     reads, bridge = ctx.reads, ctx.bridge
     twin = None if reads is None else _function_attr(type(reads), f"{name}_with_media")
     if (
-        bound is None
+        permission is None or permission.user_id != who.user_id or bound is None
         or twin is None
         or bridge is None
         or not callable(getattr(bridge, "bind_media_batch", None))
@@ -87,6 +89,8 @@ async def read(
     def job() -> tuple[Any, Any]:
         got = twin(reads, *args)  # a text-read failure propagates with its own semantics
         try:
+            if not ctx.media_read_current(permission):
+                return got, None
             binding = _bind(bound, bridge, got, who.user_id, profile)
             # The read's original per-bot gate preceded the native scan. A grant can change
             # during that scan: recheck only an accepted batch, on this same worker, before the
@@ -102,7 +106,7 @@ async def read(
             return got, None
 
     got, binding = await asyncio.to_thread(job)
-    return _emit(ctx, who, profile, bound, got, binding)
+    return _emit(ctx, who, profile, bound, got, binding, permission)
 
 
 def _bind(bridge_bound: MediaBound, bridge: Any, got: Any, user_id: str, profile: str) -> Any:
@@ -133,7 +137,8 @@ def _fallback_public(got: Any) -> Any:
 
 
 def _emit(
-    ctx: ServerContext, who: Any, profile: str, bound: MediaBound, got: Any, binding: Any
+    ctx: ServerContext, who: Any, profile: str, bound: MediaBound, got: Any, binding: Any,
+    permission: Any,
 ) -> Any:
     """Synchronous (no await). The public text, with descriptors when every check holds."""
     if type(got) is not bound.chain[0].MediaReadResult:
@@ -142,7 +147,7 @@ def _emit(
     if binding is None or type(public) not in _PUBLIC_WITH_MESSAGES:
         return public
     try:
-        minted = _mint(ctx, who, profile, bound, got, binding)
+        minted = _mint(ctx, who, profile, bound, got, binding, permission)
         if not minted:
             return public
         messages = tuple(
@@ -157,10 +162,12 @@ def _emit(
 
 
 def _mint(
-    ctx: ServerContext, who: Any, profile: str, bound: MediaBound, got: Any, binding: Any
+    ctx: ServerContext, who: Any, profile: str, bound: MediaBound, got: Any, binding: Any,
+    permission: Any,
 ) -> dict[int, WireMediaDescriptor]:
     # Gate recheck, then mint, with no await anywhere in between.
-    if not ctx.is_approval_owner_device(who.device_id) or not ctx.media_enabled():
+    if (not ctx.media_read_current(permission) or permission.user_id != who.user_id
+            or not ctx.media_enabled()):
         return {}
     final = ctx.media_snapshot()
     if final is None or not final.same_as(bound):
@@ -210,6 +217,7 @@ def _mint(
                 tip=tip,
                 tool_row_id=row_id,
                 raw_digest=digest,
+                permission_generation=permission.generation,
             ),
         )
         if ref is not None:
