@@ -68,3 +68,21 @@ without falling back to a permissive path.
 - No installed host, image service, grant, provider, device build or release is
   changed by this plan. This rejects a proposed shortcut; it does not establish
   an exploitable deployed incident.
+
+## RGA-01a: explicit input-member fence
+
+The native artifact retainer now compares the actual retained entry input's
+package-binding members against the source package-binding members, including
+all four nested selection members, before policy capture. Exact tuple widths
+precede indexed reads. Fresh binding tuple containers are accepted when they
+retain the same original members; tuple container identity is not authority.
+
+The 12-case actual retainer-prefix control checks original and copied valid
+bindings reach the next boundary, while foreign/short bindings and each of the
+eight replaced original members refuse first. It deliberately stops both valid
+controls at that boundary; neither is a complete successful retainer test.
+All cases verify failed-owner cleanup, no Scope publication, no new native
+work/attempts/registrations and no foreign binding hooks. This is an explicit
+custody prerequisite, not the reduced graph audit or end-to-end performance fix.
+The full generic source/runtime checks remain. Remaining root provenance,
+post-callback joins and reduced-dispatch causals are still required by RGA-01.

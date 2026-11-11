@@ -1,3 +1,22 @@
+## Original entry package-binding fence — November 10, 2026
+
+The local character draft now explicitly joins package and nested selection
+members to the actual retained entry inputs before policy capture. Fresh binding
+tuples with the same original members remain valid. No validator or fresh mutable
+check is removed; the optimized retained-graph audit is still unfinished.
+
+Matching 614 checks pass on actual Python 3.14.9 and 3.11.15 with unchanged
+production/test source during each run and zero failures/errors/skips. Twelve
+actual-prefix controls distinguish original/copy bindings from foreign/short or
+replaced root/fact members. Valid controls deliberately stop after this fence;
+they do not establish successful Scope construction or startup. After the full
+runs, the same 12 controls passed again on both runtimes with stronger explicit
+frame-writeback and exact error/failed-owner witnesses; production was unchanged.
+Independent read-only review found no concrete source blocker. This is a custody prerequisite,
+not a performance improvement, deployed bot character or device/release pass.
+Working host-local media6796, host/device builds and permissions are unchanged.
+See specs/046-bot-presentation-integration/RETAINED_GRAPH_ROOT_CONTRACT.md.
+
 ## Generic path-validation optimization — November 10, 2026
 
 The local character draft now validates forbidden path controls with a bounded

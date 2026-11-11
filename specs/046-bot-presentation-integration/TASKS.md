@@ -3,6 +3,9 @@
 - [x] Trace blueprint, digest, original entry inputs and artifact publication.
       Original `_Inputs` already retains package/recipe owners and bindings;
       blueprint/digest alone do not. See [contract](RETAINED_GRAPH_ROOT_CONTRACT.md).
+- [x] **RGA-01a** Add explicit original entry-input package/selection member
+      join before policy capture; no audit skipped. Focused actual-prefix causals
+      distinguish original members from mismatches; no full completion claimed.
 - [ ] **RGA-01** Prove original entry-input/root custody at every intended reduced
       audit consumer, then implement the fresh graph audit with pre/post callback
       rejoins and complete generic fallback APIs. No reduced parser is enabled.

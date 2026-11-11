@@ -3485,6 +3485,30 @@ class StartupArtifactOwner:
                      and tuple.__getitem__(runtime_original_plan, 7) is expected
                      and tuple.__getitem__(runtime_inputs, 4) is tuple.__getitem__(source, 0)) is not True:
                     raise refusal from None
+                # Bind the package graph to the actual retained entry inputs,
+                # not only the matching package owner. Binding tuples themselves
+                # are fresh return values; their original root/fact members must
+                # match, including the nested selection binding. This is a
+                # custody fence, not a cached currentness verdict.
+                input_package_binding = tuple.__getitem__(runtime_inputs, 5)
+                source_package_binding = tuple.__getitem__(source, 1)
+                if (link_raw_type(input_package_binding) is link_raw_tuple
+                     and link_raw_len(input_package_binding) == 5
+                     and link_raw_type(source_package_binding) is link_raw_tuple
+                     and link_raw_len(source_package_binding) == 5
+                     and tuple.__getitem__(input_package_binding, 0) is tuple.__getitem__(source_package_binding, 0)
+                     and tuple.__getitem__(input_package_binding, 1) is tuple.__getitem__(source_package_binding, 1)
+                     and tuple.__getitem__(input_package_binding, 2) is tuple.__getitem__(source_package_binding, 2)
+                     and tuple.__getitem__(input_package_binding, 3) is tuple.__getitem__(source_package_binding, 3)
+                     and link_raw_type(tuple.__getitem__(input_package_binding, 4)) is link_raw_tuple
+                     and link_raw_type(tuple.__getitem__(source_package_binding, 4)) is link_raw_tuple
+                     and link_raw_len(tuple.__getitem__(input_package_binding, 4)) == 4
+                     and link_raw_len(tuple.__getitem__(source_package_binding, 4)) == 4
+                     and tuple.__getitem__(tuple.__getitem__(input_package_binding, 4), 0) is tuple.__getitem__(tuple.__getitem__(source_package_binding, 4), 0)
+                     and tuple.__getitem__(tuple.__getitem__(input_package_binding, 4), 1) is tuple.__getitem__(tuple.__getitem__(source_package_binding, 4), 1)
+                     and tuple.__getitem__(tuple.__getitem__(input_package_binding, 4), 2) is tuple.__getitem__(tuple.__getitem__(source_package_binding, 4), 2)
+                     and tuple.__getitem__(tuple.__getitem__(input_package_binding, 4), 3) is tuple.__getitem__(tuple.__getitem__(source_package_binding, 4), 3)) is not True:
+                    raise refusal from None
                 link_tail, link_tail_code = tail_row[1], tail_row[2]
                 source_check, source_check_code = _source_current, _source_current.__code__
 
