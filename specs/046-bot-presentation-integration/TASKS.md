@@ -1,3 +1,11 @@
+## November 11: declared runtime classmethods
+
+- [x] **RGA-01d-RUNTIME-CLASSMETHODS** Eight exact native wrappers/functions, 94 helper roles, primitive21; old roles and indices preserved.
+- [x] Focused103 and full956 cases pass both interpreters, identical IDs, all553 source hashes match; independent bounded review.
+- [x] Preserve strict original root/callee assertions; separate late-code pure audit/final refusal without effects.
+- [ ] **RGA-01d-RUNTIME-GENERATED** Generated helpers, private-global and cache_candidates transitive custody; measured43/29 remaining class attributes.
+- [ ] Full original-root/caller/callee/GC/callback/fresh graph, native60s, complete feature/device/Linux/provider/release qualification.
+
 ## November 11: complete runtime constructor metadata
 
 - [x] **RGA-01d-RUNTIME-CONSTRUCTORS** Retain seven runtime constructors via

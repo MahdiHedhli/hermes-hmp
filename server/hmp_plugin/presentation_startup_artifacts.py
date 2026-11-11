@@ -6317,19 +6317,41 @@ class StartupArtifactOwner:
                             or link_helper_pair[0] in link_helper_defaults):
                         raise refusal from None
                     link_helper_defaults[link_helper_pair[0]] = link_helper_pair[1]
-                link_helper_default_names = ('_type', '_vars', '_tuple', '_len', '_dict', '_str',
-                    '_any', '_zip', '_all', '_set', '_error', '_value_error',
-                    '_bool', '_int', '_list', '_bytes', '_bytearray', '_sum', '_ord', '_super')
+                link_helper_default_names = (
+                    "_type",
+                    "_vars",
+                    "_tuple",
+                    "_len",
+                    "_dict",
+                    "_str",
+                    "_any",
+                    "_zip",
+                    "_all",
+                    "_set",
+                    "_error",
+                    "_value_error",
+                    "_bool",
+                    "_int",
+                    "_list",
+                    "_bytes",
+                    "_bytearray",
+                    "_sum",
+                    "_ord",
+                    "_super",
+                    "_classmethod",
+                )
                 if link_raw_any(name not in link_helper_defaults for name in link_helper_default_names):
                     raise refusal from None
-                link_helper_expected_builtins = link_raw_tuple(link_helper_defaults[name]
-                    for name in link_helper_default_names)
+                link_helper_expected_builtins = link_raw_tuple(
+                    link_helper_defaults[name] for name in link_helper_default_names
+                )
+                link_helper_classmethod = link_helper_expected_builtins[20]
                 link_helper_system, link_helper_registry = link_pin_environment[0], link_pin_environment[2]
                 if link_raw_type(link_helper_origin) is not link_raw_tuple or link_raw_len(link_helper_origin) != 8 or link_raw_type(link_helper_origin[0]) is not link_raw_module or (link_raw_type(link_helper_origin[1]) is not link_raw_dict) or (link_raw_type(link_helper_origin[2]) is not link_raw_tuple) or (link_raw_type(link_helper_origin[3]) is not link_raw_tuple) or (link_raw_len(link_helper_origin[3]) != 4) or (link_raw_type(link_helper_origin[4]) is not link_raw_tuple) or (link_raw_len(link_helper_origin[4]) != 3) or (link_raw_type(link_helper_origin[5]) is not link_raw_tuple) or (link_raw_len(link_helper_origin[5]) != 3):
                     raise refusal from None
                 link_seal_helper_module, link_seal_helper_namespace, link_seal_helper_pairs = link_helper_origin[:3]
                 link_seal_helper_builtin_module, link_seal_helper_builtin_namespace, link_seal_helper_primitive_pairs = link_helper_origin[5]
-                if link_raw_any((link_raw_type(k) is not link_raw_str for k in link_helper_registry)) or link_helper_registry.get('hmp_startup.retained_binding_origin') is not link_seal_helper_module or link_raw_vars(link_seal_helper_module) is not link_seal_helper_namespace or link_raw_any((link_raw_type(k) is not link_raw_str for k in link_seal_helper_namespace)) or (link_raw_len(link_seal_helper_namespace) != link_raw_len(link_seal_helper_pairs)) or (link_seal_helper_namespace.get('sys') is not link_helper_system) or (link_raw_type(link_seal_helper_builtin_module) is not link_raw_module) or (link_raw_type(link_seal_helper_builtin_namespace) is not link_raw_dict) or (link_helper_registry.get('builtins') is not link_seal_helper_builtin_module) or (link_raw_vars(link_seal_helper_builtin_module) is not link_seal_helper_builtin_namespace) or link_raw_any((link_raw_type(k) is not link_raw_str for k in link_seal_helper_builtin_namespace)) or (link_seal_helper_namespace.get('__builtins__') is not link_seal_helper_builtin_namespace) or (link_raw_type(link_seal_helper_primitive_pairs) is not link_raw_tuple) or (link_raw_len(link_seal_helper_primitive_pairs) != 20):
+                if link_raw_any((link_raw_type(k) is not link_raw_str for k in link_helper_registry)) or link_helper_registry.get('hmp_startup.retained_binding_origin') is not link_seal_helper_module or link_raw_vars(link_seal_helper_module) is not link_seal_helper_namespace or link_raw_any((link_raw_type(k) is not link_raw_str for k in link_seal_helper_namespace)) or (link_raw_len(link_seal_helper_namespace) != link_raw_len(link_seal_helper_pairs)) or (link_seal_helper_namespace.get('sys') is not link_helper_system) or (link_raw_type(link_seal_helper_builtin_module) is not link_raw_module) or (link_raw_type(link_seal_helper_builtin_namespace) is not link_raw_dict) or (link_helper_registry.get('builtins') is not link_seal_helper_builtin_module) or (link_raw_vars(link_seal_helper_builtin_module) is not link_seal_helper_builtin_namespace) or link_raw_any((link_raw_type(k) is not link_raw_str for k in link_seal_helper_builtin_namespace)) or (link_seal_helper_namespace.get('__builtins__') is not link_seal_helper_builtin_namespace) or (link_raw_type(link_seal_helper_primitive_pairs) is not link_raw_tuple) or (link_raw_len(link_seal_helper_primitive_pairs) != 21):
                     raise refusal from None
                 link_seal_helper_seen = {}
                 for link_seal_helper_pair in link_seal_helper_pairs:
@@ -6339,25 +6361,82 @@ class StartupArtifactOwner:
                     if link_seal_helper_key in link_seal_helper_seen or link_seal_helper_key not in link_seal_helper_namespace or link_seal_helper_namespace[link_seal_helper_key] is not link_seal_helper_value:
                         raise refusal from None
                     link_seal_helper_seen[link_seal_helper_key] = link_seal_helper_value
-                for link_seal_helper_pair, link_seal_helper_name, link_seal_helper_expected in link_raw_zip(link_seal_helper_primitive_pairs, ('type', 'vars', 'tuple', 'len', 'dict', 'str', 'any', 'zip', 'all', 'set', 'RuntimeError', 'ValueError', 'bool', 'int', 'list', 'bytes', 'bytearray', 'sum', 'ord', 'super'), link_helper_expected_builtins, strict=True):
+                for link_seal_helper_pair, link_seal_helper_name, link_seal_helper_expected in link_raw_zip(link_seal_helper_primitive_pairs, ('type', 'vars', 'tuple', 'len', 'dict', 'str', 'any', 'zip', 'all', 'set', 'RuntimeError', 'ValueError', 'bool', 'int', 'list', 'bytes', 'bytearray', 'sum', 'ord', 'super', 'classmethod'), link_helper_expected_builtins, strict=True):
                     if link_raw_type(link_seal_helper_pair) is not link_raw_tuple or link_raw_len(link_seal_helper_pair) != 2 or link_raw_type(link_seal_helper_pair[0]) is not link_raw_str or (link_seal_helper_pair[0] != link_seal_helper_name) or (link_seal_helper_pair[1] is not link_seal_helper_expected) or (link_seal_helper_builtin_namespace.get(link_seal_helper_name) is not link_seal_helper_expected):
                         raise refusal from None
-                for link_seal_helper_row, link_seal_helper_name in link_raw_zip(link_helper_origin[3], ('capture', 'current', 'capture_bound', 'current_live'), strict=True):
-                    if link_raw_type(link_seal_helper_row) is not link_raw_tuple or link_raw_len(link_seal_helper_row) != 7 or link_raw_type(link_seal_helper_row[0]) is not link_raw_str or (link_seal_helper_row[0] != link_seal_helper_name) or (link_raw_type(link_seal_helper_row[1]) is not link_raw_function) or (link_seal_helper_row[3] is not link_seal_helper_namespace) or (link_seal_helper_namespace.get(link_seal_helper_name) is not link_seal_helper_row[1]) or (link_seal_helper_row[1].__code__ is not link_seal_helper_row[2]) or (link_seal_helper_row[1].__globals__ is not link_seal_helper_namespace) or (link_seal_helper_row[1].__builtins__ is not link_seal_helper_builtin_namespace) or (link_seal_helper_row[1].__defaults__ is not link_seal_helper_row[4]) or (link_seal_helper_row[1].__kwdefaults__ is not link_seal_helper_row[5]) or (link_seal_helper_row[1].__closure__ is not None) or (link_raw_type(link_seal_helper_row[6]) is not link_raw_tuple):
+                for link_seal_helper_row, link_seal_helper_name in link_raw_zip(
+                    link_helper_origin[3],
+                    ("capture", "current", "capture_bound", "current_live"),
+                    strict=True,
+                ):
+                    if (
+                        link_raw_type(link_seal_helper_row) is not link_raw_tuple
+                        or link_raw_len(link_seal_helper_row) != 7
+                        or link_raw_type(link_seal_helper_row[0]) is not link_raw_str
+                        or (link_seal_helper_row[0] != link_seal_helper_name)
+                        or (link_raw_type(link_seal_helper_row[1]) is not link_raw_function)
+                        or (link_seal_helper_row[3] is not link_seal_helper_namespace)
+                        or (
+                            link_seal_helper_namespace.get(link_seal_helper_name)
+                            is not link_seal_helper_row[1]
+                        )
+                        or (link_seal_helper_row[1].__code__ is not link_seal_helper_row[2])
+                        or (link_seal_helper_row[1].__globals__ is not link_seal_helper_namespace)
+                        or (
+                            link_seal_helper_row[1].__builtins__
+                            is not link_seal_helper_builtin_namespace
+                        )
+                        or (link_seal_helper_row[1].__defaults__ is not link_seal_helper_row[4])
+                        or (link_seal_helper_row[1].__kwdefaults__ is not link_seal_helper_row[5])
+                        or (link_seal_helper_row[1].__closure__ is not None)
+                        or (link_raw_type(link_seal_helper_row[6]) is not link_raw_tuple)
+                    ):
                         raise refusal from None
-                    link_seal_helper_kw, link_seal_helper_kw_pairs = (link_seal_helper_row[5], link_seal_helper_row[6])
+                    link_seal_helper_kw, link_seal_helper_kw_pairs = (
+                        link_seal_helper_row[5],
+                        link_seal_helper_row[6],
+                    )
+                    if (
+                        link_raw_type(link_seal_helper_kw) is not link_raw_dict
+                        or link_raw_any(
+                            link_raw_type(k) is not link_raw_str for k in link_seal_helper_kw
+                        )
+                        or link_seal_helper_kw.get("_classmethod") is not link_helper_classmethod
+                        or (
+                            link_seal_helper_name in ("capture_bound", "current_live")
+                            and link_seal_helper_kw.get("_error")
+                            is not link_helper_expected_builtins[10]
+                        )
+                    ):
+                        raise refusal from None
                     if link_seal_helper_kw is None:
                         if link_raw_len(link_seal_helper_kw_pairs) != 0:
                             raise refusal from None
                     else:
-                        if link_raw_type(link_seal_helper_kw) is not link_raw_dict or link_raw_any((link_raw_type(k) is not link_raw_str for k in link_seal_helper_kw)) or link_raw_len(link_seal_helper_kw) != link_raw_len(link_seal_helper_kw_pairs):
+                        if (
+                            link_raw_type(link_seal_helper_kw) is not link_raw_dict
+                            or link_raw_any(
+                                link_raw_type(k) is not link_raw_str for k in link_seal_helper_kw
+                            )
+                            or link_raw_len(link_seal_helper_kw)
+                            != link_raw_len(link_seal_helper_kw_pairs)
+                        ):
                             raise refusal from None
                         link_seal_helper_seen = {}
                         for link_seal_helper_pair in link_seal_helper_kw_pairs:
-                            if link_raw_type(link_seal_helper_pair) is not link_raw_tuple or link_raw_len(link_seal_helper_pair) != 2 or link_raw_type(link_seal_helper_pair[0]) is not link_raw_str:
+                            if (
+                                link_raw_type(link_seal_helper_pair) is not link_raw_tuple
+                                or link_raw_len(link_seal_helper_pair) != 2
+                                or link_raw_type(link_seal_helper_pair[0]) is not link_raw_str
+                            ):
                                 raise refusal from None
                             link_seal_helper_key, link_seal_helper_value = link_seal_helper_pair
-                            if link_seal_helper_key in link_seal_helper_seen or link_seal_helper_key not in link_seal_helper_kw or link_seal_helper_kw[link_seal_helper_key] is not link_seal_helper_value:
+                            if (
+                                link_seal_helper_key in link_seal_helper_seen
+                                or link_seal_helper_key not in link_seal_helper_kw
+                                or link_seal_helper_kw[link_seal_helper_key]
+                                is not link_seal_helper_value
+                            ):
                                 raise refusal from None
                             link_seal_helper_seen[link_seal_helper_key] = link_seal_helper_value
                 link_seal_helper_error_kind, link_seal_helper_error_bases, link_seal_helper_error_pairs = link_helper_origin[4]
@@ -6429,36 +6508,134 @@ class StartupArtifactOwner:
                     for link_hdata_key, link_hdata_value in link_raw_zip(link_hdata_keys, link_hdata_values, strict=True):
                         if (link_hdata_key in link_hdata_names and link_hdata_names[link_hdata_key] is link_hdata_value) is not True:
                             raise refusal from None
-                for link_hdata_row, (link_hdata_index, link_hdata_owner, link_hdata_name), link_hdata_column in link_raw_zip(link_hdata_functions, link_helper_functions, link_helper_layout[3], strict=True):
-                    link_hdata_function, link_hdata_code, link_hdata_namespace, link_hdata_defaults, link_hdata_kw, link_hdata_pairs, link_hdata_closure, link_hdata_cells = link_hdata_row
+                for link_hdata_row, (
+                    link_hdata_index,
+                    link_hdata_owner,
+                    link_hdata_name,
+                ), link_hdata_column in link_raw_zip(
+                    link_hdata_functions, link_helper_functions, link_helper_layout[3], strict=True
+                ):
+                    (
+                        link_hdata_function,
+                        link_hdata_code,
+                        link_hdata_namespace,
+                        link_hdata_defaults,
+                        link_hdata_kw,
+                        link_hdata_pairs,
+                        link_hdata_closure,
+                        link_hdata_cells,
+                    ) = link_hdata_row
                     link_hdata__, link_hdata_keys, link_hdata_values = link_hdata_column
-                    if (link_raw_type(link_hdata_namespace) is link_raw_dict and link_hdata_namespace is link_hdata_modules[link_hdata_index][1] and (link_raw_type(link_hdata_function) is link_raw_function) and (link_hdata_function.__globals__ is link_hdata_namespace) and (link_hdata_function.__builtins__ is link_hdata_builtin_namespace) and (link_hdata_function.__code__ is link_hdata_code) and (link_hdata_function.__defaults__ is link_hdata_defaults) and (link_hdata_function.__kwdefaults__ is link_hdata_kw) and (link_hdata_function.__closure__ is link_hdata_closure)) is not True:
+                    if (
+                        link_raw_type(link_hdata_namespace) is link_raw_dict
+                        and link_hdata_namespace is link_hdata_modules[link_hdata_index][1]
+                        and (link_raw_type(link_hdata_function) is link_raw_function)
+                        and (link_hdata_function.__globals__ is link_hdata_namespace)
+                        and (link_hdata_function.__builtins__ is link_hdata_builtin_namespace)
+                        and (link_hdata_function.__code__ is link_hdata_code)
+                        and (link_hdata_function.__defaults__ is link_hdata_defaults)
+                        and (link_hdata_function.__kwdefaults__ is link_hdata_kw)
+                        and (link_hdata_function.__closure__ is link_hdata_closure)
+                    ) is not True:
                         raise refusal from None
                     link_hdata_names = link_hdata_namespace
-                    if link_helper_all((link_raw_type(link_hdata_key) is link_raw_str for link_hdata_key in link_hdata_namespace)) is not True:
+                    link_hdata_held_members = ()
+                    if (
+                        link_helper_all(
+                            link_raw_type(link_hdata_key) is link_raw_str
+                            for link_hdata_key in link_hdata_namespace
+                        )
+                        is not True
+                    ):
                         raise refusal from None
                     if link_hdata_owner is not None:
                         link_hdata_held_kind = None
-                        for link_hdata_class_row, (link_hdata_class_index, link_hdata_class_name) in link_raw_zip(link_hdata_classes, link_helper_classes, strict=True):
-                            if link_hdata_class_index == link_hdata_index and link_hdata_class_name == link_hdata_owner:
+                        for link_hdata_class_row, (
+                            link_hdata_class_index,
+                            link_hdata_class_name,
+                        ) in link_raw_zip(link_hdata_classes, link_helper_classes, strict=True):
+                            if (
+                                link_hdata_class_index == link_hdata_index
+                                and link_hdata_class_name == link_hdata_owner
+                            ):
                                 link_hdata_held_kind = link_hdata_class_row[0]
+                                link_hdata_held_members = link_hdata_class_row[2]
                                 break
-                        if (link_raw_type(link_hdata_held_kind) is link_raw_type and link_helper_all((link_raw_type(link_hdata_key) is link_raw_str for link_hdata_key in link_hdata_namespace)) and (link_hdata_namespace.get(link_hdata_owner) is link_hdata_held_kind)) is not True:
+                        if (
+                            link_raw_type(link_hdata_held_kind) is link_raw_type
+                            and link_helper_all(
+                                link_raw_type(link_hdata_key) is link_raw_str
+                                for link_hdata_key in link_hdata_namespace
+                            )
+                            and (link_hdata_namespace.get(link_hdata_owner) is link_hdata_held_kind)
+                        ) is not True:
                             raise refusal from None
                         link_hdata_names = link_raw_vars(link_hdata_held_kind)
-                    if (link_helper_all((link_raw_type(link_hdata_key) is link_raw_str for link_hdata_key in link_hdata_names)) and link_hdata_names.get(link_hdata_name) is link_hdata_function) is not True:
+                    if not link_helper_all(
+                        link_raw_type(link_hdata_key) is link_raw_str
+                        for link_hdata_key in link_hdata_names
+                    ):
+                        raise refusal from None
+                    link_hdata_raw = link_hdata_names.get(link_hdata_name)
+                    if (link_hdata_index, link_hdata_owner, link_hdata_name) in (
+                        (8, "EntryFileSnapshotOwner", "verify"),
+                        (8, "EntryFileSnapshotOwner", "verify_runtime_files"),
+                        (8, "EntryFileSnapshotOwner", "retain_runtime_files"),
+                        (8, "EntryFileSnapshotOwner", "retain_runtime_link_files"),
+                        (8, "EntryFileSnapshotOwner", "retain"),
+                        (8, "EntryFileSnapshotOwner", "_retain"),
+                        (8, "EntryFileSnapshotOwner", "complete"),
+                        (9, "CacheContextOwner", "retain"),
+                    ):
+                        link_hdata_held_wrapper = None
+                        for link_hdata_held_name, link_hdata_held_value in link_hdata_held_members:
+                            if link_hdata_held_name == link_hdata_name:
+                                link_hdata_held_wrapper = link_hdata_held_value
+                                break
+                        if link_hdata_raw is not link_hdata_held_wrapper:
+                            raise refusal from None
+                        if link_raw_type(link_hdata_raw) is not link_helper_classmethod:
+                            raise refusal from None
+                        link_hdata_raw = link_hdata_raw.__func__
+                    if link_hdata_raw is not link_hdata_function:
                         raise refusal from None
                     if link_hdata_kw is not None:
-                        if (link_raw_type(link_hdata_kw) is link_raw_dict and link_helper_all((link_raw_type(link_hdata_key) is link_raw_str for link_hdata_key in link_hdata_kw)) and (link_raw_len(link_hdata_kw) == link_raw_len(link_hdata_keys))) is not True:
+                        if (
+                            link_raw_type(link_hdata_kw) is link_raw_dict
+                            and link_helper_all(
+                                link_raw_type(link_hdata_key) is link_raw_str
+                                for link_hdata_key in link_hdata_kw
+                            )
+                            and (link_raw_len(link_hdata_kw) == link_raw_len(link_hdata_keys))
+                        ) is not True:
                             raise refusal from None
-                        for link_hdata_key, link_hdata_value in link_raw_zip(link_hdata_keys, link_hdata_values, strict=True):
-                            if (link_hdata_key in link_hdata_kw and link_hdata_kw[link_hdata_key] is link_hdata_value) is not True:
+                        for link_hdata_key, link_hdata_value in link_raw_zip(
+                            link_hdata_keys, link_hdata_values, strict=True
+                        ):
+                            if (
+                                link_hdata_key in link_hdata_kw
+                                and link_hdata_kw[link_hdata_key] is link_hdata_value
+                            ) is not True:
                                 raise refusal from None
                     if link_hdata_closure is not None:
-                        if (link_raw_type(link_hdata_closure) is link_raw_tuple and link_raw_len(link_hdata_closure) == link_raw_len(link_hdata_cells)) is not True:
+                        if (
+                            link_raw_type(link_hdata_closure) is link_raw_tuple
+                            and link_raw_len(link_hdata_closure) == link_raw_len(link_hdata_cells)
+                        ) is not True:
                             raise refusal from None
                         try:
-                            if link_helper_all((link_raw_type(link_hdata_cell) is link_raw_cell and link_hdata_cell.cell_contents is link_hdata_value for link_hdata_cell, link_hdata_value in link_raw_zip(link_hdata_closure, link_hdata_cells, strict=True))) is not True:
+                            if (
+                                link_helper_all(
+                                    (
+                                        link_raw_type(link_hdata_cell) is link_raw_cell
+                                        and link_hdata_cell.cell_contents is link_hdata_value
+                                        for link_hdata_cell, link_hdata_value in link_raw_zip(
+                                            link_hdata_closure, link_hdata_cells, strict=True
+                                        )
+                                    )
+                                )
+                                is not True
+                            ):
                                 raise refusal from None
                         except link_helper_value_error:
                             raise refusal from None
@@ -7033,19 +7210,41 @@ class StartupArtifactOwner:
                             or link_helper_pair[0] in link_helper_defaults):
                         raise refusal from None
                     link_helper_defaults[link_helper_pair[0]] = link_helper_pair[1]
-                link_helper_default_names = ('_type', '_vars', '_tuple', '_len', '_dict', '_str',
-                    '_any', '_zip', '_all', '_set', '_error', '_value_error',
-                    '_bool', '_int', '_list', '_bytes', '_bytearray', '_sum', '_ord', '_super')
+                link_helper_default_names = (
+                    "_type",
+                    "_vars",
+                    "_tuple",
+                    "_len",
+                    "_dict",
+                    "_str",
+                    "_any",
+                    "_zip",
+                    "_all",
+                    "_set",
+                    "_error",
+                    "_value_error",
+                    "_bool",
+                    "_int",
+                    "_list",
+                    "_bytes",
+                    "_bytearray",
+                    "_sum",
+                    "_ord",
+                    "_super",
+                    "_classmethod",
+                )
                 if link_raw_any(name not in link_helper_defaults for name in link_helper_default_names):
                     raise refusal from None
-                link_helper_expected_builtins = link_raw_tuple(link_helper_defaults[name]
-                    for name in link_helper_default_names)
+                link_helper_expected_builtins = link_raw_tuple(
+                    link_helper_defaults[name] for name in link_helper_default_names
+                )
+                link_helper_classmethod = link_helper_expected_builtins[20]
                 link_helper_system, link_helper_registry = link_pin_environment[0], link_pin_environment[2]
                 if link_raw_type(link_helper_origin) is not link_raw_tuple or link_raw_len(link_helper_origin) != 8 or link_raw_type(link_helper_origin[0]) is not link_raw_module or (link_raw_type(link_helper_origin[1]) is not link_raw_dict) or (link_raw_type(link_helper_origin[2]) is not link_raw_tuple) or (link_raw_type(link_helper_origin[3]) is not link_raw_tuple) or (link_raw_len(link_helper_origin[3]) != 4) or (link_raw_type(link_helper_origin[4]) is not link_raw_tuple) or (link_raw_len(link_helper_origin[4]) != 3) or (link_raw_type(link_helper_origin[5]) is not link_raw_tuple) or (link_raw_len(link_helper_origin[5]) != 3):
                     raise refusal from None
                 link_seal_helper_module, link_seal_helper_namespace, link_seal_helper_pairs = link_helper_origin[:3]
                 link_seal_helper_builtin_module, link_seal_helper_builtin_namespace, link_seal_helper_primitive_pairs = link_helper_origin[5]
-                if link_raw_any((link_raw_type(k) is not link_raw_str for k in link_helper_registry)) or link_helper_registry.get('hmp_startup.retained_binding_origin') is not link_seal_helper_module or link_raw_vars(link_seal_helper_module) is not link_seal_helper_namespace or link_raw_any((link_raw_type(k) is not link_raw_str for k in link_seal_helper_namespace)) or (link_raw_len(link_seal_helper_namespace) != link_raw_len(link_seal_helper_pairs)) or (link_seal_helper_namespace.get('sys') is not link_helper_system) or (link_raw_type(link_seal_helper_builtin_module) is not link_raw_module) or (link_raw_type(link_seal_helper_builtin_namespace) is not link_raw_dict) or (link_helper_registry.get('builtins') is not link_seal_helper_builtin_module) or (link_raw_vars(link_seal_helper_builtin_module) is not link_seal_helper_builtin_namespace) or link_raw_any((link_raw_type(k) is not link_raw_str for k in link_seal_helper_builtin_namespace)) or (link_seal_helper_namespace.get('__builtins__') is not link_seal_helper_builtin_namespace) or (link_raw_type(link_seal_helper_primitive_pairs) is not link_raw_tuple) or (link_raw_len(link_seal_helper_primitive_pairs) != 20):
+                if link_raw_any((link_raw_type(k) is not link_raw_str for k in link_helper_registry)) or link_helper_registry.get('hmp_startup.retained_binding_origin') is not link_seal_helper_module or link_raw_vars(link_seal_helper_module) is not link_seal_helper_namespace or link_raw_any((link_raw_type(k) is not link_raw_str for k in link_seal_helper_namespace)) or (link_raw_len(link_seal_helper_namespace) != link_raw_len(link_seal_helper_pairs)) or (link_seal_helper_namespace.get('sys') is not link_helper_system) or (link_raw_type(link_seal_helper_builtin_module) is not link_raw_module) or (link_raw_type(link_seal_helper_builtin_namespace) is not link_raw_dict) or (link_helper_registry.get('builtins') is not link_seal_helper_builtin_module) or (link_raw_vars(link_seal_helper_builtin_module) is not link_seal_helper_builtin_namespace) or link_raw_any((link_raw_type(k) is not link_raw_str for k in link_seal_helper_builtin_namespace)) or (link_seal_helper_namespace.get('__builtins__') is not link_seal_helper_builtin_namespace) or (link_raw_type(link_seal_helper_primitive_pairs) is not link_raw_tuple) or (link_raw_len(link_seal_helper_primitive_pairs) != 21):
                     raise refusal from None
                 link_seal_helper_seen = {}
                 for link_seal_helper_pair in link_seal_helper_pairs:
@@ -7055,25 +7254,82 @@ class StartupArtifactOwner:
                     if link_seal_helper_key in link_seal_helper_seen or link_seal_helper_key not in link_seal_helper_namespace or link_seal_helper_namespace[link_seal_helper_key] is not link_seal_helper_value:
                         raise refusal from None
                     link_seal_helper_seen[link_seal_helper_key] = link_seal_helper_value
-                for link_seal_helper_pair, link_seal_helper_name, link_seal_helper_expected in link_raw_zip(link_seal_helper_primitive_pairs, ('type', 'vars', 'tuple', 'len', 'dict', 'str', 'any', 'zip', 'all', 'set', 'RuntimeError', 'ValueError', 'bool', 'int', 'list', 'bytes', 'bytearray', 'sum', 'ord', 'super'), link_helper_expected_builtins, strict=True):
+                for link_seal_helper_pair, link_seal_helper_name, link_seal_helper_expected in link_raw_zip(link_seal_helper_primitive_pairs, ('type', 'vars', 'tuple', 'len', 'dict', 'str', 'any', 'zip', 'all', 'set', 'RuntimeError', 'ValueError', 'bool', 'int', 'list', 'bytes', 'bytearray', 'sum', 'ord', 'super', 'classmethod'), link_helper_expected_builtins, strict=True):
                     if link_raw_type(link_seal_helper_pair) is not link_raw_tuple or link_raw_len(link_seal_helper_pair) != 2 or link_raw_type(link_seal_helper_pair[0]) is not link_raw_str or (link_seal_helper_pair[0] != link_seal_helper_name) or (link_seal_helper_pair[1] is not link_seal_helper_expected) or (link_seal_helper_builtin_namespace.get(link_seal_helper_name) is not link_seal_helper_expected):
                         raise refusal from None
-                for link_seal_helper_row, link_seal_helper_name in link_raw_zip(link_helper_origin[3], ('capture', 'current', 'capture_bound', 'current_live'), strict=True):
-                    if link_raw_type(link_seal_helper_row) is not link_raw_tuple or link_raw_len(link_seal_helper_row) != 7 or link_raw_type(link_seal_helper_row[0]) is not link_raw_str or (link_seal_helper_row[0] != link_seal_helper_name) or (link_raw_type(link_seal_helper_row[1]) is not link_raw_function) or (link_seal_helper_row[3] is not link_seal_helper_namespace) or (link_seal_helper_namespace.get(link_seal_helper_name) is not link_seal_helper_row[1]) or (link_seal_helper_row[1].__code__ is not link_seal_helper_row[2]) or (link_seal_helper_row[1].__globals__ is not link_seal_helper_namespace) or (link_seal_helper_row[1].__builtins__ is not link_seal_helper_builtin_namespace) or (link_seal_helper_row[1].__defaults__ is not link_seal_helper_row[4]) or (link_seal_helper_row[1].__kwdefaults__ is not link_seal_helper_row[5]) or (link_seal_helper_row[1].__closure__ is not None) or (link_raw_type(link_seal_helper_row[6]) is not link_raw_tuple):
+                for link_seal_helper_row, link_seal_helper_name in link_raw_zip(
+                    link_helper_origin[3],
+                    ("capture", "current", "capture_bound", "current_live"),
+                    strict=True,
+                ):
+                    if (
+                        link_raw_type(link_seal_helper_row) is not link_raw_tuple
+                        or link_raw_len(link_seal_helper_row) != 7
+                        or link_raw_type(link_seal_helper_row[0]) is not link_raw_str
+                        or (link_seal_helper_row[0] != link_seal_helper_name)
+                        or (link_raw_type(link_seal_helper_row[1]) is not link_raw_function)
+                        or (link_seal_helper_row[3] is not link_seal_helper_namespace)
+                        or (
+                            link_seal_helper_namespace.get(link_seal_helper_name)
+                            is not link_seal_helper_row[1]
+                        )
+                        or (link_seal_helper_row[1].__code__ is not link_seal_helper_row[2])
+                        or (link_seal_helper_row[1].__globals__ is not link_seal_helper_namespace)
+                        or (
+                            link_seal_helper_row[1].__builtins__
+                            is not link_seal_helper_builtin_namespace
+                        )
+                        or (link_seal_helper_row[1].__defaults__ is not link_seal_helper_row[4])
+                        or (link_seal_helper_row[1].__kwdefaults__ is not link_seal_helper_row[5])
+                        or (link_seal_helper_row[1].__closure__ is not None)
+                        or (link_raw_type(link_seal_helper_row[6]) is not link_raw_tuple)
+                    ):
                         raise refusal from None
-                    link_seal_helper_kw, link_seal_helper_kw_pairs = (link_seal_helper_row[5], link_seal_helper_row[6])
+                    link_seal_helper_kw, link_seal_helper_kw_pairs = (
+                        link_seal_helper_row[5],
+                        link_seal_helper_row[6],
+                    )
+                    if (
+                        link_raw_type(link_seal_helper_kw) is not link_raw_dict
+                        or link_raw_any(
+                            link_raw_type(k) is not link_raw_str for k in link_seal_helper_kw
+                        )
+                        or link_seal_helper_kw.get("_classmethod") is not link_helper_classmethod
+                        or (
+                            link_seal_helper_name in ("capture_bound", "current_live")
+                            and link_seal_helper_kw.get("_error")
+                            is not link_helper_expected_builtins[10]
+                        )
+                    ):
+                        raise refusal from None
                     if link_seal_helper_kw is None:
                         if link_raw_len(link_seal_helper_kw_pairs) != 0:
                             raise refusal from None
                     else:
-                        if link_raw_type(link_seal_helper_kw) is not link_raw_dict or link_raw_any((link_raw_type(k) is not link_raw_str for k in link_seal_helper_kw)) or link_raw_len(link_seal_helper_kw) != link_raw_len(link_seal_helper_kw_pairs):
+                        if (
+                            link_raw_type(link_seal_helper_kw) is not link_raw_dict
+                            or link_raw_any(
+                                link_raw_type(k) is not link_raw_str for k in link_seal_helper_kw
+                            )
+                            or link_raw_len(link_seal_helper_kw)
+                            != link_raw_len(link_seal_helper_kw_pairs)
+                        ):
                             raise refusal from None
                         link_seal_helper_seen = {}
                         for link_seal_helper_pair in link_seal_helper_kw_pairs:
-                            if link_raw_type(link_seal_helper_pair) is not link_raw_tuple or link_raw_len(link_seal_helper_pair) != 2 or link_raw_type(link_seal_helper_pair[0]) is not link_raw_str:
+                            if (
+                                link_raw_type(link_seal_helper_pair) is not link_raw_tuple
+                                or link_raw_len(link_seal_helper_pair) != 2
+                                or link_raw_type(link_seal_helper_pair[0]) is not link_raw_str
+                            ):
                                 raise refusal from None
                             link_seal_helper_key, link_seal_helper_value = link_seal_helper_pair
-                            if link_seal_helper_key in link_seal_helper_seen or link_seal_helper_key not in link_seal_helper_kw or link_seal_helper_kw[link_seal_helper_key] is not link_seal_helper_value:
+                            if (
+                                link_seal_helper_key in link_seal_helper_seen
+                                or link_seal_helper_key not in link_seal_helper_kw
+                                or link_seal_helper_kw[link_seal_helper_key]
+                                is not link_seal_helper_value
+                            ):
                                 raise refusal from None
                             link_seal_helper_seen[link_seal_helper_key] = link_seal_helper_value
                 link_seal_helper_error_kind, link_seal_helper_error_bases, link_seal_helper_error_pairs = link_helper_origin[4]
@@ -7145,36 +7401,134 @@ class StartupArtifactOwner:
                     for link_hdata_key, link_hdata_value in link_raw_zip(link_hdata_keys, link_hdata_values, strict=True):
                         if (link_hdata_key in link_hdata_names and link_hdata_names[link_hdata_key] is link_hdata_value) is not True:
                             raise refusal from None
-                for link_hdata_row, (link_hdata_index, link_hdata_owner, link_hdata_name), link_hdata_column in link_raw_zip(link_hdata_functions, link_helper_functions, link_helper_layout[3], strict=True):
-                    link_hdata_function, link_hdata_code, link_hdata_namespace, link_hdata_defaults, link_hdata_kw, link_hdata_pairs, link_hdata_closure, link_hdata_cells = link_hdata_row
+                for link_hdata_row, (
+                    link_hdata_index,
+                    link_hdata_owner,
+                    link_hdata_name,
+                ), link_hdata_column in link_raw_zip(
+                    link_hdata_functions, link_helper_functions, link_helper_layout[3], strict=True
+                ):
+                    (
+                        link_hdata_function,
+                        link_hdata_code,
+                        link_hdata_namespace,
+                        link_hdata_defaults,
+                        link_hdata_kw,
+                        link_hdata_pairs,
+                        link_hdata_closure,
+                        link_hdata_cells,
+                    ) = link_hdata_row
                     link_hdata__, link_hdata_keys, link_hdata_values = link_hdata_column
-                    if (link_raw_type(link_hdata_namespace) is link_raw_dict and link_hdata_namespace is link_hdata_modules[link_hdata_index][1] and (link_raw_type(link_hdata_function) is link_raw_function) and (link_hdata_function.__globals__ is link_hdata_namespace) and (link_hdata_function.__builtins__ is link_hdata_builtin_namespace) and (link_hdata_function.__code__ is link_hdata_code) and (link_hdata_function.__defaults__ is link_hdata_defaults) and (link_hdata_function.__kwdefaults__ is link_hdata_kw) and (link_hdata_function.__closure__ is link_hdata_closure)) is not True:
+                    if (
+                        link_raw_type(link_hdata_namespace) is link_raw_dict
+                        and link_hdata_namespace is link_hdata_modules[link_hdata_index][1]
+                        and (link_raw_type(link_hdata_function) is link_raw_function)
+                        and (link_hdata_function.__globals__ is link_hdata_namespace)
+                        and (link_hdata_function.__builtins__ is link_hdata_builtin_namespace)
+                        and (link_hdata_function.__code__ is link_hdata_code)
+                        and (link_hdata_function.__defaults__ is link_hdata_defaults)
+                        and (link_hdata_function.__kwdefaults__ is link_hdata_kw)
+                        and (link_hdata_function.__closure__ is link_hdata_closure)
+                    ) is not True:
                         raise refusal from None
                     link_hdata_names = link_hdata_namespace
-                    if link_helper_all((link_raw_type(link_hdata_key) is link_raw_str for link_hdata_key in link_hdata_namespace)) is not True:
+                    link_hdata_held_members = ()
+                    if (
+                        link_helper_all(
+                            link_raw_type(link_hdata_key) is link_raw_str
+                            for link_hdata_key in link_hdata_namespace
+                        )
+                        is not True
+                    ):
                         raise refusal from None
                     if link_hdata_owner is not None:
                         link_hdata_held_kind = None
-                        for link_hdata_class_row, (link_hdata_class_index, link_hdata_class_name) in link_raw_zip(link_hdata_classes, link_helper_classes, strict=True):
-                            if link_hdata_class_index == link_hdata_index and link_hdata_class_name == link_hdata_owner:
+                        for link_hdata_class_row, (
+                            link_hdata_class_index,
+                            link_hdata_class_name,
+                        ) in link_raw_zip(link_hdata_classes, link_helper_classes, strict=True):
+                            if (
+                                link_hdata_class_index == link_hdata_index
+                                and link_hdata_class_name == link_hdata_owner
+                            ):
                                 link_hdata_held_kind = link_hdata_class_row[0]
+                                link_hdata_held_members = link_hdata_class_row[2]
                                 break
-                        if (link_raw_type(link_hdata_held_kind) is link_raw_type and link_helper_all((link_raw_type(link_hdata_key) is link_raw_str for link_hdata_key in link_hdata_namespace)) and (link_hdata_namespace.get(link_hdata_owner) is link_hdata_held_kind)) is not True:
+                        if (
+                            link_raw_type(link_hdata_held_kind) is link_raw_type
+                            and link_helper_all(
+                                link_raw_type(link_hdata_key) is link_raw_str
+                                for link_hdata_key in link_hdata_namespace
+                            )
+                            and (link_hdata_namespace.get(link_hdata_owner) is link_hdata_held_kind)
+                        ) is not True:
                             raise refusal from None
                         link_hdata_names = link_raw_vars(link_hdata_held_kind)
-                    if (link_helper_all((link_raw_type(link_hdata_key) is link_raw_str for link_hdata_key in link_hdata_names)) and link_hdata_names.get(link_hdata_name) is link_hdata_function) is not True:
+                    if not link_helper_all(
+                        link_raw_type(link_hdata_key) is link_raw_str
+                        for link_hdata_key in link_hdata_names
+                    ):
+                        raise refusal from None
+                    link_hdata_raw = link_hdata_names.get(link_hdata_name)
+                    if (link_hdata_index, link_hdata_owner, link_hdata_name) in (
+                        (8, "EntryFileSnapshotOwner", "verify"),
+                        (8, "EntryFileSnapshotOwner", "verify_runtime_files"),
+                        (8, "EntryFileSnapshotOwner", "retain_runtime_files"),
+                        (8, "EntryFileSnapshotOwner", "retain_runtime_link_files"),
+                        (8, "EntryFileSnapshotOwner", "retain"),
+                        (8, "EntryFileSnapshotOwner", "_retain"),
+                        (8, "EntryFileSnapshotOwner", "complete"),
+                        (9, "CacheContextOwner", "retain"),
+                    ):
+                        link_hdata_held_wrapper = None
+                        for link_hdata_held_name, link_hdata_held_value in link_hdata_held_members:
+                            if link_hdata_held_name == link_hdata_name:
+                                link_hdata_held_wrapper = link_hdata_held_value
+                                break
+                        if link_hdata_raw is not link_hdata_held_wrapper:
+                            raise refusal from None
+                        if link_raw_type(link_hdata_raw) is not link_helper_classmethod:
+                            raise refusal from None
+                        link_hdata_raw = link_hdata_raw.__func__
+                    if link_hdata_raw is not link_hdata_function:
                         raise refusal from None
                     if link_hdata_kw is not None:
-                        if (link_raw_type(link_hdata_kw) is link_raw_dict and link_helper_all((link_raw_type(link_hdata_key) is link_raw_str for link_hdata_key in link_hdata_kw)) and (link_raw_len(link_hdata_kw) == link_raw_len(link_hdata_keys))) is not True:
+                        if (
+                            link_raw_type(link_hdata_kw) is link_raw_dict
+                            and link_helper_all(
+                                link_raw_type(link_hdata_key) is link_raw_str
+                                for link_hdata_key in link_hdata_kw
+                            )
+                            and (link_raw_len(link_hdata_kw) == link_raw_len(link_hdata_keys))
+                        ) is not True:
                             raise refusal from None
-                        for link_hdata_key, link_hdata_value in link_raw_zip(link_hdata_keys, link_hdata_values, strict=True):
-                            if (link_hdata_key in link_hdata_kw and link_hdata_kw[link_hdata_key] is link_hdata_value) is not True:
+                        for link_hdata_key, link_hdata_value in link_raw_zip(
+                            link_hdata_keys, link_hdata_values, strict=True
+                        ):
+                            if (
+                                link_hdata_key in link_hdata_kw
+                                and link_hdata_kw[link_hdata_key] is link_hdata_value
+                            ) is not True:
                                 raise refusal from None
                     if link_hdata_closure is not None:
-                        if (link_raw_type(link_hdata_closure) is link_raw_tuple and link_raw_len(link_hdata_closure) == link_raw_len(link_hdata_cells)) is not True:
+                        if (
+                            link_raw_type(link_hdata_closure) is link_raw_tuple
+                            and link_raw_len(link_hdata_closure) == link_raw_len(link_hdata_cells)
+                        ) is not True:
                             raise refusal from None
                         try:
-                            if link_helper_all((link_raw_type(link_hdata_cell) is link_raw_cell and link_hdata_cell.cell_contents is link_hdata_value for link_hdata_cell, link_hdata_value in link_raw_zip(link_hdata_closure, link_hdata_cells, strict=True))) is not True:
+                            if (
+                                link_helper_all(
+                                    (
+                                        link_raw_type(link_hdata_cell) is link_raw_cell
+                                        and link_hdata_cell.cell_contents is link_hdata_value
+                                        for link_hdata_cell, link_hdata_value in link_raw_zip(
+                                            link_hdata_closure, link_hdata_cells, strict=True
+                                        )
+                                    )
+                                )
+                                is not True
+                            ):
                                 raise refusal from None
                         except link_helper_value_error:
                             raise refusal from None

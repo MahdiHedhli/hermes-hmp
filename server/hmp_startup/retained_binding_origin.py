@@ -178,6 +178,14 @@ _FUNCTIONS = (
     (9, "CacheContextOwner", "_seal"),
     (9, "CacheContextOwner", "retained_binding"),
     (9, "CacheContextOwner", "current_binding"),
+    (8, "EntryFileSnapshotOwner", "verify"),
+    (8, "EntryFileSnapshotOwner", "verify_runtime_files"),
+    (8, "EntryFileSnapshotOwner", "retain_runtime_files"),
+    (8, "EntryFileSnapshotOwner", "retain_runtime_link_files"),
+    (8, "EntryFileSnapshotOwner", "retain"),
+    (8, "EntryFileSnapshotOwner", "_retain"),
+    (8, "EntryFileSnapshotOwner", "complete"),
+    (9, "CacheContextOwner", "retain"),
 )
 
 
@@ -185,7 +193,7 @@ class RetainedBindingOriginError(RuntimeError):
     pass
 
 
-def capture():
+def capture(*, _classmethod=classmethod):
     """Collect candidates before checker callbacks; an independent root is required."""
     checker = current
     registry = sys.modules
@@ -221,35 +229,75 @@ def capture():
     for index, owner, name in _FUNCTIONS:
         namespace = modules[index][1]
         if not all(type(key) is str for key in namespace):
-            raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+            raise RetainedBindingOriginError("BI1_RETAINED_HELPER_ORIGIN_REFUSED") from None
         names = namespace
+        held_members = ()
         if owner is not None:
             held_kind = None
             for row, (class_index, class_name) in zip(classes, _CLASSES, strict=True):
                 if class_index == index and class_name == owner:
                     held_kind = row[0]
+                    held_members = row[2]
                     break
             if type(held_kind) is not type or namespace.get(owner) is not held_kind:
-                raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+                raise RetainedBindingOriginError("BI1_RETAINED_HELPER_ORIGIN_REFUSED") from None
             names = vars(held_kind)
         if not all(type(key) is str for key in names):
-            raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+            raise RetainedBindingOriginError("BI1_RETAINED_HELPER_ORIGIN_REFUSED") from None
         function = names.get(name)
+        if (index, owner, name) in (
+            (8, "EntryFileSnapshotOwner", "verify"),
+            (8, "EntryFileSnapshotOwner", "verify_runtime_files"),
+            (8, "EntryFileSnapshotOwner", "retain_runtime_files"),
+            (8, "EntryFileSnapshotOwner", "retain_runtime_link_files"),
+            (8, "EntryFileSnapshotOwner", "retain"),
+            (8, "EntryFileSnapshotOwner", "_retain"),
+            (8, "EntryFileSnapshotOwner", "complete"),
+            (9, "CacheContextOwner", "retain"),
+        ):
+            held_wrapper = None
+            for held_name, held_value in held_members:
+                if held_name == name:
+                    held_wrapper = held_value
+                    break
+            if function is not held_wrapper:
+                raise RetainedBindingOriginError("BI1_RETAINED_HELPER_ORIGIN_REFUSED") from None
+            if type(function) is not _classmethod:
+                raise RetainedBindingOriginError("BI1_RETAINED_HELPER_ORIGIN_REFUSED") from None
+            function = function.__func__
         if type(function) is not FunctionType or function.__globals__ is not namespace:
-            raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+            raise RetainedBindingOriginError("BI1_RETAINED_HELPER_ORIGIN_REFUSED") from None
         defaults, kw, closure = function.__defaults__, function.__kwdefaults__, function.__closure__
-        if ((defaults is not None and type(defaults) is not tuple)
-                or (kw is not None and (type(kw) is not dict
-                                        or not all(type(key) is str for key in kw)))
-                or (closure is not None and (type(closure) is not tuple
-                                             or not all(type(cell) is CellType for cell in closure)))):
-            raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+        if (
+            (defaults is not None and type(defaults) is not tuple)
+            or (
+                kw is not None and (type(kw) is not dict or not all(type(key) is str for key in kw))
+            )
+            or (
+                closure is not None
+                and (
+                    type(closure) is not tuple
+                    or not all(type(cell) is CellType for cell in closure)
+                )
+            )
+        ):
+            raise RetainedBindingOriginError("BI1_RETAINED_HELPER_ORIGIN_REFUSED") from None
         try:
             cells = () if closure is None else tuple(cell.cell_contents for cell in closure)
         except ValueError:
-            raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
-        functions.append((function, function.__code__, namespace, defaults, kw,
-                          () if kw is None else tuple(kw.items()), closure, cells))
+            raise RetainedBindingOriginError("BI1_RETAINED_HELPER_ORIGIN_REFUSED") from None
+        functions.append(
+            (
+                function,
+                function.__code__,
+                namespace,
+                defaults,
+                kw,
+                () if kw is None else tuple(kw.items()),
+                closure,
+                cells,
+            )
+        )
     packet = (sys, vars(sys), registry, modules, classes, tuple(functions))
     # No delegated helper was called while selecting the candidate references.
     # The independent caller authenticates checker/code/globals/defaults and
@@ -260,7 +308,7 @@ def capture():
     return packet
 
 
-def current(packet):
+def current(packet, *, _classmethod=classmethod):
     """Fresh structural/code comparisons only; no original-root or effect proof."""
     if (type(packet) is tuple and len(packet) == 6) is not True:
         raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
@@ -346,59 +394,98 @@ def current(packet):
             seen.add(key)
     for row, (index, owner, name) in zip(functions, _FUNCTIONS, strict=True):
         if (type(row) is tuple and len(row) == 8) is not True:
-            raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+            raise RetainedBindingOriginError("BI1_RETAINED_HELPER_ORIGIN_REFUSED") from None
         function, code, namespace, defaults, kw, pairs, closure, cells = row
-        if (type(namespace) is dict and namespace is modules[index][1]
-              and type(function) is FunctionType and function.__globals__ is namespace
-              and function.__builtins__ is builtin_namespace
-              and function.__code__ is code and function.__defaults__ is defaults
-              and (defaults is None or type(defaults) is tuple)
-              and function.__kwdefaults__ is kw and function.__closure__ is closure
-              and type(pairs) is tuple and type(cells) is tuple) is not True:
-            raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+        if (
+            type(namespace) is dict
+            and namespace is modules[index][1]
+            and type(function) is FunctionType
+            and function.__globals__ is namespace
+            and function.__builtins__ is builtin_namespace
+            and function.__code__ is code
+            and function.__defaults__ is defaults
+            and (defaults is None or type(defaults) is tuple)
+            and function.__kwdefaults__ is kw
+            and function.__closure__ is closure
+            and type(pairs) is tuple
+            and type(cells) is tuple
+        ) is not True:
+            raise RetainedBindingOriginError("BI1_RETAINED_HELPER_ORIGIN_REFUSED") from None
         names = namespace
+        held_members = ()
         if (all(type(key) is str for key in namespace)) is not True:
-            raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+            raise RetainedBindingOriginError("BI1_RETAINED_HELPER_ORIGIN_REFUSED") from None
         if owner is not None:
             held_kind = None
             for class_row, (class_index, class_name) in zip(classes, _CLASSES, strict=True):
                 if class_index == index and class_name == owner:
                     held_kind = class_row[0]
+                    held_members = class_row[2]
                     break
-            if (type(held_kind) is type
-                  and all(type(key) is str for key in namespace)
-                  and namespace.get(owner) is held_kind) is not True:
-                raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+            if (
+                type(held_kind) is type
+                and all(type(key) is str for key in namespace)
+                and namespace.get(owner) is held_kind
+            ) is not True:
+                raise RetainedBindingOriginError("BI1_RETAINED_HELPER_ORIGIN_REFUSED") from None
             names = vars(held_kind)
-        if (all(type(key) is str for key in names) and names.get(name) is function) is not True:
-            raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+        if not all(type(key) is str for key in names):
+            raise RetainedBindingOriginError("BI1_RETAINED_HELPER_ORIGIN_REFUSED") from None
+        raw_function = names.get(name)
+        if (index, owner, name) in (
+            (8, "EntryFileSnapshotOwner", "verify"),
+            (8, "EntryFileSnapshotOwner", "verify_runtime_files"),
+            (8, "EntryFileSnapshotOwner", "retain_runtime_files"),
+            (8, "EntryFileSnapshotOwner", "retain_runtime_link_files"),
+            (8, "EntryFileSnapshotOwner", "retain"),
+            (8, "EntryFileSnapshotOwner", "_retain"),
+            (8, "EntryFileSnapshotOwner", "complete"),
+            (9, "CacheContextOwner", "retain"),
+        ):
+            held_wrapper = None
+            for held_name, held_value in held_members:
+                if held_name == name:
+                    held_wrapper = held_value
+                    break
+            if raw_function is not held_wrapper:
+                raise RetainedBindingOriginError("BI1_RETAINED_HELPER_ORIGIN_REFUSED") from None
+            if type(raw_function) is not _classmethod:
+                raise RetainedBindingOriginError("BI1_RETAINED_HELPER_ORIGIN_REFUSED") from None
+            raw_function = raw_function.__func__
+        if raw_function is not function:
+            raise RetainedBindingOriginError("BI1_RETAINED_HELPER_ORIGIN_REFUSED") from None
         if kw is None:
             if (pairs == ()) is not True:
-                raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+                raise RetainedBindingOriginError("BI1_RETAINED_HELPER_ORIGIN_REFUSED") from None
         else:
-            if (type(kw) is dict and all(type(key) is str for key in kw)
-                  and len(kw) == len(pairs)) is not True:
-                raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+            if (
+                type(kw) is dict and all(type(key) is str for key in kw) and len(kw) == len(pairs)
+            ) is not True:
+                raise RetainedBindingOriginError("BI1_RETAINED_HELPER_ORIGIN_REFUSED") from None
             seen = set()
             for pair in pairs:
                 if (type(pair) is tuple and len(pair) == 2 and type(pair[0]) is str) is not True:
-                    raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+                    raise RetainedBindingOriginError("BI1_RETAINED_HELPER_ORIGIN_REFUSED") from None
                 key, value = pair
                 if (key not in seen and key in kw and kw[key] is value) is not True:
-                    raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+                    raise RetainedBindingOriginError("BI1_RETAINED_HELPER_ORIGIN_REFUSED") from None
                 seen.add(key)
         if closure is None:
             if (cells == ()) is not True:
-                raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+                raise RetainedBindingOriginError("BI1_RETAINED_HELPER_ORIGIN_REFUSED") from None
         else:
             if (type(closure) is tuple and len(closure) == len(cells)) is not True:
-                raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+                raise RetainedBindingOriginError("BI1_RETAINED_HELPER_ORIGIN_REFUSED") from None
             try:
-                if (all(type(cell) is CellType and cell.cell_contents is value
-                          for cell, value in zip(closure, cells, strict=True))) is not True:
-                    raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+                if (
+                    all(
+                        type(cell) is CellType and cell.cell_contents is value
+                        for cell, value in zip(closure, cells, strict=True)
+                    )
+                ) is not True:
+                    raise RetainedBindingOriginError("BI1_RETAINED_HELPER_ORIGIN_REFUSED") from None
             except ValueError:
-                raise RetainedBindingOriginError('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+                raise RetainedBindingOriginError("BI1_RETAINED_HELPER_ORIGIN_REFUSED") from None
     if (all(type(key) is str for key in modules[0][1])
           and modules[0][1].get('GatewayRecipeOwner') is classes[2][0]
           and modules[0][1].get('_same_recipe_binding') is functions[4][0]) is not True:
@@ -518,7 +605,7 @@ def current(packet):
     return packet
 
 
-def current_live(packet, bound_layout, *, _error=RuntimeError):
+def current_live(packet, bound_layout, *, _error=RuntimeError, _classmethod=classmethod):
     """Fresh mutable audit using the independently held original layout only.
 
     The rooted parent must establish actual original entry/capsule/layout identity
@@ -592,47 +679,87 @@ def current_live(packet, bound_layout, *, _error=RuntimeError):
         for key, value in zip(keys, values, strict=True):
             if (key in names and names[key] is value) is not True:
                 raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
-    for row, (index, owner, name), column in zip(functions, _FUNCTIONS, bound_layout[3], strict=True):
+    for row, (index, owner, name), column in zip(
+        functions, _FUNCTIONS, bound_layout[3], strict=True
+    ):
         function, code, namespace, defaults, kw, pairs, closure, cells = row
         _, keys, values = column
-        if (type(namespace) is dict and namespace is modules[index][1]
-              and type(function) is FunctionType and function.__globals__ is namespace
-              and function.__builtins__ is builtin_namespace
-              and function.__code__ is code and function.__defaults__ is defaults
-              and function.__kwdefaults__ is kw and function.__closure__ is closure) is not True:
-            raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+        if (
+            type(namespace) is dict
+            and namespace is modules[index][1]
+            and type(function) is FunctionType
+            and function.__globals__ is namespace
+            and function.__builtins__ is builtin_namespace
+            and function.__code__ is code
+            and function.__defaults__ is defaults
+            and function.__kwdefaults__ is kw
+            and function.__closure__ is closure
+        ) is not True:
+            raise _error("BI1_RETAINED_HELPER_ORIGIN_REFUSED") from None
         names = namespace
+        held_members = ()
         if (all(type(key) is str for key in namespace)) is not True:
-            raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+            raise _error("BI1_RETAINED_HELPER_ORIGIN_REFUSED") from None
         if owner is not None:
             held_kind = None
             for class_row, (class_index, class_name) in zip(classes, _CLASSES, strict=True):
                 if class_index == index and class_name == owner:
                     held_kind = class_row[0]
+                    held_members = class_row[2]
                     break
-            if (type(held_kind) is type
-                  and all(type(key) is str for key in namespace)
-                  and namespace.get(owner) is held_kind) is not True:
-                raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+            if (
+                type(held_kind) is type
+                and all(type(key) is str for key in namespace)
+                and namespace.get(owner) is held_kind
+            ) is not True:
+                raise _error("BI1_RETAINED_HELPER_ORIGIN_REFUSED") from None
             names = vars(held_kind)
-        if (all(type(key) is str for key in names) and names.get(name) is function) is not True:
-            raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+        if not all(type(key) is str for key in names):
+            raise _error("BI1_RETAINED_HELPER_ORIGIN_REFUSED") from None
+        raw_function = names.get(name)
+        if (index, owner, name) in (
+            (8, "EntryFileSnapshotOwner", "verify"),
+            (8, "EntryFileSnapshotOwner", "verify_runtime_files"),
+            (8, "EntryFileSnapshotOwner", "retain_runtime_files"),
+            (8, "EntryFileSnapshotOwner", "retain_runtime_link_files"),
+            (8, "EntryFileSnapshotOwner", "retain"),
+            (8, "EntryFileSnapshotOwner", "_retain"),
+            (8, "EntryFileSnapshotOwner", "complete"),
+            (9, "CacheContextOwner", "retain"),
+        ):
+            held_wrapper = None
+            for held_name, held_value in held_members:
+                if held_name == name:
+                    held_wrapper = held_value
+                    break
+            if raw_function is not held_wrapper:
+                raise _error("BI1_RETAINED_HELPER_ORIGIN_REFUSED") from None
+            if type(raw_function) is not _classmethod:
+                raise _error("BI1_RETAINED_HELPER_ORIGIN_REFUSED") from None
+            raw_function = raw_function.__func__
+        if raw_function is not function:
+            raise _error("BI1_RETAINED_HELPER_ORIGIN_REFUSED") from None
         if kw is not None:
-            if (type(kw) is dict and all(type(key) is str for key in kw)
-                  and len(kw) == len(keys)) is not True:
-                raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+            if (
+                type(kw) is dict and all(type(key) is str for key in kw) and len(kw) == len(keys)
+            ) is not True:
+                raise _error("BI1_RETAINED_HELPER_ORIGIN_REFUSED") from None
             for key, value in zip(keys, values, strict=True):
                 if (key in kw and kw[key] is value) is not True:
-                    raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+                    raise _error("BI1_RETAINED_HELPER_ORIGIN_REFUSED") from None
         if closure is not None:
             if (type(closure) is tuple and len(closure) == len(cells)) is not True:
-                raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+                raise _error("BI1_RETAINED_HELPER_ORIGIN_REFUSED") from None
             try:
-                if (all(type(cell) is CellType and cell.cell_contents is value
-                          for cell, value in zip(closure, cells, strict=True))) is not True:
-                    raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+                if (
+                    all(
+                        type(cell) is CellType and cell.cell_contents is value
+                        for cell, value in zip(closure, cells, strict=True)
+                    )
+                ) is not True:
+                    raise _error("BI1_RETAINED_HELPER_ORIGIN_REFUSED") from None
             except ValueError:
-                raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+                raise _error("BI1_RETAINED_HELPER_ORIGIN_REFUSED") from None
     if (all(type(key) is str for key in modules[0][1])
           and modules[0][1].get('GatewayRecipeOwner') is classes[2][0]
           and modules[0][1].get('_same_recipe_binding') is functions[4][0]) is not True:
@@ -752,17 +879,40 @@ def current_live(packet, bound_layout, *, _error=RuntimeError):
     return packet
 
 
-def capture_bound(*, _checker=current, _checker_code=current.__code__,
-                  _checker_defaults=current.__defaults__, _checker_kw=current.__kwdefaults__,
-                  _live=current_live, _live_code=current_live.__code__,
-                  _live_defaults=current_live.__defaults__, _live_kw=current_live.__kwdefaults__,
-                  _live_pairs=() if current_live.__kwdefaults__ is None else tuple(current_live.__kwdefaults__.items()),
-                  _builtins=current.__builtins__, _module_roles=_MODULES,
-                  _class_roles=_CLASSES, _function_roles=_FUNCTIONS, _live_roles=_LIVE_GLOBALS,
-                  _type=type, _tuple=tuple, _dict=dict, _str=str, _len=len,
-                  _vars=vars, _any=any, _function=FunctionType, _error=RuntimeError,
-                  _error_kind=RetainedBindingOriginError, _error_bases=RetainedBindingOriginError.__bases__,
-                  _error_members=tuple(vars(RetainedBindingOriginError).items())):
+def capture_bound(
+    *,
+    _checker=current,
+    _checker_code=current.__code__,
+    _checker_defaults=current.__defaults__,
+    _checker_kw=current.__kwdefaults__,
+    # Definition-time snapshots are required to authenticate later defaults.
+    _checker_pairs=tuple(current.__kwdefaults__.items()),  # noqa: B008
+    _live=current_live,
+    _live_code=current_live.__code__,
+    _live_defaults=current_live.__defaults__,
+    _live_kw=current_live.__kwdefaults__,
+    _live_pairs=()
+    if current_live.__kwdefaults__ is None
+    else tuple(current_live.__kwdefaults__.items()),  # noqa: B008
+    _builtins=current.__builtins__,
+    _module_roles=_MODULES,
+    _class_roles=_CLASSES,
+    _function_roles=_FUNCTIONS,
+    _live_roles=_LIVE_GLOBALS,
+    _type=type,
+    _tuple=tuple,
+    _dict=dict,
+    _str=str,
+    _len=len,
+    _vars=vars,
+    _any=any,
+    _function=FunctionType,
+    _error=RuntimeError,
+    _classmethod=classmethod,
+    _error_kind=RetainedBindingOriginError,
+    _error_bases=RetainedBindingOriginError.__bases__,
+    _error_members=tuple(vars(RetainedBindingOriginError).items()),  # noqa: B008
+):
     """Literal selected packet/layout/checker DATA retained by the original parent.
 
     Generic capture() keeps its six-field API. The independent parent authenticates
@@ -774,8 +924,10 @@ def capture_bound(*, _checker=current, _checker_code=current.__code__,
     namespace = _checker.__globals__
     if _live.__globals__ is not namespace:
         raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
-    fixed = (('current',_checker,_checker_code,_checker_defaults,_checker_kw,()),
-             ('current_live',_live,_live_code,_live_defaults,_live_kw,_live_pairs))
+    fixed = (
+        ("current", _checker, _checker_code, _checker_defaults, _checker_kw, _checker_pairs),
+        ("current_live", _live, _live_code, _live_defaults, _live_kw, _live_pairs),
+    )
     live_row = ('current_live',_live,_live_code,namespace,_live_defaults,_live_kw,_live_pairs)
     if (_type(namespace) is not _dict or _any(_type(k) is not _str for k in namespace)
             or namespace.get('_MODULES') is not _module_roles
@@ -838,35 +990,75 @@ def capture_bound(*, _checker=current, _checker_code=current.__code__,
     for index, owner, name in _FUNCTIONS:
         candidate_namespace = modules[index][1]
         if not all(type(key) is str for key in candidate_namespace):
-            raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+            raise _error("BI1_RETAINED_HELPER_ORIGIN_REFUSED") from None
         names = candidate_namespace
+        held_members = ()
         if owner is not None:
             held_kind = None
             for row, (class_index, class_name) in zip(classes, _CLASSES, strict=True):
                 if class_index == index and class_name == owner:
                     held_kind = row[0]
+                    held_members = row[2]
                     break
             if type(held_kind) is not type or candidate_namespace.get(owner) is not held_kind:
-                raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+                raise _error("BI1_RETAINED_HELPER_ORIGIN_REFUSED") from None
             names = vars(held_kind)
         if not all(type(key) is str for key in names):
-            raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+            raise _error("BI1_RETAINED_HELPER_ORIGIN_REFUSED") from None
         function = names.get(name)
+        if (index, owner, name) in (
+            (8, "EntryFileSnapshotOwner", "verify"),
+            (8, "EntryFileSnapshotOwner", "verify_runtime_files"),
+            (8, "EntryFileSnapshotOwner", "retain_runtime_files"),
+            (8, "EntryFileSnapshotOwner", "retain_runtime_link_files"),
+            (8, "EntryFileSnapshotOwner", "retain"),
+            (8, "EntryFileSnapshotOwner", "_retain"),
+            (8, "EntryFileSnapshotOwner", "complete"),
+            (9, "CacheContextOwner", "retain"),
+        ):
+            held_wrapper = None
+            for held_name, held_value in held_members:
+                if held_name == name:
+                    held_wrapper = held_value
+                    break
+            if function is not held_wrapper:
+                raise _error("BI1_RETAINED_HELPER_ORIGIN_REFUSED") from None
+            if type(function) is not _classmethod:
+                raise _error("BI1_RETAINED_HELPER_ORIGIN_REFUSED") from None
+            function = function.__func__
         if type(function) is not FunctionType or function.__globals__ is not candidate_namespace:
-            raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+            raise _error("BI1_RETAINED_HELPER_ORIGIN_REFUSED") from None
         defaults, kw, closure = function.__defaults__, function.__kwdefaults__, function.__closure__
-        if ((defaults is not None and type(defaults) is not tuple)
-                or (kw is not None and (type(kw) is not dict
-                                        or not all(type(key) is str for key in kw)))
-                or (closure is not None and (type(closure) is not tuple
-                                             or not all(type(cell) is CellType for cell in closure)))):
-            raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
+        if (
+            (defaults is not None and type(defaults) is not tuple)
+            or (
+                kw is not None and (type(kw) is not dict or not all(type(key) is str for key in kw))
+            )
+            or (
+                closure is not None
+                and (
+                    type(closure) is not tuple
+                    or not all(type(cell) is CellType for cell in closure)
+                )
+            )
+        ):
+            raise _error("BI1_RETAINED_HELPER_ORIGIN_REFUSED") from None
         try:
             cells = () if closure is None else tuple(cell.cell_contents for cell in closure)
         except ValueError:
-            raise _error('BI1_RETAINED_HELPER_ORIGIN_REFUSED') from None
-        functions.append((function, function.__code__, candidate_namespace, defaults, kw,
-                          () if kw is None else tuple(kw.items()), closure, cells))
+            raise _error("BI1_RETAINED_HELPER_ORIGIN_REFUSED") from None
+        functions.append(
+            (
+                function,
+                function.__code__,
+                candidate_namespace,
+                defaults,
+                kw,
+                () if kw is None else tuple(kw.items()),
+                closure,
+                cells,
+            )
+        )
     packet = (sys, vars(sys), registry, modules, classes, tuple(functions))
     if (_type(namespace) is not _dict or _any(_type(k) is not _str for k in namespace)
             or namespace.get('_MODULES') is not _module_roles

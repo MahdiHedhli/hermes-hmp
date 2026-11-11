@@ -239,3 +239,59 @@ assert reached==[True] and foreign_calls==engine_calls==[]
 '''
     monkeypatch.setattr(base,'SCRIPT',base.SCRIPT.replace(marker,marker+extra,1))
     base.test_actual_entry_and_wrapper_files(tmp_path,'normal')
+
+
+@pytest.mark.parametrize('component,owner,method', (
+    ('entry_files', 'EntryFileSnapshotOwner', 'complete'),
+    ('cache_context', 'CacheContextOwner', 'retain'),
+))
+def test_method_code_drift_after_selected_return_refuses_without_effects(
+        tmp_path, monkeypatch, component, owner, method):
+    marker = 'entry = GatewayEntryOwner.start()\n'
+    extra = '\nmethod_role=' + repr((component, owner, method)) + '\n' + r'''
+from hmp_startup import gateway_entry as original_entry
+from hmp_startup import retained_binding_origin as selected_helpers
+from hmp_startup import link_factory_origin as parent_audit
+from hmp_plugin import presentation_native_link as native_link
+parent=tuple.__getitem__(original_entry._ENTRY_ORIGIN,10)
+assert parent_audit.current_started(parent) is parent
+component,owner_name,name=method_role
+kind=vars(sys.modules['hmp_startup.'+component])[owner_name]
+raw=vars(kind)[name];function=raw.__func__;original_code=function.__code__
+selected_code=selected_helpers.current_live.__code__
+engine=native_link._engine_live_tail;engine_code=engine.__code__
+engine_defaults=engine.__defaults__;engine_kw=engine.__kwdefaults__
+engine_pairs=tuple(engine_kw.items())
+engine_origin=parent[0][4];engine_layout=parent[0][5]
+ledger=entry._scope.native_files.ledger
+before=(tuple(ledger.counts),len(ledger.attempts),len(ledger.scopes))
+reached=[];foreign_calls=[];engine_calls=[]
+def foreign(*args,**kwargs):
+    foreign_calls.append(True)
+    raise AssertionError('changed classmethod called')
+assert function.__code__.co_freevars==foreign.__code__.co_freevars==()
+def observe(frame,event,value):
+    if event=='call' and frame.f_code is foreign.__code__:foreign_calls.append(True)
+    if event=='call' and frame.f_code is engine_code:
+        engine_calls.append((native_link._engine_live_tail is engine,
+            engine.__code__ is engine_code,engine.__defaults__ is engine_defaults,
+            engine.__kwdefaults__ is engine_kw,
+            all(engine_kw.get(k) is v for k,v in engine_pairs),
+            frame.f_locals.get('origin') is engine_origin,
+            frame.f_locals.get('bound_layout') is engine_layout))
+    if event=='return' and frame.f_code is selected_code:
+        assert value is parent[0][6][6] and reached==[]
+        function.__code__=foreign.__code__;reached.append(True)
+assert sys.getprofile() is None
+sys.setprofile(observe);error=None;returned=False
+try:parent_audit.current_started(parent);returned=True
+except RuntimeError as caught:error=caught
+finally:sys.setprofile(None);function.__code__=original_code
+assert type(error) is RuntimeError and error.args==('BI1_LINK_FACTORY_ORIGIN_REFUSED',)
+assert reached==[True] and not returned and foreign_calls==[]
+assert len(engine_calls)==1 and all(engine_calls[0]),engine_calls
+assert (tuple(ledger.counts),len(ledger.attempts),len(ledger.scopes))==before
+assert vars(kind)[name] is raw and function.__code__ is original_code
+'''
+    monkeypatch.setattr(base, 'SCRIPT', base.SCRIPT.replace(marker, marker + extra, 1))
+    base.test_actual_entry_and_wrapper_files(tmp_path, 'normal')

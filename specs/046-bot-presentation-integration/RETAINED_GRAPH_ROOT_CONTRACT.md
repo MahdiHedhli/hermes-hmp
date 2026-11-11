@@ -1,3 +1,35 @@
+## Declared runtime classmethods — November 11, 2026 UTC
+
+The character-image startup draft now retains eight declared source classmethods
+by their original native wrapper and underlying function. The helper record holds
+94 functions, preserving the previous 86 plain-function roles and all packet row
+widths. Native classmethod is appended as primitive 21, preserving the original
+20 indices. The parent and both Scope publication checks authenticate the same
+roles and independently held defaults before raw function inspection. Replaced
+wrappers, changed code/defaults, hidden built-ins and coherent false defaults
+refuse without invoking the tested foreign methods or descriptors.
+
+All 956 bounded regression cases pass on both Python 3.14.9 and 3.11.15, with zero
+failures, errors or skips, identical case IDs, and all 553 source fingerprints
+matching the tested candidate. Independent review verified the source and result
+hashes. Focused 103 cases also pass on both runtimes. Baseline 24 missing-refusal
+controls and 16 isolated late-wrapper controls establish the corrected gaps.
+Two separate late-method-code tests allow one original pure engine audit with
+original arguments before final refusal, with zero foreign execution or effects;
+the existing five root/callee cases retain their stricter zero-engine requirement.
+The initial two overbroad copied assertions are recorded as test expectation
+errors, not product-defect or successful qualification evidence.
+
+This completes only the declared-classmethod source task. The fresh inventory
+still finds 43/29 callable class attributes outside the helper and constructor
+records on current/minimum Python. Generated helpers, private globals and the
+cache_candidates dependency remain open, followed by full original-root/caller/
+callee/GC/callback/fresh graph integration and unchanged native 60-second startup
+acceptance. The last dated native startup still fails; no speedup or fast audit
+activation is claimed. Character images, host-local image display and physical,
+Linux, provider and release qualification remain open. No installed build, host,
+device grant, model, provider, job or store setting changed. Full goal stays active.
+
 # Rooted retained-graph audit contract
 
 Source inspection: November 10, 2026, executable source

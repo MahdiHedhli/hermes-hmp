@@ -1,119 +1,34 @@
-## Runtime constructor capture — November 11, 2026 UTC
+## Declared runtime classmethods — November 11, 2026 UTC
 
-The character startup draft now retains all seven runtime NamedTuple constructors
-in the existing original parent record. Entry-file and cache-context modules append
-to that parent: six modules and fifteen types, preserving previous indices. Type
-pins grow from nine to twelve fields, adding keyword defaults, frozen keyword pairs
-and complete private-global pairs. Constructor code/defaults/globals, empty closure,
-class fields/base/dispatch identities and native tuple allocation are checked before
-use and after callbacks. Class keys are fenced before metadata lookup; filename
-subclasses and malformed, duplicate or foreign snapshot keys refuse without invoking
-the tested foreign protocols. Both Scope publication checks use the same stronger
-record. The separate helper record stays10modules/53classes/86plainfunctions.
+The character-image startup draft now retains eight declared source classmethods
+by their original native wrapper and underlying function. The helper record holds
+94 functions, preserving the previous 86 plain-function roles and all packet row
+widths. Native classmethod is appended as primitive 21, preserving the original
+20 indices. The parent and both Scope publication checks authenticate the same
+roles and independently held defaults before raw function inspection. Replaced
+wrappers, changed code/defaults, hidden built-ins and coherent false defaults
+refuse without invoking the tested foreign methods or descriptors.
 
-Baseline42 retains six already-correct code/default controls and36 missing-refusal
-failures. Corrected58 focused metadata cases and eight real Scope constructor-code
-causals pass on actual Python3.14.9 and3.11.15. Scope refusals preserve the private
-failure marker and zero foreign calls, work, reservations, registrations and success.
-An additional baseline18 has three controls and15 failures: seven filename omissions,
-one foreign class-key comparison, one missing keyword-key refusal, and six child60s
-timeouts. Those timeouts establish uncertainty, not admission or foreign execution;
-they remain recorded separately and the deadline was not widened.
+All 956 bounded regression cases pass on both Python 3.14.9 and 3.11.15, with zero
+failures, errors or skips, identical case IDs, and all 553 source fingerprints
+matching the tested candidate. Independent review verified the source and result
+hashes. Focused 103 cases also pass on both runtimes. Baseline 24 missing-refusal
+controls and 16 isolated late-wrapper controls establish the corrected gaps.
+Two separate late-method-code tests allow one original pure engine audit with
+original arguments before final refusal, with zero foreign execution or effects;
+the existing five root/callee cases retain their stricter zero-engine requirement.
+The initial two overbroad copied assertions are recorded as test expectation
+errors, not product-defect or successful qualification evidence.
 
-The same853 full regression cases pass on both runtimes with zero failures/errors/
-skips and unchanged source, matching all552 source-map entries and identical case
-IDs. This includes the previous765 cases,22 dedicated started-parent cases,58 new
-constructor cases and eight added Scope cases. Independent review verifies source,
-log/XML hashes and bounded constructor freshness. New tests are lint-clean; changed
-production diagnostics decrease without new diagnostics, and surface/private/diff
-checks pass. Existing exact parent-module assertions now reflect the six-module
-contract. This is source qualification, not a new installed build or image delivery.
-
-An updated actual-record census separates seven captured constructors from the old
-helper-table-only omission count. Among these runtime classes, callable attributes
-outside both records remain51 on3.14.9 and37 on3.11.15: declared classmethods plus
-generated helpers. Closed eight-classmethod capture, cache-candidate/transitive source
-closure, original-root/caller/callee checks, GC/callback safety, whole fresh graph
-integration and unchanged native60s acceptance remain required. The last dated native
-startup still fails; no fast audit is activated and no speedup is claimed. Character
-images, host-local image display, physical/Linux/provider/release qualification and
-the full roadmap remain open. No host/device/grant/model/provider/job/store changed.
-A separate read-only support check found generic review advice, not BYO-host/demo
-acceptance; no declaration or release action followed. LLY520 remains absent from
-the refreshed management inventory. The full feature goal stays active.
-
-## Persistent runtime record — November 11, 2026 UTC
-
-The character-image startup draft now retains the three prewarmed runtime modules,
-their12 declared classes and44 plain functions/methods in the actual early helper
-record. Old positions remain unchanged: the record now holds10modules,53classes and
-86functions, with the same six-field packet API. Only cache owner/root/fact values
-join the existing live-value exclusions; their keys remain required. The started
-parent's fixed prefix was updated to match. No fast audit path is activated.
-
-Thirty-nine imported aliases are joined to their defining held modules in both
-DATA checkers, both parent audits and both Scope publication audits. Initial wrong
-aliases can no longer become accepted coherent snapshots. The132 plain-code/default/
-keyword-default controls and39 alias controls first fail on their respective
-baselines, then pass. Six actual Scope causals mutate runtime code at both publication
-points and require private refusal with no foreign calls, new work, reservations,
-registration or successful return. The parent already passed the two entry-lineage
-controls; four cache/plan cases exposed foreign dispatch and are corrected in this
-draft. No deployed incident or live-host change is established by these fixtures.
-
-The same765 broad regression cases pass on actual Python3.14.9 and3.11.15, with no
-failures/errors/skips and unchanged source during each run. Dedicated22 started-parent
-cases also pass on both. Their standalone first test previously depended on other
-suite imports; the unchanged parent reproduces that setup failure. It now explicitly
-loads definitions without starting an owner and observes zero generic fallback calls.
-Only that separately executed test file changed after the765 runs; all production
-and executed broad-suite test bytes are unchanged. Independent review and private
-source/log/XML receipts retain this distinction. New tests are lint-clean, production
-lint counts match their baselines, and surface/private/diff checks pass.
-
-This is partial persistent code custody, not complete dependency or constructor
-coverage. An isolated census among these12classes still finds58 unrecorded callable
-attributes on3.14.9 and44 on3.11.15, including classmethods and generated constructors/
-helpers. Cache-candidate dependency closure, full original-root/caller/callee and
-transitive code checks, GC/callback safety, final fresh graph integration and the
-unchanged native60s acceptance remain open. The last dated native startup still
-fails; this step does not claim a speedup or a new native pass. Bot character images,
-host-local image display, physical devices, Linux and release remain separately
-unqualified. Installed builds, grants, providers, models, jobs and stores are unchanged.
-The full feature goal remains active; these remaining integration gaps are ours,
-not a claim that upstream lacks the requested image features.
-
-## Fixed runtime prewarming — November 11, 2026 UTC
-
-The character startup draft now prepares the fixed runtime-file, entry-file and
-cache-context modules before original helper capture. Entry retains their module
-and spec namespaces, declared classes, function code/defaults/closures and generated
-constructor globals across later imports and capture callbacks. Only declared
-aliases missing from a genuinely initializing module with a matching active module
-frame may be supplied from held defining objects. Foreign aliases and attempts to
-repair an initialized module refuse. Existing modules are inspected directly before
-importlib can read malformed metadata; native spec-dictionary access and class-key
-fences avoid foreign comparison/getter dispatch in the tested refusal paths.
-
-The unchanged parent fails all three new readiness controls. The corrected source
-passes29 new cases: three import orders, twelve later class/code/default/keyword
-default mutations, and fourteen partial-alias/initialization/module/spec/class-key
-cases. Two retained red runs distinguish a fixture-arming error from an actual
-importlib spec lookup gap; a separate class-key red demonstrates the class metadata
-lookup gap. Both candidate gaps are corrected. The final same224-case startup and
-cache regression set passes on actual Python3.14.9 and3.11.15, with unchanged source
-and zero failures, errors or skips. Independent review accepts transient capture
-custody only; the initial222-case greens predate the final class-key correction.
-
-This is initialization custody, not persistent runtime provenance or a fast
-admission path. The early persistent helper packet still omits these three modules'
-full class/code closure. Expanding and authenticating that record through the
-original caller/root and both Scope checks, complete graph integration, actual
-GC/callback causal checks and unchanged native60s startup acceptance remain open.
-No startup speedup, character image delivery, host-local image display, device or
-release qualification is claimed. No host restart, install, grant, provider, model,
-job or store release changed in this source step. The broader feature goal remains
-active; LLY520 is absent from the current management inventory.
+This completes only the declared-classmethod source task. The fresh inventory
+still finds 43/29 callable class attributes outside the helper and constructor
+records on current/minimum Python. Generated helpers, private globals and the
+cache_candidates dependency remain open, followed by full original-root/caller/
+callee/GC/callback/fresh graph integration and unchanged native 60-second startup
+acceptance. The last dated native startup still fails; no speedup or fast audit
+activation is claimed. Character images, host-local image display and physical,
+Linux, provider and release qualification remain open. No installed build, host,
+device grant, model, provider, job or store setting changed. Full goal stays active.
 
 ## November 11: definition staging for fixed prewarm
 
