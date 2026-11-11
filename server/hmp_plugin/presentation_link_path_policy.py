@@ -48,10 +48,17 @@ class _LinkPathCursor(NamedTuple):
 
 
 def _parts(path):
-    _need(type(path) is str and 1 < len(path) <= 4096
-          and path.startswith('/')
-          and all(32 <= ord(c) != 127 and not 0xD800 <= ord(c) <= 0xDFFF
-                  for c in path))
+    if not (type(path) is str and 1 < len(path) <= 4096 and path.startswith('/')):
+        return _need(False)
+    try:
+        encoded = path.encode('utf-8')
+    except UnicodeEncodeError:
+        encoded = None
+    # Keep the first original guard's acceptance set and callback position:
+    # controls/surrogates refuse before any successful project guard return.
+    _need(encoded is not None and len(encoded.translate(None,
+        b"\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f"
+        b"\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1a\x1b\x1c\x1d\x1e\x1f\x7f")) == len(encoded))
     parts = tuple(path[1:].split('/'))
     _need(1 <= len(parts) <= 64 and 1 < len(path.encode('utf-8')) <= 4096
           and all(part not in ('', '.', '..') for part in parts))

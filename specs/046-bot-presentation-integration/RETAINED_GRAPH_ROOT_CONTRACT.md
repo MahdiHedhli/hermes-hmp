@@ -211,3 +211,67 @@ plugin surface and diff checks pass. Remaining coherent Scope/source/registratio
 grafts, hostile protocol, actual reduced dispatch, full fresh mutable graph,
 current/minimum broad regressions and original native60s acceptance are not
 closed by these nine cases. No runtime, phone build or permission changed.
+
+
+## Native-consumer cost decision and generic path scan
+
+Actual first-consumer audit samples on source9018961 use the real registered
+Scope/resource, original early engine/layout and snapshot roots,24calls each.
+Current/minimum receipts `/private/tmp/hq-pgf4n89j/receipt.json` and
+`/private/tmp/hq-v2p2i38o/receipt.json` are terminal pass with unchanged source.
+The full closed selector is about3times the full engine alone (3.108/1.044ms
+current;2.464/0.860ms floor). Delegating the two consumer audits to it is rejected
+as a performance strategy and not implemented. The fixed-live engine alone is
+0.851/0.698ms; original root/callee proof is excluded from those timings. Native
+work, counts, Scope and runtime input/root identities stayed unchanged. This is
+an actual paused-fixture cost observation, not adversarial/runtime acceptance.
+
+The separate generic `_parts` byte scan has matching58 final current/minimum
+cases: `/private/tmp/hq-ai7y9fd7/receipt.json` and
+`/private/tmp/hq-kretbpxv/receipt.json`. No full audit is removed. Every codepoint,
+exact guard arguments/results, hostile str overrides, surrogate error context,
+and actual after-first-guard frame writeback are covered. The later byte bound
+still re-encodes the current path; no earlier encoded bytes substitute for it.
+Earlier45/47/55/58 draft receipts predate the final test/implementation content and
+are superseded, not final evidence. The extra third-guard draft was rejected in
+source review; the final implementation preserves original callback topology.
+Independent review accepted the corrected source, not whole-startup performance.
+
+Fresh original native gate `/private/tmp/hq-ealec0bb/receipt.json` fails its
+unchanged60s deadline with source unchanged, no skip or earlier setup refusal.
+Last event4 at48.848s:44typed, one retired capsule, work963/reserved0. The full
+feature and native/device/release gates remain open. No host/device changes.
+
+## RGA-01d coherent graph implementation boundary
+
+Source review identifies the actual repeated DAG: `_guard` -> `_source_current`
+-> `_package_source` invokes package retained/guard/retained, including recipe and
+selection, then `_runtime_current` -> entry `_pure_current`/`_pure_lineage` repeats
+entry/recipe/package. Deleting one nested call or retaining a returned binding as
+a later verdict is not the selected implementation. Generic functions stay full.
+
+The fixed registered-artifact branch must cover source and runtime together.
+Original Scope.parent and runtime.inputs retain package/recipe/selection binding
+members, literal immutable expected rows/bytes and their validated correspondence.
+Only schema/row construction/UTF8/digest/duplicate/size arithmetic may be reused;
+`_configuration_rows` also observes approval ownership, which must stay live.
+
+Per-call live checks include all scope/cell/root/fact/count/buffer/read/active/
+ready/failed/unknown/retired/uncertain state, activation anchors, descriptor and
+scan lists/close claims/raw/result/FD receipts, runtime plans/io/cache/completion/
+attempt/before/after/read/counter fields and actual PID/UID/thread. Finish native
+actor/weak/getter/project observations first, then perform a final pure complete
+mutable graph reseal with original function/class provenance before return.
+Do not put project guard/helper callbacks in that final reseal or reuse a verdict
+across an actor/constructor/callback. Descriptor/approval/activation predicates
+must be inlined or covered completely by final mirrors, not dropped.
+
+The native registration phase boundary `_native_scope_current` already receives
+actual owner/registration/Scope and checks idle phase/slot/ledger row. Its current
+`_owner_guard` call is a candidate integration site to evaluate, not authorized
+eligibility by itself. Independent Entry/STARTED/CELL/lineage/callee/root proof is
+still required before selecting a fixed graph branch; pre-registration and all
+other families keep complete generic validation. Cover coherent whole-root
+grafts, callbacks/GC/late returns, counters/descriptor cleanup and supported
+runtimes, then original60s and full feature/device qualification. No branch is
+enabled by this source contract.

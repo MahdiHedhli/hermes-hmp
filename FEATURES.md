@@ -1,3 +1,28 @@
+## Generic link-path scan and actual audit costs — November 11, 2026 UTC
+
+The character draft uses a strict UTF-8/ASCII-control byte scan in the generic
+link-path validator. Exact string, character/byte length, absolute path, segment,
+control and surrogate refusals remain. Original two-guard callback topology and
+post-callback byte-bound freshness remain; no mutable verdict is saved.
+
+The same58 focused cases pass on Python3.14.9 and3.11.15 with unchanged source,
+zero failures/errors/skips. They compare every Unicode code point against the
+original function, cover boundaries/foreign strings, original guard arguments,
+surrogate error-context privacy and actual late frame-path replacement. Source
+review caught an extra-callback draft; it was corrected before acceptance. All
+full audits and native deadlines remain. The original native gate still fails
+TimeoutExpired60s at event4/44typed, last checkpoint48.848s; no whole-startup
+speedup, character delivery, physical or release pass is claimed.
+
+Actual native-consumer measurements also reject delegating to the full closed
+selector: median3.108ms versus1.044ms full-engine on Python3.14.9, and2.464ms
+versus0.860ms on3.11.15. Each used24 actual original calls with unchanged roots
+and no new native work. The fixed-live engine alone measured0.851/0.698ms, but
+those figures exclude required root proof. They are diagnostic, not adversarial
+qualification or an additive startup cost model. The full-selector replacement
+was not implemented. Next is the complete fresh source/runtime graph pass,
+retaining generic APIs and every mutable ownership/callback check.
+
 ## Native consumer input identity — November 11, 2026 UTC
 
 The bot-character draft now holds the registered Scope's original runtime inputs

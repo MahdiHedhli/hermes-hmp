@@ -1,3 +1,18 @@
+## November 11: measured next graph unit
+
+- [x] Measure actual native consumer full-engine/fixed-live/closed-selector costs
+      without new native work; current/minimum24samples each. Reject costly full
+      closed-selector delegation; no such replacement enabled.
+- [x] Generic `_parts` UTF8 byte scan with original two-guard callback order,
+      post-callback bound freshness and full Unicode equivalence; final58 pass
+      current/minimum. Original native60s still fails, not a speedup acceptance.
+- [ ] **RGA-01d-FRESH-DAG** Implement fixed registered-artifact source+runtime DAG
+      together after original root/callee proof, final pure mutable reseal and
+      unchanged full generic paths. Evaluate actual native registration boundary;
+      no self-stored eligibility or cached verdict. Contract contains live fields.
+- [ ] Qualify original/copied/coherent/late-callback/GC/counter/descriptor/cleanup
+      differentials, both runtimes, unchanged native60s and full device delivery.
+
 ## November 11: RGA-01c input-pointer prerequisite
 
 - [x] Hold registered Scope parent/runtime and original snapshot inputs/rootcell
