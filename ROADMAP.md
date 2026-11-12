@@ -1,3 +1,20 @@
+## Read-only media permission inspection — November 12, 2026 UTC
+
+Issue #147 / spec048 separates `devices media-read` from mutable Store creation
+and migration. Existing custody, authenticated listener, current decision equality
+and final identity checks remain; each database sample opens a fresh WAL-aware
+read-only view. No setup compatibility/profile-count gate is added. Grant/deny
+confirmation and compare-and-set behavior are unchanged. Samples are not a single
+atomic fence across listener, database and identity; SQLite reader-lock metadata
+is not claimed byte-immutable.
+
+225 focused tests pass, including real no-WAL to WAL changes during the operator
+roundtrip, changed epochs/decisions, stale or absent authority and no-write checks.
+Independent review found and verified the fresh-view correction. Changed-file lint,
+plugin-surface and private-data scans pass. Full-tree lint still reports1242
+findings outside changed files; the log scan has no captured fixture logs.
+This is source-only: no host update, restart, grant or physical device pass.
+
 ## Generated record metadata — November 11, 2026 UTC
 
 The character-image startup draft now appends generated-helper metadata as the

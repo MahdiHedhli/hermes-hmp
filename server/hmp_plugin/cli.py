@@ -1066,6 +1066,70 @@ def _open(env: CliEnv, *, needs_identity: bool = False) -> Any:
         store.close()
 
 
+@contextlib.contextmanager
+def _media_inspection_connection(path: Path) -> Any:
+    # Re-evaluate WAL state for every sample. An immutable connection must not be
+    # retained across the operator roundtrip: a gateway may start writing meanwhile.
+    wal = path.with_name(path.name + "-wal").exists()
+    if not path.is_file() or (wal and not path.with_name(path.name + "-shm").is_file()):
+        raise RefusedError(NOT_READY, EXIT_ENVIRONMENT)
+    mode = "mode=ro" if wal else "mode=ro&immutable=1"
+    conn = sqlite3.connect(path.as_uri() + f"?{mode}", uri=True)
+    try:
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA query_only=ON")
+        conn.execute("BEGIN")
+        yield conn
+    finally:
+        conn.close()
+
+
+class _ReadOnlyMediaStore:
+    """Narrow fresh-view adapter; never constructs or migrates a mutable Store."""
+
+    def __init__(self, path: Path) -> None:
+        self._path = path
+
+    def revocation_epoch(self) -> int:
+        with _media_inspection_connection(self._path) as conn:
+            row = conn.execute(
+                "SELECT store_revocation_epoch FROM meta WHERE id = 1"
+            ).fetchone()
+            return int(row[0]) if row else 0
+
+    def media_read_decision(self, iid: str, device_id: str) -> Any:
+        from .store import _media_decision
+
+        with _media_inspection_connection(self._path) as conn:
+            return _media_decision(conn, iid, device_id)
+
+
+@contextlib.contextmanager
+def _open_media_inspection(env: CliEnv) -> Any:
+    from . import identity, server
+
+    kw = env.identity_kwargs
+    try:
+        custody = identity.resolve_custody(
+            env=kw.get("env", env.environ),
+            hermes_root=kw.get("hermes_root"), binding_root=kw.get("binding_root"),
+        )
+    except identity.NamedProfileError as exc:
+        raise RefusedError(
+            "refused: HMP runs only under the default profile; run this without -p/--profile",
+            EXIT_ENVIRONMENT,
+        ) from exc
+    except identity.IdentityError as exc:
+        raise RefusedError("refused: the HMP custody location is unsafe", EXIT_ENVIRONMENT) from exc
+    path = server.store_path(custody.anchor_dir).resolve()
+    try:
+        store = _ReadOnlyMediaStore(path)
+        identity.load_existing(store, **_identity_kw(env))
+        yield _Context(env=env, custody=custody, store=store)
+    except (identity.IdentityError, sqlite3.Error) as exc:
+        raise RefusedError(NOT_READY, EXIT_ENVIRONMENT) from exc
+
+
 def _identity_kw(env: CliEnv) -> dict[str, Any]:
     kw = env.identity_kwargs
     return {k: kw[k] for k in ("env", "hermes_root", "binding_root", "host_id") if k in kw}
@@ -2617,6 +2681,9 @@ def dispatch(args: argparse.Namespace, env: Optional[CliEnv] = None) -> int:  # 
             return _cmd_health_check(env)
         if (group, action) == ("push", "status"):
             return _cmd_push_status(env)
+        if (group, action) == ("devices", "media-read"):
+            with _open_media_inspection(env) as ctx:
+                return _cmd_devices_media(ctx, args)
         handler = _STORE_COMMANDS.get((group or "", action or ""))
         if handler is None:
             env.stderr.write(
