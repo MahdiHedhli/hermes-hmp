@@ -1,0 +1,721 @@
+# Tasks
+
+> **Amended 2026-10-02.** The owner's minimum-version policy replaces the exact-build manifest, fingerprints,
+> process anchor and preload qualification (S6/S6a/S6b). Their records below are **historical evidence about the
+> retired design**, not current policy and not runtime behavior. See
+> [Minimum-version conversion](ROOT_DECISIONS.md#minimum-version-conversion-supersedes-s6-manifestfingerprintanchor-s6a-admission-semantics-s6b-preload-qualification-2026-10-02)
+> and the slices M0-M3 below. Descriptor/fetch source and bounded native samples
+> now exist; activation, physical acceptance and full release qualification remain open.
+
+**Current November 6 disposition:** [C6b scoped native-evidence acceptance](../../docs/research/local-media-c6b-root-acceptance-2026-11-06.md) is complete. Earlier dated stage statements that C6b remains open are historical checkpoints. HMP R2 source and runtime-package review are also complete. Full S4/S5 delivery acceptance, plugin loading, R3/current-listener activation, clients/devices and release remain open.
+
+`[ ]` means not started or not independently reviewed. Workers do not self-certify. No implementation task starts before the contract revision (P0) is reviewed. A worker meeting unspecified behavior records a gap marker instead of inventing a rule.
+
+## M0 Documents
+
+- [x] **P0** Additive public contract revision: HMP v1 §7e, `media_unavailable` row, optional `media` on tool rows, constants, residual, conformance rows (this change). Root reviewed the additive transcription against the frozen design and the independent Opus pre-code PASS (2026-10-01). No serving or code gate is certified.
+- [x] **E1** Native-generated bounded fixture: producer `image` string versus the routed-home lexical prefix on exact Hermes `8afaab3703e336d72a72c812dd2dd249f04f166a`. Root passed three isolated positive native flows and 37 focused string/helper tests (research `f9c542b`). Limited to the real `save_b64_image` producer and stated scratch layout; no live route or manifest admission is granted.
+
+## Minimum-version conversion slices (M0 integration to M3)
+
+Ordered. Workers tick no review boxes; every `[ ]` here is unchecked until root or an independent reviewer marks it.
+Native fixtures and owner-local packaging are root-operated. No slice here authorizes a live, device, provider or
+dependency action.
+
+- [x] **M0 root integration checkpoint** (inert). Merge `0cdbbf5` of media source `6d400af` onto the converted
+  approvals base (`2c153e2` plus probe fixture `f4045cd`). Root receipt status:
+  `ROOT_M0_INERT_INTEGRATION_REVIEWED_NOT_FEATURE_COMPLETE`. The runtime media binder is a constant closed
+  callback; the retired gate and its empty manifest were not carried. Carried media modules, the `reads.py` twins
+  and the bridge twins are byte-identical to the accepted media lineage except the merged twin hunks. **Not green:**
+  - converted focused 013/034 set: 1123 passed, 14 skipped, 3 failed; the three failures are
+    `test_contract_tables.py` draft-contract-table cases (`media_unavailable` and `MEDIA_*` constants not in
+    `contract.py`); the identical three fail on the unconverted media source and remain the S4 gate. They are
+    visible, not skipped or hidden.
+  - 114 legacy qualification tests fail (109 listener-binding, 4 gate-pinning layout, 1 bridge-inert) and the
+    removed gate test has one collection error. They test the retired binder and are **explicit work in progress**
+    pending M3. Nothing was skipped, deleted or ignored to change that, and no green full-suite claim is made.
+  - The media helper suites (active batch, scan, binding, candidate, file safety, raster, registry, result,
+    sidecar, reads media) passed at the checkpoint.
+  - Not run: full server suite, `tools/*` suites, native or fixture matrices.
+- [x] **M1** Documentation and contract amendments (this change): ROOT_DECISIONS section, spec, plan, tasks,
+  checklists, HMP v1 §7e and GU-2d, conformance, specs 013/034 cross-references, `server-modules.md`, FEATURES and
+  INSTALL. No code, tests, fixtures or data. Exit: root review. Independent documentation review
+  accepted the frozen 13-file delta; root accepted it and added the existing D-M4 publication and D-M6
+  no-await mint requirements explicitly to the contract. This certifies documentation only, not media delivery.
+- [x] **M2** Eligibility member (D-M2, D-M3, D-M8): `Feature.LOCAL_MEDIA`, the three-row probe table,
+  `FEATURE_FLOORS["local_media"]` at the write floor, `issue_draft`/`cli` member, labels and the single reportable
+  code. Root accepted after independent bounded source review: 368 focused tests passed, six existing
+  native-fixture skips; the new media file passed 61 cases with no xfail. Eight root scratch-copy
+  guard mutations failed their targeted assertions; baseline and restored source passed. Thirteen
+  compatibility/extraction/privacy-tool tests also passed with the tools collection boundary.
+  Configured Ruff 0.16.9, explicit candidate privacy and surface checks passed. This certifies only
+  eligibility and offline drafting: the runtime binder remains closed; no route or descriptor exists.
+  The known M3/S4 failures below remain; no green full-suite claim.
+- [x] **M3 source slice** Replace the retired binder with the D-M4 binding and coherence check: delete the gate-era components
+  (manifest, fingerprints, anchor, GIL guard, origin checks, non-media core proof), add
+  `ServerContext.media_available` and the bound modules, publish `_bridge_classes` as one tuple. Retire or adapt
+  the 114 legacy tests as the architecture allows. Exit for the listener source slice: bounded A7-A12 and A14 evidence, then **mandatory independent
+  exact-candidate security review**. Root accepted exact `f737197` after independent review: 3047 unit cases passed, three existing S4 contract-table failures and 16 native-dependent skips remained. This closes the listener source slice only; the route portions of A8/A10/A11 stay with S4/S5.
+
+(The older headings "M1 Host" and "M2 Convergence" below are original document-phase names and are unrelated to slices M1-M3 above.) At the original M3 checkpoint, later slices remained C6b exact-native cost and
+concurrent-writer evidence (release-candidate evidence, not a per-version allowlist), S4 descriptor emission, S5
+route, R2 independent exact-candidate review, and R3 owner-authorized install, flag
+and physical-device acceptance. The current November 6 disposition above now records scoped C6b and HMP R2 acceptance. Full delivery and device acceptance remain open;
+the T12 sampled Darwin memory measurement is recorded below. No evidence row
+enables the feature or certifies another platform.
+
+### Acceptance matrix for M2/M3
+
+Each case must fail when its named guard is removed. A1-A6 and A13 have bounded source evidence
+from M2. M3 supplies bounded listener evidence for A7-A12 and A14; A8 owner/non-owner route responses, A10 mint/fetch identity and A11 route refusal are still S4/S5 requirements. No case proves media serving.
+
+| ID | Setup | Expected | Guard mutated |
+|---|---|---|---|
+| A1 | version at or above floor, all three rows present | `local_media` probe eligibility available; no media build-list, manifest, fingerprint or SHA input (shared diagnostic evidence does not gate media) | re-introduce a media manifest reader |
+| A2 | version unknown, `0.0.0`, newer or development | attempted (available if the probe passes) | floor treats unknown as below |
+| A3 | version below floor | unavailable `hermes_version_below_floor`; media rows not imported | probe before floor check |
+| A4 | media-table dependency missing, `**kwargs`-only, or resolved from `site-packages` | media-table failure closes only `local_media` (`dependency_missing`, fixed labels); an actually absent shared API also closes each sibling whose own table needs it | merge tables or close siblings |
+| A5 | send unavailable or `direct_send.enabled` false | `local_media` unaffected | add `requires_send` |
+| A6 | read core missing | `local_media` = `requires_read`; no media import | probe media without read |
+| A7 | supported, `identity is None` (converted base) | media can open | require `BuildIdentity` |
+| A8 | flag off, non-bool or malformed block | closed: exact old read bytes; owner `503 media_unavailable`; non-owner `404` first | truthy flag |
+| A9 | media chain split (synthetic second package copy, foreign `candidate._scan`) | this listener's media closed with a fixed outcome; a second listener in the same process with coherent modules opens (no latch) | process latch or skip coherence |
+| A10 | whole-package eviction after open | old listener keeps its bound tuple; mint and fetch use the same objects by identity | handler re-imports |
+| A11 | use-time cache identity differs from the bound tuple | `503 media_unavailable`; this listener's media closed until reopen | skip fence |
+| A12 | free-threaded interpreter flag simulated | no closure from interpreter mode alone; review confirms registry, permits and caches are lock-protected | GIL guard re-added |
+| A13 | `--issue-draft --feature local_media --failure-code media_unavailable` | draft with bounded metadata; `not_found`, `rate_limited`, `forbidden` refused as their own reason; privacy canary (no ref, path, digest, profile or device) | allow 404 drafting |
+| A14 | legacy process anchor present as `"closed"` in `sys.__dict__` | new code ignores it and never writes it | read the legacy key |
+| Inherited | T1-T18 (T18 amended), C6b A1 identity, D4 uncertainty rule, registry CAS/TTL/LRU, leaf no-follow/nlink, raster, permits and cancellation, `ContextVar` copy, closed log enums | unchanged | as in plan.md |
+
+Sampled evidence (E1 producer spelling, Linux leaf, C6 cost, rotation) stays recorded as tested-sample evidence.
+No case requires an exact-build receipt for runtime admission. Release evidence still binds the tested
+candidate and sample; that evidence does not prove behavior on future builds.
+
+## M1 Host (after P0 review)
+
+- [x] **S1** Promote the accepted scanner, leaf and raster modules into the plugin surface, logic unchanged except the shared result function; record content hashes. Root accepted the inert slice after independent Opus wrapper/hash review, module-contract repair, and 70 bounded layout/wrapper tests on 2026-10-01. No serving or admission claim.
+- [x] **S2** Read-result sidecar and lexical name derivation; golden proof that closed-gate bytes are unchanged (T1). Root accepted S2a–S2d after independent reviews and 833 focused tests (three preexisting Hermes-build skips). Optional media twins remain unused by production handlers; no serving claim.
+- [x] **S3** Registry: lock, TTL, LRU, idempotent mint, first-digest CAS (T2, T8). Root accepted the inert slice after independent Opus delta review, causal foreign-snapshot/caller tests, and 152 focused registry/layout tests on 2026-10-01. No fetch authority or serving claim.
+- [ ] **S6** *(converted by the minimum-version policy; the manifest, file list, baseline and disk-equality parts are retired. The flag accessor already exists; remaining scope is the eligibility member and in-memory binding, tracked as M2/M3; T18 amended.)* Original text: `local_media.enabled` default-off flag, empty manifest, dedicated media file list, start baseline plus fresh disk equality, off-loop (T18).
+- [x] **S6a** *(historical; retired design, not carried onto the converted base)* Inert process qualification gate and empty manifest. Root accepted source after independent Opus original review, Sonnet hardening delta review and 392 focused tests. No listener, flag, entry or admission; S6 remains open.
+- [ ] **S6b** *(historical; retired design, superseded by M3)* Bind the S6a gate to the adapter, request context and per-load media caches (static required set, actual-object proofs, strict flag fields). Source and focused tests written under the [S6b freeze](ROOT_DECISIONS.md#s6b-listener-binding-freeze-2026-10-01); bounded source independently reviewed and accepted after repair, with 138 root cases passing. No entry, route consumer or admission; S6 stays open.
+- [x] **C6a** Request-scoped active-history batch module and independent security review, following the C6 freeze; accepted single scanner unchanged. Source acceptance only; native cost/memory and C6b remain open.
+- [x] **C6b** Bind the reviewed batch to the same native database/home capture and accept the bounded current-native cost/allocation, modeled mint, process RSS and 912-phase writer evidence. Root accepted after independent contract review and receipt-join repair, preserving actual sources, old refusals and residual/ABA limits. This closes this evidence task only; full delivery, activation, platform/device and release qualification remain separate.
+- [ ] **S4** Descriptor emission in handlers, 128 cap (T1, T5, T6, T7). Needs S2, S3, S6 and C6 admission.
+  Source written on `b07890e`, independently reviewed and accepted for the S4 source slice (2026-10-02; full task not ticked): the four read handlers select the old read or the media twin plus one `bind_media_batch` in one worker job, then mint newest-first (at most 128) on the loop through the listener's one registry; `media_unavailable` and the §13 media constants are in `contract.py`; no fetch route (S5). Native complete-binding cost and T12 are release-candidate evidence, not prerequisites for this source. Independent review accepted the exact source, with stale documentation repaired. Root reproduced 679 focused cases after seven added tests; full delivery, native cost, T12 and device evidence remain separate open gates.
+- [ ] **S5** Route, dedicated executor, permits, `ContextVar` copy for both phases, constants, streaming, phase one, phase two, synchronous final section (T3, T9-T11, T13, T15-T17). Needs S1, S3, S6.
+  Source slice independently reviewed and accepted after bounded amendments (2026-10-02; full task not ticked): the always-registered route, per-app executor/permits, both native bridge phases and synchronous final section. Clean locked CI: 3613 passed, 16 native-dependent skips, one existing warning. Synthetic four-fetch memory passed the unchanged provisional limits; native T12, native serving, phone binary loading, device and release evidence remain open. See [the S5 acceptance scope](ROOT_DECISIONS.md#s5-bounded-source-acceptance-2026-10-02).
+- [ ] **T** Causal suite T1-T18 on a fake bridge and an exact-build disposable-home fixture.
+- [x] **T12** Memory measurement run recorded against the unchanged provisional ceilings: HMP `8f16c1f` / native `ed1afb08`, Python 3.14.9/aiohttp 3.14.5, Darwin; four active and four cancelled-late-worker 8 MiB fetches. Independent source/artifact review accepted the [scoped sample](../../docs/research/local-media-native-memory-2026-11-06.md). Combined-process clients count toward the bounds; no native-allocation, Linux, device, activation or release qualification follows. The fixture's `t12_qualified: false` remains a refusal to self-certify broader qualification.
+- [x] **PG** Linux errno mapping for the file leaf only. Root reviewed and independently reran the accepted 89 tests plus 91 supplemental real-kernel checks on non-root Linux CPython 3.14.7/tmpfs. See the bounded evidence below; native HMP serving remains unqualified.
+
+## M2 Convergence
+
+- [x] **R2** Independent exact HMP local-media source security review at `5e247a6` / native `ed1afb08`; 21 production files and their composition accepted, with known limits retained. The runtime-only 109-file package is independently verified. This is not full S4/S5 delivery, mobile/build/device, plugin-loading or R3 activation qualification. See [source/package evidence](../../docs/research/local-media-delivery-source-review-2026-11-06.md).
+- [ ] **R3** Owner-authorized install, live flag and physical-device acceptance. No build-list or manifest entry is required. Any live Hermes change needs separate owner authorization.
+
+## S1 reviewed source identity (2026-10-01)
+
+These four modules remain inert; no production caller or route imports them. The three research copies are byte-identical. The wrapper uses the same accepted predicate after bounding the raw result before parsing. The module inventory now includes the optional modules and pins startup import inertness. A synthetic test home was normalized to the scanner-approved `user` placeholder; no runtime logic changed.
+
+| Module | SHA-256 |
+|---|---|
+| `local_media_active_scan.py` | `81eb6880f396ad3c2a244c875753887332336da4c4a2a68569f3e7c455b8b4c2` |
+| `local_media_file_safety.py` | `440c3cfa5c636d5d280f4cf8876f900ab9177b0421d55a8d5503fc398973ef74` |
+| `local_media_raster_structure.py` | `f293d0c1e379d20ec5d466e9a92e9c0e6b961a2a2b7009b5aac3705410b47610` |
+| `local_media_result.py` | `04d011cf8b805c2b285297e18f99a4ec1691f0133320948d2680d564c29b4336` |
+
+Independent review found only the prior exact-tree contract mismatch; the reviewed wrapper had no defect. Root verified the repaired layout and wrapper (70 tests), configured Ruff 0.16.9, plugin-surface check and privacy scan. Earlier adapted research tests passed (289); no broad native matrix was rerun. S2, S4-S6, Linux, serving qualification and device tests remain open.
+
+## S3 reviewed registry (2026-10-01)
+
+`local_media_registry.py` remains inert and stdlib-only; no route, bridge, sidecar, flag, manifest or production caller uses it. A registry hit never authorizes a fetch. Binding types follow current `contract.py`: session and tip are `str`, tool row id is an exact non-bool `int`, and strings are bounded to 1..256 characters. One future instance server context must share the registry between mint and fetch.
+
+Independent review cleared the foreign-snapshot/caller CAS guard, exact types, lower-only limits, monotonic clock, secure randomness and identity checks. Root ran 152 registry/layout tests, configured Ruff 0.16.9 and explicit candidate privacy scanning. The reviewer killed 27 of 28 mutants; the survivor was an equivalent grammar guard already enforced by exact lookup and entry identity. Tests were on macOS CPython; Linux and free-threaded behavior are not claimed.
+
+| Module | SHA-256 |
+|---|---|
+| `local_media_registry.py` | `b49e6e6205805f38144e769f742f6e3ee918536aa6dd5f66e6c8096d8f77c2b2` |
+
+S2, S4-S6, native serving qualification and device acceptance remain open.
+
+## E1 bounded producer evidence (2026-10-01)
+
+[Research evidence](https://github.com/MahdiHedhli/hermes-hmp/blob/f9c542b/docs/research/local-media-lexical-evidence-2026-10-01.md) compares the uncapped persisted producer string against the actual native routed-home helper's string, without normalizing the candidate. Desktop, Phone stand-in and deferred-tool flows matched the selected prefix and one flat 128-byte-bounded name; the foreign profile prefix did not match. The native pin, clean source and source fingerprints were checked before/after. Root retained the private native report and reviewed 37 focused lexical/helper tests.
+
+This evidence is not a live HMP route, other-provider path proof, Linux qualification or device acceptance. All other serving gates remain open.
+
+## S2a reviewed carrier (2026-10-01)
+
+Root accepted the immutable non-wire carrier after independent bounded review. A test-only
+follow-up closes the reviewer's class-spoof lookalike gap; the functional source is byte-identical
+to the accepted candidate, with one prose correction about trusted in-process subclass spoofing.
+Root passed 120 carrier/layout cases, configured Ruff 0.16.9 and explicit privacy/diff checks.
+Serialization mutants demonstrate that accidental generic return fails closed, and a dataclass
+mutant leaks the sentinel only in the causal test. No startup path or runtime reader imports the
+carrier. It establishes no authority and holds no image path, name or raw result.
+
+| Module | SHA-256 |
+|---|---|
+| `local_media_sidecar.py` | `c6abfd7684420a751023f4819bdc6810bd0d6b6ee2a04a8106976f7d4826c206` |
+
+S2 remains open for shared native query plumbing and four read
+cores with golden-byte proof. Serving, qualification, Linux, device and release gates remain open.
+
+## S2b reviewed extraction (2026-10-01)
+
+Root accepted bounded candidate extraction after independent Sonnet review and 215 focused
+candidate/layout tests on the matrix interpreter. The reviewer ran separate refusal probes and
+nine causal mutants; all mutants failed their targeted checks. Configured Ruff 0.16.9 and explicit
+privacy/diff checks passed. The module is inert, performs no filesystem access, and emits only a
+tool row id and the accepted scanner's canonical digest. A candidate grants no file authority.
+
+| Module | SHA-256 |
+|---|---|
+| `local_media_candidate.py` | `6bd2cde98064b85b65831048a550787e4cd215ac5f5e74a050a683dcdb840e88` |
+
+Exact shapes, bounded descending row-id order and duplicate behavior are recorded in
+`ROOT_DECISIONS.md`. Native query/read plumbing, golden-byte proof, active-set rescan cost,
+serving, qualification, Linux and device acceptance remain open; S2 is not complete.
+
+## S2c reviewed bridge (2026-10-01)
+
+Root accepts shared native query plumbing and its media-only downgrade after independent Opus
+source review and independent Sonnet delta review. Root passed 473 focused bridge, carrier,
+candidate and layout cases (three preexisting Hermes-build skips), configured Ruff 0.16.9 and
+explicit privacy/diff checks. Old methods keep their query/release/conversion behavior.
+The media twins are inert: no production reader or route selects them yet.
+
+Native session/tip strings are unbounded. A carrier-only metadata refusal, or a native page above
+the existing 1000-row carrier bound, returns the same exact old parsed list before extraction.
+Native/conversion errors, other metadata exceptions and candidate invariant failures remain errors.
+Carrier changes are return annotations and prose only; extraction changes are prose only.
+
+| Module | SHA-256 |
+|---|---|
+| `bridge.py` | `a72b77634604c0598fa074edc990d3f0cb577091000636580034a632103b5736` |
+| `local_media_candidate.py` | `4656d83b6adfa1a05a068f63c68111ad2147c5ce0b76b5414ad8082d4d9789d1` |
+| `local_media_sidecar.py` | `e3872f8f013fc51f9e4f682d3ad96024817aa1585075433ede980649857410bf` |
+
+Review residuals: the candidate import test currently allows any scope rather than module scope
+only; tighten it in the S2d import-pin update. Syntactic pins do not detect arbitrary dynamic
+imports. Narrow named-exception catch-widening mutants survive the test suite, although root
+and independent review verify the exact catch in source. Native uncapped materialization and
+non-atomic snapshots remain explicit residuals. S2 remains open for read cores and golden bytes.
+Serving, cost qualification, Linux, memory, installation and device acceptance remain open.
+
+## S2d reviewed read cores (2026-10-01)
+
+Root accepted this inert read-core slice after fresh independent Sonnet review and root verification. S2 is complete for its stated sidecar/golden scope; serving and admission are separate gates.
+`reads.py` now has four private shared cores; the four old methods are thin wrappers with the media
+flag off and four optional `*_with_media` twins use the same cores with it on. The twins have no
+route, handler or gate caller. The bridge opt-in is read from the class only; a bridge without the
+explicit `True` marker keeps the old native calls and returns an empty `UNSUPPORTED_BRIDGE` sidecar.
+An opted-in bridge may return its carrier, the exact old row list (unchanged text, empty
+`UNSUPPORTED_BRIDGE`, never re-queried) or, for `after`, a `ResetReason`; any other shape is the
+existing `500 internal_error`. A separately read lineage tip the carrier cannot hold gives the same
+empty null-metadata downgrade, catching only the carrier refusal at that one construction.
+
+Golden bytes, native event logs, baseline rows and observation discard sets were captured once from
+a read-only `git archive` of `575a9bc` and are compared as static data. Old methods, the twins'
+`.public` and unsupported-bridge twins all match them, as do the four routes over aiohttp. The
+layout pins now allow the sidecar only below a function boundary in `reads.py` and `bridge.py`, and
+the candidate module's imports at module scope only. Dynamic imports are not detected.
+
+| File | SHA-256 |
+|---|---|
+| `reads.py` | `ee37573601c354fbbb12928bc6a3404fd6fcc784adb282287bf268f971581bea` |
+| `test_reads_media.py` | `a79f077315ff2b63cc553bf50a23d551a822119dab15a0304a0cbf989f19810c` |
+| `test_skeleton_layout.py` | `05cd947844971706eff2f05bd50332b50bb5141cae65668440f8754e0f8fb613` |
+| `test_local_media_sidecar.py` | `ba426d685cbb64fb1fe4976e90bcfa594fc0f9f35501d2ba75b7eed0acabc901` |
+
+The root-authorized S2c import-pin update now permits these optional read twins while keeping
+server, routes, CLI and compatibility callers inert. Root and the independent reviewer each passed
+833 focused tests, with three preexisting no-Hermes-build skips. Configured Ruff 0.16.9 and root
+explicit privacy/diff checks passed. The reviewer independently regenerated golden data from
+`575a9bc1cba5d5ec4c41741c5a5eb723f505f65c`; sorted JSON SHA-256 is
+`7b87d0b9a7bfd98e4826b9b0e190360595eba00f9ab7ce0d7f215823102d70ac`.
+The narrow constructor catch was reviewed: candidate invariants cannot downgrade silently, and
+a failing fallback still surfaces. Syntactic pins do not detect arbitrary dynamic imports.
+Native materialization, non-atomic reads, C6 cost, minting, S4-S6, qualification and device
+gates remain open. Existing formatting differences in `reads.py` predate this slice.
+
+## PG bounded Linux leaf evidence (2026-10-01)
+
+[Evidence](../../docs/research/local-media-linux-leaf-evidence-2026-10-01.md) records accepted
+source/test hashes, real errno and permission controls, race cases, root isolated rerun and limits.
+The accepted leaf source is unchanged. This closes only the Linux file-leaf task on the stated
+non-root tmpfs platform; it does not qualify native Hermes serving, other filesystems or kernels,
+process manifests, memory ceilings, a phone build or release.
+
+## C6a accepted inert batch module (2026-10-01)
+
+`local_media_active_batch.py` is accepted in its inert source scope; production imports nothing
+from it. `scan_active_batch(db, tip, selectors,
+*, home, current_tip, seam=None)` takes an exact tuple of 1..128 unique `(positive int row id,
+32-byte digest)` pairs and runs one bracketed active-set pass: tip, ids, 128-row pages through the
+accepted scanner helpers by identity, ids, tip. Role, name, call id and declarations are charged
+once into a shared base budget with no selected row; each selected content is bounded to 64 KiB
+and surrogate-checked before it is retained, then judged against the base plus only its own charge,
+the unchanged `_link`, constant-time digest equality and lexical derivation against the captured
+home. A bracket failure refuses every selector; otherwise verdicts are independent. The result
+holds row ids, closed reasons (the scanner's plus `digest_mismatch` and `lexical_mismatch`) and
+counts only. Native call count does not grow with selector count; cost, concurrent-writer and
+mint-memory evidence, C6b binding and S4 emission remain open.
+
+Independent Opus accepted the original bounded source; root then required exact native-dict
+capture, constructor re-init refusal and a non-str retention test. Independent Sonnet accepted
+that narrow delta. The original focused scanner/candidate/carrier/result/layout batch passed
+563 tests; the changed batch/layout slice passed 232 tests at root and review. Configured
+Ruff 0.16.9, explicit privacy scan and diff checks pass. No serving, native cost or device
+acceptance follows from these checks. Final module SHA-256:
+`b30d3bcc37e246a193d00d599855b7abcc114d1a2812d8014cb7062566948ecc`;
+test SHA-256: `aee82e9fefb96d2eee63937516f4f0618c1742167a7d01aaa8b425ed5e010a17`.
+Public result constructors remain conventional immutable containers rather than tamper-resistant
+authority; C6b must call the scanner itself and consume only that fresh result.
+
+## C6b inert binding source accepted (2026-10-01)
+
+The bounded source passed Opus review, its strict-walk repair passed independent Sonnet review,
+and root verified the focused tests. **C6b, S4, S5 and S6 stay unchecked**: native binding cost and
+serving qualification are still open. `local_media_batch_binding.py` holds the closed `MediaBatchBinding` result, `MintKind`,
+the pure two-proof `classify` rule and a lexical `strict_home`. The bridge adds
+`bind_media_batch(sidecar)` (an exact `MediaBatchBinding`, or `None` for a non-exact sidecar) and the
+shared `media_eligibility(db, user_id, profile, session_id, expected_tip)` helper, with
+`_phone_proof` and `_bot_chat_proof`. One `_db_home` capture, one fresh `scan_active_batch` and a
+full both-kind reclassification at the initial check and both batch tip checks. Nothing calls them;
+no route, flag, manifest entry, registry use or serving. The optional `MediaReadBridge` protocol
+annotation was not added, so the accepted sidecar stays byte-identical; S4 must add it with its own
+pin change. The strict walk re-read precedes lineage/membership negatives; malformed Phone refs
+close the two-proof classification. The result constructor has no magnitude cap on its six counters;
+actual batch counters are bounded. Independent delta verification: 411 tests passed (binding plus
+layout); three pre-existing draft MEDIA contract-table failures remain outside this focused result.
+Exact-native binding cost, concurrent-writer and ABA behavior, Phone evidence, fetch
+integration and every other C6/S4/S5/S6 gate remain open.
+
+## S6 design accepted, implementation open (2026-10-01) *(historical; superseded 2026-10-02)*
+
+The [S6 root freeze](ROOT_DECISIONS.md#s6-media-qualification-design-freeze-2026-10-01) adopts the
+independent Opus design amendments: persistent process-wide primitive baseline across reloads,
+short anchor locking outside imports/I/O, free-threaded closure, this-load module-origin checks,
+import-shadowing refusal and bounded fd-relative source reads. No gate module, listener binding,
+manifest entry, live flag, media route or approval-gate change is accepted by this design.
+
+## S6a reviewed inert gate (2026-10-01) *(historical evidence of the retired exact-build gate; superseded 2026-10-02, not current policy or runtime behavior)*
+
+Source acceptance only; **S6 stays unchecked**. `local_media_gate.py` is
+inert: nothing imports it, there is no flag, route, adapter or bridge binding, and the shipped
+`local_media_supported_builds.json` has `builds: []` (preliminary native inventory of 22 files, every
+top-level HMP `.py`). With no entry every call returns the constant closed callback and reads only the
+media manifest. It implements the frozen S6 design: strict `hmp-local-media-1` parser, bounded
+fd-relative no-follow source reads, directory-set equality for importable forms, the `sys` anchor
+with its exact primitive layout, optional adapter-owned `preload` with this-load origin checks
+(`preload=None` can never admit), and a fresh dependency probe on every check. The media probe table is
+`READ_DEPENDENCIES` plus `SessionDB.get_session_by_title` and `SessionDB.get_compression_lineage`.
+No qualification entry, native execution, callee-closure trace, cost measurement, Linux, T12 or
+device result exists. Independent Opus review cleared the gate/manifest and required one test
+repair: explicitly create the cache before testing its FIFO refusal, independent of bytecode
+writing. Root also adopted precise origin hardening: refuse leaf-symlink aliases, preserve valid
+whole-directory aliases, and bind the loader's own name/path to its spec. The factory now requires
+an exact BuildIdentity and documents S6b's separate supported-read precondition. Independent
+Sonnet delta review accepted the repaired source; root passed 392 gate/layout cases with `-B`,
+configured Ruff 0.16.9, explicit privacy/diff and plugin-surface checks. The manifest remains empty.
+
+S6b must bind only under `CompatResult.supported is True`, prove unsupported/missing-dependency
+states leave the cell untouched, and supply the static required-module preload. Preliminary
+native callee/producer coverage, bytecode/ABA, same-account tampering, public test seams,
+BaseException propagation, blocking lock/kernel/Git latency and per-check cost remain residuals.
+No approval gate, live plugin, source qualification entry or device build changed.
+
+| File | SHA-256 |
+| --- | --- |
+| `local_media_gate.py` | `fb8ae21e8a67dfe382de2e283d5672044828b4c316bc33bce4e12fb1302439c4` |
+| `local_media_supported_builds.json` | `4efc1f0a44fcd844d77a64320bd6fd92781604368cc018d6adbe8cdbb5db4f46` |
+| `test_local_media_gate.py` | `4f3f02ae7a28f6a13ced3b5d0ff7ce85d0795fb0fdf864471b815f4a9841c416` |
+| `test_skeleton_layout.py` | `52f19ad67250c3efda1d780b300afb5cd7dcc4fb2e77d8f2c01566fe1fde59ed` |
+
+## S6b listener binding source written (2026-10-01, review pending) *(historical; the qualifier it binds is retired)*
+
+Source and focused tests only; **S6, S6b, S4 and S5 stay unchecked** and no reviewer checklist item is
+marked. Root review and an independent Opus security review of the exact implementation are still
+required. Implements the [S6b freeze](ROOT_DECISIONS.md#s6b-listener-binding-freeze-2026-10-01): on a
+SUPPORTED build only, `adapter.open_components` calls `local_media_gate.media_listener_qualifier` with
+the exact identity and a static preload. The preload proves 21 required modules against the objects
+this listener runs (plain-function and class-body-method globals, static module references, the
+adapter's own namespace) and sweeps them for split copies by identity; any failure raises and the gate
+closes. `ServerContext` gains callable `media_flag` and `media_qualified` fields (default closed) with
+exact-True accessors; no route, manifest entry, consumer, dependency inventory or approval-gate change.
+`bridge.py` and `reads.py` gain per-load set-once media module caches that their media sites read in
+place of function-local imports; the old read methods are byte-identical. A first twin call on a
+closed listener may fill a cache (the reviewed design), so the caches do not fill only inside the
+preload. The gate edit is its module docstring only (AST-identical to `fb8ae21e` apart from the module
+docstring; only the AST was compared, no loaded or compiled bytecode claim); its pin is renewed below.
+An unlocked `adapter._bridge_classes()` can publish its two caches from different package copies if
+first calls race a whole-package eviction; the preload then refuses and the first factory latches
+closed. That is a fail-closed availability residual (restart to recover), not an authority gap. The native-inventory closure remains a separate later slice before any entry.
+The full evidence, residuals and the unverified gates are in the S6b author report, not here.
+
+| File | SHA-256 (S6b) |
+| --- | --- |
+| `local_media_gate.py` (docstring only) | `4cb4646a0722c7a28d4f4fc1c8afcf3ac492e709799af778deb067300b7d9e25` |
+| `test_skeleton_layout.py` | `619497a5a68af36fca7bbcce3dfd6cde802ef71a49745dcc47bf67bc79602325` |
+| `test_local_media_listener_binding.py` | `27fc47b49e2bae422e61b8e6a0b1f73dbac6688f2a76d0afa48f6e299ef755b4` |
+
+
+## S6b repaired source acceptance (2026-10-01) *(historical; accepts the retired binder only)*
+
+The source slice is accepted after independent review of the original implementation
+and its comment/test repair. Root reverified the frozen 15-file candidate and the
+138-case focused result. The independent delta review confirmed 138 cases and 13
+causal mutant kills. Reviewer checkboxes and S6/S6b stay open for their full scope.
+Three earlier baseline contract-table failures remain recorded; no full-suite green
+is claimed. No build entry, native admission or serving route is present. See the
+[root acceptance scope](ROOT_DECISIONS.md#s6b-bounded-source-acceptance--2026-10-01).
+
+
+## C6b sampled complete-binding evidence (2026-10-02)
+
+The [r2 native sample](../../docs/research/local-media-complete-binding-sample-2026-10-02.md)
+completed 58 steps with 9,686 semantic checks and 500 writer phases. Root rechecked all 1,000
+first/second outcomes, including closed refusal reasons. Public native prompts prove the declared
+large-prompt fixture. This is M3 binding/mint research on the stated native sample, not S4 route
+cost or S5/T12 evidence. Native materialization and non-atomic residual/ABA remain; no gate,
+ceiling or release checkbox is implied. Earlier r1 measurement defects remain historical.
+
+## S5 source checkpoint (2026-10-02)
+
+The source slice is independently accepted after the three bounded amendments,
+with root clean locked CI (3613 passed, 16 native-dependent skips, one existing
+warning), 162 focused fetch cases and nine causal scratch-copy mutant kills.
+The independent reviewer reproduced 162 fetch/amendment and 308 startup/layout
+cases; all frozen candidate hashes stayed unchanged. See the
+[S5 acceptance scope](ROOT_DECISIONS.md#s5-bounded-source-acceptance-2026-10-02).
+
+S5's full serving task and T12 stay unchecked. The synthetic four-by-8-MiB
+route measurement covers its stated macOS allocation/lifecycle scenario only;
+native sample serving/cost/T12, Linux serving and phone/device/release evidence
+remain open. No live install or flag was changed.
+
+
+## Fresh native-serving harness candidate (2026-11-06)
+
+`tools/compat/local_media_native_serving_fixture.py` prepares the S4/S5 serving
+sample over native SessionDB/registry with real HMP routes and synthetic transport
+routing/authorization/compatibility. It has not executed native imports or DB work.
+It is not T12, Linux, physical acceptance or live activation evidence.
+
+Independent repair review accepted canonical scratch SQLite URI handling, retained
+partial setup and bounded source inventory. Both native and HMP/test trees must be
+private source-only copies: no symlink directories, bytecode, alternate import
+artifacts or preloaded foreign HMP/native/test modules. Selected module file
+origins are checked; dependency/site startup remains a trusted-runtime premise,
+and Python audit hooks are not an OS sandbox. The materializer and exact entry
+still require review before the first native run.
+
+Root passes 32 guard tests on Python 3.11.15 and 3.14.4. An overlapping 277-case
+S4/S5/guard regression run passes after changing test helpers to retain partial
+Rig/Env owners before constructor effects. Real fixture-store fault coverage
+proves cleanup after a post-store setup failure. Source guard results do not tick
+S4/S5/T12/R2/R3; source/native/device/activation scope remains separate.
+
+
+### Materializer and entry checkpoint (2026-11-06)
+
+`tools/compat/local_media_native_serving_driver.py` prepares private source-only
+Git archives and a fixed isolated child entry. It refuses custom tar filters,
+unsafe archive members and noncanonical report shapes. The retained command
+runner treats expired observation as refusal and waits on the same child; it does
+not restart work. The entry selects the private working folder before importing
+the copied harness. Selected dependency/site startup remains a trusted premise.
+
+Root passes 29 driver checks, including a real isolated entry subprocess with a
+stdlib-only stub (no native module/database), and 32 existing harness guards:
+61 combined checks on Python 3.14.4. These checks do not execute Git/native serving
+commands. The initial wrong-working-folder handoff was independently identified
+and repaired. Whole materializer/entry review and the first real native sample
+remain pending; no serving, T12, Linux, phone or activation gate is closed.
+
+Literal tree/blob binding now rejects export-attribute omissions, substitutions,
+extra source entries and wrong executable modes. Git replacement objects, lazy
+fetching, protocols, prompts and fsmonitor are disabled; the selected Git minimum
+is 2.54.0. A bounded 8-MiB tree read leaves the command runner default 64-KiB
+limit unchanged for existing callers. Root also passes the 56 portable command
+runner regression checks; its Darwin native case was deliberately not rerun.
+
+The first controlled materialization stopped before native entry: 143,421,440-byte
+tar framing exceeded the initial 128-MiB archive ceiling, while its 12,185 source
+files totaled 133,762,797 bytes, below the unchanged 128-MiB source budget.
+Independent review accepted a separate 160-MiB tar ceiling; source/file/entry
+bounds remain unchanged. All original Git actors were observed terminal. This
+setup refusal is preserved separately and is not native-serving evidence.
+
+
+### Actual materialization and native-import outcome (2026-11-06)
+
+Independent source review accepted `899f7ea` and the separate tar-framing repair.
+A fresh-root attempt on `ada0f0b` completed literal native/HMP snapshot verification
+and launched the isolated entry. The child terminated with `ModuleNotFoundError:
+No module named 'ruamel'` while importing the selected native registry's
+dependencies. This is a setup failure before database/HTTP work, not a serving
+pass or timeout. All 11 recorded command actors were observed terminal; the two
+expected absent-config probes returned 1, and the native child returned 1.
+
+Private original artifacts remain at
+`/private/tmp/hermes-media-native-serving-framing-311-20261106-run`; they are not
+reused or modified for a subsequent attempt. Prepare a fresh source/lock-backed
+PM environment with isolated home/runtime/cache, rather than adding dependencies
+piecemeal or borrowing the live gateway environment. Preserve the original failed
+setup separately. Native serving/cost/T12, Linux, physical and activation gates
+remain open. No live config, device grant or deployment changed.
+
+
+### Clean native runtime exposed missing plugin dependency (2026-11-06)
+
+Fresh explicit-source PM builds succeeded at pinned Python 3.14.9 with unchanged
+native source/locks. The first selected only `test` (pytest is actually in `dev`);
+a new `dev`/`test` output then reached the harness but lacked aiohttp. Each attempt
+was terminal before DB/HTTP work; none is a serving pass.
+
+This latter failure reproduced a packaging issue: native `ed1afb08` declares
+aiohttp only in optional extras, while HMP's root/subdir manifests omitted it.
+A focused repair explicitly declares the bounded patched HTTP dependency in both
+shipping manifests and the server project, and advances only that package in the
+server lock. Native source/locks are unchanged; no live plugin installation or
+provider configuration occurs. Combined plugin-resolution qualification remains
+separate from an isolated native sample with the pinned HTTP library present.
+
+
+## Bounded native serving sample completed (2026-11-06)
+
+Root completed the fresh Darwin sample at HMP `3d7d08c` / native `ed1afb08`:
+real native scratch storage/registry, descriptor mint and authenticated image
+fetch, with synthetic authority/compatibility. HTTP byte/header controls, eligible
+second-device positive control, foreign device/profile refusal, changed file and
+cleared message refusal, between-phase bot revocation and device revocation
+completed. Borrows/releases 25/25, native close, zero scoped sweep, listener close
+and actual worker joins were observed. Eleven command actors were terminal plus
+the outer controller; no timeout/settlement path occurred. Independent read-only artifact
+review accepted the exact bindings and bounded observations; no reviewer execution.
+A separate 320-case descriptor/fetch/guard regression passed on Python 3.14.9 and
+aiohttp 3.14.5 (23.40 seconds).
+
+[The sample report](../../docs/research/local-media-native-serving-sample-2026-11-06.md)
+records source/runtime pins, 28 synthetic Darwin probe absences, three own-FD
+listings, two public OS metadata reads and the exact limits. Thirteen terminal
+attempts are preserved; only one is a validated completion. Earlier incorrect
+late-file/row expectations were corrected to the established S5 contract, not
+made into a new production guarantee. Native cost/T12, Linux, actual producer,
+full plugin PM union, physical rendering and activation gates remain unchecked.
+
+
+## C1a current native cache compatibility (2026-11-06)
+
+Current native `ed1afb08` writes generated images to `cache/generated/images`;
+the legacy-only HMP selector discarded them. The independently reviewed C1a
+amendment now supports exactly that root plus `cache/images`, with flat names,
+raw-digest namespace binding, descriptor-pinned ancestor revalidation and no
+fallback. Existing ownership, flags, minimum/API policy and limits are unchanged.
+Historical source hash constants remain intact behind an exact reviewed inverse.
+
+The source `d6c79d6` native sample used the actual cache writer and response helper
+three times under scratch profile ContextVar scope, restored each token, then
+completed real native storage/HMP serving controls across both layouts. Source,
+28 artifacts, runtime, closed report and cleanup bindings were independently
+accepted read-only. Sixteen focused layout/witness checks and a separate 800-case
+regression passed.
+
+[The sample record](../../docs/research/local-media-native-cache-layouts-2026-11-06.md)
+distinguishes native cache-helper evidence from provider generation, deferred/
+Desktop runtime scope, cost/T12, Linux, complete plugin PM, phone rendering and
+activation; those gates remain open. No live permissions, settings or deployment
+changed.
+
+## Exact shipping dependency-union sample (2026-11-06)
+
+PR128 integrated at `4bab0cd` after both full exact-source CI runs passed all
+jobs (7,415 tests, 33 skips, 18 warnings, 190 subtests plus Unicode jobs).
+The two omitted historical active-batch witnesses now use the exact reviewed
+inverse, preserving byte reads and original SHA constants.
+
+One isolated native PM build resolved and installed the three shipping HMP
+manifest dependencies with the pinned native core graph. All 12,189 original
+inputs remained unchanged. This closes only the sampled dependency-union build
+gap; full plugin installation/loading and activation remain separate. The first
+environment-preflight refusal is preserved. See
+[the PM sample](../../docs/research/local-media-native-pm-union-2026-11-06.md).
+At that dependency-union checkpoint, C6b/T12, Linux, production provider/Desktop
+scope and physical display/activation remained unchecked. The later T12 sampled
+Darwin observation below supersedes only that measurement status; no broader
+S4/S5/R2/R3 completion is inferred.
+
+## Native four-fetch memory observation (2026-11-06)
+
+One source `8f16c1f` sample now records four simultaneous 8 MiB native-backed
+fetches and four cancelled handlers whose actual late workers retained all
+permits. Both cases refused the eligible fifth request without new phase-one
+work. Active/cancelled traced peaks 42,702,643 / 42,648,222 bytes and RSS increments
+41,615,360 / 12,533,760 bytes pass the unchanged 96 / 128 MiB ceilings. The
+combined process includes bounded streaming clients; each case has its own trace
+session, while RSS high-water is cumulative. Native borrows/releases 46/46,
+database close, zero scoped sweep, listener close and actual worker joins passed.
+
+Independent read-only review accepted 28 artifact bindings, source/literal Git
+identities, runtime and terminal report/receipt. Root's separate 114 guard cases
+passed; reviewer execution is not claimed. This completes the T12 sampled Darwin
+measurement row, not platform, provider, device or release qualification. No
+broader source/release checkbox is closed. See
+[the exact record](../../docs/research/local-media-native-memory-2026-11-06.md).
+
+## C6b current native refresh: reuse established work (2026-11-06)
+
+The independently confirmed [source reuse audit](../../docs/research/local-media-binding-reuse-audit-2026-11-06.md)
+finds all eight measured capture/classification/binding bridge methods and the
+complete binding/registry/Reads files byte-identical to the historical complete-
+binding study. No implementation rewrite is needed for those methods. Current
+scanner/sidecar/candidate code and three owning native read implementations
+differ. Reuse the established shapes and writer/control/residual assertions, but
+refresh the current native helper/DB lifecycle, timing and allocation evidence.
+The old 500 writer phases are historical evidence, not a new current run.
+C6b remains open; no extra HTTP/provider/Linux/device prerequisite is added to it.
+
+## Current complete-binding cost stage (2026-11-06)
+
+At `85c83f8`, all 24 selected workload pairs completed: 72 warm timing values,
+24 Python allocation traces, both proof contexts and exact full prompts. Each
+process balanced 40/40 borrows and closed its workload/original databases and
+listener/workers. [Exact method and results](../../docs/research/local-media-native-binding-cost-2026-11-06.md).
+Independent aggregate artifact review accepted all 24 reports, 672 artifact
+and source/Git/runtime bindings; 235 focused guards/lint passed.
+The earlier observation-expired actor settled but remains refused. Current
+mint-memory, RSS and writer/control/refusal/residual/ABA stages remain open.
+C6b and delivery/release rows remain unchecked. No live activation occurred.
+
+## Current modeled mint-memory stage (2026-11-06)
+
+At `6453386`, all 24 native-bound modeled mint samples completed and passed
+independent artifact/source review: 1,160 refs, 672 artifact bindings, 35/35
+borrows per run, closed DBs/listener/workers and no observation expiry.
+[Method/results](../../docs/research/local-media-native-mint-memory-2026-11-06.md)
+cover fresh production registry/Binding/descriptor allocation with shared inputs,
+not input-index construction, binding, S4 authorization/event-loop, RSS/native-C
+or full-capacity registry memory. Root's 277 focused guards/lint passed.
+Current RSS/writer/control/refusal/residual/ABA work and C6b remain open.
+
+## Current binding RSS observations (2026-11-06)
+
+At `e299092`, all 24 fresh-process warm-binding RSS cases completed and passed
+independent artifact/source review: 672 artifact bindings, 36/36 borrows per
+process and known commands/database/listener/worker closure.
+[Method/results](../../docs/research/local-media-native-binding-rss-2026-11-06.md)
+retain raw current/peak snapshots, signed deltas and prior peaks; 17 zero-new-peak
+cases do not imply zero allocation. Root's 328 focused guards/lint passed.
+Current writer/control/refusal/residual/ABA evidence remains required; C6b stays
+unchecked. No native-C, Linux, physical display, activation or release pass follows.
+
+## Current writer refresh foundation (2026-11-06)
+
+- [x] **CW1** Inert owned-actor/read-hook source and independent foundation review
+  at `89703b8`: 21 causal models, 349 combined focused checks/lint. Initial
+  ambiguous-release witness blocker repaired and independently accepted.
+- [ ] **CW2** Native fixture DB-close/restore barriers retain every actual actor
+  and uncertain borrow/release debt, including partial setup and failed hooks.
+- [ ] **CW3** Explicit public-API applicability, before/after scheduling and exact
+  first/second outcome oracles across the full declared workload/selector matrix.
+- [ ] **CW4** Independent exact-source entry review, genuine native writer/control/
+  refusal/residual/ABA execution and artifact readback; no old500count transfer.
+- [ ] **CW5** Scoped current evidence documentation; preserve unresolved native
+  non-atomic/ABA and G-M1/G-M2 and separate platform/device/release gates.
+
+[Writer contract](NATIVE_BINDING_WRITER_REFRESH.md). CW1 is foundation acceptance
+only, not C6b completion or native writer execution.
+
+## Writer integrated source and bounded pilot (2026-11-06)
+
+CW2's native DB-close/global cleanup barriers and the currently declared subset
+of CW3 oracles are implemented and independently accepted for a bounded pilot.
+At `8167016`, all 12 pilot phases and 24 first/second outcomes passed independent
+artifact/source/runtime readback. Each process balanced 39/39 borrows and closed
+its writer/hooks/DB/listener/workers; all 132 command outcomes were known.
+Root's 559 focused guards/lint passed.
+
+[Exact scope](../../docs/research/local-media-native-writer-pilot-2026-11-06.md)
+preserves the native guard refusal, surviving-selector semantics, residual stale
+acceptance and Phone-store ABA acceptance. Full 624-phase execution requires a
+reviewed storage/layout plan; native fork/reset applicability and other coverage
+remain open. CW3/CW4/CW5 and current C6b remain unchecked. No native safety
+limitation is reclassified as a fix or a physical/release qualification.
+
+### CW3 constructed child isolation candidate, 2026-11-06
+
+- [ ] Independently review `branch_child`/`reset_child` public-API synthetic
+  lineage facts and unchanged parent binding oracles; 247 focused models passed.
+- [ ] Verify the new cases on pinned native source after source acceptance.
+  Declared matrix is now 768 phases; prior 12-phase pilot remains its exact
+  historical scope. Actual gateway fork/reset admission is not covered by child
+  construction and remains separately assessed. Preserve storage and actor gates.
+
+- [ ] Read back the four child native phases at `befa0f7` independently (112
+  artifacts, eight parent outcomes); no full matrix/gateway admission claim.
+- [ ] Review pure 768-phase/384-pair planner, then implement two fresh DB scopes
+  per process with explicit closed checkpoints and unchanged deadline. Planner
+  models pass; paired execution is not implemented by the planner.
+
+- [x] Independent four-child artifact readback accepted: exact112 artifacts and
+  source/runtime/outcome/closure bindings; bounded constructed-child scope only.
+- [ ] Paired runner source implemented with two exclusive DB scopes and closed
+  checkpoints; independent source review and unchanged-budget native pilot pending.
+
+- [x] Independent paired source review accepted after canonical checkpoint type
+  repair, before native execution. Two largest-shape native processes/four phases
+  at `f6c693f` passed independent 60-artifact/checkpoint/source/runtime readback.
+- [ ] Execute and independently review all 768 declared phases with capacity
+  preflight/reserve and unchanged actor/deadline/security rules. Current bounded
+  pilots are not the full matrix; operational gateway reset admission stays distinct.
+
+- [x] Independently review full-matrix orchestration and expected-source guard:
+  one attempt per exclusive root, per-admission 32 GiB+1 GiB capacity check,
+  no deletion/retry/resume and unchanged native actor refusal/settlement.
+- [ ] Root execute all 384 pairs and independently reconcile every phase,
+  source/runtime/checkpoint identity and actor/database cleanup before matrix pass.
+
+### Isolated D2 divergence follow-up
+
+- [ ] Independently review ordinary-child public-fact construction and exact
+  first/fresh-second Bot/Phone refusal oracles; source applicability accepted.
+- [ ] Independently review delegate marker isolation and expanded 912-phase
+  inventory, preserving separately running 768-phase source/evidence binding.
+- [ ] Native supplemental execution/reuse audit after source acceptance; do not
+  relabel previous artifacts as the new runner or claim actual gateway admission.
+
+- [x] Independent base/new Git/AST/inventory reuse audit accepted for explicit
+  two-source evidence only; no execution completion inferred.
+- [ ] Review explicit 72-pair supplemental scope, whose completed result cannot
+  assert full-matrix completion. Execute after prior full run settles; retain
+  separate source bindings, artifacts and independent readback.
+
+- [x] Optional archive-clone driver source independently accepted for one sample;
+  679 root model/guard checks and lint passed. Fresh largest Bot ordinary-child
+  cached single phase completed at `0397803`; no expiry/fallback, 39/39 borrows.
+- [x] Independent cached sample readback accepted all 26 artifacts and source/
+  runtime/clone bindings; one largest Bot ordinary-child phase only.
+- [ ] Review broader heavy single-phase partition and all remaining scope.
+
+- [x] Pure remaining partition source independently accepted: exact historical
+  catalog digest, 301 jobs / 418 unattempted phases, refused pair excluded.
+- [x] Separately reviewed two fresh single-phase experiments accepted at
+  `5c96927`: all 52 artifacts/source/runtime/entry/cache bindings and cleanup.
+  The original paired refusal remains refused, not retroactively passed.
+- [ ] Completed-prefix full artifact review and remaining-plan execution owner
+  integration/admission; supplemental144 and final composite coverage still open.
+
+- [x] Independently review the pure [child-lineage supplement partition](NATIVE_WRITER_SUPPLEMENT_PARTITION.md): preserve all 144 added phases in 90 prospective jobs, exact expanded-catalog coordinates, heavy-only splitting and no execution authority. Root 23 pure partition cases and independent source review pass; native supplemental execution/admission and final composite coverage remain open.
+- [x] Independently review the explicit supplemental-only execution owner: fresh roots, per-job capacity/source/cache checks, pre-effect attempt record, retained failure and no replay. Root 13 causal models plus 23 pure partition tests and lint pass. No native supplement run is claimed.
+- [x] Admit and execute the reviewed supplemental scope after the base-tail batch becomes authoritatively terminal; independently verify all actual source/runtime/report/command/checkpoint and cleanup artifacts. All 144 fresh phases completed with 3,744 artifacts and 1,810,368 copied-source identities independently accepted.
+- [x] Independently reconcile all 912 exact declared phase identities across the six actual-source evidence scopes, preserving original paired refusals, fresh-single contexts and residual/ABA limitations. [Bounded composite evidence](../../docs/research/local-media-native-writer-composite-2026-11-06.md). This does not close C6b root disposition, delivery, activation or device/release gates.
+- [x] Independently accept the base-tail completed prefix after job 201 observation refusal: 201 completed jobs / 296 phases, not the full planned scope. Preserve the original pair-174 and new origin-pair-323 refusals; cause remains unproven. Independent review accepted all 5,416 artifacts and 2,526,369 copied source identities in the completed prefix only; no retry, deadline extension or later native admission follows.
+- [x] Independently review explicit supplemental `per_phase_v2` layout: exactly the same ordered 144 observations in 144 single-phase jobs; historical `heavy_only_v1` remains default and no failure-driven switching/replay occurs. Root 45 pure/fake-driver tests and lint pass. Timing improvement and native admission remain unproven.
+- [x] Independently review the pure [second-tail partition](NATIVE_WRITER_SECOND_TAIL_PARTITION.md): exactly 120 never-started phases after job 201, preserving every ordered coordinate/workload and excluding both refusals. Root 64 related pure/fake-driver cases and configured lint pass. No source/receipt acceptance, execution owner or native admission follows from this plan.
+
+- [x] Independently accept all 120 never-started single-phase observations at exact source 5e247a6: 3,120 artifacts, 1,508,640 copied source identities, 240 outcomes and 1,200 known commands without settlement; all borrows/DB/listener/workers/hooks/writers closed. No old paired refusal or full-matrix timing result is promoted.
+- [x] Review the exact new Phone-pair-323 phase plan/controller (38 admission causals), execute its two fresh single-phase observations, and independently accept 52 artifacts / 25,144 copied source identities and known cleanup. Process-startup/cumulative-resource/timing context differs from the original paired attempt, which remains refused.
+- [ ] Complete and independently accept the full 144-phase ordinary/delegated-child supplement. The reviewed controller 43ba4592 is now running explicit per_phase_v2 from frozen 5e247a6 with all 17 evidence pins checked before each unchanged original driver call. Capacity exit 0 alone is not completion; original 12-second observation/retained settlement/no retry rules remain.

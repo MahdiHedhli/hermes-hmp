@@ -27,8 +27,9 @@ Middleware order (outermost first):
    into the `AppRunner`, so aiohttp's own internal logging of these faults — which otherwise
    includes the peer address and that same raw text via `exc_info` — never reaches the log either;
    it always emits exactly `event=http_parse_error outcome=bad_request`.
-5. `compat` (ERR-2a): on an unsupported build every path except `/hmp/v1/ready` answers
-   `503 other {why}` and nothing else runs, so no bridge call is possible.
+5. `compat` (ERR-2a): on an unsupported build every path except `/hmp/v1/ready` and the
+   authenticated readiness capability path answers `503 other {why}`. The capability handler
+   returns only its fixed compatibility projection and does not call the bridge.
 
 Rate limits (TR-6) are applied inside the P2, P4 and P5 handlers, because the contract orders
 them against the body checks and keys two of them on body fields.
@@ -44,16 +45,46 @@ import contextlib
 import ipaddress
 import json
 import logging
+import os
+import re
 import ssl
+import sys
+import threading
+import time
 from collections.abc import Awaitable, Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from functools import partial
 from pathlib import Path
 from typing import Any
 
 from aiohttp import web
 from aiohttp.http_exceptions import LineTooLong
 
-from . import direct_send, wire
+from . import (
+    approval_test_authority,
+    approval_test_host_codec,
+    approval_test_host_transport,
+    approval_test_producer,
+    approval_test_routes,
+    approval_test_service,
+    compat,
+    controls_request_routes,
+    direct_send,
+    media_emission,
+    media_fetch,
+    media_readiness,
+    mobile_cron,
+    mobile_model,
+    presentation_native_service,
+    presentation_routes,
+    prompts,
+    push_registration,
+    push_resolve,
+    readiness,
+    wire,
+)
+from .auth import Authenticator
+from .authorize import ensure_chat
 from .contract import (
     CONTRACT_REVISION,
     HISTORY_LIMIT_DEFAULT,
@@ -62,9 +93,11 @@ from .contract import (
     MAX_HEADER_BYTES,
     PATH_PREFIX,
     RATE_AUTHORIZE_PER_MIN_PER_DEVICE_ID,
+    RATE_PROMPT_ACTION_PER_MIN_PER_DEVICE,
+    RATE_PROMPT_READ_PER_MIN_PER_DEVICE,
     RATE_READ_PER_MIN_PER_DEVICE_ID,
     RATE_SESSIONS_LIST_PER_MIN_PER_DEVICE_ID,
-    READ_COMPAT_EXEMPT_PATH,
+    READ_COMPAT_EXEMPT_PATHS,
     READ_COMPAT_REFUSALS,
     SESSION_LIST_LIMIT_DEFAULT,
     SESSION_LIST_LIMIT_MAX,
@@ -73,6 +106,7 @@ from .contract import (
     SNAPSHOT_LIMIT_MAX,
     SUPPORTED_VERSIONS,
     WATCHDOG_INTERVAL_S,
+    AuthzState,
     DirectSendOutcome,
     DirectSendRequest,
     ErrorCode,
@@ -81,14 +115,17 @@ from .contract import (
     OtherWhy,
     WriteGateState,
 )
+from .gate import direct_send_gate
 from .identity import set_ssl_context_attr
 from .logging_policy import (
     LOGGER_NAME,
     AllowListedAccessLogger,
+    log_bridge_exception,
     log_event,
     log_handler_exception,
 )
 from .pairing import handle_pair_complete, handle_pair_request
+from .push_dispatch import PushDispatcher, RelayPort
 from .reads import require_bot_authorized
 
 # `request_ctx` is the leaf module `ServerContext`/`CTX_KEY`/`context()`/the body and bearer
@@ -113,12 +150,21 @@ from .request_ctx import (
     peer_key,  # noqa: F401
     read_json_body,
 )
+from .request_ctx import (
+    ReadWorkerBudget as ReadWorkerBudget,
+)
 from .revoke import handle_self_revoke
 from .tokens import handle_token
+
+_AT1_SERVER_MODULE = sys.modules[__name__]
 
 # The F1 route table (server-modules.md). Method, path under PATH_PREFIX, clause.
 F1_ROUTES: tuple[tuple[str, str, str], ...] = (
     ("GET", "/ready", "PR0-1"),
+    ("GET", "/readiness/capabilities", "AR1"),
+    ("GET", "/bots/{p}/readiness", "AR1"),
+    ("GET", "/bots/{p}/media-readiness", "LM-ENT1"),
+    ("GET", "/media-readiness/capabilities", "LM-ENT1"),
     ("POST", "/pair/request", "PR2"),
     ("POST", "/pair/complete", "PR4"),
     ("POST", "/auth/token", "PR5"),
@@ -136,6 +182,7 @@ F1_ROUTES: tuple[tuple[str, str, str], ...] = (
 A1_SESSION_ROUTES: tuple[tuple[str, str, str], ...] = (
     ("GET", "/bots/{p}/sessions", "SES-1"),
     ("GET", "/bots/{p}/sessions/{ref}/messages", "SES-2"),
+    ("GET", "/bots/{p}/sessions/{ref}/messages/from-start", "SES-2a"),
 )
 
 # Amendment F2 (direct send, HMP_V1.md §7a): DS-1/DS-8. Unlike A1_SESSION_ROUTES, these are
@@ -145,6 +192,54 @@ A1_SESSION_ROUTES: tuple[tuple[str, str, str], ...] = (
 F2_DIRECT_SEND_ROUTES: tuple[tuple[str, str, str], ...] = (
     ("POST", "/bots/{p}/chat/messages", "DS-1"),
     ("GET", "/bots/{p}/chat/messages/by-client-id/{cmid}", "DS-8"),
+)
+
+# Host-local generated images (HMP_V1.md §7e, LM-10; spec 011 S5). ALWAYS registered, GET only
+# (`allow_head=False`): the gate, owner, flag and availability checks run per request inside the
+# handler, never by withholding the route.
+S5_MEDIA_ROUTES: tuple[tuple[str, str, str], ...] = (("GET", "/bots/{p}/media/{ref}", "LM-10"),)
+
+# Local-startup-only, authenticated self-request surface. Static paths precede the
+# request-id matcher. There is no remote host allow/deny route.
+CONTROLS_REQUEST_ROUTES: tuple[tuple[str, str, str], ...] = (
+    ("GET", "/devices/self/controls-requests/capabilities", "AR1-RQ"),
+    ("GET", "/devices/self/controls-requests/by-client-id/{client_id}", "AR1-RQ"),
+    ("POST", "/devices/self/controls-requests", "AR1-RQ"),
+    ("POST", "/devices/self/controls-requests/{request_id}/cancel", "AR1-RQ"),
+    ("GET", "/devices/self/controls-requests/{request_id}", "AR1-RQ"),
+)
+
+# Amendment F3 (approvals and Phone chat, HMP_V1.md §7b). Always registered. The direct-send
+# gate is re-checked per request; flag off is `503 write_gate_closed`, not `404`.
+F3_APPROVAL_ROUTES: tuple[tuple[str, str, str], ...] = (
+    ("GET", "/bots/{p}/prompts", "AP-3"),
+    ("POST", "/bots/{p}/prompts/{request_id}", "AP-4"),
+    ("POST", "/bots/{p}/phone/messages", "AP-6"),
+)
+
+PUSH_REGISTRATION_ROUTES: tuple[tuple[str, str, str], ...] = (
+    ("GET", "/push/registration", "PN-REG-1"),
+    ("PUT", "/push/registration", "PN-REG-2"),
+    ("DELETE", "/push/registration", "PN-REG-3"),
+)
+
+PUSH_RESOLVE_ROUTES: tuple[tuple[str, str, str], ...] = (
+    ("POST", "/push/hints/resolve", "PN-RES-1"),
+)
+
+MOBILE_CRON_ROUTES: tuple[tuple[str, str, str], ...] = (
+    ("GET", "/bots/{p}/jobs", "CR-1"),
+    ("POST", "/bots/{p}/jobs", "CR-2"),
+    ("PATCH", "/bots/{p}/jobs/{job_id}", "CR-3"),
+    ("DELETE", "/bots/{p}/jobs/{job_id}", "CR-4"),
+    ("POST", "/bots/{p}/jobs/{job_id}/pause", "CR-5"),
+    ("POST", "/bots/{p}/jobs/{job_id}/resume", "CR-6"),
+)
+
+MOBILE_MODEL_ROUTES: tuple[tuple[str, str, str], ...] = (
+    ("GET", "/bots/{p}/model/default", "MD-1"),
+    ("GET", "/bots/{p}/model/options", "MD-2"),
+    ("PUT", "/bots/{p}/model/default", "MD-3"),
 )
 
 # aiohttp's parser limits for one request line or one header field (SEC-4: bounded at the same
@@ -157,6 +252,7 @@ PARSER_MAX_HEADERS = 64
 # Graceful shutdown bound. Direct-send background tasks are cancelled and awaited up to this
 # same bound (`HmpServer.stop`); the HTTP runner uses it too.
 SHUTDOWN_TIMEOUT_S = 2.0
+PUSH_PURGE_INTERVAL_S = 3600
 
 ACCESS_LOGGER_NAME = LOGGER_NAME + ".access"
 STORE_FILENAME = "hmp.sqlite3"
@@ -300,9 +396,9 @@ async def limits_middleware(request: web.Request, handler: Handler) -> web.Strea
 
 @web.middleware
 async def compat_middleware(request: web.Request, handler: Handler) -> web.StreamResponse:
-    """ERR-2a: on an unsupported build, only `/hmp/v1/ready` is served (FR-044a)."""
+    """ERR-2a: readiness capabilities is the one authenticated additive exception (AR1)."""
     ctx = context(request)
-    if not ctx.compat.supported and request.path != READ_COMPAT_EXEMPT_PATH:
+    if not ctx.compat.supported and request.path not in READ_COMPAT_EXEMPT_PATHS:
         why = ctx.compat.why or OtherWhy.HERMES_BUILD_UNSUPPORTED
         refusal = READ_COMPAT_REFUSALS.get(why)
         if refusal is None:  # never expected; fail closed on the build-unsupported refusal
@@ -332,6 +428,412 @@ async def handle_ready(request: web.Request) -> web.Response:
             "guarantees": ctx.guarantees(),
             "write_gate": ctx.reported_write_gate(),
         }
+    )
+
+
+_READINESS_PROFILE_RE = re.compile(r"[a-z0-9][a-z0-9_-]{0,63}")
+_READINESS_WORKER_SLOTS = 4
+_READINESS_DEADLINE_S = 2.0
+
+
+def _readiness_empty_get(request: web.Request) -> None:
+    if (
+        request.query
+        or (request.content_length is not None and request.content_length != 0)
+        or request.headers.get("Transfer-Encoding") is not None
+    ):
+        raise HmpError(ErrorCode.BAD_REQUEST)
+
+
+def _readiness_capabilities(ctx: ServerContext) -> dict[str, object]:
+    return {"protocol": 1, "features": readiness.capability_snapshot(ctx.compat)}
+
+
+def _readiness_bearer(request: web.Request) -> Any:
+    """Keep definitive bearer refusals; collapse failures to establish authority to fixed 503."""
+    try:
+        return bearer(request)
+    except HmpError as exc:
+        if exc.code in {
+            ErrorCode.UNAUTHENTICATED, ErrorCode.REVOKED, ErrorCode.WRONG_INSTANCE,
+        }:
+            raise
+        raise HmpError(ErrorCode.READINESS_UNAVAILABLE) from None
+    except Exception:
+        raise HmpError(ErrorCode.READINESS_UNAVAILABLE) from None
+
+
+async def handle_readiness_capabilities(request: web.Request) -> web.Response:
+    _readiness_empty_get(request)
+    _readiness_bearer(request)  # compatibility-exempt, never disclosed before authentication
+    try:
+        ctx = context(request)
+        body = wire.dump_json(_readiness_capabilities(ctx))
+    except Exception:
+        raise HmpError(ErrorCode.READINESS_UNAVAILABLE) from None
+    if len(body) > readiness.MAX_RESPONSE_BYTES:
+        raise HmpError(ErrorCode.READINESS_UNAVAILABLE)
+    return web.Response(
+        body=body,
+        content_type="application/json",
+        headers={"Cache-Control": "no-store"},
+    )
+
+
+def _readiness_now(ctx: ServerContext) -> int:
+    try:
+        value = ctx.now()
+    except Exception:
+        raise readiness.ReadinessUnavailableError() from None
+    if type(value) is not int or not 0 <= value <= readiness.MAX_SAFE_INTEGER:
+        raise readiness.ReadinessUnavailableError()
+    return value
+
+
+def _readiness_feature_statuses(ctx: ServerContext) -> dict[str, tuple[str, str | None]]:
+    compat_result = ctx.compat
+    eligibility = getattr(compat_result, "eligibility", None)
+    statuses = getattr(eligibility, "features", None)
+    if not isinstance(eligibility, compat.Eligibility) or not isinstance(statuses, Mapping):
+        raise readiness.ReadinessUnavailableError()
+    return {
+        "jobs": readiness.capability_axis(statuses.get(compat.Feature.JOBS)),
+        "model": readiness.capability_axis(statuses.get(compat.Feature.MODEL)),
+    }
+
+
+def _readiness_authority_check(
+    ctx: ServerContext,
+    *,
+    authorization: str | None,
+    instance: str | None,
+    expected: Any,
+    profile: str,
+    generation: str,
+    deadline: float,
+) -> None:
+    if time.monotonic() >= deadline:
+        raise readiness.ReadinessUnavailableError()
+    current_generation = ctx.readiness_generation
+    if (
+        not isinstance(current_generation, str)
+        or readiness.GENERATION_RE.fullmatch(current_generation) is None
+        or current_generation != generation
+    ):
+        raise readiness.ReadinessUnavailableError()
+    try:
+        if ctx.identity.still_current() is not True:
+            raise readiness.ReadinessUnavailableError()
+        current = Authenticator(ctx.store, ctx.iid, ctx.now).authenticate(authorization, instance)
+    except HmpError:
+        raise
+    except readiness.ReadinessUnavailableError:
+        raise
+    except Exception:
+        raise readiness.ReadinessUnavailableError() from None
+    if current != expected:
+        raise HmpError(ErrorCode.NOT_FOUND)
+    bridge = ctx.bridge
+    if bridge is None:
+        raise readiness.ReadinessUnavailableError()
+    try:
+        state = bridge.authz_state(current.user_id, profile)
+    except Exception:
+        raise readiness.ReadinessUnavailableError() from None
+    if not isinstance(state, AuthzState):
+        raise readiness.ReadinessUnavailableError()
+    if state is AuthzState.UNVERIFIABLE:
+        raise readiness.ReadinessUnavailableError()
+    if state is not AuthzState.AUTHORIZED:
+        raise HmpError(ErrorCode.NOT_FOUND)
+
+
+def _readiness_controls(ctx: ServerContext, device_id: str) -> str:
+    decision = ctx.store.readiness_owner_controls_value(device_id)
+    if decision is not None:
+        return "granted" if decision == 1 else "missing"
+    reader = ctx.readiness_owner_device_ids
+    if reader is None:
+        raise readiness.ReadinessUnavailableError()
+    ids = reader()
+    if not isinstance(ids, frozenset) or any(not isinstance(item, str) for item in ids):
+        raise readiness.ReadinessUnavailableError()
+    return "granted" if device_id in ids else "missing"
+
+
+def _readiness_host_settings(ctx: ServerContext) -> dict[str, str]:
+    reader = ctx.readiness_settings
+    if reader is None:
+        raise readiness.ReadinessUnavailableError()
+    extra = reader()
+    if not isinstance(extra, Mapping):
+        raise readiness.ReadinessUnavailableError()
+    result: dict[str, str] = {}
+    for feature, key in (("jobs", "cron"), ("model", "model_management")):
+        if key not in extra:
+            result[feature] = "disabled"
+            continue
+        block = extra[key]
+        if not isinstance(block, Mapping):
+            raise readiness.ReadinessUnavailableError()
+        if "enabled" not in block:
+            result[feature] = "disabled"
+            continue
+        enabled = block["enabled"]
+        if type(enabled) is not bool:
+            raise readiness.ReadinessUnavailableError()
+        result[feature] = "enabled" if enabled else "disabled"
+    return result
+
+
+def _collect_readiness(
+    ctx: ServerContext,
+    *,
+    authorization: str | None,
+    instance: str | None,
+    expected: Any,
+    profile: str,
+    device_id: str,
+    deadline: float,
+    generation: str,
+) -> dict[str, object]:
+    if not isinstance(generation, str) or readiness.GENERATION_RE.fullmatch(generation) is None:
+        raise readiness.ReadinessUnavailableError()
+    _readiness_authority_check(
+        ctx, authorization=authorization, instance=instance, expected=expected,
+        profile=profile, generation=generation, deadline=deadline,
+    )
+    statuses = _readiness_feature_statuses(ctx)
+    entitlement = _readiness_controls(ctx, device_id)
+    _readiness_authority_check(
+        ctx, authorization=authorization, instance=instance, expected=expected,
+        profile=profile, generation=generation, deadline=deadline,
+    )
+    settings = _readiness_host_settings(ctx)
+    _readiness_authority_check(
+        ctx, authorization=authorization, instance=instance, expected=expected,
+        profile=profile, generation=generation, deadline=deadline,
+    )
+    bridge = ctx.bridge
+    if bridge is None:
+        raise readiness.ReadinessUnavailableError()
+    def checkpoint() -> None:
+        _readiness_authority_check(
+            ctx, authorization=authorization, instance=instance, expected=expected,
+            profile=profile, generation=generation, deadline=deadline,
+        )
+    try:
+        profile_api = bridge.readiness_profile_api_state(profile, checkpoint=checkpoint)
+    except HmpError:
+        raise
+    except Exception:
+        raise readiness.ReadinessUnavailableError() from None
+    if profile_api not in {"configured", "missing", "unknown"}:
+        raise readiness.ReadinessUnavailableError()
+    # Profile resolution can block while operator controls or live flags change. Re-read both
+    # sources after it and discard the snapshot if either changed; the earlier values must not be
+    # disclosed as current readiness after an await.
+    current_entitlement = _readiness_controls(ctx, device_id)
+    current_settings = _readiness_host_settings(ctx)
+    if current_entitlement != entitlement or current_settings != settings:
+        raise readiness.ReadinessUnavailableError()
+    _readiness_authority_check(
+        ctx, authorization=authorization, instance=instance, expected=expected,
+        profile=profile, generation=generation, deadline=deadline,
+    )
+    checked_at = _readiness_now(ctx)
+    features: dict[str, object] = {}
+    for feature in ("jobs", "model"):
+        capability, reason = statuses[feature]
+        readiness.validate_feature_axes(capability, entitlement, settings[feature], profile_api)
+        features[feature] = readiness.feature_status_fields(
+            capability=capability,
+            capability_reason=reason,
+            entitlement=entitlement,
+            host_setting=settings[feature],
+            profile_api=profile_api,
+        )
+    return {
+        "protocol": 1,
+        "checked_at": checked_at,
+        "generation": generation,
+        "features": features,
+    }
+
+
+def _collect_media_readiness(ctx: ServerContext, **scope: Any) -> dict[str, object]:
+    # Reuse AR1's authorization/deadline fence, never its jobs/model entitlement.
+    authority = {key: scope[key] for key in (
+        "authorization", "instance", "expected", "profile", "generation", "deadline",
+    )}
+    def checkpoint() -> None:
+        _readiness_authority_check(ctx, **authority)
+    original_iid = ctx.iid
+    checkpoint()
+    decision = ctx.store.media_read_decision(ctx.iid, scope["device_id"])
+    if decision is None:
+        raise readiness.ReadinessUnavailableError()
+    decision.validate()
+    permission = ctx.media_read_permission(scope["device_id"])
+    expected_allowed = decision.allowed is True
+    if decision.allowed is None:
+        owners = ctx.owner_device_ids()
+        if type(owners) is not frozenset or any(type(item) is not str for item in owners):
+            raise readiness.ReadinessUnavailableError()
+        expected_allowed = decision.fallback_controls is not False and scope["device_id"] in owners
+    # An operational reader failure is not evidence that an operator omitted rights.
+    if (permission is not None) is not expected_allowed:
+        raise readiness.ReadinessUnavailableError()
+    entitlement = "granted" if expected_allowed else "missing"
+    if ctx.readiness_settings is None:
+        raise readiness.ReadinessUnavailableError()
+    setting = media_readiness.host_setting(ctx.readiness_settings())
+    bound = ctx.media_snapshot()
+    api = "available" if bound is not None else "unavailable"
+    checkpoint()
+    # Refuse superseded per-device rights and host settings, including changes during callbacks.
+    if (ctx.store.media_read_decision(ctx.iid, scope["device_id"]) != decision
+            or ctx.media_read_permission(scope["device_id"]) != permission
+            or media_readiness.host_setting(ctx.readiness_settings()) != setting):
+        raise readiness.ReadinessUnavailableError()
+    payload = media_readiness.project(entitlement=entitlement, host=setting, api=api)
+    checked_at = _readiness_now(ctx)
+    checkpoint()
+    # The checkpoint invokes authorization callbacks. Sample its dependent media
+    # state afterward; nothing authority-bearing may follow these comparisons.
+    if (ctx.store.media_read_decision(ctx.iid, scope["device_id"]) != decision
+            or ctx.media_read_permission(scope["device_id"]) != permission
+            or media_readiness.host_setting(ctx.readiness_settings()) != setting
+            or ctx.media_snapshot() != bound
+            or ctx.iid != original_iid
+            or ctx.readiness_generation != scope["generation"]):
+        raise readiness.ReadinessUnavailableError()
+    return {"protocol": 1, "checked_at": checked_at,
+            "generation": scope["generation"], "media": payload,
+            "_authority": (decision, permission)}
+
+
+async def handle_media_readiness_capabilities(request: web.Request) -> web.Response:
+    _readiness_empty_get(request)
+    _readiness_bearer(request)
+    # Protocol support only: never an entitlement, host opt-in, or file availability claim.
+    return web.Response(
+        body=wire.dump_json({"protocol": 1, "media_readiness": True,
+                             "remote_permission_write": False}),
+        content_type="application/json", headers={"Cache-Control": "no-store"},
+    )
+
+
+async def handle_media_readiness(request: web.Request) -> web.Response:
+    return await _handle_readiness(request, media=True)
+
+
+async def handle_readiness(request: web.Request) -> web.Response:
+    return await _handle_readiness(request, media=False)
+
+
+async def _handle_readiness(request: web.Request, *, media: bool) -> web.Response:
+    _readiness_empty_get(request)
+    try:
+        ctx = context(request)
+    except Exception:
+        raise HmpError(ErrorCode.READINESS_UNAVAILABLE) from None
+    original_cohort = (ctx.identity, ctx.store, ctx.bridge)
+    original_iid = ctx.iid
+    def media_context_current() -> bool:
+        return (context(request) is ctx
+                and ctx.identity is original_cohort[0]
+                and ctx.store is original_cohort[1]
+                and ctx.bridge is original_cohort[2]
+                and ctx.iid == original_iid
+                and ctx.readiness_generation == generation)
+    who = _readiness_bearer(request)
+    profile = request.match_info.get("p", "")
+    if _READINESS_PROFILE_RE.fullmatch(profile) is None:
+        raise HmpError(ErrorCode.BAD_REQUEST)
+    try:
+        now = _readiness_now(ctx)
+        ctx.limiter.check("readiness", who.device_id, 30, now)
+        generation = ctx.readiness_generation
+    except HmpError as exc:
+        if exc.code is ErrorCode.RATE_LIMITED:
+            raise
+        raise HmpError(ErrorCode.READINESS_UNAVAILABLE) from None
+    except Exception:
+        raise HmpError(ErrorCode.READINESS_UNAVAILABLE) from None
+    if not isinstance(generation, str) or readiness.GENERATION_RE.fullmatch(generation) is None:
+        raise HmpError(ErrorCode.READINESS_UNAVAILABLE)
+    authorization = request.headers.get("Authorization")
+    instance = request.headers.get("HMP-Instance")
+    if not ctx.read_worker_budget.reserve(operator=False):
+        raise HmpError(ErrorCode.READINESS_UNAVAILABLE)
+    deadline = time.monotonic() + _READINESS_DEADLINE_S
+    try:
+        work = asyncio.create_task(asyncio.to_thread(
+            _collect_media_readiness if media else _collect_readiness,
+            ctx,
+            authorization=authorization,
+            instance=instance,
+            expected=who,
+            profile=profile,
+            device_id=who.device_id,
+            deadline=deadline,
+            generation=generation,
+        ))
+    except Exception:
+        ctx.read_worker_budget.release(operator=False)
+        raise HmpError(ErrorCode.READINESS_UNAVAILABLE) from None
+
+    def release_worker(done: asyncio.Task[Any]) -> None:
+        with contextlib.suppress(asyncio.CancelledError):
+            done.exception()
+        ctx.read_worker_budget.release(operator=False)
+
+    work.add_done_callback(release_worker)
+    try:
+        payload = await asyncio.wait_for(asyncio.shield(work), timeout=_READINESS_DEADLINE_S)
+    except TimeoutError:
+        raise HmpError(ErrorCode.READINESS_UNAVAILABLE) from None
+    except readiness.ReadinessUnavailableError:
+        raise HmpError(ErrorCode.READINESS_UNAVAILABLE) from None
+    except HmpError as exc:
+        if exc.code is ErrorCode.READINESS_UNAVAILABLE:
+            raise HmpError(ErrorCode.READINESS_UNAVAILABLE) from None
+        raise
+    except Exception as exc:
+        log_handler_exception(exc)
+        raise HmpError(ErrorCode.READINESS_UNAVAILABLE) from None
+    if media:
+        if not media_context_current():
+            raise HmpError(ErrorCode.READINESS_UNAVAILABLE)
+        # Final synchronous authority/readback fence after the worker await. Never await
+        # between this comparison and response construction. These authority readers can
+        # perform SQLite/native config I/O; this is not a nonblocking performance claim.
+        try:
+            current = _collect_media_readiness(
+                ctx, authorization=authorization, instance=instance, expected=who,
+                profile=profile, device_id=who.device_id, deadline=deadline,
+                generation=generation,
+            )
+            if (not media_context_current()
+                    or current["media"] != payload["media"]
+                    or current["_authority"] != payload["_authority"]):
+                raise readiness.ReadinessUnavailableError()
+        except HmpError:
+            raise
+        except Exception:
+            raise HmpError(ErrorCode.READINESS_UNAVAILABLE) from None
+        payload.pop("_authority")  # internal snapshot never enters the wire DTO
+    try:
+        body = wire.dump_json(payload)
+    except Exception:
+        raise HmpError(ErrorCode.READINESS_UNAVAILABLE) from None
+    if len(body) > readiness.MAX_RESPONSE_BYTES:
+        raise HmpError(ErrorCode.READINESS_UNAVAILABLE)
+    return web.Response(
+        body=body,
+        content_type="application/json",
+        headers={"Cache-Control": "no-store"},
     )
 
 
@@ -391,6 +893,7 @@ async def handle_roster(request: web.Request) -> web.Response:
     # serves. `asyncio.to_thread` copies contextvars into the worker thread, so Hermes's own
     # profile secret-scope stays correct there too.
     result = await asyncio.to_thread(reads.roster, who.user_id)
+    result = presentation_routes.roster_capability(ctx, result)
     return _result_response(result)
 
 
@@ -419,8 +922,25 @@ async def handle_snapshot(request: web.Request) -> web.Response:
     )
     ctx.limiter.check("bots_snapshot", who.device_id, RATE_READ_PER_MIN_PER_DEVICE_ID, ctx.now())
     reads = _require(ctx.reads)
-    result = await asyncio.to_thread(reads.snapshot, who.user_id, profile, limit)
+    result = await media_emission.read(
+        ctx, who, profile, "snapshot", reads.snapshot, (who.user_id, profile, limit)
+    )
+    if hasattr(result, "open_requests"):
+        # `open_requests` carries Phone-chat prompts only (`Reads._phone_open_requests`), so it
+        # needs the `phone_chat` member as well as an approval owner and the host flag.
+        visible = (
+            ctx.is_approval_owner_device(who.device_id)
+            and ctx.direct_send_enabled()
+            and ctx.is_phone_chat_available()
+        )
+        if not visible:
+            result = replace(result, open_requests=())
     return _result_response(result)
+
+
+async def handle_media_fetch(request: web.Request) -> web.StreamResponse:
+    """LM-10: `GET /bots/{p}/media/{ref}`. The whole route lives in `media_fetch.serve`."""
+    return await media_fetch.serve(request)
 
 
 async def handle_history(request: web.Request) -> web.Response:
@@ -431,7 +951,9 @@ async def handle_history(request: web.Request) -> web.Response:
     limit = _query_int(request, "limit", default=HISTORY_LIMIT_DEFAULT, lo=1, hi=HISTORY_LIMIT_MAX)
     ctx.limiter.check("bots_history", who.device_id, RATE_READ_PER_MIN_PER_DEVICE_ID, ctx.now())
     reads = _require(ctx.reads)
-    result = await asyncio.to_thread(reads.history, who.user_id, profile, after, limit)
+    result = await media_emission.read(
+        ctx, who, profile, "history", reads.history, (who.user_id, profile, after, limit)
+    )
     return _result_response(result)
 
 
@@ -470,13 +992,51 @@ async def handle_session_messages(request: web.Request) -> web.Response:
     )
     reads = _require(ctx.reads)
     if after == 0:
-        result: Any = await asyncio.to_thread(
-            reads.session_snapshot, who.user_id, profile, ref, limit
+        result: Any = await media_emission.read(
+            ctx,
+            who,
+            profile,
+            "session_snapshot",
+            reads.session_snapshot,
+            (who.user_id, profile, ref, limit),
         )
     else:
-        result = await asyncio.to_thread(
-            reads.session_history, who.user_id, profile, ref, after, limit
+        result = await media_emission.read(
+            ctx,
+            who,
+            profile,
+            "session_history",
+            reads.session_history,
+            (who.user_id, profile, ref, after, limit),
         )
+    return _result_response(result)
+
+
+async def handle_session_history_start(request: web.Request) -> web.Response:
+    """SES-2a: the first active page, distinct from SES-2's latest snapshot.
+
+    The route is deliberately distinct so an older HMP returns 404 instead of silently treating
+    `after=0` as a latest snapshot and making phone search appear complete when it is not.
+    """
+    who = bearer(request)
+    ctx = context(request)
+    profile = request.match_info["p"]
+    ref = request.match_info["ref"]
+    if any(key != "limit" for key in request.query):
+        raise HmpError(ErrorCode.BAD_REQUEST)
+    limit = _query_int(request, "limit", default=HISTORY_LIMIT_DEFAULT, lo=1, hi=HISTORY_LIMIT_MAX)
+    ctx.limiter.check(
+        "bots_session_messages", who.device_id, RATE_READ_PER_MIN_PER_DEVICE_ID, ctx.now()
+    )
+    reads = _require(ctx.reads)
+    result = await media_emission.read(
+        ctx,
+        who,
+        profile,
+        "session_history",
+        reads.session_history,
+        (who.user_id, profile, ref, 0, limit),
+    )
     return _result_response(result)
 
 
@@ -543,6 +1103,14 @@ async def handle_chat_send(request: web.Request) -> web.Response:
     req = _parse_direct_send_body(body)
     base_gate = ctx.write_gate()
     deps = _require(ctx.direct_send_deps)
+    # AP-1 / D2b: decided here from live state, before the send and before any lock. Only an
+    # effective approval owner whose bot has `approvals` available streams; every other send keeps
+    # the synchronous route, unchanged. Never re-decided after a stream failure.
+    stream = False
+    if ctx.direct_send_effective() and ctx.prompt_store is not None:
+        stream = ctx.is_approvals_available() and await asyncio.to_thread(
+            ctx.is_approval_owner_device, who.device_id
+        )
     try:
         outcome = await direct_send.handle_direct_send(
             deps,
@@ -550,13 +1118,155 @@ async def handle_chat_send(request: web.Request) -> web.Response:
             user_id=who.user_id,
             profile=profile,
             request=req,
-            flag_enabled=ctx.direct_send_enabled(),
+            flag_enabled=ctx.direct_send_effective(),
             base_write_gate=base_gate,
+            stream=stream,
         )
     except direct_send.DirectSendError as exc:
         raise HmpError(exc.failure.code) from exc
     guarded = base_gate.state is not WriteGateState.OPEN
     return _direct_send_outcome_response(outcome, guarded=guarded)
+
+
+async def _cron_endpoint(request: web.Request, *, write: bool) -> Any:
+    """No job data or loopback call before device and profile authorization."""
+    who = bearer(request)
+    ctx = context(request)
+    if not ctx.is_owner_device(who.device_id):
+        raise HmpError(ErrorCode.NOT_FOUND)
+    ctx.limiter.check(
+        "cron_write" if write else "cron_read",
+        who.device_id,
+        20 if write else 60,
+        ctx.now(),
+    )
+    profile = request.match_info["p"]
+    await asyncio.to_thread(require_bot_authorized, _require(ctx.bridge), who.user_id, profile)
+    if not ctx.cron_enabled() or not ctx.is_cron_available():
+        raise HmpError(ErrorCode.CRON_UNAVAILABLE)
+    endpoint = await asyncio.to_thread(ctx.bridge.direct_send_endpoint, profile)
+    if endpoint is None:
+        raise HmpError(ErrorCode.CRON_UNAVAILABLE)
+    return endpoint
+
+
+async def handle_cron_list(request: web.Request) -> web.Response:
+    endpoint = await _cron_endpoint(request, write=False)
+    return json_response(await mobile_cron.call(endpoint, method="GET"))
+
+
+async def handle_cron_create(request: web.Request) -> web.Response:
+    await _cron_endpoint(request, write=True)
+    body = mobile_cron.create_body(await read_json_body(request))
+    try:
+        raw = await asyncio.to_thread(
+            _require(context(request).bridge).create_mobile_cron,
+            request.match_info["p"],
+            body,
+        )
+    except ValueError as exc:
+        raise HmpError(ErrorCode.BAD_REQUEST) from exc
+    except Exception as exc:
+        raise HmpError(ErrorCode.CRON_UNAVAILABLE) from exc
+    return json_response({"job": mobile_cron.project_job(raw)})
+
+
+async def handle_cron_edit(request: web.Request) -> web.Response:
+    await _cron_endpoint(request, write=True)
+    job_id = mobile_cron.job_id(request.match_info["job_id"])
+    body = mobile_cron.edit_body(await read_json_body(request))
+    try:
+        raw = await asyncio.to_thread(
+            _require(context(request).bridge).edit_mobile_cron,
+            request.match_info["p"],
+            job_id,
+            body,
+        )
+    except ValueError as exc:
+        raise HmpError(ErrorCode.BAD_REQUEST) from exc
+    except Exception as exc:
+        raise HmpError(ErrorCode.CRON_UNAVAILABLE) from exc
+    if raw is None:
+        raise HmpError(ErrorCode.NOT_FOUND)
+    return json_response({"job": mobile_cron.project_job(raw)})
+
+
+async def handle_cron_delete(request: web.Request) -> web.Response:
+    endpoint = await _cron_endpoint(request, write=True)
+    job_id = mobile_cron.job_id(request.match_info["job_id"])
+    return json_response(await mobile_cron.call(endpoint, method="DELETE", job=job_id))
+
+
+async def handle_cron_pause(request: web.Request) -> web.Response:
+    endpoint = await _cron_endpoint(request, write=True)
+    job_id = mobile_cron.job_id(request.match_info["job_id"])
+    result = await mobile_cron.call(endpoint, method="POST", job=job_id, action="pause")
+    return json_response(result)
+
+
+async def handle_cron_resume(request: web.Request) -> web.Response:
+    endpoint = await _cron_endpoint(request, write=True)
+    job_id = mobile_cron.job_id(request.match_info["job_id"])
+    result = await mobile_cron.call(endpoint, method="POST", job=job_id, action="resume")
+    return json_response(result)
+
+
+async def _model_profile(request: web.Request, *, write: bool) -> str:
+    """Reject before reading a body, profile config, or model catalog."""
+    who = bearer(request)
+    ctx = context(request)
+    if not ctx.is_owner_device(who.device_id):
+        raise HmpError(ErrorCode.NOT_FOUND)
+    ctx.limiter.check(
+        "model_write" if write else "model_read",
+        who.device_id,
+        10 if write else 30,
+        ctx.now(),
+    )
+    profile = request.match_info["p"]
+    await asyncio.to_thread(require_bot_authorized, _require(ctx.bridge), who.user_id, profile)
+    if not ctx.model_enabled() or not ctx.is_model_available():
+        raise HmpError(ErrorCode.MODEL_UNAVAILABLE)
+    return profile
+
+
+async def handle_model_current(request: web.Request) -> web.Response:
+    profile = await _model_profile(request, write=False)
+    try:
+        bridge = _require(context(request).bridge)
+        raw = await asyncio.to_thread(bridge.profile_default_model, profile)
+    except Exception as exc:
+        log_bridge_exception(exc)
+        raise HmpError(ErrorCode.MODEL_UNAVAILABLE) from exc
+    return json_response(mobile_model.project_current(raw))
+
+
+async def handle_model_options(request: web.Request) -> web.Response:
+    profile = await _model_profile(request, write=False)
+    try:
+        bridge = _require(context(request).bridge)
+        endpoint = await asyncio.to_thread(bridge.direct_send_endpoint, profile)
+    except Exception as exc:
+        log_bridge_exception(exc)
+        raise HmpError(ErrorCode.MODEL_UNAVAILABLE) from exc
+    if endpoint is None:
+        raise HmpError(ErrorCode.MODEL_UNAVAILABLE)
+    return json_response(await mobile_model.options(endpoint))
+
+
+async def handle_model_update(request: web.Request) -> web.Response:
+    profile = await _model_profile(request, write=True)
+    provider, model = mobile_model.selection(await read_json_body(request))
+    try:
+        raw = await asyncio.to_thread(
+            _require(context(request).bridge).set_profile_default_model, profile, provider, model
+        )
+    except Exception as exc:
+        log_bridge_exception(exc)
+        raise HmpError(ErrorCode.MODEL_UNAVAILABLE) from exc
+    if raw is None:
+        raise HmpError(ErrorCode.BAD_REQUEST)
+    return json_response(mobile_model.project_current(raw))
 
 
 # DS-7's own definitive-failure codes that mean "HMP's guard refused before Hermes ever saw this
@@ -645,6 +1355,320 @@ def _stored_rejection_code(result_json: str | None) -> str | None:
     return code if isinstance(code, str) else None
 
 
+class _LivePromptResolver:
+    """AP-4. Bot Chat answers go to loopback with the stored `run_id`. Phone chat answers call
+    the bridge with the stored session key. A client-supplied session key is never read.
+
+    A Phone helper that fails at use time (`HelperUnavailableError`, including a rebinding) is
+    `unavailable`: nothing is claimed about Hermes's pending request (AP-7a, AP-10)."""
+
+    def __init__(self, ctx: ServerContext, endpoint: Any) -> None:
+        self._ctx = ctx
+        self._endpoint = endpoint
+
+    async def resolve_approval(self, row: Any, choice: str) -> str:
+        if row.surface == "bot_chat":
+            if self._endpoint is None or not row.run_id:
+                return "unavailable"
+            return await direct_send.aiohttp_approval_call(
+                self._endpoint, row.run_id, row.request_id, choice
+            )
+        bridge = self._ctx.bridge
+        if bridge is None or not row.session_key:
+            return "unavailable"
+        try:
+            resolved = await asyncio.to_thread(
+                bridge.resolve_gateway_approval, row.session_key, choice, row.request_id
+            )
+        except prompts.HelperUnavailableError:
+            log_event("approval_helper", outcome="unavailable")
+            return "unavailable"
+        return "accepted" if resolved > 0 else "stale"
+
+    async def resolve_clarify(self, row: Any, response: str) -> str:
+        bridge = self._ctx.bridge
+        if bridge is None:
+            return "unavailable"
+        try:
+            ok = await asyncio.to_thread(bridge.resolve_gateway_clarify, row.request_id, response)
+        except prompts.HelperUnavailableError:
+            log_event("approval_helper", outcome="unavailable")
+            return "unavailable"
+        return "accepted" if ok else "stale"
+
+    async def mark_awaiting(self, row: Any) -> str:
+        bridge = self._ctx.bridge
+        if bridge is None:
+            return "unavailable"
+        try:
+            ok = await asyncio.to_thread(bridge.mark_clarify_awaiting_text, row.request_id)
+        except prompts.HelperUnavailableError:
+            log_event("approval_helper", outcome="unavailable")
+            return "unavailable"
+        return "ok" if ok else "stale"
+
+
+async def _require_approvals_gate(ctx: ServerContext, profile: str, *, member: str | None) -> Any:
+    """The DS-2(b) gate for §7b routes. Raises `write_gate_closed` before any endpoint
+    resolution, listing, resolver or delivery when the flag, send, the needed member or the
+    endpoint says closed. `member` is the surface the route serves: `bot_chat` (approvals),
+    `phone_chat`, or None for a route that serves either (it then needs at least one)."""
+    if not ctx.direct_send_effective():
+        raise HmpError(ErrorCode.WRITE_GATE_CLOSED)
+    if member is None:
+        available = ctx.is_approvals_available() or ctx.is_phone_chat_available()
+    else:
+        available = ctx.approval_surface_available(member)
+    if not available:
+        raise HmpError(ErrorCode.WRITE_GATE_CLOSED)
+    base = ctx.write_gate()
+    deps = ctx.direct_send_deps
+    bridge = ctx.bridge
+    if deps is None or bridge is None:
+        raise HmpError(ErrorCode.WRITE_GATE_CLOSED)
+    endpoint = await asyncio.to_thread(bridge.direct_send_endpoint, profile)
+    gate = direct_send_gate(base_write_gate=base, flag_enabled=True, endpoint=endpoint)
+    if gate.state not in (WriteGateState.OPEN, WriteGateState.OPEN_GUARDED):
+        raise HmpError(ErrorCode.WRITE_GATE_CLOSED)
+    return endpoint
+
+
+def _prompt_result(result: prompts.HttpResult) -> web.Response:
+    return json_response(result.body, status=result.status)
+
+
+async def _observe_desktop_ownership(
+    ctx: ServerContext, profile: str, *, eligible: bool = True
+) -> prompts.DesktopOwnership:
+    """One fail-closed HMP observation through the injected, closed port.
+
+    The unavailable default short-circuits before resolving a native profile or canonical target.
+    That avoids doing observation-only work when no accepted observer is configured. A future
+    provider must be separately admitted; this function never falls back to `lease_snapshot`.
+    """
+    if not eligible:
+        return prompts.DesktopOwnership.UNKNOWN
+    port = ctx.desktop_ownership
+    try:
+        if getattr(port, "can_observe", False) is not True:
+            return prompts.DesktopOwnership.UNKNOWN
+    except Exception:
+        return prompts.DesktopOwnership.UNKNOWN
+    bridge = ctx.bridge
+    if bridge is None:
+        return prompts.DesktopOwnership.UNKNOWN
+    try:
+        target = await asyncio.to_thread(bridge.resolve_bot_chat, profile)
+    except Exception:
+        log_event("desktop_ownership", outcome="unknown")
+        return prompts.DesktopOwnership.UNKNOWN
+    try:
+        if target is None:
+            return prompts.DesktopOwnership.UNKNOWN
+        lineage = getattr(target, "compression_chain", None)
+        if (
+            type(lineage) is not tuple
+            or not lineage
+            or not all(type(session_id) is str and session_id for session_id in lineage)
+            or len(set(lineage)) != len(lineage)
+        ):
+            return prompts.DesktopOwnership.UNKNOWN
+    except Exception:
+        return prompts.DesktopOwnership.UNKNOWN
+    try:
+        result = await port.observe(profile=profile, canonical_lineage=lineage)
+    except Exception:
+        return prompts.DesktopOwnership.UNKNOWN
+    return result if type(result) is prompts.DesktopOwnership else prompts.DesktopOwnership.UNKNOWN
+
+
+async def handle_prompts_list(request: web.Request) -> web.Response:
+    """AP-3: `GET /bots/{p}/prompts`."""
+    who = bearer(request)
+    ctx = context(request)
+    profile = request.match_info["p"]
+    if not ctx.is_approval_owner_device(who.device_id):
+        raise HmpError(ErrorCode.NOT_FOUND)
+    ctx.limiter.check("prompt_reads", who.device_id, RATE_PROMPT_READ_PER_MIN_PER_DEVICE, ctx.now())
+    await asyncio.to_thread(require_bot_authorized, _require(ctx.bridge), who.user_id, profile)
+    await _require_approvals_gate(ctx, profile, member=None)
+    store = ctx.prompt_store
+    if store is None:
+        return json_response(
+            {"prompts": [], "desktop_held": False, "desktop_ownership": "unknown"}
+        )
+    t1 = ctx.now()
+    store.purge(t1)
+    candidates = store.view_visible(
+        ctx.iid, who.user_id, profile, now=t1, members=prompts.ALL_OPEN, include_wire=True
+    )
+    sessions = {
+        view.session_key
+        for view in candidates.rows
+        if view.visible_now
+        and view.kind == "approval"
+        and view.session_key
+        and view.surface == "phone_chat"
+    }
+    if sessions and ctx.is_phone_chat_available():
+        for session_key in sessions:
+            try:
+                pending = await asyncio.to_thread(ctx.bridge.list_gateway_approvals, session_key)
+            except prompts.HelperUnavailableError:
+                # Unavailable is not proof the waiter is gone: the row stays as it was.
+                log_event("approval_helper", outcome="unavailable")
+                continue
+            store.reconcile_approvals(
+                session_key,
+                {item["request_id"] for item in pending if "request_id" in item},
+                ctx.now(),
+            )
+    t2 = ctx.now()
+    store.purge(t2)
+    # Only rows of an available member are shown. A closed member lists nothing of its own.
+    members = ctx.approval_members_now()
+    final = store.view_visible(
+        ctx.iid, who.user_id, profile, now=t2, members=members, include_wire=True
+    )
+    has_open_bot_row = any(
+        view.surface == "bot_chat" and view.open_now for view in final.rows
+    )
+    ownership = await _observe_desktop_ownership(
+        ctx,
+        profile,
+        eligible=members.bot_chat and has_open_bot_row,
+    )
+    hide_bot = ownership in {
+        prompts.DesktopOwnership.OWNED,
+        prompts.DesktopOwnership.UNKNOWN,
+    }
+    shown = [
+        view.wire
+        for view in final.rows
+        if view.visible_now and not (hide_bot and view.surface == "bot_chat")
+    ]
+    return _prompt_result(
+        prompts.HttpResult(
+            200,
+            {
+                "prompts": shown,
+                "desktop_held": final.held or ownership is prompts.DesktopOwnership.OWNED,
+                "desktop_ownership": ownership.value,
+            },
+        )
+    )
+
+
+async def handle_prompt_answer(request: web.Request) -> web.Response:
+    """AP-4: `POST /bots/{p}/prompts/{request_id}`."""
+    who = bearer(request)
+    ctx = context(request)
+    profile = request.match_info["p"]
+    request_id = request.match_info["request_id"]
+    if not ctx.is_approval_owner_device(who.device_id):
+        raise HmpError(ErrorCode.NOT_FOUND)
+    ctx.limiter.check(
+        "prompt_actions", who.device_id, RATE_PROMPT_ACTION_PER_MIN_PER_DEVICE, ctx.now()
+    )
+    await asyncio.to_thread(require_bot_authorized, _require(ctx.bridge), who.user_id, profile)
+    store = ctx.prompt_store
+    # The surface of the stored row decides which member the answer needs. An unknown id has no
+    # surface: it needs at least one member and then answers 404 without allocating anything.
+    stored = store.get((ctx.iid, who.user_id, profile, request_id)) if store is not None else None
+    endpoint = await _require_approvals_gate(
+        ctx, profile, member=stored.surface if stored is not None else None
+    )
+    body = await read_json_body(request)
+    if store is None:
+        missing = prompts.HttpResult(404, {"error": {"code": "not_found", "message": "not found"}})
+        return _prompt_result(missing)
+
+    async def ownership_check(_row: prompts.PromptRow) -> prompts.DesktopOwnership:
+        # `answer_prompt` invokes this while holding the exact row lock and only after its
+        # missing/expiry/replay/conflict/stale decisions. The default port exits before the
+        # canonical Bot Chat bridge read.
+        return await _observe_desktop_ownership(ctx, profile)
+
+    result = await prompts.answer_prompt(
+        store,
+        iid=ctx.iid,
+        user_id=who.user_id,
+        profile=profile,
+        request_id=request_id,
+        body=body,
+        resolver=_LivePromptResolver(ctx, endpoint),
+        now=ctx.now(),
+        ownership_check=ownership_check,
+    )
+    return _prompt_result(result)
+
+
+def _parse_phone_body(body: dict[str, Any]) -> tuple[str, str]:
+    cmid = body.get("client_message_id")
+    if not isinstance(cmid, str) or not cmid or len(cmid.encode("utf-8")) > _CMID_MAX_BYTES:
+        raise HmpError(ErrorCode.BAD_REQUEST)
+    text = body.get("text")
+    if not isinstance(text, str) or not text:
+        raise HmpError(ErrorCode.BAD_REQUEST)
+    sent_at = body.get("sent_at")
+    if sent_at is not None and (not isinstance(sent_at, int) or isinstance(sent_at, bool)):
+        raise HmpError(ErrorCode.BAD_REQUEST)
+    return cmid, text
+
+
+async def handle_phone_send(request: web.Request) -> web.Response:
+    """AP-6: `POST /bots/{p}/phone/messages`."""
+    who = bearer(request)
+    ctx = context(request)
+    profile = request.match_info["p"]
+    if not ctx.is_approval_owner_device(who.device_id):
+        raise HmpError(ErrorCode.NOT_FOUND)
+    ctx.limiter.check(
+        "prompt_actions", who.device_id, RATE_PROMPT_ACTION_PER_MIN_PER_DEVICE, ctx.now()
+    )
+    await asyncio.to_thread(require_bot_authorized, _require(ctx.bridge), who.user_id, profile)
+    body = await read_json_body(request)
+    cmid, text = _parse_phone_body(body)
+    endpoint = await _require_approvals_gate(ctx, profile, member="phone_chat")
+    store = ctx.prompt_store
+    bridge = _require(ctx.bridge)
+    if store is None:
+        raise HmpError(ErrorCode.WRITE_GATE_CLOSED)
+    chat_id = await asyncio.to_thread(ensure_chat, ctx.store, who.user_id, profile)
+    resolver = _LivePromptResolver(ctx, endpoint)
+
+    def session_key() -> str | None:
+        return bridge.phone_session_key(who.user_id, profile)
+
+    def pending(key: str) -> object:
+        return bridge.list_gateway_approvals(key)
+
+    async def deliver() -> bool | None:
+        return await bridge.deliver_phone_message(
+            user_id=who.user_id,
+            profile=profile,
+            text=text,
+            message_id=f"hmp:{chat_id}:{cmid}",
+        )
+
+    result = await prompts.handle_phone_send(
+        prompts=store,
+        sqlite_store=ctx.store,
+        iid=ctx.iid,
+        user_id=who.user_id,
+        profile=profile,
+        chat_id=chat_id,
+        cmid=cmid,
+        text=text,
+        now=ctx.now(),
+        resolver=resolver,
+        session_key=session_key,
+        pending_approvals=pending,
+        deliver=deliver,
+    )
+    return _prompt_result(result)
+
+
 def build_app(ctx: ServerContext) -> web.Application:
     """The HMP application: the middlewares above and the F1 route table, nothing else.
 
@@ -672,9 +1696,21 @@ def build_app(ctx: ServerContext) -> web.Application:
         },
     )
     app[CTX_KEY] = ctx
+    # S5: this app's own fetch service (dedicated executor, permits); never module-global. Threads
+    # start lazily on the first submission, and cleanup closes admissions without waiting.
+    app[media_fetch.MEDIA_SERVICE_KEY] = media_fetch.MediaFetchService()
+    app.on_cleanup.append(media_fetch.close_service)
     app.on_response_prepare.append(_server_header)
     handlers: dict[str, Handler] = {
         "/ready": handle_ready,
+        "/readiness/capabilities": handle_readiness_capabilities,
+        "/bots/{p}/readiness": handle_readiness,
+        "/bots/{p}/media-readiness": handle_media_readiness,
+        "/media-readiness/capabilities": handle_media_readiness_capabilities,
+        "/push/registration": push_registration.handle_push_get,
+        "/push/hints/resolve": partial(
+            push_resolve.handle_push_resolve, require_gate=_require_approvals_gate
+        ),
         "/pair/request": handle_pair_request,
         "/pair/complete": handle_pair_complete,
         "/auth/token": handle_token,
@@ -687,19 +1723,71 @@ def build_app(ctx: ServerContext) -> web.Application:
         # switch below -- the gate is re-checked per request, inside the handler.
         "/bots/{p}/chat/messages": handle_chat_send,
         "/bots/{p}/chat/messages/by-client-id/{cmid}": handle_chat_lookup,
+        "/approval-tests/current": approval_test_routes.handle_current,
+        "/bots/{p}/approval-tests/current": approval_test_routes.handle_scoped_current,
+        "/approval-tests/{phone_test_id}/answer": approval_test_routes.handle_answer,
+        "/approval-tests/{phone_test_id}/cancel": approval_test_routes.handle_cancel,
+        "/bots/{p}/prompts": handle_prompts_list,
+        "/bots/{p}/prompts/{request_id}": handle_prompt_answer,
+        "/bots/{p}/phone/messages": handle_phone_send,
+        "/bots/{p}/media/{ref}": handle_media_fetch,
+        "/bots/{p}/presentation": presentation_routes.serve,
+        "/bots/{p}/presentation/avatar/{revision}": presentation_routes.serve,
+        "/bots/{p}/jobs": handle_cron_list,
+        "/bots/{p}/jobs/{job_id}": handle_cron_edit,
+        "/bots/{p}/jobs/{job_id}/pause": handle_cron_pause,
+        "/bots/{p}/jobs/{job_id}/resume": handle_cron_resume,
+        "/bots/{p}/model/default": handle_model_current,
+        "/bots/{p}/model/options": handle_model_options,
     }
-    routes = list(F1_ROUTES) + list(F2_DIRECT_SEND_ROUTES)
-    if ctx.session_browsing_enabled:
+    routes = (
+        list(F1_ROUTES)
+        + list(F2_DIRECT_SEND_ROUTES)
+        + list(F3_APPROVAL_ROUTES)
+        + list(approval_test_routes.ROUTES)
+        + list(MOBILE_CRON_ROUTES)
+        + list(MOBILE_MODEL_ROUTES)
+        + list(S5_MEDIA_ROUTES)
+        + list(presentation_routes.ROUTES)
+        + list(PUSH_REGISTRATION_ROUTES)
+        + list(PUSH_RESOLVE_ROUTES)
+    )
+    if ctx.session_browsing_enabled and ctx.session_browsing_available:
         # Amendment A1 kill switch: when off, SES-1/SES-2 are never added to the router at all,
         # so they 404 exactly like every other unregistered F1 route (server-modules.md).
         handlers["/bots/{p}/sessions"] = handle_sessions_list
         handlers["/bots/{p}/sessions/{ref}/messages"] = handle_session_messages
+        handlers["/bots/{p}/sessions/{ref}/messages/from-start"] = handle_session_history_start
         routes += list(A1_SESSION_ROUTES)
+    if controls_request_routes.registration_ready(ctx):
+        handlers.update({
+            "/devices/self/controls-requests/capabilities": controls_request_routes.capabilities,
+            "/devices/self/controls-requests/by-client-id/{client_id}": (
+                controls_request_routes.by_client_id
+            ),
+            "/devices/self/controls-requests": controls_request_routes.create,
+            "/devices/self/controls-requests/{request_id}/cancel": controls_request_routes.cancel,
+            "/devices/self/controls-requests/{request_id}": controls_request_routes.by_request_id,
+        })
+        routes += list(CONTROLS_REQUEST_ROUTES)
     for method, path, _clause in routes:
+        handler = handlers[path]
+        if path == "/bots/{p}/jobs" and method == "POST":
+            handler = handle_cron_create
+        elif path == "/bots/{p}/jobs/{job_id}" and method == "DELETE":
+            handler = handle_cron_delete
+        elif path == "/bots/{p}/model/default" and method == "PUT":
+            handler = handle_model_update
+        if path == "/push/registration":
+            handler = {
+                "GET": push_registration.handle_push_get,
+                "PUT": push_registration.handle_push_put,
+                "DELETE": push_registration.handle_push_delete,
+            }[method]
         if method == "GET":
-            app.router.add_get(full_path(path), handlers[path], allow_head=False)
+            app.router.add_get(full_path(path), handler, allow_head=False)
         else:
-            app.router.add_route(method, full_path(path), handlers[path])
+            app.router.add_route(method, full_path(path), handler)
     return app
 
 
@@ -846,19 +1934,61 @@ class HmpServer:
         *,
         watchdog_interval: float = WATCHDOG_INTERVAL_S,
         on_closed: Callable[[], None] | None = None,
+        push_relay_factory: Callable[[], RelayPort] | None = None,
+        approval_test_owners: tuple[Any, Any] | None = None,
+        presentation_owner: Any = None,
     ) -> None:
         self.ctx = ctx
         self.settings = settings
         self._interval = watchdog_interval
         self._on_closed = on_closed
+        # T025 supplies the transport. No default URL/provider or live network
+        # path is invented here; source tests inject the same listener port.
+        self._push_relay_factory = push_relay_factory
+        self._push_dispatcher: PushDispatcher | None = None
         self._runner: web.AppRunner | None = None
+        self._runner_cleanup_attempted = False
+        self._runner_cleanup_unknown = False
+        self._start_owner: asyncio.Task[None] | None = None
         self._watch: asyncio.Task[None] | None = None
+        self._push_watch: asyncio.Task[None] | None = None
         self._stopping: asyncio.Task[None] | None = None
+        self._operator_read: Any = None
+        self._operator_read_drained: Any = None
+        self.operator_worker_debt = 0
+        # The actual adapter retains the owner across reconnects. A standalone
+        # server without that owner never silently creates a replacement pool.
+        self._presentation_owner = presentation_owner
+        self._presentation_service: Any = None
+        self._presentation_live = threading.Event()
+        self.presentation_worker_debt = False
+        self._dependencies_closed = False
+        self._dependencies_close_unknown = False
+        self._dependency_close_task: Any = None
+        self._stop_owner: asyncio.Task[None] | None = None
+        self._at1_owners = approval_test_owners
+        self._at1_attempted = False
+        self._at1_live = False
+        self._at1_service: Any = None
+        self._at1_endpoint: Any = None
         self.bound: tuple[str, int] | None = None
         self.closed = asyncio.Event()
         ctx.on_identity_changed = self._identity_changed
 
     async def start(self) -> None:
+        if (self._start_owner is not None or self._runner is not None
+                or self._stop_owner is not None
+                or self.closed.is_set() or self._runner_cleanup_attempted):
+            raise ListenerConfigError('listener lifecycle already used')
+        self._start_owner = asyncio.get_running_loop().create_task(self._start_owned())
+        await asyncio.shield(self._start_owner)
+
+    def _require_setup_current(self, runner: web.AppRunner) -> None:
+        if (self._runner is not runner or self._stop_owner is not None
+                or self._stopping is not None or self.closed.is_set()):
+            raise ConnectionError('listener stopped during startup')
+
+    async def _start_owned(self) -> None:
         if not address_allowed(self.settings.bind):
             raise ListenerConfigError("bind must be a loopback or tailnet IP address (TR-4)")
         ssl_ctx = server_ssl_context(self.ctx.identity, self._identity_changed)
@@ -871,14 +2001,20 @@ class HmpServer:
             shutdown_timeout=SHUTDOWN_TIMEOUT_S,
             handle_signals=False,
         )
-        await runner.setup()
-        site = web.TCPSite(
-            runner, self.settings.bind, self.settings.port, ssl_context=ssl_ctx, reuse_address=True
-        )
+        self._runner = runner  # adopt before any setup/partial-start await
         try:
+            await runner.setup()
+            self._require_setup_current(runner)
+            site = web.TCPSite(
+                runner, self.settings.bind, self.settings.port,
+                ssl_context=ssl_ctx, reuse_address=True
+            )
+            await self._purge_push_once()
+            self._require_setup_current(runner)
             await site.start()
+            self._require_setup_current(runner)
         except BaseException:
-            await runner.cleanup()
+            await self._cleanup_runner()
             raise
         self._runner = runner
         sockets = getattr(site._server, "sockets", None) or ()
@@ -886,12 +2022,188 @@ class HmpServer:
             host, port = sockets[0].getsockname()[:2]
             self.bound = (str(host), int(port))
         self._watch = asyncio.get_running_loop().create_task(self._watchdog())
+        self._push_watch = asyncio.get_running_loop().create_task(self._push_purge_loop())
+        await self._start_push_dispatcher()
+        self._require_setup_current(runner)
+        self._start_presentation()
         log_event("listener_start", outcome="ok")
+
+    def _presentation_current(self) -> bool:
+        return (
+            self._presentation_live.is_set()
+            and self._runner is not None
+            and self._stop_owner is None
+            and self.ctx.presentation_service is self._presentation_service
+            and self._presentation_service is not None
+        )
+
+    def _start_presentation(self) -> None:
+        """Normal native startup only; no request can create or nominate an owner."""
+        if (self._runner is None or self._stop_owner is not None
+                or self._stopping is not None or self.closed.is_set()
+                or self._presentation_service is not None):
+            return
+        if (type(self._presentation_owner)
+                is not presentation_native_service.NativePresentationOwner
+                or not self.ctx.compat.supported):
+            return
+        self._presentation_live.set()
+        try:
+            service = self._presentation_owner.bind(
+                self.ctx, current=self._presentation_current,
+                worker_current=self._presentation_live.is_set,
+            )
+        except Exception:
+            self._presentation_live.clear()
+            log_event('presentation_start', outcome='unavailable')
+            return
+        self._presentation_service = self.ctx.presentation_service = service
+        self.ctx.presentation_available = self._presentation_current
+
+    async def start_operator_read(self, anchor_dir: Path, nonce: str) -> None:
+        from .operator_read import OperatorReadService
+
+        if self._operator_read is not None or self._runner is None:
+            raise RuntimeError("operator read listener unavailable")
+        service = OperatorReadService(self.ctx, anchor_dir, nonce)
+        self._operator_read = service  # cancellation must not orphan this dependency owner
+        await service.start()
+    async def start_approval_test(self, record: Path, nonce: str) -> None:
+        """One optional service after the owner wrote this listener's same-nonce record.
+
+        The adapter owns record creation. This method never creates a directory,
+        changes a permission, retries a generation or falls back to HTTP/native IPC.
+        """
+        if self._at1_attempted or self._stop_owner is not None:
+            return
+        self._at1_attempted = True
+        if (self.bound is None or self.ctx.bridge is None or self._at1_owners is None
+                or not self.ctx.is_approvals_available() or not self.ctx.direct_send_effective()):
+            return
+        service = None
+        endpoint = None
+        try:
+            generation = approval_test_host_codec.HostGeneration(self.ctx.iid, os.getpid(), nonce)
+            modules = (_AT1_SERVER_MODULE, approval_test_authority, approval_test_service,
+                       approval_test_producer, approval_test_host_codec,
+                       approval_test_host_transport, approval_test_routes,
+                       sys.modules[ServerContext.__module__],
+                       sys.modules[type(self.ctx.bridge).__module__], *self._at1_owners)
+            factory, native_current = self.ctx.bridge.approval_test_producer_factory(
+                asyncio.get_running_loop()
+            )
+
+            def current() -> bool:
+                try:
+                    valid = (
+                        self._at1_live and self._stop_owner is None
+                        and self.ctx.approval_test_service is service
+                        and self.ctx.approval_test_generation is generation
+                        and generation.pid == os.getpid() and generation.iid == self.ctx.iid
+                        and self.ctx.identity.still_current() is True
+                        and all(sys.modules.get(module.__name__) is module for module in modules)
+                        and native_current() is True
+                    )
+                except Exception:
+                    valid = False
+                if not valid:
+                    # Replacement/lost native identity retires this service forever.
+                    self._at1_live = False
+                return valid
+
+            service = approval_test_service.ApprovalTestService(
+                self.ctx, generation, generation_current=current,
+                approvals_gate=_require_approvals_gate, producer_factory=factory,
+                native_current=native_current,
+            )
+            self._at1_service = service
+            self.ctx.approval_test_generation = generation
+            self.ctx.approval_test_service = service
+            self.ctx.approval_test_current = current
+            endpoint = approval_test_host_transport.HostIpcEndpoint(record, generation, service)
+            self._at1_endpoint = endpoint
+            self._at1_live = True
+            if not current():
+                raise ValueError("approval test unavailable")
+            endpoint.start()
+        except Exception:
+            self._at1_live = False
+            # Do not suppress unknown cleanup and then drop the store. The retained
+            # close owner keeps the entire listener dependency generation alive.
+            if endpoint is not None:
+                if await endpoint.close() is not True:
+                    raise RuntimeError("approval test cleanup unavailable") from None
+            elif service is not None:
+                await service.shutdown()
+            log_event("approval_test_start", outcome="unavailable")
+
+    async def _start_push_dispatcher(self) -> None:
+        if self._push_relay_factory is None:
+            return
+        dispatcher = None
+        relay = None
+        try:
+            relay = self._push_relay_factory()
+            dispatcher = PushDispatcher(self.ctx, relay, require_gate=_require_approvals_gate)
+            dispatcher.start()
+            self._push_dispatcher = dispatcher
+        except Exception:
+            if dispatcher is not None:
+                with contextlib.suppress(Exception):
+                    await dispatcher.close()
+            elif relay is not None:
+                # Constructor failure must not leak a just-created client.
+                with contextlib.suppress(Exception):
+                    async with asyncio.timeout(1):
+                        await relay.close()
+            with contextlib.suppress(Exception):
+                log_event("push_dispatch", outcome="creation_failed")
+
+    async def _purge_push_once(self) -> None:
+        """PN-BND listener-open/hourly maintenance; no network or repairing key accessor.
+
+        Read the push key once off-loop, then take one live settings snapshot. The
+        store yields only outside its short transactions so cancellation/backlog
+        cannot leave an open transaction or hold its lock across an await.
+        """
+        try:
+            try:
+                reader = getattr(self.ctx.identity, "read_k_grace_for_push", None)
+                key = await reader() if reader is not None else None
+                if type(key) is not bytes or len(key) != 32:
+                    key = None
+            except Exception:
+                # Key loss skips hash expiry ONLY; other maintenance still runs.
+                # Cancellation propagates and never starts another key reader.
+                key = None
+            if not self.ctx.identity.still_current():
+                return
+            availability = self.ctx.push_availability()
+            for _ in self.ctx.store.purge_push_steps(
+                now=self.ctx.now(),
+                key=key,
+                push_available=availability.available,
+                live_kids=availability.live_kids,
+            ):
+                self.ctx.prune_push_delete_fence()
+                await asyncio.sleep(0)
+                if not self.ctx.identity.still_current():
+                    return
+        except Exception:
+            with contextlib.suppress(Exception):
+                log_event("push_purge", outcome="cleanup_failed")
+
+    async def _push_purge_loop(self) -> None:
+        while True:
+            await asyncio.sleep(PUSH_PURGE_INTERVAL_S)
+            await self._purge_push_once()
 
     async def _watchdog(self) -> None:
         # PR7-6 polls on-disk custody by design; there is no event to wait on.
         while True:
             await asyncio.sleep(self._interval)
+            if self.ctx.prompt_store is not None:
+                await asyncio.to_thread(self.ctx.prompt_store.purge, self.ctx.now())
             try:
                 current = self.ctx.identity.still_current()
             except Exception:
@@ -901,9 +2213,38 @@ class HmpServer:
                 return
 
     def _identity_changed(self) -> None:
+        self._presentation_live.clear()
+        self._at1_live = False
         if self._stopping is None:
             log_event("identity_changed", outcome="listener_closed")
             self._stopping = asyncio.get_running_loop().create_task(self.stop())
+
+    async def wait_operator_drain(self) -> None:
+        service = self._operator_read_drained
+        if service is not None:
+            await service.wait_drained()
+
+    async def wait_presentation_drain(self) -> None:
+        service = self._presentation_service
+        if service is not None:
+            await service.wait_drained()
+
+    async def _cleanup_runner(self) -> None:
+        """One original cleanup attempt; exceptions/cancellation retain ownership."""
+        if self._runner_cleanup_unknown or self._runner_cleanup_attempted:
+            if self._runner is not None:
+                raise RuntimeError('listener cleanup unavailable')
+            return
+        runner = self._runner
+        if runner is None:
+            return
+        self._runner_cleanup_attempted = True
+        try:
+            await runner.cleanup()
+        except BaseException:
+            self._runner_cleanup_unknown = True
+            raise
+        self._runner = None
 
     async def _cancel_pending_sends(self) -> None:
         """Review round 3: cancel in-flight direct sends and wait, bounded, so a stop does not
@@ -916,18 +2257,65 @@ class HmpServer:
         await cancel(SHUTDOWN_TIMEOUT_S)
 
     async def stop(self, *, notify: bool = True) -> None:
-        """Close the listener. `notify=False` for an orderly shutdown by the owner."""
-        await self._cancel_pending_sends()
+        """Fence immediately; retain and shield the single actual teardown owner."""
+        self._at1_live = False
+        self._presentation_live.clear()
         if not notify:
             self._on_closed = None
+        if self._stop_owner is None:
+            self._stop_owner = asyncio.get_running_loop().create_task(self._stop_joined())
+        if asyncio.current_task() is self._start_owner:
+            raise RuntimeError('startup cannot await its own shutdown')
+        await asyncio.shield(self._stop_owner)
+
+    async def _stop_joined(self) -> None:
+        startup = self._start_owner
+        if startup is not None and not startup.done():
+            if not self._runner_cleanup_attempted:
+                startup.cancel()
+            try:
+                await asyncio.shield(startup)
+            except asyncio.CancelledError:
+                if not startup.done():
+                    raise
+            except Exception:
+                log_event('listener_start', outcome='unavailable')
+        presentation = self._presentation_service
+        if presentation is not None:
+            self.presentation_worker_debt = not await presentation.close_and_join()
+            if self.presentation_worker_debt:
+                log_event('presentation_stop', outcome='worker_debt')
+        service, self._operator_read = self._operator_read, None
+        if service is not None:
+            debt = await service.stop()
+            self.operator_worker_debt = debt
+            self._operator_read_drained = service
+            if debt:
+                log_event("operator_read_stop", outcome="worker_debt")
+        endpoint = self._at1_endpoint
+        service = self._at1_service
+        if endpoint is not None:
+            if await endpoint.close() is not True:
+                raise RuntimeError("approval test cleanup unavailable")
+        elif service is not None:
+            await service.shutdown()
+        # All AT1 leases/authority reads/native owners have joined at this point.
+        self.ctx.push_hints.clear()
+        dispatcher, self._push_dispatcher = self._push_dispatcher, None
+        if dispatcher is not None:
+            await dispatcher.close()
+        await self._cancel_pending_sends()
+        push_watch, self._push_watch = self._push_watch, None
+        if push_watch is not None and push_watch is not asyncio.current_task():
+            push_watch.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await push_watch
         watch, self._watch = self._watch, None
         if watch is not None and watch is not asyncio.current_task():
             watch.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await watch
-        runner, self._runner = self._runner, None
-        if runner is not None:
-            await runner.cleanup()
+        await self._cleanup_runner()
         if not self.closed.is_set():
             self.closed.set()
             if self._on_closed is not None:

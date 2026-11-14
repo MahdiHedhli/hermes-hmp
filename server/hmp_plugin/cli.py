@@ -70,10 +70,18 @@ Refusals and rules:
     transaction (PR3-4). Denial goes through `pairing.deny_pairing`.
 - **`devices revoke` (PR7-1)** revokes the device and every token family atomically. For a user's
   last device it prints the Hermes `pairing revoke` commands, and never runs them.
+- **Privileged phone controls.** After pairing, a separate host prompt requires the full word
+  `GRANT` before that device can manage jobs or default models. EOF, interruption and every other
+  answer record a denial. `devices grant-controls` and `devices deny-controls` are TTY-gated host
+  commands for later changes. An explicit decision overrides the legacy config allowlist.
 - **`instance rotate-key` (PR7-2)** makes a new key, revokes every device, and expires every open
   offer and pending pairing.
-- **`compat`** prints the build identity, the list match and the probe outcome. There are no
-  secrets in any of them.
+- **`compat`** prints the Hermes version, the minimum supported versions and whether each feature
+  is available. `compat --issue-draft` prints a GitHub issue draft for the operator to review and
+  paste. It is pure and offline: nothing is submitted, no network, `gh` or browser is used, and only
+  allowlisted version and fixed-code fields appear. `--feature` with `--failure-code` states a
+  failure the operator saw, for an upstream failure the static probe cannot see. There are no
+  secrets in any of it.
 
 Grants that live in Hermes's own pairing stores cannot be read without a Hermes internal, and
 only `bridge.py` may import one (PR-2). So the "grants" the CLI prints are the bots this user asked
@@ -102,7 +110,7 @@ import sys
 import time
 import unicodedata
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Optional, TextIO
 
@@ -115,7 +123,14 @@ MUTATING_COMMANDS: frozenset[tuple[str, str | None]] = frozenset(
         ("pair", "confirm"),
         ("pair", "deny"),
         ("devices", "revoke"),
+        ("devices", "grant-controls"),
+        ("devices", "deny-controls"),
+        ("devices", "grant-media-read"),
+        ("devices", "deny-media-read"),
+        ("devices", "controls-requests"),
         ("instance", "rotate-key"),
+        ("approval-test", "begin"),
+        ("approval-test", "cancel"),
     }
 )
 
@@ -160,7 +175,9 @@ _PROFILE_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
 LISTENER_RECORD_FILENAME = "listener.json"
 LISTENER_RECORD_FORMAT = 1
 RECORD_MODE = 0o600
-MAX_RECORD_BYTES = 4_096  # generous bound for a small, fixed-shape JSON record
+MAX_RECORD_BYTES = 16_384  # bounded profile inventory and status-only health snapshot
+HEALTH_MAX_AGE_S = 45
+HEALTH_STATES = frozenset({"ready", "disabled", "unsupported", "unavailable"})
 
 
 class ListenerRecordError(RuntimeError):
@@ -179,6 +196,8 @@ class ListenerRecord:
     # on a record written by an older gateway that never had this field -- the caller then falls
     # back to the generic placeholder next-steps text, as before this field existed.
     profiles: tuple[tuple[str, str], ...] | None = None
+    health_checked_at: int | None = None
+    health: tuple[tuple[str, str, str, str], ...] | None = None
 
 
 def listener_record_path(anchor_dir: Path) -> Path:
@@ -194,6 +213,8 @@ def write_listener_record(
     iid: str,
     nonce: str | None = None,
     profiles: Sequence[tuple[str, str]] | None = None,
+    health_checked_at: int | None = None,
+    health: Sequence[tuple[str, str, str, str]] | None = None,
 ) -> None:
     """Atomically write the record: a new 0600 temp file in the same directory, fsync, rename.
 
@@ -218,8 +239,12 @@ def write_listener_record(
             "pid": os.getpid(),
             "nonce": nonce if nonce is not None else secrets.token_hex(16),
             "profiles": [[p, d] for p, d in profiles] if profiles is not None else None,
+            "health_checked_at": health_checked_at,
+            "health": [list(row) for row in health] if health is not None else None,
         }
     ).encode("utf-8")
+    if len(body) > MAX_RECORD_BYTES:
+        raise OSError("listener record exceeds size limit")
     tmp = path.with_name(f".{path.name}.{secrets.token_hex(8)}.tmp")
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
     fd = os.open(tmp, flags, RECORD_MODE)
@@ -537,6 +562,9 @@ def read_listener_record(
     if not pid_alive(pid):  # type: ignore[arg-type]
         raise ListenerRecordError("the listener record is stale")
     profiles = _parse_record_profiles(data.get("profiles"))
+    checked_at, health = _parse_record_health(
+        data.get("health_checked_at"), data.get("health"), profiles
+    )
     return ListenerRecord(
         host=str(host),
         port=int(port),
@@ -544,6 +572,8 @@ def read_listener_record(
         pid=int(pid),  # type: ignore[arg-type]
         nonce=nonce,
         profiles=profiles,
+        health_checked_at=checked_at,
+        health=health,
     )
 
 
@@ -565,6 +595,35 @@ def _parse_record_profiles(raw: object) -> tuple[tuple[str, str], ...] | None:
             raise ListenerRecordError("the listener record is malformed")
         out.append((entry[0], entry[1]))
     return tuple(out)
+
+
+def _parse_record_health(
+    checked_at: object, raw: object, profiles: tuple[tuple[str, str], ...] | None
+) -> tuple[int | None, tuple[tuple[str, str, str, str], ...] | None]:
+    """Old records have no snapshot. A present snapshot must cover exactly the served bots."""
+    if checked_at is None and raw is None:
+        return None, None
+    if type(checked_at) is not int or checked_at < 0 or not isinstance(raw, list):
+        raise ListenerRecordError("the listener health record is malformed")
+    if profiles is None or len(raw) != len(profiles) or len(raw) > 128:
+        raise ListenerRecordError("the listener health record is malformed")
+    names = {name for name, _ in profiles}
+    if len(names) != len(profiles) or any(not _valid_profile_name(name) for name in names):
+        raise ListenerRecordError("the listener health record is malformed")
+    rows: list[tuple[str, str, str, str]] = []
+    for row in raw:
+        if (
+            not isinstance(row, list)
+            or len(row) != 4
+            or not isinstance(row[0], str)
+            or row[0] not in names
+            or any(not isinstance(value, str) or value not in HEALTH_STATES for value in row[1:])
+        ):
+            raise ListenerRecordError("the listener health record is malformed")
+        rows.append((row[0], row[1], row[2], row[3]))
+    if {row[0] for row in rows} != names or len({row[0] for row in rows}) != len(rows):
+        raise ListenerRecordError("the listener health record is malformed")
+    return checked_at, tuple(rows)
 
 
 def _default_verify_listener_live(
@@ -624,9 +683,28 @@ def endpoint_for(host: str, port: int) -> str:
 # --------------------------------------------------------------------------------------------------
 
 
+def _approval_test_timeout(value: str) -> int:
+    try:
+        return int(value)
+    except ValueError:
+        # argparse's default int converter echoes the supplied token on failure.
+        raise argparse.ArgumentTypeError("invalid diagnostic timeout") from None
+
+
 def setup_parser(parser: argparse.ArgumentParser) -> None:
     """`setup_fn` for `register_cli_command`: builds `hermes hmp …`."""
     groups = parser.add_subparsers(dest=SUBCOMMAND_DEST)
+
+    approval_test = groups.add_parser(
+        "approval-test", help="Synthetic approval diagnostic; no action will run"
+    ).add_subparsers(dest="approval_test_command")
+    begin = approval_test.add_parser("begin", help="Hold one diagnostic until joined completion")
+    begin.add_argument("--device", required=True)
+    begin.add_argument("--profile", required=True, dest="target_profile")
+    begin.add_argument("--session", required=True)
+    begin.add_argument("--timeout-ms", type=_approval_test_timeout, default=30000)
+    for action in ("status", "cancel"):
+        approval_test.add_parser(action).add_argument("operation_id")
 
     pair = groups.add_parser("pair", help="Pairing offers and confirmations").add_subparsers(
         dest="pair_command"
@@ -665,6 +743,27 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
     devices.add_parser("list", help="List devices")
     revoke = devices.add_parser("revoke", help="Revoke a device and its tokens (PR7-1)")
     revoke.add_argument("device_id")
+    grant_controls = devices.add_parser(
+        "grant-controls", help="Allow one paired phone to manage jobs and default models"
+    )
+    grant_controls.add_argument("device_id")
+    deny_controls = devices.add_parser(
+        "deny-controls", help="Remove jobs and default-model control from one phone"
+    )
+    deny_controls.add_argument("device_id")
+    for action, help_text in (
+        ("media-read", "Inspect one phone's independent media-read decision"),
+        ("grant-media-read", "Allow host-local images only; no approval or Controls grant"),
+        ("deny-media-read", "Deny host-local image access only"),
+    ):
+        devices.add_parser(action, help=help_text).add_argument("device_id")
+    requests = devices.add_parser(
+        "controls-requests", help="Inspect and decide a phone's Controls request at this TTY"
+    ).add_subparsers(dest="controls_requests_command")
+    inbox = requests.add_parser("list", help="List one bounded page of host requests")
+    inbox.add_argument("--after")
+    for action in ("show", "allow", "deny"):
+        requests.add_parser(action).add_argument("request_id")
 
     instance = groups.add_parser("instance", help="Instance identity").add_subparsers(
         dest="instance_command"
@@ -672,7 +771,46 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
     instance.add_parser("show", help="Show the instance fingerprint")
     instance.add_parser("rotate-key", help="Rotate the instance key; revokes every device (PR7-2)")
 
-    groups.add_parser("compat", help="Show build identity, list match and probe result (GU-2c)")
+    compat_cmd = groups.add_parser(
+        "compat", help="Show the Hermes version and which HMP features are available"
+    )
+    compat_cmd.add_argument(
+        "--issue-draft",
+        action="store_true",
+        help="Print a GitHub issue draft to review and paste (offline; nothing is sent)",
+    )
+    compat_cmd.add_argument(
+        "--feature",
+        default=None,
+        help="With --issue-draft and --failure-code: the feature that failed "
+        "(read, session_browsing, send, jobs, model, approvals, phone_chat, local_media)",
+    )
+    compat_cmd.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Also print informational diagnostics (the Bot Chat approval hook fact)",
+    )
+    compat_cmd.add_argument(
+        "--failure-code",
+        default=None,
+        help="With --issue-draft and --feature: the HMP error code the phone showed",
+    )
+    setup = groups.add_parser("setup", help="Check host readiness without changing configuration")
+    setup.add_subparsers(dest="setup_command").add_parser(
+        "check", help="Check the Hermes build, HMP identity, and pinned listener"
+    )
+    health = groups.add_parser("health", help="Check each served bot's enabled channels")
+    health_commands = health.add_subparsers(dest="health_command")
+    health_commands.add_parser(
+        "check", help="Read the gateway's current bot-channel health snapshot"
+    )
+    health_commands.add_parser(
+        "presentation", help="Inspect appearance service binding without fetching images"
+    )
+    push = groups.add_parser("push", help="Read configured push state and store counts")
+    push.add_subparsers(dest="push_command").add_parser(
+        "status", help="Read push configuration and counts; does not contact the relay"
+    )
 
 
 # --------------------------------------------------------------------------------------------------
@@ -718,6 +856,9 @@ class CliEnv:
     # injectable so a unit test never spawns a real process -- a FAKE runner stands in.
     hermes_executable: Callable[[], str | None] = _default_resolve_hermes_executable
     run_hermes_cli: Callable[..., subprocess.CompletedProcess[str] | None] = _default_run_hermes_cli
+    # PN-OPS: tests inject a synthetic settings reader; production uses the
+    # isolated Hermes bridge's read-only configuration path, never `_open`.
+    push_settings_reader: Callable[[Path], object] | None = None
 
     def interactive(self) -> bool:
         try:
@@ -734,7 +875,8 @@ class RefusedError(Exception):
 
 def _command(args: argparse.Namespace) -> tuple[str | None, str | None]:
     group = getattr(args, SUBCOMMAND_DEST, None)
-    action = getattr(args, f"{group}_command", None) if group else None
+    action_dest = "approval_test_command" if group == "approval-test" else f"{group}_command"
+    action = getattr(args, action_dest, None) if group else None
     return group, action
 
 
@@ -760,6 +902,25 @@ class _Context:
         return int(self.env.clock())
 
 
+def _undecided_active_devices(store_path: Path) -> int | None:
+    """Active paired devices with no recorded host controls decision, read through a read-only
+    connection. `None` when the store cannot be read. Names no device and writes nothing."""
+    path = store_path.resolve()
+    mode = "mode=ro" if path.with_name(path.name + "-wal").exists() else "mode=ro&immutable=1"
+    try:
+        conn = sqlite3.connect(path.as_uri() + f"?{mode}", uri=True)
+        try:
+            row = conn.execute(
+                "SELECT COUNT(*) FROM devices d LEFT JOIN device_owner_controls c "
+                "ON c.device_id = d.device_id WHERE d.state = 'ACTIVE' AND c.device_id IS NULL"
+            ).fetchone()
+        finally:
+            conn.close()
+    except sqlite3.Error:
+        return None
+    return int(row[0]) if row else None
+
+
 class _ReadOnlyEpoch:
     """The store's revocation epoch, read through a read-only SQLite connection, so the CLI can
     check the identity before it opens the store for writing."""
@@ -783,6 +944,94 @@ class _ReadOnlyEpoch:
         if not self._path.with_name(self._path.name + "-wal").exists():
             return self._read("mode=ro&immutable=1")
         return self._read("mode=ro")
+
+
+def _push_store_counts(path: Path) -> tuple[int, int] | None:
+    """One committed SQLite view. No migration, pruning, identity or token load."""
+    path = path.resolve()
+    if not path.is_file():
+        return None
+    # An immutable open of a live WAL silently misses uncheckpointed rows.
+    # Use normal read-only WAL handling while the gateway is running.
+    wal = path.with_name(path.name + "-wal").exists()
+    if wal and not path.with_name(path.name + "-shm").exists():
+        # Refuse rather than ask SQLite to create a missing shared-memory file.
+        return None
+    mode = "mode=ro" if wal else "mode=ro&immutable=1"
+    try:
+        with contextlib.closing(
+            sqlite3.connect(path.as_uri() + f"?{mode}", uri=True, timeout=0.2)
+        ) as conn:
+            conn.execute("PRAGMA query_only = ON")
+            # Schema identity and both counts come from a single statement, so
+            # a concurrent registration/revoke cannot tear the two counters.
+            row = conn.execute(
+                "SELECT schema_version, "
+                "(SELECT COUNT(*) FROM push_registrations WHERE state = 'active'), "
+                "(SELECT COUNT(*) FROM push_device_generations g JOIN devices d "
+                "ON d.device_id = g.device_id WHERE d.state <> 'REVOKED') "
+                "FROM meta WHERE id = 1"
+            ).fetchone()
+            if row is None or row[0] != 3:
+                return None
+            return int(row[1]), int(row[2])
+    except (sqlite3.Error, OSError, ValueError):
+        return None
+
+
+def _cmd_push_status(env: CliEnv) -> int:
+    """PN-OPS: fixed codes and booleans/counts only; unavailable is never zero."""
+    from . import identity, push_config, server
+
+    kw = env.identity_kwargs
+    try:
+        custody = identity.resolve_custody(
+            env=kw.get("env", env.environ),
+            hermes_root=kw.get("hermes_root"),
+            binding_root=kw.get("binding_root"),
+        )
+    except identity.NamedProfileError as exc:
+        raise RefusedError(
+            "refused: HMP runs only under the default profile; run this without -p/--profile",
+            EXIT_ENVIRONMENT,
+        ) from exc
+    except identity.IdentityError as exc:
+        raise RefusedError("refused: the HMP custody location is unsafe", EXIT_ENVIRONMENT) from exc
+
+    available = True
+    try:
+        reader = env.push_settings_reader
+        if reader is None:
+            from .compat import CompatStatus
+
+            if env.compat().status != CompatStatus.SUPPORTED:
+                raise ValueError("configuration API unavailable")
+            # Hermes imports remain behind the minimum-version/dependency gate.
+            from .bridge import read_push_settings_for_diagnostics
+
+            reader = read_push_settings_for_diagnostics
+        enabled, configured, kids = push_config.configuration_summary(reader(custody.hermes_root))
+        env.stdout.write(f"push_enabled: {'yes' if enabled else 'no'}\n")
+        env.stdout.write(f"relay_configured: {'yes' if configured else 'no'}\n")
+        env.stdout.write(f"configured_kid_count: {kids}\n")
+    except Exception:
+        # Neither Hermes parse errors nor configuration data may reach output.
+        env.stdout.write(
+            "push_enabled: unavailable\nrelay_configured: unavailable\n"
+            "configured_kid_count: unavailable\nconfiguration_status: config_unavailable\n"
+        )
+        available = False
+    counts = _push_store_counts(server.store_path(custody.anchor_dir))
+    if counts is None:
+        env.stdout.write(
+            "active_registration_count: unavailable\n"
+            "non_revoked_generation_count: unavailable\nstore_status: store_unavailable\n"
+        )
+        available = False
+    else:
+        env.stdout.write(f"active_registration_count: {counts[0]}\n")
+        env.stdout.write(f"non_revoked_generation_count: {counts[1]}\n")
+    return EXIT_OK if available else EXIT_ENVIRONMENT
 
 
 @contextlib.contextmanager
@@ -1246,6 +1495,46 @@ def _grant_bot_access(ctx: _Context, *, user_id: str) -> None:
         out.write(f"  {_combined_approve_command(list(remaining), user_id)}\n")
 
 
+def _write_controls_saved(out: Any) -> None:
+    """Static, informational text after a saved grant. A permission is not an activation."""
+    out.write(
+        "Permission saved for this phone. It does not activate the previews: scheduled jobs "
+        "and default models each also need the host feature flag, a supported build, the "
+        "profile API and key, and bot authorization.\n"
+        "Check host prerequisites with: hermes hmp health check (see docs/INSTALL.md)\n"
+    )
+
+
+def _prompt_owner_controls(ctx: _Context, *, device_id: str, label: str) -> None:
+    """Ask the host for a separate, per-device privileged-control decision.
+
+    The only granting answer is the full word GRANT. Existing y/n answers intended for the
+    bot-access prompt therefore cannot accidentally elevate a newly paired phone.
+    """
+    out = ctx.out
+    out.write(
+        "\nAllow this phone to manage scheduled jobs and bot default models? "
+        "This is separate from Bot Chat access.\n"
+    )
+    out.write(f"Type GRANT for {json.dumps(label, ensure_ascii=True)}, or Enter to keep it off: ")
+    out.flush()
+    try:
+        answer = ctx.env.stdin.readline()
+    except KeyboardInterrupt:
+        answer = ""
+        out.write("\n")
+    allowed = answer.strip() == "GRANT"
+    if ctx.store.set_owner_controls(device_id, allowed=allowed, now=ctx.now()):
+        if allowed:
+            _write_controls_saved(out)
+        else:
+            out.write("Jobs and default-model control stays off for this phone.\n")
+    else:
+        out.write("The phone is no longer active; privileged control was not granted.\n")
+    if not allowed:
+        out.write(f"To grant it later: hermes hmp devices grant-controls {device_id}\n")
+
+
 def _wait_for_scan_and_confirm(
     ctx: _Context, *, oid: str, exp: int, label: str | None, user: str | None, grant: bool = True
 ) -> int:
@@ -1315,7 +1604,7 @@ def _wait_for_scan_and_confirm(
             yes_share=user is not None,  # the operator already chose this user at offer time
         )
         try:
-            _, user_id = _do_confirm(ctx, ns)
+            device_id, user_id = _do_confirm(ctx, ns)
         except KeyboardInterrupt:
             out.write("\nCancelled. The pairing is still pending.\n")
             out.write(_resume_hint(pairing_id, confirm_label))
@@ -1336,6 +1625,7 @@ def _wait_for_scan_and_confirm(
             _grant_bot_access(ctx, user_id=user_id)
         else:
             _print_next_steps(ctx)
+        _prompt_owner_controls(ctx, device_id=device_id, label=confirm_label)
         return EXIT_OK
 
 
@@ -1571,6 +1861,7 @@ def _do_confirm(ctx: _Context, args: argparse.Namespace) -> tuple[str, str]:
 def _cmd_confirm(ctx: _Context, args: argparse.Namespace) -> int:
     device_id, user_id = _do_confirm(ctx, args)
     ctx.out.write(f"Confirmed. Device {device_id}, user {user_id}.\n")
+    _prompt_owner_controls(ctx, device_id=device_id, label=args.label)
     return EXIT_OK
 
 
@@ -1620,6 +1911,328 @@ def _cmd_devices_revoke(ctx: _Context, args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def _cmd_devices_controls(ctx: _Context, args: argparse.Namespace, *, allowed: bool) -> int:
+    if not ctx.store.set_owner_controls(args.device_id, allowed=allowed, now=ctx.now()):
+        raise RefusedError("refused: device does not exist or is not active")
+    if allowed:
+        _write_controls_saved(ctx.out)
+    else:
+        ctx.out.write("Jobs and default-model control removed.\n")
+    return EXIT_OK
+
+
+def _cmd_devices_grant_controls(ctx: _Context, args: argparse.Namespace) -> int:
+    return _cmd_devices_controls(ctx, args, allowed=True)
+
+
+def _cmd_devices_deny_controls(ctx: _Context, args: argparse.Namespace) -> int:
+    return _cmd_devices_controls(ctx, args, allowed=False)
+
+
+def _media_operator_context(ctx: _Context, device_id: str, iid: str) -> dict[str, Any]:
+    from .media_permissions import MediaReadDecision
+    from .operator_read import SOCKET_NAME, OperatorUnavailableError, read_media_context
+
+    try:
+        record = read_listener_record(
+            listener_record_path(ctx.custody.anchor_dir), iid=iid, pid_alive=ctx.env.pid_alive,
+        )
+        if not ctx.env.verify_listener_live(record, iid):
+            raise OperatorUnavailableError("operator listener unavailable")
+        response = read_media_context(
+            listener_record_path(ctx.custody.anchor_dir).parent / SOCKET_NAME,
+            iid=iid, nonce=record.nonce, device_id=device_id,
+        )
+        current = ctx.store.media_read_decision(iid, device_id)
+        if type(current) is not MediaReadDecision:
+            raise OperatorUnavailableError("operator device unavailable")
+        current.validate()
+        if current._asdict() != response["decision"]:
+            raise OperatorUnavailableError("operator device changed")
+        if _load_identity(ctx).iid != iid:
+            raise OperatorUnavailableError("operator instance changed")
+        return response
+    except (ListenerRecordError, OperatorUnavailableError, OSError, ValueError,
+            TypeError, RuntimeError, sqlite3.Error) as exc:
+        raise RefusedError(
+            "refused: current media-permission runtime unavailable; inspect or restart HMP"
+        ) from exc
+
+
+def _cmd_devices_media(ctx: _Context, args: argparse.Namespace) -> int:
+    from .media_permissions import MediaReadDecision
+
+    iid = _load_identity(ctx).iid
+    before = _media_operator_context(ctx, args.device_id, iid)
+    decision = MediaReadDecision(**before["decision"])
+    decision.validate()
+    ctx.out.write(json.dumps({
+        "device_id": args.device_id, "explicit_media_read": decision.allowed,
+        "effective_entitlement": before["effective"], "revision": decision.revision,
+        "host_enabled": before["host_enabled"], "api_available": before["api_available"],
+        "per_bot_authorization": "required separately",
+    }, sort_keys=True) + "\n")
+    if args.devices_command == "media-read":
+        return EXIT_OK
+    allowed = args.devices_command == "grant-media-read"
+    ctx.out.write(
+        "Scope: eligible host-local images for this device's authorized bots now or later. "
+        "No approval answers, jobs, models, bot membership or host flags are changed. "
+        "Host settings are sampled, not fenced atomically with the permission commit.\n"
+    )
+    token = ("ALLOW" if allowed else "DENY") + f" MEDIA_READ {args.device_id}"
+    if not _host_request_confirmation(ctx, token):
+        raise RefusedError("refused: exact typed media-read decision required")
+    after = _media_operator_context(ctx, args.device_id, iid)
+    if any(after[key] != before[key] for key in (
+        "decision", "nonce", "generation", "host_enabled", "api_available", "effective",
+    )) or int(time.monotonic() * 1_000) >= after["expires_ms"]:
+        raise RefusedError("refused: media decision context changed; inspect before retrying")
+    try:
+        written = ctx.store.set_media_read(decision, allowed=allowed, now=ctx.now())
+    except BaseException:
+        raise RefusedError(
+            "media decision outcome unknown; inspect with devices media-read; do not replay"
+        ) from None
+    if written is None:
+        raise RefusedError("refused: device or media decision changed; no decision saved")
+    try:
+        if type(written) is not MediaReadDecision:
+            raise ValueError("write outcome unavailable")
+        written.validate()
+        readback = ctx.store.media_read_decision(iid, args.device_id)
+        if type(readback) is not MediaReadDecision:
+            raise ValueError("readback unavailable")
+        readback.validate()
+        if readback != written:
+            raise ValueError("decision superseded")
+        live = _media_operator_context(ctx, args.device_id, iid)
+        if (live["decision"] != written._asdict() or live["effective"] is not allowed
+                or live["nonce"] != after["nonce"] or live["generation"] != after["generation"]):
+            raise ValueError("live readback changed")
+    except Exception:
+        raise RefusedError(
+            "media decision committed; live readback uncertain; inspect; do not replay"
+        ) from None
+    ctx.out.write(f"Media-read decision saved at revision {written.revision}; "
+                  "host and per-bot availability remain separate.\n")
+    return EXIT_OK
+
+
+def _host_request_line(record: Any) -> str:
+    """A bounded ASCII-only host snapshot, never a bearer token or a grant."""
+    fields = {
+        "request_id": record.request_id,
+        "device_id": record.origin.device_id,
+        "user_id": record.origin.user_id,
+        "family_id": record.origin.family_id,
+        "iid": record.origin.iid,
+        "instance_epoch": record.origin.instance_epoch,
+        "store_revocation_epoch": record.origin.store_revocation_epoch,
+        "bot_profile": record.bot_profile,
+        "feature": record.feature,
+        "state": record.state,
+        "expires_at": record.expires_at,
+        "controls_revision": record.current_controls_revision,
+        "controls_allowed": record.current_controls_allowed,
+        "origin_active": record.current_origin_active,
+    }
+    line = json.dumps(fields, sort_keys=True, ensure_ascii=True, separators=(",", ":"))
+    if len(line.encode("ascii")) > 2048:
+        raise RefusedError("refused: host request snapshot exceeded its bound")
+    return line
+
+
+def _host_request_current(ctx: _Context, request_id: str) -> tuple[Any, Any, str]:
+    from .controls_requests import ControlsRequestStore
+
+    if re.fullmatch(r"[0-9a-f]{32}", request_id) is None:
+        raise RefusedError("refused: invalid request id")
+    iid = _load_identity(ctx).iid
+    requests = ControlsRequestStore(ctx.store)
+    result = requests.host_record(request_id, now=ctx.now(), current_iid=iid)
+    if result.code != "ok" or result.record is None:
+        raise RefusedError("refused: request is missing or current state is unavailable")
+    return requests, result.record, iid
+
+
+def _host_request_confirmation(ctx: _Context, expected: str) -> bool:
+    """One exact, bounded TTY line. EOF, signal, or any variant refuses."""
+    ctx.out.write(f"Type {expected} to confirm: ")
+    ctx.out.flush()
+    try:
+        line = ctx.env.stdin.readline(256)
+    except KeyboardInterrupt:
+        return False
+    return line == expected + "\n"
+
+
+def _host_operator_context(ctx: _Context, request: Any, iid: str) -> dict[str, Any]:
+    """Bound one fresh local read to a TLS-pinned current listener and Store row."""
+    from .operator_read import SOCKET_NAME, OperatorUnavailableError, read_context
+
+    try:
+        record = read_listener_record(
+            listener_record_path(ctx.custody.anchor_dir), iid=iid,
+            pid_alive=ctx.env.pid_alive,
+        )
+        if not ctx.env.verify_listener_live(record, iid):
+            raise OperatorUnavailableError("operator listener unavailable")
+        response = read_context(
+            listener_record_path(ctx.custody.anchor_dir).parent / SOCKET_NAME,
+            iid=iid, nonce=record.nonce, request_id=request.request_id,
+        )
+        # Full equality with the Store's validated bounded record; JSON canonicalization
+        # distinguishes bool from int and rejects unknown/extra fields.
+        def canonical(value: Any) -> str:
+            return json.dumps(
+                value, sort_keys=True, separators=(",", ":"),
+                ensure_ascii=True, allow_nan=False,
+            )
+        if canonical(response["record"]) != canonical(asdict(request)):
+            raise OperatorUnavailableError("operator request changed")
+        return response
+    except (ListenerRecordError, OperatorUnavailableError, OSError, ValueError, TypeError) as exc:
+        raise RefusedError("refused: current host decision context unavailable") from exc
+
+
+def _positive_operator_sources(response: dict[str, Any], request: Any) -> bool:
+    source = response["sources"]
+    return bool(
+        request.bot_profile in source["authorized_profiles"]
+        and all(source["host_settings"][key] == "enabled" for key in ("jobs", "model"))
+        and all(source["eligibility"][key] == ["available", None]
+                for key in ("jobs", "model"))
+        and all(value == "configured" for value in source["profile_api"].values())
+    )
+
+
+def _cmd_controls_requests(ctx: _Context, args: argparse.Namespace) -> int:
+    from .controls_requests import ControlsRequestStore
+
+    action = args.controls_requests_command
+    if action == "list":
+        if args.after is not None and re.fullmatch(r"[0-9a-f]{32}", args.after) is None:
+            raise RefusedError("refused: invalid request cursor")
+        iid = _load_identity(ctx).iid
+        page = ControlsRequestStore(ctx.store).host_list(
+            after=args.after, now=ctx.now(), current_iid=iid, limit=20,
+        )
+        if page.code != "ok" or len(page.records) > 20:
+            raise RefusedError("refused: host request inbox is unavailable")
+        lines = [_host_request_line(row) for row in page.records]
+        output = "\n".join(lines) + ("\n" if lines else "No requests.\n")
+        if page.next_after is not None:
+            output += f"Next --after {page.next_after}\n"
+        if len(output.encode("ascii")) > 16_384:
+            raise RefusedError("refused: host request inbox exceeded its bound")
+        ctx.out.write(output)
+        return EXIT_OK
+    if action not in {"show", "allow", "deny"}:
+        raise RefusedError("refused: choose list, show, allow, or deny", EXIT_ENVIRONMENT)
+    requests, first, iid = _host_request_current(ctx, args.request_id)
+    ctx.out.write(_host_request_line(first) + "\n")
+    ctx.out.write(
+        "Scope: device-wide jobs AND default-model Controls for all authorized bots now "
+        "or later. Bot and feature above are request provenance only. This does not add "
+        "owner_device_ids, but may restore approval ownership for an already allowlisted "
+        "phone. Bot membership, host flags, profile API/key and mode administration remain "
+        "separate. Current complete host prerequisites: unverified here.\n"
+    )
+    if action == "show":
+        return EXIT_OK
+    if first.state != "PENDING":
+        raise RefusedError("refused: request is no longer pending")
+    if action == "allow":
+        before = _host_operator_context(ctx, first, iid)
+        source = before["sources"]
+        ctx.out.write("Authorized bots now: " + ", ".join(source["authorized_profiles"]) + "\n")
+        ctx.out.write("Served bots now: " + ", ".join(source["served_profiles"]) + "\n")
+        ctx.out.write(
+            f"Host jobs={source['host_settings']['jobs']}; "
+            f"model={source['host_settings']['model']}; "
+            f"existing approval-owner allowlist={source['approval_owner_allowlisted']}.\n"
+        )
+        for profile, state in sorted(source["profile_api"].items()):
+            ctx.out.write(f"Bot {json.dumps(profile)} API/key={state}.\n")
+        ctx.out.write(
+            "The live Hermes/config checks cannot be fenced atomically with the Store commit. "
+            "This grants device-wide jobs and default-model Controls to all bots authorized "
+            "now or later; the initiating bot/feature only identify the request. Existing "
+            "owner-device allowlist membership can restore approval ownership.\n"
+        )
+        if not _positive_operator_sources(before, first):
+            raise RefusedError("refused: current host prerequisites are not ready")
+        token = (
+            f"ALLOW {first.request_id} DEVICE {first.origin.device_id} "
+            "CONTROLS_JOBS_MODELS_ALL_CURRENT_FUTURE_BOTS"
+        )
+        if not _host_request_confirmation(ctx, token):
+            raise RefusedError("refused: exact typed device-wide decision required")
+        after_record = requests.host_record(first.request_id, now=ctx.now(), current_iid=iid)
+        second = after_record.record
+        if (after_record.code != "ok" or second != first or second is None
+                or second.state != "PENDING"):
+            raise RefusedError("refused: request or Controls state changed while confirming")
+        after = _host_operator_context(ctx, second, iid)
+        if (after["generation"] != before["generation"]
+                or after["sources"] != before["sources"]
+                or not _positive_operator_sources(after, second)):
+            raise RefusedError("refused: host prerequisites changed while confirming")
+        result = requests.decide(
+            first.request_id, allow=True, now=ctx.now(), current_iid=iid,
+            precommit_external_verified=True,
+        )
+        if (result.code != "committed_needs_effective_readback"
+                or type(result.committed_revision) is not int):
+            raise RefusedError("refused: decision outcome unknown; inspect request and Controls")
+        readback = requests.host_decision_readback(
+            first.request_id, expected_revision=result.committed_revision,
+            now=ctx.now(), current_iid=iid,
+        )
+        if readback.code != "committed" or readback.record is None:
+            raise RefusedError(
+                "refused: decision unknown or superseded; inspect request and Controls"
+            )
+        effective = _host_operator_context(ctx, readback.record, iid)
+        if (effective["generation"] != after["generation"]
+                or effective["sources"] != after["sources"]
+                or effective["record"]["current_controls_allowed"] != 1
+                or effective["record"]["current_controls_revision"]
+                != result.committed_revision):
+            raise RefusedError(
+                "refused: decision unknown or superseded; inspect request and Controls"
+            )
+        ctx.out.write("Controls request granted for this device.\n")
+        return EXIT_OK
+    expected = (
+        f"DENY {first.request_id} DEVICE {first.origin.device_id} REQUEST_ONLY"
+    )
+    if not _host_request_confirmation(ctx, expected):
+        raise RefusedError("refused: exact typed request-only decision required")
+    second_result = requests.host_record(first.request_id, now=ctx.now(), current_iid=iid)
+    second = second_result.record
+    if (second_result.code != "ok" or second is None or second.state != "PENDING"
+            or second.origin != first.origin or second.current_controls_revision
+            != first.current_controls_revision or second.current_controls_allowed
+            != first.current_controls_allowed):
+        raise RefusedError("refused: request or Controls state changed while confirming")
+    result = requests.decide(
+        first.request_id, allow=False, now=ctx.now(), current_iid=iid,
+        precommit_external_verified=False,
+    )
+    if result.code != "denied":
+        raise RefusedError("refused: decision outcome unknown; inspect the request")
+    readback = requests.host_record(first.request_id, now=ctx.now(), current_iid=iid)
+    if (readback.code != "ok" or readback.record is None
+            or readback.record.state != "DENIED"
+            or readback.record.current_controls_revision != first.current_controls_revision
+            or readback.record.current_controls_allowed != first.current_controls_allowed):
+        raise RefusedError("refused: decision readback unknown; inspect the request")
+    ctx.out.write("Request denied. Existing Controls were not withdrawn.\n")
+    return EXIT_OK
+
+
 def _cmd_show(ctx: _Context, _args: argparse.Namespace) -> int:
     iid = _load_identity(ctx).iid
     ctx.out.write(f"Instance fingerprint: {_short(iid)}\n")
@@ -1653,40 +2266,350 @@ def _cmd_rotate(ctx: _Context, _args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
-def _cmd_compat(env: CliEnv) -> int:
-    result = env.compat()
-    out = env.stdout
-    status = getattr(getattr(result, "status", None), "value", "unsupported")
-    out.write(f"Read compatibility: {status}\n")
-    why = getattr(getattr(result, "why", None), "value", None)
-    if why:
-        out.write(f"Reason: {why}\n")
-    ident = getattr(result, "identity", None)
-    if ident is not None:
-        out.write(f"Git SHA: {ident.git_sha or 'none (no git metadata)'}\n")
-        out.write(f"Read-bridge fingerprint: {ident.fingerprint}\n")
-    else:
-        out.write("Build identity: unidentifiable\n")
-    entry = getattr(result, "entry", None)
-    out.write(f"List match: {entry.label if entry is not None else 'none'}\n")
-    probe = (
-        "passed"
-        if getattr(result, "supported", False)
-        else ("failed" if why == "hermes_read_dependency_missing" else "not run")
-    )
-    out.write(f"Dependency probe: {probe}\n")
-    if getattr(result, "supported", False):
-        from . import compat
+def _version_floor_text() -> str:
+    from . import hermes_version
 
-        send_ready = compat.direct_send_build_qualified(ident)
-        out.write(f"Guarded send qualification: {'qualified' if send_ready else 'unqualified'}\n")
-    if status != "supported":
-        out.write(
-            "For an older Hermes install, update to v0.21.5 (v2026.9.24). "
-            "If already newer, update HMP after that release is qualified; "
-            "see github.com/MahdiHedhli/hermes-hmp/blob/main/docs/RELEASE_COMPAT_WATCH.md.\n"
+    read = hermes_version.FEATURE_FLOORS["read"]
+    write = hermes_version.FEATURE_FLOORS["send"]
+    return (
+        f"read {read.semver_text} ({read.calver_text}); "
+        f"send, jobs, model, approvals, phone chat and local media "
+        f"{write.semver_text} ({write.calver_text})"
+    )
+
+
+def _failure_lines(version: str, feature: Any, status: Any) -> list[str]:
+    """A failed compatibility check. A failed probe is a fact about this install's APIs, not proof
+    of a version problem: the sample note appears only when no tested sample matches, and only
+    after a failure."""
+    from . import issue_draft
+
+    detail = issue_draft.failure_detail(feature, status)
+    lines = [f"The {feature.value} compatibility check failed on Hermes {version} ({detail}).\n"]
+    if status.tested_label is None:
+        lines.append("This Hermes is not one of HMP's tested samples.\n")
+    return lines
+
+
+def _read_gap_lines(result: Any) -> list[str]:
+    """The three-way read wording shared by `compat` and `setup check`."""
+    from . import compat
+
+    eligibility = getattr(result, "eligibility", None)
+    status = eligibility.features.get(compat.Feature.READ) if eligibility is not None else None
+    if status is None or status.available:
+        return []
+    version = eligibility.version.text
+    if status.reason is compat.Unavailable.VERSION_BELOW_FLOOR:
+        floor = _version_floor_text()
+        return [
+            f"Hermes {version} is older than HMP's minimum ({floor}). Update Hermes.\n"
+        ]
+    if status.reason is compat.Unavailable.HERMES_NOT_FOUND:
+        return ["The Hermes install could not be found, so HMP cannot serve any feature.\n"]
+    return [
+        *_failure_lines(version, compat.Feature.READ, status),
+        "To prepare a report: hermes hmp compat --issue-draft\n",
+    ]
+
+
+def _cmd_compat(env: CliEnv, args: argparse.Namespace | None = None) -> int:
+    from . import compat, issue_draft
+
+    want_draft = bool(getattr(args, "issue_draft", False))
+    feature = getattr(args, "feature", None)
+    code = getattr(args, "failure_code", None)
+    if (feature is None) != (code is None):
+        raise RefusedError(
+            "refused: --feature and --failure-code must be used together", EXIT_ENVIRONMENT
         )
+    if feature is not None and not want_draft:
+        raise RefusedError(
+            "refused: --feature and --failure-code need --issue-draft", EXIT_ENVIRONMENT
+        )
+    context: issue_draft.OperatorReport | issue_draft.OwnReason | None = None
+    if feature is not None:
+        try:
+            context = issue_draft.check_report_request(feature, code)
+        except issue_draft.ReportRequestError as exc:
+            raise RefusedError(
+                f"refused: {exc}. Features: {', '.join(issue_draft.FEATURES)}. Use the code the "
+                "phone showed for that feature.",
+                EXIT_ENVIRONMENT,
+            ) from exc
+
+    result = env.compat()
+    eligibility = getattr(result, "eligibility", None)
+    out = env.stdout
+    if want_draft:
+        return _write_issue_draft(out, eligibility, context)
+
+    if eligibility is None:
+        out.write("Hermes version: unknown\n")
+        out.write(f"Minimum Hermes: {_version_floor_text()}\n")
+        out.write("Feature availability could not be determined.\n")
+        return EXIT_OK
+    version = eligibility.version
+    out.write(f"Hermes version: {version.text} (source: {version.source.value})\n")
+    out.write(f"Minimum Hermes: {_version_floor_text()}\n")
+    for feat, status in eligibility.features.items():
+        if status.available:
+            out.write(f"{feat.value}: available\n")
+            continue
+        out.write(f"{feat.value}: unavailable ({issue_draft.failure_detail(feat, status)})\n")
+    if getattr(args, "verbose", False):
+        hook = getattr(eligibility, "stream_approval_hook", None)
+        word = "present" if hook is True else "absent" if hook is False else "unknown"
+        out.write(
+            f"Session-stream approval hook: {word} (informational; it never gates a feature "
+            "and sets no minimum Hermes version)\n"
+        )
+
+    below = [
+        f.value
+        for f, st in eligibility.features.items()
+        if st.reason is compat.Unavailable.VERSION_BELOW_FLOOR
+    ]
+    if below:
+        out.write(
+            f"Hermes {version.text} is older than HMP's minimum "
+            f"({_version_floor_text()}) for {', '.join(below)}. Update Hermes.\n"
+        )
+    failures = issue_draft.static_failures(eligibility)
+    for feat, status in failures:
+        out.writelines(_failure_lines(version.text, feat, status))
+    if failures:
+        out.write("To prepare a report: hermes hmp compat --issue-draft\n")
+    elif eligibility.features[compat.Feature.READ].reason is compat.Unavailable.HERMES_NOT_FOUND:
+        out.write("The Hermes install could not be found, so HMP cannot serve any feature.\n")
     return EXIT_OK
+
+
+def _write_issue_draft(out: TextIO, eligibility: Any, context: Any) -> int:
+    from . import issue_draft
+
+    report = None
+    if isinstance(context, issue_draft.OwnReason):
+        out.write(issue_draft.own_reason_text(context) + "\n")
+    elif isinstance(context, issue_draft.OperatorReport):
+        report = context
+        feature_status = _feature_status(eligibility, report.feature)
+        if feature_status is not None and feature_status.reason is not None and (
+            feature_status.reason.value == "hermes_version_below_floor"
+        ):
+            out.write(
+                f"Note: this Hermes is older than HMP's minimum for {report.feature}; "
+                "updating Hermes is the expected fix.\n\n"
+            )
+    draft = issue_draft.build_draft(eligibility, report)
+    if draft is None:
+        if context is None:
+            out.write(issue_draft.NOTHING_TO_REPORT + "\n")
+        return EXIT_OK
+    out.write(draft.render())
+    return EXIT_OK
+
+
+def _feature_status(eligibility: Any, feature: str) -> Any:
+    if eligibility is None:
+        return None
+    for feat, status in eligibility.features.items():
+        if feat.value == feature:
+            return status
+    return None
+
+
+def _checked_setup(env: CliEnv) -> tuple[int, ListenerRecord | None]:
+    """Read-only host preflight. Never opens the writable store or runs Hermes CLI."""
+    from . import identity, server
+
+    out = env.stdout
+    result = env.compat()
+    supported = bool(getattr(result, "supported", False))
+    out.write(f"Hermes read compatibility: {'supported' if supported else 'unsupported'}\n")
+    if not supported:
+        out.writelines(_read_gap_lines(result))
+        out.write("Check `hermes hmp compat` for the details.\n")
+
+    kw = env.identity_kwargs
+    try:
+        custody = identity.resolve_custody(
+            env=kw.get("env", env.environ),
+            hermes_root=kw.get("hermes_root"),
+            binding_root=kw.get("binding_root"),
+        )
+    except identity.NamedProfileError:
+        out.write("HMP instance: unavailable under a named profile; use the default profile.\n")
+        return EXIT_REFUSED, None
+    except identity.IdentityError:
+        out.write("HMP instance: custody location is unsafe.\n")
+        return EXIT_REFUSED, None
+
+    store_path = server.store_path(custody.anchor_dir)
+    if not store_path.is_file():
+        out.write("HMP instance: not initialized. Start the gateway with HMP enabled once.\n")
+        return EXIT_REFUSED, None
+    try:
+        loaded = identity.load_existing(_ReadOnlyEpoch(store_path), **_identity_kw(env))
+    except (identity.IdentityError, sqlite3.Error, OSError):
+        out.write("HMP instance: not current; inspect the gateway before pairing.\n")
+        return EXIT_REFUSED, None
+    out.write("HMP instance: current.\n")
+
+    try:
+        record = read_listener_record(
+            listener_record_path(custody.anchor_dir),
+            iid=loaded.iid,
+            pid_alive=env.pid_alive,
+        )
+    except ListenerRecordError:
+        out.write("HMP listener: unavailable or unsafe. Start or inspect the gateway.\n")
+        return EXIT_REFUSED, None
+    try:
+        live = env.verify_listener_live(record, loaded.iid)
+    except Exception:
+        live = False
+    if not live:
+        out.write("HMP listener: TLS identity or readiness check failed.\n")
+        return EXIT_REFUSED, None
+    out.write("HMP listener: running with the expected TLS identity.\n")
+    count = len(record.profiles or ())
+    out.write(f"Served bot count: {count} (routing and access are not verified here).\n")
+    undecided = _undecided_active_devices(store_path)
+    if undecided:
+        out.write(
+            f"Approvals note: {undecided} active paired device(s) have no recorded controls "
+            "decision. A device listed in owner_device_ids with no decision also receives jobs "
+            "and model controls. Record an explicit decision with `hermes hmp devices "
+            "grant-controls` before listing an approval owner. Approval ownership requires "
+            "grant-controls (or no decision, legacy); deny-controls removes approval "
+            "ownership. This check changed nothing.\n"
+        )
+    out.write("Review docs/INSTALL.md and server/DEPLOYMENT.md before pairing.\n")
+    return (EXIT_OK, record) if supported and count > 0 else (EXIT_REFUSED, None)
+
+
+def _approval_test_binding(env: CliEnv) -> Any:
+    """Load-only custody/epoch/identity, then typed private record; no health probe."""
+    from . import identity, server
+    from .approval_test_cli import ListenerBinding
+    from .approval_test_host_codec import HostGeneration
+
+    kw = env.identity_kwargs
+    custody = identity.resolve_custody(
+        env=kw.get("env", env.environ),
+        hermes_root=kw.get("hermes_root"),
+        binding_root=kw.get("binding_root"),
+    )
+    path = server.store_path(custody.anchor_dir)
+    if not path.is_file():
+        raise ValueError()
+    # Read-only SQLite can require a -shm sidecar when a WAL exists. Refuse a
+    # missing sidecar rather than ask SQLite to create it during this command.
+    if path.with_name(path.name + "-wal").exists() and not path.with_name(
+        path.name + "-shm"
+    ).exists():
+        raise ValueError()
+    loaded = identity.load_existing(_ReadOnlyEpoch(path), **_identity_kw(env))
+    record_path = listener_record_path(custody.anchor_dir)
+
+    def reread() -> HostGeneration:
+        record = read_listener_record(record_path, iid=loaded.iid, pid_alive=env.pid_alive)
+        return HostGeneration(record.iid, record.pid, record.nonce)
+
+    return ListenerBinding(record_path, reread(), reread)
+
+
+def _cmd_approval_test(env: CliEnv, args: argparse.Namespace, action: str | None) -> int:
+    """One separate async invocation; never a native producer or writable Store."""
+    import asyncio
+
+    from .approval_test_cli import run_command
+    from .approval_test_host_codec import HostBeginRequest, HostOperationRequest
+
+    try:
+        if action not in ("begin", "status", "cancel"):
+            env.stdout.write("Approval test unavailable.\n")
+            return EXIT_REFUSED
+        if ("approval-test", action) in MUTATING_COMMANDS:
+            _check_mutation_allowed(env)
+        binding = _approval_test_binding(env)
+        if action == "begin":
+            request = HostBeginRequest(
+                binding.generation, args.device, args.target_profile, args.session, args.timeout_ms
+            )
+        else:
+            request = HostOperationRequest(binding.generation, action, args.operation_id)
+        return asyncio.run(run_command(binding, request, env.stdout))
+    except RefusedError:
+        env.stdout.write("Approval test unavailable.\n")
+        return EXIT_REFUSED
+    except KeyboardInterrupt:
+        env.stdout.write("Operator interrupted; host cleanup is not confirmed by interruption.\n")
+        return EXIT_INTERRUPTED
+    except Exception:
+        # No parser/native/record paths or selectors can escape through errors.
+        env.stdout.write("Approval test completion unconfirmed; do not resubmit begin.\n")
+        return EXIT_ENVIRONMENT
+
+
+def _cmd_setup_check(env: CliEnv) -> int:
+    status, _record = _checked_setup(env)
+    return status
+
+
+def _cmd_health_check(env: CliEnv) -> int:
+    """Read-only operator diagnostic from the live, TLS-pinned gateway record."""
+    status, record = _checked_setup(env)
+    if status != EXIT_OK or record is None:
+        return EXIT_REFUSED
+    checked_at, rows = record.health_checked_at, record.health
+    age = int(env.clock()) - checked_at if checked_at is not None else None
+    if age is None or age < -5 or age > HEALTH_MAX_AGE_S or rows is None:
+        env.stdout.write("Bot channel health: unavailable or stale; inspect the gateway.\n")
+        return EXIT_REFUSED
+    healthy = True
+    for profile, send, cron, model in sorted(rows):
+        env.stdout.write(
+            f"Bot {json.dumps(profile)}: send={send}, jobs={cron}, model={model}.\n"
+        )
+        healthy &= all(state in ("ready", "disabled") for state in (send, cron, model))
+    env.stdout.write("Device access and later loopback execution are not verified.\n")
+    return EXIT_OK if healthy else EXIT_REFUSED
+
+
+def _cmd_health_presentation(env: CliEnv) -> int:
+    """Current same-listener binding metadata, never a rendering/access verdict."""
+    from . import identity
+    from .operator_read import SOCKET_NAME, read_presentation_context
+
+    status, record = _checked_setup(env)
+    if status != EXIT_OK or record is None:
+        return EXIT_REFUSED
+    try:
+        kw = env.identity_kwargs
+        custody = identity.resolve_custody(
+            env=kw.get("env", env.environ), hermes_root=kw.get("hermes_root"),
+            binding_root=kw.get("binding_root"),
+        )
+        path = listener_record_path(custody.anchor_dir)
+        result = read_presentation_context(path.parent / SOCKET_NAME,
+                                           iid=record.iid, nonce=record.nonce)
+        after = read_listener_record(path, iid=record.iid, pid_alive=env.pid_alive)
+        if ((after.pid, after.nonce, after.iid) != (record.pid, record.nonce, record.iid)
+                or env.verify_listener_live(after, record.iid) is not True
+                or not result["sample_ms"] <= int(time.monotonic() * 1_000)
+                    < result["expires_ms"]):
+            raise ListenerRecordError("listener changed")
+    except Exception:
+        env.stdout.write("Desktop appearance binding: unavailable; inspect HMP startup.\n")
+        env.stdout.write("Images and phone access were not tested.\n")
+        return EXIT_REFUSED
+    bound = result["state"] == "bound_not_probed"
+    env.stdout.write("Desktop appearance binding: "
+                     + ("bound (not probed).\n" if bound else "unavailable.\n"))
+    env.stdout.write("Images and phone access were not tested.\n")
+    return EXIT_OK if bound else EXIT_REFUSED
 
 
 _STORE_COMMANDS: dict[tuple[str, str], Callable[[_Context, argparse.Namespace], int]] = {
@@ -1696,6 +2619,12 @@ _STORE_COMMANDS: dict[tuple[str, str], Callable[[_Context, argparse.Namespace], 
     ("pair", "deny"): _cmd_deny,
     ("devices", "list"): _cmd_devices_list,
     ("devices", "revoke"): _cmd_devices_revoke,
+    ("devices", "grant-controls"): _cmd_devices_grant_controls,
+    ("devices", "deny-controls"): _cmd_devices_deny_controls,
+    ("devices", "media-read"): _cmd_devices_media,
+    ("devices", "grant-media-read"): _cmd_devices_media,
+    ("devices", "deny-media-read"): _cmd_devices_media,
+    ("devices", "controls-requests"): _cmd_controls_requests,
     ("instance", "show"): _cmd_show,
     ("instance", "rotate-key"): _cmd_rotate,
 }
@@ -1703,7 +2632,9 @@ _STORE_COMMANDS: dict[tuple[str, str], Callable[[_Context, argparse.Namespace], 
 
 # Commands that use the instance identity: checked load-only before the store is opened.
 IDENTITY_COMMANDS: frozenset[tuple[str, str]] = frozenset(
-    {("pair", "offer"), ("instance", "show"), ("instance", "rotate-key")}
+    {("pair", "offer"), ("instance", "show"), ("instance", "rotate-key"),
+     ("devices", "controls-requests")}
+    | {("devices", action) for action in ("media-read", "grant-media-read", "deny-media-read")}
 )
 
 
@@ -1714,11 +2645,24 @@ def dispatch(args: argparse.Namespace, env: Optional[CliEnv] = None) -> int:  # 
     env = env if env is not None else CliEnv()
     group, action = _command(args)
     try:
+        if group == "approval-test":
+            return _cmd_approval_test(env, args, action)
         if group == "compat":
-            return _cmd_compat(env)
+            return _cmd_compat(env, args)
+        if (group, action) == ("setup", "check"):
+            return _cmd_setup_check(env)
+        if (group, action) == ("health", "check"):
+            return _cmd_health_check(env)
+        if (group, action) == ("health", "presentation"):
+            return _cmd_health_presentation(env)
+        if (group, action) == ("push", "status"):
+            return _cmd_push_status(env)
         handler = _STORE_COMMANDS.get((group or "", action or ""))
         if handler is None:
-            env.stderr.write("usage: hermes hmp {pair,devices,instance,compat} ...\n")
+            env.stderr.write(
+                "usage: hermes hmp "
+                "{pair,devices,instance,compat,setup,health,push,approval-test} ...\n"
+            )
             return EXIT_ENVIRONMENT
         if (group, action) in MUTATING_COMMANDS:
             _check_mutation_allowed(env)

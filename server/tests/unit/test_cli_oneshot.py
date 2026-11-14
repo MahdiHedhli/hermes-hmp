@@ -242,6 +242,48 @@ def test_happy_path_y_confirms_and_pairs(c: Cli) -> None:
     assert "hmp1:" not in c.out
 
 
+def test_host_grants_owner_controls_only_after_explicit_word(c: Cli) -> None:
+    c.write_record()
+    dev = hmp_kit.Device(name="f1-fixture-owner-phone")
+
+    code = _run_offer(
+        c,
+        "--label",
+        "f1-fixture-owner-phone",
+        sleep=FakeSleep([lambda: _claim_via_qr(c, dev)]),
+        stdin=FakeStdin(["y\n", "GRANT\n"]),
+    )
+
+    assert code == cli.EXIT_OK, c.out
+    row = _device_row(c.env)
+    assert c.env.store.owner_controls_decision(row["device_id"]) is True
+    assert "separate from Bot Chat access" in c.out
+    assert "Permission saved for this phone" in c.out
+    assert "does not activate the previews" in c.out
+    assert "hermes hmp health check" in c.out and "docs/INSTALL.md" in c.out
+    assert "ready" not in c.out.lower().replace("readiness", "")
+    assert "control granted" not in c.out
+
+
+def test_old_yes_answer_cannot_grant_owner_controls(c: Cli) -> None:
+    c.write_record()
+    dev = hmp_kit.Device(name="f1-fixture-chat-only-phone")
+
+    code = _run_offer(
+        c,
+        "--label",
+        "f1-fixture-chat-only-phone",
+        sleep=FakeSleep([lambda: _claim_via_qr(c, dev)]),
+        stdin=FakeStdin(["y\n", "y\n"]),
+    )
+
+    assert code == cli.EXIT_OK, c.out
+    row = _device_row(c.env)
+    assert c.env.store.owner_controls_decision(row["device_id"]) is False
+    assert "control stays off" in c.out
+    assert "Permission saved" not in c.out
+
+
 def test_offer_for_the_intended_user_shares_without_a_second_prompt(c: Cli) -> None:
     """Item 4: when the offer named `--user`, the one-shot flow completes the existing
     `--user ... --yes-share` confirm path automatically -- the operator already made that choice

@@ -1,0 +1,1188 @@
+## Rooted route current-runtime prefix result — November11
+
+Current17 corrected cases pass with zero failures/errors/skips, unchanged source,
+matching log/XML hashes and all557 source maps independently verified. This is
+resource-route prefix acceptance only; minimum17 runs serially next. Actual
+consumer lifetime and complete native startup are not covered by that result.
+A separate lifetime harness remains private/unexecuted: independent review caught
+an attempt to read caller.resource before its assignment at the pin-return site;
+it now derives the resource from the original consumer/operation and compares the
+local only when bound. A local WIP commit may preserve this stage for independent
+next-unit authoring; it does not authorize deployment or remove the full guard.
+
+## Rooted-route observer correction — November11, current
+
+The corrected broad draft runs showed first-case failures and were intentionally
+interrupted to obtain a bounded normal-case traceback. That diagnostic and a
+subsequent isolated normal run both hit the unchanged60s fixture timeout; neither
+proves an accounting assertion failure or production acceptance. The observer now
+holds original code/native-operation references, ignores unrelated return events
+and uses direct C-operation identities without per-event property reads/generators.
+Independent read-only review accepts this observation scope; production predicates
+and deadline are unchanged. The isolated normal1 prefix passes46.15s with source
+unchanged. This is harness overhead correction, not a native startup speedup.
+The17-case fault matrix is now serial current first, then minimum after terminal;
+actual full startup/optimizedDAG/feature/device/release acceptance remain open.
+
+## Rooted link Scope route — implementation under review, November11
+
+A separate root-owned implementation worktree now defines an early-retained
+_native_link_scope_current execution/resource route at the actual resource and
+lifetime callers. Generic _native_scope_current/_native_walk_scope and their seven
+call sites remain unchanged. The new route holds actual Scope/digest/Entry/input/
+snapshot/owner roots around the FULL existing owner guard; no reduced audit or
+performance pass is claimed. It is the root-carrying integration stage of RGA-01e,
+not a substitute for its complete fresh mutable DAG and native60s requirements.
+
+Independent draft review corrected argument substitution, original-class and
+held-callee selection, class-key/native-descriptor and last-return root fences.
+An actual normal route prefix passed once. Two preceding diagnostic runs refused
+before injection; one identified first-seen engine class/function rows in the
+importing module, not necessarily the defining module. Those are retained failed
+drafts, not successful security controls. Current changed source is not qualified
+by the earlier normal result.
+
+Review then found a false-green initial-fault witness and missing accounting
+comparisons. The two obsolete17-case runs were deliberately interrupted with
+SIGINT only for their exact isolated runner/pytest/wrapper process trees; neither
+qualifies. Corrected tests record checker success before fault-specific returns,
+require completed mutation/readback, and verify attempts/scopes/cursor/history/
+actions, exact reserved-close charges and original close receipts. Normal observer
+exception disables its C observer, so that cleanup is proved by accounting/receipts,
+not a claimed all-phase call trace. Seventeen corrected cases on each runtime are
+running; acceptance/review and subsequent complete DAG integration remain open.
+
+Prior-source actual consumer21-case suites separately passed on both runtimes,
+with same ordered IDs and556 source maps bound to44b6d04. These preserve original
+selector/input/callee-prefix guarantees only; not full startup or this new route.
+No deployment, build, permissions, provider, model, job or store changes occurred.
+
+## Generated closure primitives — bounded checks passed, November 11
+
+Candidate checks join canonical collections closure values to independently held
+native len/map/dict/zip/tuple operations, exact integer field counts and the original
+_fields tuple. Repr-format closure values must be exact strings. Canonical role /
+free-variable shapes precede comparisons; non-collections roles cannot impersonate
+these helpers. Parent own-function default carriers retain map; original capture
+explicitly forwards held map/int/zip/len references before callbacks can nominate
+new defaults. The shared helper21 and thirteen-field typepin layouts stay unchanged.
+
+Baseline161/129 cases fail their missing initial-refusal assertions. An initial
+apply script failed before writing source; two subsequent draft runs simply repeat
+that unchanged baseline, not a product regression. Corrected166/134 focused suites
+pass, including coherent export/default/cell changes, an actual pre-call nomination
+with original arguments observed at collector entry, and map drift at both Scope
+publication points. A later test-only explanatory noqa preserves forced distinct
+equal-tuple construction. Final1698/1474 pass on the frozen final source with zero failures, errors or skips. All556 source files match; the common1076 ordered cases match while generated-role cohorts remain version-specific.
+
+This remains bounded primitive/field correspondence, not full executable standard-
+library authority or admission. Annotation execution exclusion still needs actual-journey observation; specific deep evaluation review is conditional on an observed path, with all existing predicates retained. Original-root/caller/callee/GC/callback/freshgraph and unchanged native60s gates are
+open, as are character delivery, physical image and Linux/provider/release checks.
+No native shortcut, build, host, permission, provider, model, job or store changed.
+
+## Generated record metadata — November 11, 2026 UTC
+
+The character-image startup draft now appends generated-helper metadata as the
+thirteenth type-pin field, preserving the previous twelve positions, all99 declared
+HMP function roles, ordinary-function globals checks and the separate engine record. All sixteen retained types
+record seven supported attribute roles with actual presence/absence, original raw
+members and native wrapper checks before function inspection. Function/code/global/
+builtins/default/keyword/closure identities and shallow dictionary-cell snapshots
+are fresh at nine parent/capture/codec consumers and both Scope publication checks.
+Owner/collections/typing module bindings and code-referenced export projections
+remain checked without freezing unrelated standard-library module values. Capture
+does not invoke generated helpers or evaluate annotations. No native effect or
+shorter admission path is enabled by this metadata DATA.
+
+Baseline runtime-type suites expose228/132 missing refusals. Independent review
+also caught a new collector lookup before its system-namespace key fence; its
+one-case red control invokes foreign equality, and the corrected control proves
+fixed refusal with zero hooks. The old-source four Scope controls hit unchanged
+child60s deadlines: uncertainty, not admission or foreign execution. An earlier
+minimum-runtime collection had two empty-parameter skips; corrected collection
+has none and that setup result is retained separately.
+
+Focused all-sixteen-type checks pass469 cases on Python3.14.9 and277 on3.11.15,
+covering97/65 actual generated attributes, mutable annotation dictionaries where
+present, late checker returns and both publication points. Final suites pass1533
+and1341 respectively, zero failures/errors/skips, unchanged source and all555
+source hashes bound to the tested candidate. All1074 common ordered case IDs match;
+the generated459/267 cohorts differ by actual helper/annotation support and are
+not treated as interchangeable. No exact-version feature allowlist was added.
+Independent review verifies the bounded result, log/XML hashes and source binding;
+plugin/private-data/diff checks pass and the new test file is lint-clean.
+
+Metadata freshness is not independent native-primitive authority, deep annotation
+validity or approval of legitimate annotation-cache evolution. Those dependencies,
+lazy annotation helpers, original root/caller/callee/GC/callback/freshgraph checks
+and unchanged native60s acceptance remain open. The last dated native startup
+still fails; no speedup is claimed. Character delivery remains unfinished. Existing
+host-local image source/native/Dart/Flutter evidence is preserved, while signed
+physical image display and Linux/provider/release qualification remain pending.
+No build was installed or host/grant/model/provider/job/store changed. The complete
+feature goal stays active.
+
+## Cache planner and final constructor freshness — November 11, 2026 UTC
+
+The character-image startup draft now prewarms and retains cache_candidates before
+later imports. Its two classes and five source functions extend the helper record
+to 11 modules, 55 classes and 99 functions. PlannedCachePath extends the parent to
+seven modules and sixteen types using the existing twelve-field constructor pins.
+Old indices and packet widths remain unchanged. Five imported aliases join their
+original definitions in both helper checks, both parent checks and both Scope
+publication checks. No filesystem read, provider or permission surface was added.
+
+The tests exposed a source freshness gap: constructor metadata changed after a
+selected checker callback could survive to a successful parent return. Three
+explicit diagnostics observe that invalid return with zero changed-constructor
+calls and one original pure engine audit. Both parent paths now repeat the full
+native module and sixteen-constructor validation after the last checker callback;
+this is not a special-case planner check. The failing cases remain evidence of the
+gap, not successful controls. No deployed incident or foreign execution is claimed.
+
+Baseline26 all fail for missing refusals; corrected26 and then50 pass. Expanded110
+pass on Python3.14.9 and3.11.15, including five planner functions and all eight
+runtime constructors changed after generic/started checker returns, code/default/
+keyword drift and six actual Scope publication cases. The final1070 regression
+cases pass on both interpreters with identical ordered IDs, zero failures/errors/
+skips and unchanged source. Private-data and plugin-surface checks pass. Source
+fingerprints and log/XML hashes bind the tested bytes; initial collection failure
+was a test import mistake and is excluded from causal failure evidence.
+
+This remains bounded source qualification. Fresh inventories find49/33 callable
+class attributes outside the helper and constructor records on current/minimum
+Python. Generated helpers use collections/typing globals, and newer annotation
+helpers contain mutable dictionary closure cells; these need explicit custody,
+not a relaxed HMP-function check. Full original-root/caller/callee/GC/callback/fresh
+graph integration, unchanged native60s acceptance, character-image delivery and
+physical/Linux/provider/release qualification remain open. Host-local images have
+an existing source delivery candidate and separately recorded native/Dart/Flutter
+evidence; actual display on a signed physical candidate remains unverified. This
+constructor step does not replace that earlier evidence. The last dated native
+startup still fails. No fast audit, speedup, installed build,
+host restart/update, device grant, model, provider, job or store change is claimed.
+The complete roadmap goal remains active.
+
+## Declared runtime classmethods — November 11, 2026 UTC
+
+The character-image startup draft now retains eight declared source classmethods
+by their original native wrapper and underlying function. The helper record holds
+94 functions, preserving the previous 86 plain-function roles and all packet row
+widths. Native classmethod is appended as primitive 21, preserving the original
+20 indices. The parent and both Scope publication checks authenticate the same
+roles and independently held defaults before raw function inspection. Replaced
+wrappers, changed code/defaults, hidden built-ins and coherent false defaults
+refuse without invoking the tested foreign methods or descriptors.
+
+All 956 bounded regression cases pass on both Python 3.14.9 and 3.11.15, with zero
+failures, errors or skips, identical case IDs, and all 553 source fingerprints
+matching the tested candidate. Independent review verified the source and result
+hashes. Focused 103 cases also pass on both runtimes. Baseline 24 missing-refusal
+controls and 16 isolated late-wrapper controls establish the corrected gaps.
+Two separate late-method-code tests allow one original pure engine audit with
+original arguments before final refusal, with zero foreign execution or effects;
+the existing five root/callee cases retain their stricter zero-engine requirement.
+The initial two overbroad copied assertions are recorded as test expectation
+errors, not product-defect or successful qualification evidence.
+
+This completes only the declared-classmethod source task. The fresh inventory
+still finds 43/29 callable class attributes outside the helper and constructor
+records on current/minimum Python. Generated helpers, private globals and the
+cache_candidates dependency remain open, followed by full original-root/caller/
+callee/GC/callback/fresh graph integration and unchanged native 60-second startup
+acceptance. The last dated native startup still fails; no speedup or fast audit
+activation is claimed. Character images, host-local image display and physical,
+Linux, provider and release qualification remain open. No installed build, host,
+device grant, model, provider, job or store setting changed. Full goal stays active.
+
+## Runtime constructor capture — November 11, 2026 UTC
+
+The character startup draft now retains all seven runtime NamedTuple constructors
+in the existing original parent record. Entry-file and cache-context modules append
+to that parent: six modules and fifteen types, preserving previous indices. Type
+pins grow from nine to twelve fields, adding keyword defaults, frozen keyword pairs
+and complete private-global pairs. Constructor code/defaults/globals, empty closure,
+class fields/base/dispatch identities and native tuple allocation are checked before
+use and after callbacks. Class keys are fenced before metadata lookup; filename
+subclasses and malformed, duplicate or foreign snapshot keys refuse without invoking
+the tested foreign protocols. Both Scope publication checks use the same stronger
+record. The separate helper record stays10modules/53classes/86plainfunctions.
+
+Baseline42 retains six already-correct code/default controls and36 missing-refusal
+failures. Corrected58 focused metadata cases and eight real Scope constructor-code
+causals pass on actual Python3.14.9 and3.11.15. Scope refusals preserve the private
+failure marker and zero foreign calls, work, reservations, registrations and success.
+An additional baseline18 has three controls and15 failures: seven filename omissions,
+one foreign class-key comparison, one missing keyword-key refusal, and six child60s
+timeouts. Those timeouts establish uncertainty, not admission or foreign execution;
+they remain recorded separately and the deadline was not widened.
+
+The same853 full regression cases pass on both runtimes with zero failures/errors/
+skips and unchanged source, matching all552 source-map entries and identical case
+IDs. This includes the previous765 cases,22 dedicated started-parent cases,58 new
+constructor cases and eight added Scope cases. Independent review verifies source,
+log/XML hashes and bounded constructor freshness. New tests are lint-clean; changed
+production diagnostics decrease without new diagnostics, and surface/private/diff
+checks pass. Existing exact parent-module assertions now reflect the six-module
+contract. This is source qualification, not a new installed build or image delivery.
+
+An updated actual-record census separates seven captured constructors from the old
+helper-table-only omission count. Among these runtime classes, callable attributes
+outside both records remain51 on3.14.9 and37 on3.11.15: declared classmethods plus
+generated helpers. Closed eight-classmethod capture, cache-candidate/transitive source
+closure, original-root/caller/callee checks, GC/callback safety, whole fresh graph
+integration and unchanged native60s acceptance remain required. The last dated native
+startup still fails; no fast audit is activated and no speedup is claimed. Character
+images, host-local image display, physical/Linux/provider/release qualification and
+the full roadmap remain open. No host/device/grant/model/provider/job/store changed.
+A separate read-only support check found generic review advice, not BYO-host/demo
+acceptance; no declaration or release action followed. LLY520 remains absent from
+the refreshed management inventory. The full feature goal stays active.
+
+## Persistent runtime record — November 11, 2026 UTC
+
+The character-image startup draft now retains the three prewarmed runtime modules,
+their12 declared classes and44 plain functions/methods in the actual early helper
+record. Old positions remain unchanged: the record now holds10modules,53classes and
+86functions, with the same six-field packet API. Only cache owner/root/fact values
+join the existing live-value exclusions; their keys remain required. The started
+parent's fixed prefix was updated to match. No fast audit path is activated.
+
+Thirty-nine imported aliases are joined to their defining held modules in both
+DATA checkers, both parent audits and both Scope publication audits. Initial wrong
+aliases can no longer become accepted coherent snapshots. The132 plain-code/default/
+keyword-default controls and39 alias controls first fail on their respective
+baselines, then pass. Six actual Scope causals mutate runtime code at both publication
+points and require private refusal with no foreign calls, new work, reservations,
+registration or successful return. The parent already passed the two entry-lineage
+controls; four cache/plan cases exposed foreign dispatch and are corrected in this
+draft. No deployed incident or live-host change is established by these fixtures.
+
+The same765 broad regression cases pass on actual Python3.14.9 and3.11.15, with no
+failures/errors/skips and unchanged source during each run. Dedicated22 started-parent
+cases also pass on both. Their standalone first test previously depended on other
+suite imports; the unchanged parent reproduces that setup failure. It now explicitly
+loads definitions without starting an owner and observes zero generic fallback calls.
+Only that separately executed test file changed after the765 runs; all production
+and executed broad-suite test bytes are unchanged. Independent review and private
+source/log/XML receipts retain this distinction. New tests are lint-clean, production
+lint counts match their baselines, and surface/private/diff checks pass.
+
+This is partial persistent code custody, not complete dependency or constructor
+coverage. An isolated census among these12classes still finds58 unrecorded callable
+attributes on3.14.9 and44 on3.11.15, including classmethods and generated constructors/
+helpers. Cache-candidate dependency closure, full original-root/caller/callee and
+transitive code checks, GC/callback safety, final fresh graph integration and the
+unchanged native60s acceptance remain open. The last dated native startup still
+fails; this step does not claim a speedup or a new native pass. Bot character images,
+host-local image display, physical devices, Linux and release remain separately
+unqualified. Installed builds, grants, providers, models, jobs and stores are unchanged.
+The full feature goal remains active; these remaining integration gaps are ours,
+not a claim that upstream lacks the requested image features.
+
+## Fixed runtime prewarming — November 11, 2026 UTC
+
+The character startup draft now prepares the fixed runtime-file, entry-file and
+cache-context modules before original helper capture. Entry retains their module
+and spec namespaces, declared classes, function code/defaults/closures and generated
+constructor globals across later imports and capture callbacks. Only declared
+aliases missing from a genuinely initializing module with a matching active module
+frame may be supplied from held defining objects. Foreign aliases and attempts to
+repair an initialized module refuse. Existing modules are inspected directly before
+importlib can read malformed metadata; native spec-dictionary access and class-key
+fences avoid foreign comparison/getter dispatch in the tested refusal paths.
+
+The unchanged parent fails all three new readiness controls. The corrected source
+passes29 new cases: three import orders, twelve later class/code/default/keyword
+default mutations, and fourteen partial-alias/initialization/module/spec/class-key
+cases. Two retained red runs distinguish a fixture-arming error from an actual
+importlib spec lookup gap; a separate class-key red demonstrates the class metadata
+lookup gap. Both candidate gaps are corrected. The final same224-case startup and
+cache regression set passes on actual Python3.14.9 and3.11.15, with unchanged source
+and zero failures, errors or skips. Independent review accepts transient capture
+custody only; the initial222-case greens predate the final class-key correction.
+
+This is initialization custody, not persistent runtime provenance or a fast
+admission path. The early persistent helper packet still omits these three modules'
+full class/code closure. Expanding and authenticating that record through the
+original caller/root and both Scope checks, complete graph integration, actual
+GC/callback causal checks and unchanged native60s startup acceptance remain open.
+No startup speedup, character image delivery, host-local image display, device or
+release qualification is claimed. No host restart, install, grant, provider, model,
+job or store release changed in this source step. The broader feature goal remains
+active; LLY520 is absent from the current management inventory.
+
+## November 11: definition staging for fixed prewarm
+
+Two cycle-causing imports moved below complete entry-file/cache-context defs;
+all final defining aliases preserved, no dynamic binder/repair or expanded type
+capture. Baseline3order controls had1pass2definitionmissing failures; staged3pass
+with no native owners/bootstrap/gateway activity. Final195 current/minimum cases
+pass source-bound nofail/error/skip, independent source/log/XML binding review.
+
+This only makes partial-module definitions available. Gateway-entry-first still
+captures before these modules load. Fixed prewarm under original Entry seals,
+genuine-init-only declared aliases and original type/function/constructor/source
+pins remain next, before complete transitive/caller/root/callee/actor/API/cache/
+runtime/GC/callback graph integration and unchanged native60s/fullfeature/device/
+release gates. Last dated native60s still fails; no graph reduction, character
+image delivery or installed runtime/device/grant/provider/model/job/store change.
+
+## November 11: new graph checker code rows retained early
+
+The original helper role table now retains9 additional artifact graph functions
+(42total; prior33positions/41classes/7modules/six-field DATA unchanged). Existing
+parent and both final Scope metadata checks use the extended roles; no graph
+checker is dispatched by production guards. New27 metadata controls and18 actual
+Scope late-code controls preserve zero foreign calls/work/registration/success
+and private refusal. Corrected exactbaseline27 omission failures retained.
+
+Final386 cases pass current3.14.9/minimum3.11.15 with unchanged source and nofail/
+error/skip, independent all548 source/log/XML verification. Earlier382pass4fail
+runs remain failures; previous-role baseline reproduces same4 stale import-order
+hooks. Test migration to actual capture_bound preserves actual timing/literal
+record/alias/root assertions and now exercises late fault injection correctly.
+
+Remaining: transitive class/global/source and original caller/Entry/Scope/callee
+provenance, actor/API actual results, cache/runtime semantic closure and final
+pure live graph before any selected reduction, actual integrated graft/callback/
+GC/cleanup and unchanged native60s/feature/physical/release gates. Last dated
+native startup still fails60s. Full original goal active; no deployed changes.
+
+## November 11: interpreter/native field checkpoint
+
+Latest source adds unintegrated interpreter/cache/compiler/decoder and native API
+export comparison alongside the prior graph components. Same145 current/minimum
+cases pass with unchanged source and nofail/error/skip, independent all547 source/
+log/XML verification. Actual65exports×replacement/deletion=130 controls, zero
+native/loader calls and unchanged file work. Initial nullable sys.pycache_prefix
+absence matched None; required-key fence fixes it, no deployed incident established.
+Canonical member-descriptor/mappingproxy corrections and failed preflight runs
+remain distinct from passing acceptance. Public FEATURES/status gist updated.
+
+No production guard uses these components. Complete original-root/callee/code
+custody and new-predicate early capture, actual actor/API results, cache/runtime
+semantic closure and final full live graph before reduced dispatch; then actual
+integrated adversarial/cleanup/original60s/feature/device/release gates. Last dated
+native startup still fails60s. Full original goal active; no runtime/grant/provider/
+model/job/device/release changes. Components are not character-image delivery.
+
+## November 11: current rooted-graph implementation checkpoint
+
+Code checkpoint `bc118ba1c389d855dce9312f9405255419d8203c` retains full
+production guards. Unintegrated field projections now cover shared owners,
+closed file/scan fields, cache context, operator approval/read-chain/API metadata,
+settled activation/import origins and started Entry/invocation/native ledger
+representation. These do not establish original-object or current-code authority.
+Actual cache getter and approval filename metadata hook findings were corrected
+in the candidate and causally checked; no deployed incident is established.
+
+Latest matching current/minimum suite:136 tests each on actual Python3.14.9 and
+3.11.15, unchanged source,0fail/error/skip, independent all546 source/log/XML
+verification. This suite is not136 full native launches. Earlier cache27 and
+approval79 bounded runs remain separate exact-source evidence. Source, test,
+lint/scanner/surface and publication receipts remain private.
+
+Next: complete interpreter/native API and fresh actor/API observations, bind the
+fixed callee and original caller/Scope/Entry roots before reduced dispatch, and
+compose the complete final pure live graph without ordinary project callbacks.
+New helper definitions must be included in the original early held-code record
+before any selected dispatch; current-export identity alone cannot qualify them.
+Preserve full generic/pre-publication/non-native validators. Then run actual
+coherent-graft/late-callback/GC/counter/cleanup differentials, original60s and full
+normal/native/service/physical/release acceptance. The last dated native startup
+still fails60s. No character delivery, host/deployment/device build or grant/
+provider/model/job/store change occurred at this checkpoint. Full goal is active.
+
+## November 10: RBH-02 early parent and publication binding
+
+The parent environment is now env7 with a literal retained-helper capsule;
+engine6 and all original direct/nested audits remain. Bootstrap checks precede
+component dispatch, and selected-helper predicates are repeated inline after the
+final engine callback and at both Scope publication seals. Exact module/registry
+checks precede vars(). The same120 selected cases pass on both actual runtimes,
+including14 actual publication faults and1 early-entry control. Full transitive
+coverage and broader regression remain open; full native traversal still times
+out60seconds after44typed observations/one retired capsule. No performance,
+image/service/device/release pass or host/settings/install change is claimed.
+
+## November 10: selected retained-helper preparation
+
+RBH-01 adds an unintegrated inspection DATA component for selected package/recipe
+helpers. The same 64 local checks pass on actual current/minimum Python. No audit
+is skipped. Original early-parent custody, the component's own primitive/global/
+function authentication, post-callback reseals and transitive-helper coverage
+remain prerequisites to RBH-04 consolidation. See
+SELECTED_RETAINED_HELPER_ORIGIN.md for exact scope and RBH-02 through RBH-05.
+Normal/native/service/routes/images/physical/release remain unqualified.
+
+## November 10: immediate native control and next prerequisite
+
+Kept production remains unchanged after a withheld class-column vector experiment.
+A fresh immediate native control still times out60s (65typed/two retired capsules,
+not completion). Four added live-class controls pass in41cases on both runtimes.
+Next is original package/recipe helper custody before any same-call audit
+consolidation; see RETAINED_BINDING_AUDIT_PLAN.md. No skipped permission/fresh
+mutable checks, helper self-nomination, host/device/install/release changes.
+
+## November 10: fixed-width audit checks
+
+Claim and closed-descriptor checks use direct indexed predicates after the same
+exact tuple3/list2 fences. Every original type, identity, live ledger and cleanup
+check remains; no mutable verdict is retained. Independent bounded implementation
+and test review accepted the change. Same source and matching case sets pass
+302 regression plus25 close/status checks on both actual Python 3.14.9 and 3.11.15.
+Four added actual pending-close cases reject integer/foreign state slots before
+Cclose or ledger debit, then restore and close exactly once.
+
+An actual original-claim helper benchmark is about20percent faster; it is not
+whole-startup evidence. Fresh current normal-artifact completion still times out
+at60seconds with checked._ready unchanged. No full native/service/route/image,
+physical-device or release acceptance; no host/device/settings/install changes.
+
+# Desktop presentation integration checkpoint
+
+## November 10 — original layout binding verified; image delivery remains open
+
+The experimental image startup path now retains immutable expected class-member
+columns from its original captured rows. The same literal layout is bound through
+the engine, parent environment, native selector, execution and both publication
+seals. Existing fresh module/class/function/default/closure and native/resource/
+byte/custody audits remain. Fast schema use is not implemented; this increment
+makes no full-path speed claim and enables no presentation route.
+
+The same **302 checks pass on Python 3.14.9 and 3.11.15**, with unchanged source
+and matching case sets: 280 local controls, 12 actual runtime refusal controls and
+10 actual publication controls. New controls exposed and corrected late original
+invocation/getter ordering. The actual mutation cases require zero foreign calls,
+new native work, registration after mutation or successful retainer returns, with
+unchanged close reservation. These are bounded source proofs, not physical or
+release acceptance.
+
+Before the fixture repair, a broader 110-case open/close selection passed 93
+and failed 17; a withheld optimization had the exact same outcomes. The repaired
+open-registration fixture now has six fault cases passing on both versions,
+including original native-close proof. Its two full normal-completion controls
+still time out at 60 seconds. The broader gate has not been freshly rerun and
+remains unqualified.
+
+A fresh complete-path attempt on this composition still exceeded its unchanged
+60-second deadline. Its last retained checkpoint contains 44 typed native
+observations and one retired raw capsule; this subset is not full native
+acceptance or a speed improvement. The full native flow, startup/service/route
+integration, desktop character/avatar display and host-local chat images remain
+unfinished. No upstream-only image blocker has
+been demonstrated. No host, device, permission, provider, model, job, installation
+or release changed; LLY520's authorized update still needs its established
+connection. Prepared Android/iOS 2026110901 are not new device qualification.
+
+
+## November 10 — image-path audit changes verified; delivery remains open
+
+The experimental Link audit now indexes exact namespace identities within each call
+and checks all current key types with authenticated native primitives. Original
+checker values and unique names are joined before those primitives run, including
+both actual Scope publication seals. No access verdict survives a callback.
+
+The same **281 focused checks pass on Python 3.14.9 and 3.11.15**: 265 local
+controls, 12 actual runtime refusals and four actual Scope publication refusals.
+The latter require completed mutation, no foreign execution, no registration or
+successful publication after mutation, and unchanged native work/reservation.
+These source-bound results do not establish full native or device acceptance.
+
+The full native contract still fails its unchanged 60-second deadline. Its retained
+subset contains 65 typed observations and two retired raw capsules; snapshots,
+all rechecks, startup/service delivery and physical images remain unqualified.
+The immutable expected-layout design is not implemented. Next work must resolve
+the actual delivery contract, including a bounded presentation metadata interface,
+without bypassing per-device/profile authority, confined reads or resource custody.
+No upstream-only blocker has been demonstrated.
+
+The isolated test environment was rebuilt from independently pinned artifacts and
+locked dependencies; fresh results above bind the new environment. No installed
+host/device, grants, providers, models, jobs or releases changed. LLY520 is absent
+from the refreshed established remote inventory; its authorized update is pending
+connection. Prepared Android/iOS 2026110901 are not new physical qualification.
+
+Composed parent: `2bd4303`, combining reviewed deployed HMP `dbdcdba` and
+existing presentation foundation `cc51a4e`. Neither foundation merge nor this
+backend enables presentation routes.
+
+The explicit POSIX backend forwards only the existing FileOps operations. The
+fixed reader continues to own flags, budgets, inode/mode checks and close custody.
+Real temporary-file tests prove symlink leaf/directory refusal and held-descriptor
+identity across name replacement. No live profile files or images were read.
+
+Focused checks: 28 tests plus 31 subtests passed (backend and fake transaction);
+earlier composition checks: 331 tests plus 23 subtests passed (pure projection,
+parent authority and skeleton). Counts overlap and are not aggregate coverage.
+The selected Python environment lacks ruff; lint is not claimed.
+
+Remaining integration: native reauthentication service and worker process/custody
+binding, shutdown drain, negotiated route, optional roster projection, mobile DTO
+and rendering, cache isolation, independent contract review and physical parity.
+An unbound NativeReadOnlyService must continue to refuse. No future route may
+construct a lease or GO marker and treat it as native authorization.
+
+## Native observation implementation
+
+An explicit, currently unregistered native service now binds one listener/store/
+bridge/identity/native owner and owning event loop. It authenticates original
+headers before and after an owned native bot-authority/home lookup; wrong owner,
+listener, retired generation or late/deadline response cannot return an observation.
+Cancellation leaves the real worker under a retained task; per-operation drain or
+close-and-join waits for actual thread termination before releasing it. No config,
+avatar or chat bytes are read in this phase.
+
+Five focused synthetic tests exercise valid bindings, post-read identity mismatch,
+wrong listener/native owner and cancelled observer with a real blocked worker.
+Authenticator behavior is mocked in these five tests; they do not prove native
+credential integration or deployed functionality. Live route and worker-child
+binding remain closed pending focused independent review and real integration.
+
+## Independent review findings and repair
+
+Review of `4af2f70` found native grant recheck missing after home resolution and
+task-done incorrectly treated as actual worker drain. Both findings concern inert
+source, not an observed live incident. The repair checks native bot authority and
+routing again inside the worker, retains an explicit thread ledger independently
+of task cancellation, and refuses closure after any ambiguous start exception.
+Eight service tests now include native revocation during lookup, cancellation of
+the owned task itself and ambiguous start. The combined service/parent/layout run
+passed 258 tests plus 23 subtests. Independent re-review remains pending.
+
+## Actual YAML parser integration
+
+A worker-only PyYAML SafeLoader event adapter now feeds the existing closed reducer
+without loading a profile object graph. Only the five allowlisted presentation
+fields can leave the reducer. Explicit tags/directives, aliases/anchors, ambiguous
+keys, multiple documents, selected-field type confusion, malformed UTF-8 and
+expired shared deadlines refuse. Fifteen real-parser cases passed using synthetic
+documents. No live metadata was read. Supervisor-enforced process deadline and
+independent parser review remain prerequisites before route activation.
+
+## Real fixed-reader transaction evidence
+
+Three real-kernel synthetic cases passed: complete fixed metadata transaction
+feeding the actual YAML reducer, symlink metadata refusal with all owned FDs
+closed, and name replacement during read refusal with all owned FDs closed.
+The synthetic test parent was explicitly selected under a safe ancestor chain;
+no live Hermes directory or profile file was opened. Other test environments
+with unsafe ancestors skip these fixtures rather than weaken production policy.
+These cases qualify transaction/backend composition, not request authentication,
+worker process isolation, live routing or physical parity.
+
+## Worker processing pipeline
+
+The fixed-reader result now feeds the actual YAML reducer, bounded raster
+structural inspector and closed presentation DTO. Metadata carries canonical
+instance/profile and separate metadata/image revisions; expected avatar revision
+mismatch or clear refuses. The original clock/deadline is required on the raster
+budget. Raw profile bytes cannot appear in the projection. Six real-file tests
+passed, including actual metadata-only and tiny synthetic PNG result composition.
+Raster structure admission is not a decode proof; the phone codec remains the
+decoder. Shared total job ledger and child supervisor integration remain open.
+
+Independent review accepted exact native repair `0eef794` with its three findings
+closed by four separate inert checks. Receipt SHA256
+`0514c3c5a2e02b7652166a8344303fa1a14142c22b702eada9bfde59e00746e2`.
+This verdict does not cover the later parser, real-file or pipeline additions and
+does not authorize live activation or certify atomic authority over file I/O.
+
+## Deadline and lint checkpoint
+
+The pipeline now checks the deadline after metadata revision/projection as well
+as before it, and rejects a raster budget with an extended/different clock scope.
+Causal tests cover both boundaries. All eight new source/test modules pass the
+CI-pinned Ruff 0.16.9 checks; 34 focused backend/native/parser/pipeline cases pass.
+Formatting and literal-dictionary cleanup do not alter the accepted native
+ownership algorithm. The lint environment is available through the pinned tool
+runner; the earlier missing-module limitation is superseded. No activation occurred.
+
+## PYAML-01 review repair
+
+Exact `d15c938` review found that PyYAML discards unknown directives before
+document events, contradicting the all-directives rejection claim. The adapter
+now scans bounded source tokens under the same deadline and refuses every actual
+DirectiveToken, including unknown names, before parsing events. Token count is
+bounded at 2048; block/quoted scalar text is not treated as a directive. The actual
+unknown-directive and block-scalar regression cases pass. Combined parser/pipeline
+run: 25 passed. Review of this repair remains pending; no route was activated.
+
+## Nonresetting work ledger foundation
+
+One immutable-limit ledger now retains file/read/hash/open/metadata/path/YAML/token/
+raster counts across phases. Duplicate phase entry or exhaustion poisons it; an
+expired/malformed clock cannot recover by moving back. Snapshot callers receive
+a copy. Six counter tests and layout checks pass; pinned strict lint passes.
+The file/YAML callback bindings and actual child supervisor remain incomplete,
+so the shared-budget task is still open and no route was enabled.
+
+## Shared ledger phase bindings
+
+The fixed reader now debits shared bytes/open/metadata/path credits before I/O,
+retaining the exact ledger in its processing result. Actual YAML scanner tokens
+and reducer nodes debit the same ledger; raster processing must use that identical
+clock/deadline/ledger. The worker processing entry creates the single ledger itself
+and rejects mismatched profile before any file-open attempt. Real-file cases cover
+metadata/avatar cumulative charges, replacement-ledger refusal and whole worker
+entry. Twelve real-file cases pass and selected strict lint passes. Legacy pure
+phase fixtures retain optional unbound counters; the worker entry does not use them.
+This qualifies the processing budget binding, not a spawned process, child frame
+proof, parent authorization, shutdown drain or live route. Independent review of
+this new binding is pending. The shared-budget task awaits that review; supervisor
+and transport remain open.
+
+## Bounded private worker result frame
+
+Completed processing now retains only numeric source proofs/hash/chain rows,
+closed metadata and optional avatar bytes; no raw profile bytes/path enter IPC.
+The existing frozen frame codec bounds header/body and binds challenge/epoch.
+Real-file tests check raw-private-field/path exclusion and wrong challenge refusal;
+default-profile blobatar survives frame-to-parent projection unchanged. Fourteen
+real-file cases and selected lint pass. These frames are processing evidence,
+never permission, and do not establish actual child wait/group/IPC/FD custody.
+
+The shared-budget binding at `d1521fd` received bounded independent acceptance
+with21 separate checks, receipt SHA256
+`2fc1c83c70a0fc10dde8bec5979894d3171fe3f56c9668a16976d1bbee5f456f`.
+Combined presentation/Unicode suites on that exact processing source passed256
+tests plus190 subtests. Later framing changes require their own focused review.
+
+## FRAME-NONE repair
+
+Review of `98e7ca2` found null-character metadata for the default profile was
+reconstructed as an implicit purple squircle because the normalized frame omitted
+custom. The frame now explicitly suppresses that implicit default for every
+normalized result, preserving a null character and its metadata revision. Raw
+customization provenance is not claimed by these projection inputs. Two actual
+file-to-codec-to-projection negative cases cover custom-only and invalid-color
+characters;16 real-file cases and selected lint pass. Independent closure pending.
+No host activation or updated phone install occurred.
+
+## Parser runtime declaration / CI correction
+
+CI38196929251 rejected the undeclared yaml import (11 scanner-suite failures;
+source processing tests were not proof of install packaging). Runtime PyYAML>=6,<7
+is now declared in plugin.yaml/project/lock; the already locked version did not
+change. A narrow lazy module-import exception is confined to the worker adapter.
+Other modules, module-level worker imports, from-imports and submodules remain
+rejected by negative cases.64 scanner tests and selected lint pass in an isolated
+fixture. The earlier successful61-case run had81 old temporary-artifact cleanup
+warnings; those unrelated artifacts were not modified. Independent review of the
+closed-surface amendment remains required. No live dependency installation occurred.
+
+## Child control codec / lazy-import review repair
+
+A bounded child control decoder now accepts only the existing closed input frame,
+its exact64-byte GO challenge/newline and EOF before profile I/O. Missing/mismatched
+GO, trailing data and oversized prefixes refuse. Seven stream cases pass; actual
+stream reads can block and the parent hard-deadline/child custody remains open.
+This is a local IPC binding, never native authority.
+
+Independent dependency review found eager class bodies bypassed lazy-import rules.
+Actual function-depth checks now reject module/nested eager classes and preserve
+function-local class imports, including the analogous bridge late-binding rule.
+Seventy scanner cases and238 control/layout cases passed; independent
+review of the new lazy-scope repair remains required. No activation.
+
+## Parent GO handoff
+
+A synchronous one-use handoff binds the exact job handle/child and an observed
+nonblocking pipe identity. Blocking/non-pipe or replaced descriptors refuse;
+retired/wrong-child scopes perform no write. The65-byte GO uses one syscall, and
+partial/invalid results or exceptions after actual writes cannot be retried.
+Ten focused cases pass, including a real pipe and actual write-then-lost-ack.
+An initial five failures were synthetic tests lacking the newly required explicit
+pipe-info port; fixture correction preserved the production checks. Selected lint
+and the preceding241 GO/layout tests pass. This module creates no process and
+does not own/close its borrowed descriptor; the supervisor must supply exclusive
+FD custody and native reauthorization. Independent handoff review remains open.
+
+The lazy-import dependency repair `80c1406` received independent source acceptance
+with37 separate scanner cases (receipt SHA256
+`4fea051371c8a08f4cd05c65171b2ed5da8dc2658b25df2c56f096b1525a6789`).
+This does not include the separate child control decoder or GO handoff.
+
+## GO-01 one-use reentry repair
+
+Review of88f103 reproduced two writes when current/pipe-info callbacks reentered
+the handoff. Entry ownership is now consumed before callbacks; any reentry poisons
+it even if the callback catches the refusal. Two new counterexamples perform zero
+writes after caught reentry;12 GO cases and selected lint pass. Independent
+closure review remains pending. No real worker launch or live route occurred.
+
+## Worker launch policy
+
+The fixed launch recipe selects the current absolute interpreter, isolated/no-
+bytecode flags, one fixed future worker script, a new process session, close_fds
+and no inherited descriptors. The environment contains only LANG/LC_ALL, never
+a copy of provider/bearer/PYTHONPATH/loader variables or a changed HOME. Three
+finite tests pass, including a real isolated interpreter with synthetic secrets
+absent and an explicitly inheritable parent pipe not inherited. The recipe is
+not source attestation: the worker script does not yet exist, and its verification,
+actual launcher/ownership/drain and child code remain required. No live plugin
+process or profile read was started by these tests.
+
+GO-01 repair at54d0df received independent source acceptance with17 separate
+checks, receipt SHA256
+`4a72ac1380265a0e0493ac0fe870a05976129f724fddc47674bc743d87e26c6c`.
+Actual exclusive FD custody/native binding/child supervision remain outside it.
+
+## Controlled worker stream composition
+
+Child-only processing now joins bounded input/GO, exact root/home/profile/UID/GID/
+deadline/challenge/source-manifest scope checks, the one-ledger processing entry
+and bounded result encoding. Output advances only known written prefixes; write
+exceptions are not retried and expiry is checked after flush. A real-file stream
+case passes and wrong GO reaches neither the scope factory nor filesystem opens;
+17 real-file cases pass. Selected lint passes. The scope factory remains a trusted
+parent-policy dependency, not request authority. No child entry script, process
+launcher/reap/group/IPC ownership or live route is supplied by this module.
+
+## Local-media rendering source check
+
+Checked the existing deployed scanner's one-entry tool_call declaration linkage
+and the mobile transcript's image-card placement. The scanner accepts the native
+resolved image_generate tool result paired to a single image_generate declaration
+inside tool_call; the card is above the collapsible tool header. Therefore no new
+wrapper-name exception or expansion of assistant MEDIA-path authority is justified
+by the screenshot alone. The historical named JPG is absent; fresh physical image
+confirmation remains open. This is source evidence, not live rendering proof.
+
+## WORKER-01 original-input preservation
+
+Independent review of5b1961 found the scope factory could mutate the decoded row
+used to validate its own deadline/hash/epoch. The factory now receives a deep copy
+of the bounded primitive input; the original comparison/processing/emission source
+never leaves the flow. Actual file cases reject deadline/hash substitution before
+opens and preserve epoch1 despite a private-copy epoch/list mutation. Twenty
+real-file/actual-pipe cases and selected lint pass. Independent closure pending.
+
+The parent GO writer and child decoder also passed a real-pipe composition case.
+No actual presentation child process, native permission or cleanup ownership is
+qualified by that pipe-only test. Live routing remains absent.
+
+## Current combined source verification
+
+Exact3e85a38 passes286 presentation/Unicode tests plus190 subtests and complete
+server/tools strict lint. WORKER-01 received independent closure with9 separate
+causals, receipt SHA256
+`d68814fcf2871937debfd4c1a6c4604019bb02026eb8efa152157330498f4b6b`.
+This does not establish process custody, native route binding or installed support.
+The draft branch was pushed for a fresh exact-head public CI run; prior failed CI
+evidence stays intact. No live host/app or grants were updated.
+
+## Scope preparation expiry fence
+
+Worker flow checks the retained original deadline immediately before and after
+scope preparation. A late factory cannot proceed into profile I/O or output even
+with otherwise matching scope data. The new causal reports zero opens/output;
+20 real-file cases and selected lint pass. The factory itself is not forcibly
+bounded by these checks; actual child hard-deadline supervision remains required.
+
+## October 12: strict child schema 2 transfer
+
+Added the closed parent-qualified directory policy and bounded projection context codec, plus a schema-2-only GO reader. Canonical fallback must already match the existing normalized presentation name. Legacy schema 1 is rejected by the new path. No child entry, supervisor, native route, deployment or physical character result is claimed. Focused codec/control/layout verification: 260 passed; targeted Ruff imports repaired. Initial verification mistakenly referenced a nonexistent test file and ran no tests; the corrected invocation above completed. Independent source review remains pending.
+
+## October 12: schema 2 processing binding
+
+Added fixed schema2 processing and lexical policy reconstruction with exact effective UID/GID checks, singleton directory modes, and explicit default-profile mapping. It reuses the original retained-input/deadline/output fences; no child filesystem policy discovery occurs. Real synthetic profile processing preserves name/hexagon projection and closes descriptors. Focused real-file/codec/control tests: 48 passed. Independent schema2 codec review reported no actionable finding in f12a360 (61 independent cases); processing binding still awaits its own review. Actual standalone entry/provenance, parent policy acquisition, process custody, routes, deployment and physical rendering remain open.
+
+## October 12: actual isolated child entry
+
+Implemented fixed own-file private namespace bootstrap and schema2 processing entry with effective identity checks, no sys.path/environment/config/provider lookup, closed diagnostics and original input deadline adoption. The parent must bound startup/imports/blocked IPC with the original hard deadline; sys.float_info.max is only a pre-decode ceiling, not a renewed work deadline. A real -I -B process using a synthetic secure profile returned Synthetic/hexagon metadata; 258 real-file/layout tests passed. Namespace collision refusal added. This is not code/dependency attestation or an OS sandbox; parent source verification/policy acquisition, supervisor custody and route binding remain required before deployment. Independent entry review pending.
+
+## October 12: CI dependency reconciliation
+
+CI 38200379495 is terminal failure at 08b2c08: three tests retained the old qrcode-only dependency assumption. Local correction additionally exposed an actual root-install manifest omission: PyYAML was declared only in the package manifest. Root manifest now matches the reviewed bounded worker dependency. Routing/config writer absence and global third-party import restriction are retained; QR version checks select QR explicitly. 119 CLI/merge regression cases pass with a dedicated temporary directory. Worker 03f0d2c and entry 873bf02 independent source reviews reported no actionable defect. Runtime provenance must cover bytecode reads (Python -B only prevents writes), interpreter/system-site hooks and dependency origins; activation remains open.
+
+## October 12: full-suite child import correction
+
+Exact broader suite at 8af2c6d: 13 failed, 5613 passed, 38 skipped, 190 subtests; all failures came from the new child absolute private-namespace imports violating the surface scanner. Fixed bootstrap now assigns its explicit private __package__ and uses static relative processing imports, as the reviewed design intended. Scanner/global import policy is unchanged. Mobile header name+character sharing implemented at dbe4111; three widget cases and changed-source analysis passed, independent review pending. No deployed/physical claim.
+
+## October 12: bounded actual pipe collection
+
+Added OwnedPresentationPipes with pre-effect descriptor identity checks, finite selector waits under the original deadline, stdout/diagnostic limits before retention, diagnostic-content discard and actual EOF/one-use close records. Timeout/overflow never manufacture closure or release a reservation; errors retain uncertain ownership. An initial causal test found closed FDs disappearing silently from selectors; polling now verifies all held stream identities before select. Four real-pipe cases plus layout: 241 passed after correction. This is the receive/close part of supervision, not process launch/wait/group/signal or source attestation; independent review pending.
+
+## October 12: actual child/pipe composition
+
+Added a second real isolated-child execution path using OwnedPresentationPipes rather than subprocess capture. It verifies bounded result collection, diagnostic count, actual EOF/stream closure and successful wait while preserving Synthetic/hexagon projection. 23 real-file cases pass. Cleanup in this test targets only its exact synthetic Popen process; no production signal/group custody is inferred. The full suite started at e9c9a23 remains separately observed and must not be claimed to cover this later test delta.
+
+## October 12: PIPES-01 ownership repair
+
+Independent review held e9c9a23 because acquisition plus selector-close failure lost the exact selector owner. PipeAcquisitionError now retains the failed owner plus original/cleanup exceptions under a closed diagnostic. Selector construction is inside the owned failure path; close is marked attempted before effects and cannot be retried after uncertainty. Causal creation/double-failure/no-retry tests plus real child/pipes: 29 passed. Review closure remains pending; no activation. The e9c9a23 broad suite is a separate prior-source run, not evidence for this repair.
+
+## October 12: exact broad-suite result
+
+The exact e9c9a23 source run (session9372) completed exit0: 5631 passed, 38 skipped, 18 warnings, 190 subtests in179.52s. It includes the relative-import repair and original pipe reader, but predates ef58812 composition-test and6c600de PIPES-01 repair. Those later deltas have their separately scoped focused results; full-suite success does not close the held acquisition issue or physical gates. Log: /private/tmp/hermes-character-full-suite-e9c9a23-20261012.log.
+
+## October 12: process wait/signal decision
+
+PIPES-01 independent closure accepted6c600de,11cases, receipt SHA739bdb986fc8ce23cd315bca63310ffdb6223cb843ee21480a162ae91ee2376f. Added precise exclusive process lifetime proposal: direct waitpid proof rather than Popen ECHILD compatibility, held unreaped-group signals only, post-reap group absence probe with no further signals, typed failed owner retention and separate pipe/control cleanup. Contract review is required before binding; no new launch/deployment performed. Corrected stale shared-ledger contract prose to reflect implemented source while retaining parent-accounting gate.
+
+## October 12: actual launch/terminal-wait ownership
+
+Implemented retained fixed Popen launch owner, typed uncertain launch failure, nonblocking serialized/sticky reentry checks, stable child PID binding, exact terminal os.waitpid evidence and one post-reap signal-zero group probe. No Popen poll/wait/signal helpers are used. Actual isolated reader with empty input returned its expected refusal/exit1, bounded pipes drained and group absence was observed. 248 initial process/layout cases passed; later bound-PID focused cases pass. Destructive signalling, auto-reap/competing-reaper runtime exclusion, hard termination schedule and JobOwner binding remain unimplemented; no activation. Independent source review pending.
+
+## October 12: owned control input/GO/EOF
+
+Implemented exclusive nonblocking control pipe with fixed schema2 byte packet, original deadline, descriptor identity/blocking checks, one-use input and existing GoHandoff, exact close attempt and retained unknown outcome. Caught callback reentry prevents writes; changed blocking flags refuse before effects. Native PRE_GO must still call this through ParentAuthorityAdapter; no credentials/authority are conveyed. 243 control/layout cases passed. Real reader composition with this control path added separately; process hard deadline/termination, reaper/source qualification and full binder remain open. Independent review pending.
+
+## October 12: CONTROL-01 prewrite/terminal repair
+
+Independent review held c64f89e: control-owner poison or expiry during pipe callback could still send GO, and caught reentry in final writes could report normal completion. Added owner-aware actual GO write wrapper after pipe callbacks, rechecking current scope, poison and original deadline; final input-ready and post-GO/post-close success fences retain uncertainty. One-use GO/write/close debt is preserved without replay. Five new causal real-pipe cases cover callback poison/expiry/scope loss and final input/GO reentry; 33 real reader/control cases pass. Original HOLD receipt SHA595c656056d0a3a0a215fdc814da87d13b3aed7391d52e5b704edbb81b2bb12c retained. Review closure pending; no live activation/incident.
+
+## October 12: retained-process composition and CONTROL-02
+
+Added actual reader composition through retained launch/wait owner, owned input/GO and result/diagnostic pipes: exact success wait and observed group absence, no second Popen reaper. Review closed original CONTROL-01 cases but held CONTROL-02: new final current callback could replace inode/blocking mode after earlier identity check. Final owned descriptor validation now follows that callback before the final deadline/poison fence and syscall. 34 real-file/control cases pass; independent successor replay pending. No activation.
+
+## October 12: control security closure
+
+Independent review accepted7ccefeb: CONTROL-01/02 closed,13cases; receipt SHA2cc18801190d53c4e779861099d9452e058bfb38af32542cb7cc4525fa13ada1. Committed repository regressions now reproduce final-current inode replacement and blocking-mode change on real synthetic pipes, proving zero GO output. Control/processfocused25casespass. Prior holds retained. Remaining critical path: parent policy acquisition/accounting and installed code/runtime qualification; hard-deadline termination; native authority/JobOwner/lifecycle routes; exact physical host/app qualification.
+
+## October 12: current CI and parent accounting decision
+
+GitHub CI38205232793 completed success at exactc78e922. Added explicit parent policy/accounting decision: fixed directory-only no-follow acquisition, before-effect shared charges/actual close ownership and required schema3 counter transfer; current schema2 cannot silently fund a fresh child ledger after parent work. This closes an implementation design gap, not runtime readiness. Mobile budgetbinding3881fa2 review remains pending; no host/app deployment.
+
+## October 12: construction-time parent work seed
+
+Added exact eight-counter successful-parent validation and defensive construction
+copy into the sole work ledger. N/4N/3S schedule must match lexical home; non-parent
+phase counters stay zero, types/bounds/keys are closed, and imported parent-policy
+phase cannot run again. Existing total limits are unchanged: seeded3opens leaves77
+and no refund.16budget cases and341presentation cases plus190subtests pass. This
+is source accounting only: schema3 input, result2 totals/comparison and actual
+authorized parent policy acquisition are still unbound. Independent review pending.
+
+## October 12: seed preallocation correction
+
+Review held304d46b (BUDGET-SEED-01): despite the prior checkpoint claim, the intended early scalar-length guard had not applied to the actual source. Corrected exact-str/4096scalar guard now precedes NUL scan/split/encoding, retaining UTF8 byte ceiling. Added an actual allocation regression with a preallocated2MBhome;17budgetcasespass. The original inaccurate guard claim and review evidence remain recorded; closure pending.
+
+## October 12: strict input3 codec
+
+Added closed input3 with exact complete parent_work_counts, geometry-coupled N/4N/3S schedule and existing total caps. Common schema2 validation is reused only on a copied field subset; the new decoder refuses legacy schemas and missing/extra/duplicate counter fields. Original8192 envelope cap remains including new counts. Actual child/control/result migration remains pending and legacy actual source still performs no parent acquisition; no fallback/activation introduced. Focused input3/seed/layout initially269passed; extra named/full-envelope cases added. Independent codec review pending.
+
+## October 12: closed result2 accounting
+
+Added versioned result2 validation/encode/decode retaining prior frame/proof/body rules while adding hash_bytes and yaml_tokens. Complete eight-total parent comparison maps body_bytes exactly to read_bytes, refuses totals below the retained successful parent snapshot, and never sums already-included costs. Legacy result versions and missing/extra totals refuse; same original header/body caps and exact challenge/epoch remain.265result/input/layout cases initiallypass; exactexpected-epoch cases added. Child producer/parent consumer/native binder are not migrated yet. Counter claims are not proof of work/custody/permission. Independent codec review pending.
+
+## October 12: active worker input3/result2 migration
+
+Standalone child now invokes strict process_child_stream_v3; owned control writer validates only input3. Processing constructs the sole ledger from copied validated parent credits and emits result2 with all eight totals. Legacy schema1/2 helpers remain fixture-only. Real isolated/retained/control compositions now use input3/result2 and preserve Synthetic metadata. Declared parent counts in these fixtures are not actual parent IO proof. Legacy input refusal before any filesystem effect is tested.371presentation cases plus190subtests pass;51real-file/control/process cases pass. Parent native policy acquisition, retained result comparison/JobOwner migration, hard termination and live qualification remain open. Independent migration review pending.
+
+## October 12: actual directory-only parent policy owner
+
+Added locked, one-attempt parent policy acquisition over the fixed lexical chain:
+named/held no-follow checks, exact service ownership/modes, retained descriptors
+and final identity verification with Nopens/4Nmetadata/3Spath before effects.
+No profile/config/asset/body reads. Pending returned FD is retained before record
+allocation; close attempts run reverse once and unknown outcomes persist. Public
+errors are closed while original/cleanup errors remain private.31real-file cases
+pass, including current refusal with0opens, unsafe home cleanup and lost close
+acknowledgement/no replay. Native admission/authorization and actual thread join
+are NOT proved by run completion; no one-use transfer/native binding yet.
+Independent policy-owner review pending.
+
+## October 12: bounded result2 parent comparison
+
+Added version2-only streaming result buffer with bounded prefix/body handling,
+one-use finish and terminal malformed-frame state. Parent snapshot comparison
+requires the exact retained directory chain plus full conserved totals; counters
+and typed snapshots remain processing observations, not grant/thread/custody proof.
+Actual synthetic parent directory IO now feeds input3 child processing and a
+chunked result2 consumer; changed child inode is refused.47result/real-file cases
+pass. JobOwner consumption/native binding/hard termination are still open.
+Independent bounded receiver/comparison review pending.
+
+## October 12: review execution audit and acquisition regressions
+
+Live agent inventory showed reviewer completed atad31a3e, so subsequent queued
+send_message requests were not proof of running reviews. Restarted that same
+reviewer with explicit followup for74d75d3/9ba5e39/944bbac/dd924f9/90a0aad; all
+remain pending until actual receipts. No unreviewed deployment. Current source
+presentation suite379passed+190subtests. Added real parent-record allocation
+failure and exhausted-open-credit tests: retained pending FD closes after failure;
+exhaustion has0kernelopens.34real-file cases pass.
+
+## October 12: actual parent policy thread ownership
+
+Added pre-recorded one-attempt non-daemon policy worker with retained start-failure
+owner/cause, nonblocking serialized join observations and snapshot access only
+after actual thread join plus known descriptor closure. No cancellation/forced
+thread kill/replay. A real held-stat worker stays unavailable while running, then
+joins with closed descriptors; unknown start cannot manufacture join or retry.
+36real-file cases pass;278initial real-file/layout cases pass. Native admission,
+authorization/current-home postchecks and one-use transfer are still unbound.
+Independent thread-owner review pending; no deployment.
+
+## October 12: parent owner PARENT-01/02 repairs
+
+Independent parent-owner review helddd924f9: replay overwrote the original private
+failure, and constructor paths were split/encoded before the scalar ceiling.
+Run now preserves the first failure; exact-string/4096scalar checks precede
+_components for both root/home. Actual2MBallocation regressions and original
+unknown-close identity/no-retry cases pass;37real-file cases total. Parent closure
+review pending. Input3/result2/migration and bounded receiver have separate actual
+acceptance receipts; none authorizes native routes or physical delivery.
+
+## October 12: policy work/native operation binding
+
+Added one policy-work owner per existing opaque authority operation only after
+INITIAL/BEFORE and reserved STARTING admission. Home derives from its observed
+canonical native home; no request path or alternate profile lookup. Actual join
+and fresh PRE_GO observation gate snapshot access. One-use constructor/start
+claims precede callbacks.61real-file/authoritycases+23subtests pass with synthetic
+native service; initial test corrected nonexistent capture API to reserve, and
+postcheck correctly uses STARTING phasePRE_GO (BEFORE belongs QUEUED). No actual
+bearer/native gateway qualification, child/input transfer, clean-abort, retirement
+integration or routes. Full exact361cf69 suite5705passed/53skipped/190subtests.
+Independent binding review pending.
+
+## Native policy callback fences — October 12, 2026
+
+Review of 783eede found NPOLICY-01 (reentrant postcheck could issue duplicate
+PRE_GO) and NPOLICY-02 (clock callback could retire the listener before snapshot
+publication). The successor reserves postcheck before callbacks, retains sticky
+invalidity on repeated entry, and revalidates source-owned authority and policy
+joins after the retained clock sample without another callback loop. Two causal
+regressions exercise caught reentry and listener retirement. Focused real-file
+and authority checks: 63 passed, 23 subtests; Ruff passes. Independent closure
+remains pending; no live route, deployment, signed app or phone qualification.
+Review: /private/tmp/hermes-presentation-chain-review-20261012/native-policy-REVIEW.json.
+
+## Parent-bound result receiver — October 12, 2026
+
+Independent review accepted a2746c8's narrow NPOLICY-01/02 closure (eight original
+causals). Receipt: /private/tmp/hermes-presentation-chain-review-20261012/native-policy-closure-REVIEW.json.
+JobOwner now has an explicit one-use STARTING/pre-child result2 binding retaining
+copied parent counts and immutable numeric directory identity. EOF validates the
+child result against that retained context; legacy result1, changed chains and
+under-parent totals refuse without releasing custody credit. Focused receiver/job
+checks: 55 passed, 43 subtests; Ruff passes. Independent receiver integration review
+is pending. Native policy transfer and route callers remain unwired; the default
+legacy receiver remains only for existing fixture flows. No deployment claim.
+
+## Native policy input transfer — October 12, 2026
+
+Result binding 7955c06 passed independent review (20 pure cases), receipt
+/private/tmp/hermes-presentation-chain-review-20261012/job-result-REVIEW.json.
+NativePolicyWork now emits one private input3 packet only after known policy join
+and fresh native postcheck; it binds result2 to the retained parent snapshot before
+returning bytes. Scope/identity/challenge/deadline derive from the admitted record;
+no bearer or user/device credentials enter the packet. Metadata refuses an avatar
+revision; avatar requires one. Duplicate transfer is sticky-invalid, and final
+current fences refuse publication after retirement during result binding.
+84 focused tests plus 23 subtests pass; Ruff passes. Independent transfer review
+remains pending. Supplied manifest digest is context, NOT runtime code attestation.
+No route, subprocess supervisor, signed candidate or physical activation claimed.
+
+## Known pre-transfer abort — October 12, 2026
+
+Independent transfer review accepted 1784355 (18 pure cases), receipt
+/private/tmp/hermes-presentation-chain-review-20261012/worker-transfer-REVIEW.json.
+Policy work now supports clean refusal only before any input transfer/child/native
+claim and only after the policy owner is sealed never-started or actually joined
+with known descriptor closure. Unjoined, uncertain or transferred work retains its
+slot. Native credential retirement additionally checks policy resource closure
+before and after its native drain. Start is permanently refused after closure.
+Focused real-file/authority/job causals: 105 passed, 66 subtests; Ruff passes.
+Independent cleanup review is pending. No launch supervisor, route or deployment.
+
+## Constructor refusal cleanup repair — October 12, 2026
+
+Review identified a zero-work reservation leak when the listener retires during
+NativePolicyWork construction, before policy/thread ownership exists. The repair
+records terminal constructor completion separately from in-flight construction;
+only a terminal never-started, known-zero-work owner can close without a thread.
+A callback during construction cannot claim an abort receipt. Actual uncertain
+thread starts still retain debt. The causal regression checks in-flight refusal,
+listener retirement, zero policy/thread and eventual slot/credential retirement.
+106 focused tests plus 66 subtests pass; Ruff passes. Independent closure pending.
+
+## ColPanicM2 runtime refresh — November 4, 2026
+
+The supported updater advanced installed Hermes from `8afaab37` to
+`ed1afb082eb` (0.22.7), with a full pre-update backup and three profile
+snapshots. The updater verified the relaunched default gateway at `ed1afb08`.
+`hermes hmp health check` observed the expected TLS listener and three served
+bots (default, liteforms-connector, netmin), each reporting send/jobs/model
+ready. These are host readiness checks, not device authorization, actual
+execution, approval settlement, presentation delivery or phone qualification.
+The updater stopped the standalone dashboard and reported its relaunch pending.
+
+The recovered PR head is `3f4618c`; prior temporary checkouts no longer contain
+Git metadata/source. Later local-only process ownership repairs from the dated
+handoff must be recovered or reconstructed and re-reviewed before activation.
+No presentation route exists in this head's server.py. The next implementation
+work remains the supervisor/process custody binding followed by authenticated
+metadata/avatar routes. Mobile PR87 retains the reviewed static renderer at
+`d9b0826`; it has not been installed or physically qualified.
+
+## November 4 — reviewed result collector repair
+
+Commit 017abd6 fixes a concrete review finding: the pipe owner aggregates up to
+its bounded total, but the result codec admits only 65,536 bytes per feed. The
+closure collector now snapshots the result once and feeds ordered bounded slices.
+A 140 KB synthetic V2 avatar exercises collector-to-real-codec reconstruction
+and one-use refusal. That test explicitly uses inert custody fixtures; the
+separate actual empty-child test covers observed EOF/wait/group closure only.
+Independent reviewer accepted this finite repair and the binary-envelope
+credential absence assertion correction. Reviewer ran 67 tests/23 subtests plus
+10 policy-binding cases. Root ran all presentation tests: 409 tests/190 subtests
+on Python 3.11, 3.13 and the host's Python 3.14.7 executable via isolated uv test
+environments. Ruff 0.16.9 and diff whitespace checks pass.
+
+No route, host deployment or phone installation changed. Remaining work is the
+full deadline supervisor, including cleanup after expiry without fresh output
+authority, exact runtime/code/dependency and exclusive-reaper qualification,
+listener lifecycle and authenticated metadata/avatar routes, then signed-device
+character display. Host-local images remain the next feature priority and their
+physical rendering remains unverified.
+
+## November 4 — expired-reader cleanup slice
+
+Reviewed commit bf24a54 adds cleanup-only discard after the adapter checks exact
+retained process binding, child/stream/control identity, observed terminal wait,
+group absence, signal retirement and known control closure. The job is cancelled
+before discard. The pipe owner never restores normal read authority; it wipes
+retained output even if EOF was already observed, drains under one frozen 250 ms
+allowance and a separate finite discard ceiling, and records only real EOF/close.
+Timeout, overflow or descriptor uncertainty retains debt; no close is retried.
+
+Independent review accepted 42 tests/23 subtests, including actual pipe cleanup,
+buffered wipe, frozen allowance, sticky overflow, wrong control handle and an
+actual empty child. The post-GO fixture changes only inert JobOwner state and
+explicitly proves UNKNOWN/no credential retirement rather than successful
+post-GO cleanup. Root's full presentation run passes 416 tests/190 subtests using
+the host Python 3.14.7 executable via an isolated uv environment. Ruff passes.
+
+Remaining contract decision: a cancelled post-GO child may exit without a valid
+worker cleanup envelope. Current JobOwner deliberately retains UNKNOWN after
+result discard. A refusal-only path based on exact OS closure is under design
+review; success/emission must still require a valid worker result and final
+native reauthorization, and parent/native thread ambiguity cannot be waived.
+Full supervisor and runtime/listener/route/physical qualification remain open.
+
+Fresh GitHub checks for the preceding pushed 2e02858 checkpoint passed the plugin
+suite and BI1 Unicode jobs on Python 3.12/3.13/3.14 (run 41927367852); these are not
+checks of bf24a54 until that commit is pushed and its own run completes.
+
+## November 4 — refusal-only aborted-result lifecycle
+
+Commit 71b592c implements the independently reviewed RESULT_ABORTED_EOF marker.
+Only a DRAINING job with irrevocably revoked output may accept it; ordinary
+RESULT_EOF parsing is unchanged, duplicate/mixed EOF or prior UNKNOWN cannot
+recover, and an aborted result cannot become COMPLETE/reauthorized/emitted.
+The exact adapter selects this projection only after retained process/child/
+stream/control identity, actual wait/group/EOF/close/signal observations and
+irreversible discard. Native and parent policy closure remain independent gates.
+
+The actual fixed-child test writes input3 and GO through the normal adapter
+handoff, requests termination, observes wait/group/pipe closure and finishes as
+refusal. It uses synthetic native authority and an empty private synthetic tree;
+it is not evidence of child GO acknowledgement, completed processing or production
+native-policy acquisition. Native DRAIN false retains non-null headers/claim and
+disables the scope; true permits retirement. Pure ledger fixtures prove truncated
+abort, no unrevoked acceptance, prior malformed-parser UNKNOWN retention and
+mixed/duplicate/reordered closure failure. Independent review accepted 83 focused
+tests/66 subtests plus both finite native-DRAIN variants. Root full presentation
+suite: 422 tests/190 subtests on host Python 3.14.7 via isolated uv dependencies;
+Ruff 0.16.9 and whitespace checks pass.
+
+This supersedes the earlier post-GO missing-envelope limitation, not the live
+qualification gates. Exit-backed refusal relies on the fixed reviewed worker
+having no spawn or FD delegation; group absence alone is not general descendant
+containment. Runtime/source/dependency/reaper qualification, full supervisor,
+listener lifecycle, authenticated metadata/avatar routes and physical rendering
+remain open. No installed host or mobile artifact changed.
+
+## November 4 — retained composed reader supervisor
+
+Source d26db66 binds one ReaderSupervisor to the reserved operation before any
+await or child acquisition. The composed path performs native INITIAL/BEFORE,
+actual policy-thread acquisition/join/postcheck, input3 transfer, fixed process
+launch, exact control input/GO, bounded output collection, exact wait/group/pipe
+closure, result2/parent-work validation, final native authorization and one
+synchronous sink call. Independent source review accepted all 15 then-current
+composed/adversarial cases. Root's full presentation run passed 437 tests/190
+subtests on host Python 3.14.7 through isolated uv dependencies.
+
+The outer task uses the original remaining deadline, synchronously transfers
+ownership to CLEANUP and retires output before cancellation. Every resumed normal
+phase checks current phase/authority; no detached normal path may launch, write,
+read or reap after handoff. One frozen total 250 ms cleanup allowance applies
+across child/control/pipes/policy/native work. Discard can shorten its budget to
+that deadline, never extend it. Partial owners, body/cleanup tasks and ambiguous
+native claims remain attached to the record; no acquisition, GO or close replay
+is attempted. UNKNOWN may discard exact known-exited pipes for FD disposal but
+cannot project abort, recover authority or retire credentials.
+
+Actual composed checks cover successful synthetic metadata emission/retirement,
+late/swallowed native awaits at INITIAL/BEFORE/both PRE_GO observations/PRE_EMIT,
+actual original timeout, partial launch/pipe/control construction, deadline
+exhaustion after termination, duplicate run, late native DRAIN and blocked actual
+policy-thread completion. Tests deliberately retain debt after uncertain partial
+setup or late work. This is not production native authorization or signed phone
+qualification.
+
+Remaining limits are explicit: asyncio timers cannot bound a synchronous syscall
+that blocks the event loop; supported syscall latency or an external watchdog
+must be qualified before a hard wall-clock claim. Input preparation followed by
+failure before launch conservatively retains transfer debt. Fixed no-spawn/no-FD
+transfer code, interpreter/dependency provenance and exclusive reaper remain
+live qualification gates. Listener startup/shutdown and authenticated routes are
+not connected. No installed host plugin/app or permission changed.
+
+GitHub run 41929068669 completed successfully for previous head 8f5bef1, not this
+new supervisor source. The roadmap remains active; characters are still first,
+then host-local images and physical qualification.
+
+Two final test-only causals were independently reviewed and passed: a sink that
+writes then raises produces one write, retained UNKNOWN/credentials and refused
+run replay; a borrowed outer cleanup deadline may only shorten the pipe owner's
+allowance. Root's focused supervisor/pipe run passes 28 cases. These two additions
+follow the 437-case full Python 3.14 run above; no production code changed after
+that full run.
+
+## November 4 — actual runtime census changes the next action
+
+RUNTIME_FINDINGS.md and runtime-source-pins-20261104.json pin native ed1afb and
+its current launcher. Bare isolated tools Python 3.14.9 cannot find yaml; native
+PM activation selects dependencies through parent sys.path, not sys.prefix. This
+is not an inspection of selected-environment contents or the running gateway PID.
+The PM venv_command helper is an existing supported dependency-aware primitive,
+but freezing and qualifying the listener's selected generation remains work.
+
+Independent source review confirmed the embedded Kanban path invokes
+waitpid(-1,WNOHANG) in the gateway process. When active, it conflicts with direct
+reader ownership; active configuration was not inspected. A new actual exact-PID
+competing-reap test proves ECHILD retains UNKNOWN/no signal retry and touches no
+other child. Independent reviewer ran all 20 process tests successfully. No
+version allowlist, reaper replacement, Kanban disablement or live setting change
+is introduced. A native ownership contract or separately reviewed external broker
+can resolve the direct-reader issue; the feature is not declared impossible.
+
+Continue host-local images independently. Their existing route does not depend
+on this worker. Fresh 1,359 server media assertions pass in isolated Python3.14.9;
+old shared pytest garbage cleanup warnings and one fixture-task teardown warning
+are recorded rather than treated as a clean run. The latter test-only repair is
+independently accepted and passes its targeted dedicated-basetemp rerun. Flutter
+3.44.2/Dart3.12.2 passes62 host-image loader/card/transcript/BotChat cases at
+unchanged mobile d9b0826 with pinned HMPdbdcdba restored. Registry/credentials,
+model/provider settings and device grants were untouched. Physical image display
+remains unverified. CoreDevice inventory shows the authorized iPad Pro connected
+with Developer Mode and iPhone15ProMax disconnected; source build preparation is
+separate from signing/install/launch and image journeys.
+
+
+## November 4: explicit isolated parser dependency
+
+Closed startup parser path and namespace-only -I-B-S launch are implemented and
+independently accepted; see DEPENDENCY_LAUNCH_DECISION.md for the S2 rejection,
+static amendment, retained constructor-code scope, dispose semantics, startup
+mutation repair and exact verification. Final Python3.11 presentation/skeleton/
+surface union793 tests+190 subtests passes; Python3.14.9 earlier union790+190 and
+final20-case parser launch checks pass. No live PM generation, exclusive reaper,
+listener route, advertised capability or phone parity is certified. The broad
+feature goal and actual deployment/physical gates remain open.

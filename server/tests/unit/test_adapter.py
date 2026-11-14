@@ -20,7 +20,8 @@ from typing import Any
 
 import pytest
 
-from hmp_plugin import cli, reads, wire
+from hmp_plugin import cli, prompts, reads, wire
+from hmp_plugin.contract import WriteGate, WriteGateState
 
 from .hmp_kit import Env
 from .test_server import WRITE_PATHS, tls_exchange
@@ -107,6 +108,66 @@ def test_bad_listener_config_does_not_connect(adapter_module: types.ModuleType) 
     adapter = adapter_module.HmpAdapter(_Config(wildcard))
     assert asyncio.run(adapter.connect()) is False
     assert "connected" not in adapter.states
+
+
+@pytest.mark.parametrize(
+    ("extra", "enabled"),
+    [
+        ({}, False),
+        ({"controls_requests": None}, False),
+        ({"controls_requests": True}, False),
+        ({"controls_requests": []}, False),
+        ({"controls_requests": {"enabled": False}}, False),
+        ({"controls_requests": {"enabled": 1}}, False),
+        ({"controls_requests": {"enabled": "true"}}, False),
+        ({"controls_requests": {"enabled": True}}, True),
+        (None, False),
+    ],
+)
+def test_controls_requests_local_startup_flag_is_exact_and_restart_bound(
+    adapter_module: types.ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    extra: Any,
+    enabled: bool,
+) -> None:
+    """Exercise the production context constructor without a bridge or a live listener."""
+    from hmp_plugin.compat import CompatResult, CompatStatus
+
+    class FakeStore:
+        def __init__(self, _path: Path) -> None:
+            pass
+
+        def migrate(self) -> None:
+            pass
+
+        def close(self) -> None:
+            pass
+
+    class Gate:
+        def evaluate(self) -> CompatResult:
+            return CompatResult(CompatStatus.UNSUPPORTED)
+
+    monkeypatch.setattr(adapter_module.compat, "default_gate", lambda: Gate())
+    monkeypatch.setattr(
+        adapter_module.identity,
+        "resolve_custody",
+        lambda: types.SimpleNamespace(anchor_dir=tmp_path),
+    )
+    monkeypatch.setattr(
+        adapter_module.identity,
+        "load_or_create",
+        lambda _store: types.SimpleNamespace(iid="synthetic-iid"),
+    )
+    monkeypatch.setattr(adapter_module, "Store", FakeStore)
+    adapter = adapter_module.HmpAdapter(_Config(extra))
+    first = adapter_module.open_components(adapter)
+    assert first.controls_requests_enabled is enabled
+    # Registration is a listener-start decision, not a mutable per-request flag.
+    adapter.config.extra = {"controls_requests": {"enabled": not enabled}}
+    assert first.controls_requests_enabled is enabled
+    restarted = adapter_module.open_components(adapter)
+    assert restarted.controls_requests_enabled is not enabled
 
 
 def test_lifecycle_and_zero_handoff_on_write_paths(
@@ -276,6 +337,85 @@ def test_sync_refresh_skips_the_write_when_the_served_set_is_unchanged(
     asyncio.run(main())
 
 
+def test_health_snapshot_keeps_profile_failures_separate(adapter_module: types.ModuleType) -> None:
+    bridge = types.SimpleNamespace(
+        direct_send_endpoint=lambda profile: object() if profile == "alpha" else None
+    )
+    ctx = types.SimpleNamespace(
+        direct_send_enabled=lambda: True,
+        reported_send_gate=lambda profile: WriteGate(
+            state=WriteGateState.OPEN_GUARDED if profile == "alpha" else WriteGateState.CLOSED,
+            reason=None,
+        ),
+        cron_enabled=lambda: True,
+        is_cron_available=lambda: True,
+        model_enabled=lambda: False,
+        is_model_available=lambda: True,
+        is_send_available=lambda: True,
+        bridge=bridge,
+    )
+    assert adapter_module.HmpAdapter._health_snapshot(
+        ctx, [("alpha", "Alpha"), ("beta", "Beta")]
+    ) == (
+        ("alpha", "ready", "ready", "disabled"),
+        ("beta", "unavailable", "unavailable", "disabled"),
+    )
+
+
+def test_health_snapshot_reports_unavailable_send_as_unsupported_not_disabled(
+    adapter_module: types.ModuleType,
+) -> None:
+    """E13: the owner's flag and this Hermes's availability are separate. A flag that is on for a
+    Hermes without the send dependencies reads `unsupported`; a flag that is off reads
+    `disabled`."""
+
+    def ctx(*, flag: bool, available: bool) -> types.SimpleNamespace:
+        return types.SimpleNamespace(
+            direct_send_enabled=lambda: flag,
+            is_send_available=lambda: available,
+            reported_send_gate=lambda profile: WriteGate(
+                state=WriteGateState.OPEN_GUARDED, reason=None
+            ),
+            cron_enabled=lambda: False,
+            is_cron_available=lambda: False,
+            model_enabled=lambda: False,
+            is_model_available=lambda: False,
+            bridge=None,
+        )
+
+    snapshot = adapter_module.HmpAdapter._health_snapshot
+    assert snapshot(ctx(flag=True, available=False), [("a", "A")]) == (
+        ("a", "unsupported", "disabled", "disabled"),
+    )
+    assert snapshot(ctx(flag=False, available=False), [("a", "A")]) == (
+        ("a", "disabled", "disabled", "disabled"),
+    )
+    assert snapshot(ctx(flag=True, available=True), [("a", "A")]) == (
+        ("a", "ready", "disabled", "disabled"),
+    )
+
+
+def test_periodic_health_refresh_rewrites_unchanged_served_set(
+    adapter_module: types.ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    env = Env(tmp_path)
+    env.bridge.served_profiles = lambda: ["default"]  # type: ignore[method-assign]
+    monkeypatch.setattr(adapter_module, "open_components", lambda _adapter: env.ctx)
+    monkeypatch.setattr(adapter_module.time, "time", lambda: 1000)
+    adapter = adapter_module.HmpAdapter(_Config({"bind": "127.0.0.1", "port": _free_port()}))
+
+    async def main() -> None:
+        assert await adapter.connect() is True
+        path = cli.listener_record_path(env.custody.anchor_dir)
+        assert cli.read_listener_record(path, iid=env.iid).health_checked_at == 1000
+        monkeypatch.setattr(adapter_module.time, "time", lambda: 1020)
+        adapter._sync_refresh(["default"], refresh_health=True)
+        assert cli.read_listener_record(path, iid=env.iid).health_checked_at == 1020
+        await adapter.disconnect()
+
+    asyncio.run(main())
+
+
 def test_sync_refresh_failure_is_logged_and_leaves_the_previous_record_intact(
     adapter_module: types.ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -412,5 +552,28 @@ def test_identity_change_reports_fatal_and_stays_closed(
         )
         assert status == "connection_failure"
         await adapter.disconnect()
+
+    asyncio.run(main())
+
+
+def test_adapter_supplies_production_push_port_and_closes_it(
+    adapter_module: types.ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    env = Env(tmp_path)
+    # Supported production open_components supplies the prompt store; the F1
+    # fixture above deliberately has no notification source.
+    env.ctx.prompt_store = prompts.PromptStore(clock=env.ctx.now)
+    monkeypatch.setattr(adapter_module, "open_components", lambda _adapter: env.ctx)
+    adapter = adapter_module.HmpAdapter(_Config({"bind": "127.0.0.1", "port": _free_port()}))
+
+    async def main():
+        assert await adapter.connect() is True
+        dispatcher = adapter._server._push_dispatcher
+        assert dispatcher is not None
+        relay = dispatcher.relay
+        assert isinstance(relay, adapter_module.RelayClient)
+        assert not relay._sessions  # default push-off performs no relay I/O
+        await adapter.disconnect()
+        assert relay.closed and not relay._sessions
 
     asyncio.run(main())

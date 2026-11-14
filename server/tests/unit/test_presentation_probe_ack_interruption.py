@@ -1,0 +1,118 @@
+"""Partial acknowledgement and lost-return contracts on actual shared machinery."""
+import pytest
+
+from . import test_presentation_entry_files as base
+from .test_presentation_gateway_approval import operator_composed_script
+
+
+@pytest.mark.parametrize('case', ('ack_published', 'raw_cleared', 'snapshot_cleared',
+                                 'envelope_cleared', 'category_cleared', 'consumed',
+                                 'history_appended', 'cursor_stored', 'phase_result',
+                                 'pre_return_ack', 'actual_return_event'))
+def test_probe_shared_ack_interruption(tmp_path, monkeypatch, case):
+    script, mutation = operator_composed_script('links')
+    script = script.replace('GatewayPackageOwner.verify_recipe(recipe)',
+                            'GatewayPackageOwner.verify_recipe_source_hashes(recipe,entry)')
+    script = script[:script.rfind('print(json.dumps')]
+    script += '\nack_case=' + repr(case) + '\n'
+    script += r'''
+import gc,os
+from hmp_startup.gateway_continuation import GatewayContinuationOwner
+from hmp_startup.cache_selection import selected_cache_input_attempts
+from hmp_startup.cache_probe import RuntimeCacheProbeOwner
+from hmp_startup import probe_native as engine
+from hmp_plugin import presentation_native_metadata as m
+from hmp_plugin import presentation_startup_artifacts as a
+continuation=GatewayContinuationOwner.retain(entry,approval,recipe,checked)
+rows=selected_cache_input_attempts(continuation)
+index=next(i for i,row in enumerate(rows) if row.plan_row.source.path==str(dep_root/'__init__.py'))
+owner=RuntimeCacheProbeOwner.retain(continuation,index)
+scope,selected,path,proof,reg,root,cell,count=RuntimeCacheProbeOwner._start(owner)
+faults=[];held_rows=[];references=[];snapshots=[];native_after=[]
+def capture(consumer,commit):
+    if type(consumer) is m._ProbeConsumer and consumer.execution.owner is owner:
+        execution=consumer.execution
+        if execution.opened and not faults:
+            operation=consumer.operation
+            faults.append(True)
+            held_rows.extend(scope.records)
+            references.append(consumer.custody[5])
+            snapshots.append((consumer,operation,commit,
+                              tuple(execution.history),execution.next_site[0],
+                              tuple(reg.native_ledger.counts),len(reg.native_ledger.attempts)))
+            raise RuntimeError('SYNTHETIC_ACK_STORE_INTERRUPTION_ONLY')
+def interrupted(frame):
+    capture(frame.f_locals.get('consumer'),frame.f_locals.get('commit'))
+route={
+ 'ack_published':(m._ack_directory_policy.__code__,'actor_arguments = (consumer, actual, commit)'),
+ 'raw_cleared':(m._ack_directory_policy.__code__,'result.snapshot[0] = None'),
+ 'snapshot_cleared':(m._ack_directory_policy.__code__,'result.envelope[0] = None'),
+ 'envelope_cleared':(m._ack_directory_policy.__code__,'result.category[0] = None'),
+ 'category_cleared':(m._ack_directory_policy.__code__,'consumer.consumption[0] = commit'),
+ 'consumed':(m._ack_directory_policy.__code__,'if type(consumer) is _ProbeConsumer:'),
+ 'history_appended':(engine._publish_shared_ack.__code__,'execution.next_site[0] = commit.next_site'),
+ 'cursor_stored':(engine._publish_shared_ack.__code__,'execution.pending[0] = None'),
+ 'phase_result':(m._ack_directory_policy.__code__,'phase.current[0] = phase.idle'),
+ 'pre_return_ack':(m._ack_directory_policy.__code__,'return commit'),
+}
+prior_profile=sys.getprofile()
+if ack_case=='actual_return_event':
+    def profile(frame,event,arg):
+        if prior_profile is not None:prior_profile(frame,event,arg)
+        if (frame.f_code is m._ack_directory_policy.__code__ and event=='return'
+                and type(arg) is engine._ProbeCommit):
+            capture(arg.consumer,arg)
+    sys.setprofile(profile)
+else:
+    code,fragment=route[ack_case]
+    lines=Path(code.co_filename).read_text().splitlines()
+    end=max(line for _,_,line in code.co_lines() if line is not None)
+    matches=[i+1 for i in range(code.co_firstlineno-1,end) if fragment in lines[i]]
+    assert matches,(ack_case,fragment)
+    _synthetic_trace_routes.setdefault(code,{})[matches[0]]=interrupted
+    sys.settrace(synthetic_trace)
+def observed(frame):
+    if faults:native_after.append(True)
+# In a return-event fault Python disables the raising profiler. Exact original
+# attempt/history/count checks below additionally prove no metered work replay.
+if ack_case!='actual_return_event':
+    for native in reg.native_origin.operations[3:5]:
+        observe_synthetic_native(native,m._produce_directory_metadata.__code__,observed)
+old_gc=gc.isenabled();gc.disable()
+refused=False
+try:
+    try:engine._run_fresh_probe(owner,scope,reg,scope.native_probe_plan)
+    except a.ArtifactObservationError:refused=True
+    assert faults==[True] and refused and len(snapshots)==1
+    consumer,operation,commit,history,cursor,budget,attempts=snapshots[0]
+    execution=owner._probe_execution
+    facts={'case':ack_case,'refused':refused,'faults':len(faults),
+           'raw_capsules_alive':sum(reference() is not None for reference in references),
+           'known_rows':len(held_rows),'closed_rows':sum(row.closed for row in held_rows),
+           'native_after_observed':ack_case!='actual_return_event',
+           'stat_after_fault':len(native_after) if ack_case!='actual_return_event' else None,'ack_preserved':operation.result.acknowledged[0] is commit,
+           'history_length':len(execution.history),'history_at_fault':len(history),
+           'cursor':execution.next_site[0],'cursor_at_fault':cursor,
+           'used':reg.native_ledger.counts[0],'used_at_fault':budget[0],
+           'attempts':len(reg.native_ledger.attempts),'attempts_at_fault':attempts,
+           'failed':reg.native_ledger.failed[0]}
+    path=Path(sys.argv[1])/'probe-ack-interruption-stage.json'
+    fd=os.open(path,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
+    with os.fdopen(fd,'w') as stream:json.dump(facts,stream,sort_keys=True)
+    assert all(reference() is None for reference in references)
+    assert held_rows and all(row.closed and row.close_attempted for row in held_rows)
+    if ack_case!='actual_return_event':assert native_after==[]
+    assert operation.result.acknowledged[0] is commit
+    assert len(execution.history)==len(history) and all(x is y for x,y in zip(execution.history,history,strict=True))
+    assert execution.next_site[0]==cursor and len(reg.native_ledger.attempts)==attempts
+    assert reg.native_ledger.counts[0]==budget[0]+len(held_rows)
+    assert reg.native_ledger.failed==[True] and reg.native_ledger.inflight==[None]
+    assert reg.native_phase.current[0] is reg.native_phase.failed and reg.native_phase.result==[None]
+    assert owner._bytes_read==0 and owner._count_cell is count and not owner._ready
+finally:
+    sys.setprofile(prior_profile)
+    if old_gc:gc.enable()
+print(json.dumps({'mutation':mutation,'runtime_admitted':False}))
+'''
+    monkeypatch.setattr(base, 'SCRIPT', script)
+    base.test_actual_entry_and_wrapper_files(tmp_path, mutation)

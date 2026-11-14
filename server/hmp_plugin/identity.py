@@ -49,12 +49,14 @@ and `k_grace`. Nothing in this module logs; callers log only `change_reason` cod
 from __future__ import annotations
 
 import _ssl
+import asyncio
 import contextlib
 import hashlib
 import json
 import os
 import re
 import ssl
+import stat
 import subprocess
 import sys
 import time
@@ -155,6 +157,14 @@ class InstanceIdentity(Protocol):
         """The 32-byte retry-grace key (research R16, CS-13): its own file, mode 0600, outside
         every Hermes home, never in SQLite, never logged or printed. Regenerated on `rotate-key`,
         on clone/backup/host-change detection, and when missing or unreadable. Consumed by T026."""
+        ...
+
+    async def read_k_grace_for_push(self) -> bytes | None:
+        """PN-ISS-5: one off-loop, read-only key read; None is not re-derivable.
+
+        Call once before a request/batch's store transaction, never once per row.
+        Existing retry-grace callers retain their separate read-or-create behavior.
+        """
         ...
 
     def still_current(self) -> bool:
@@ -485,6 +495,29 @@ def _read_or_create_k_grace(path: Path) -> bytes:
     return fresh
 
 
+def _read_k_grace_for_push(path: Path) -> bytes | None:
+    """Bounded read only: never create, repair, chmod, log or retain the secret.
+
+    A non-regular file cannot block this worker: open nonblocking where supported,
+    then reject it before reading. Descriptor-based checks avoid path replacement.
+    """
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
+    try:
+        fd = os.open(path, flags)
+    except OSError:
+        return None
+    try:
+        info = os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode) or info.st_size != K_GRACE_BYTES:
+            return None
+        data = os.read(fd, K_GRACE_BYTES + 1)
+        return data if len(data) == K_GRACE_BYTES else None
+    except OSError:
+        return None
+    finally:
+        os.close(fd)
+
+
 # --------------------------------------------------------------------------------------------------
 # The loaded identity
 # --------------------------------------------------------------------------------------------------
@@ -528,6 +561,14 @@ class LoadedIdentity:
 
     def k_grace(self) -> bytes:
         return _read_or_create_k_grace(self._custody.k_grace_path)
+
+    async def read_k_grace_for_push(self) -> bytes | None:
+        """PN-ISS-5; await once before the transaction, sharing the result per batch.
+
+        Failure never invokes the existing repair accessor. This method makes no
+        liveness/authorization decision; callers must check their exact binding.
+        """
+        return await asyncio.to_thread(_read_k_grace_for_push, self._custody.k_grace_path)
 
     def _current_sigs(self) -> tuple[object, object]:
         return (_stat_sig(self._custody.key_path), _stat_sig(self._custody.binding_path))

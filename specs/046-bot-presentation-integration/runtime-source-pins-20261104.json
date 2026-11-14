@@ -1,0 +1,33 @@
+{
+  "native_commit": "ed1afb082eb3e46cf2edae9d8f68fb67b09ee4df",
+  "scope": "read-only source and bare interpreter probe; not running gateway memory or active configuration",
+  "sources": {
+    "gateway/kanban_watchers.py": "72136d069a558ebfed19a795c168b66590c5926e7535f446c04edebd70bc1915",
+    "gateway/kanban_watchers_common.py": "e0e381fc2ced952e8f81f806ea466915eec433dfe604833edc8d9d8cc94fbac2",
+    "hermes_cli/kanban_db_dispatch.py": "8ead0acc2812176894d3f9d8c570e8b14ccf9c224217d197a7e52b06374d59fb",
+    "pm/environments.py": "bfddba8093866c66fae12115389d78a2a65adc84f68b634a989775923c42268b",
+    "hermes_bootstrap.py": "f242036b2d35b92283b9a7e97c7059e537607fc4b02026f657a6d00cb4683f69"
+  },
+  "launcher": {
+    "sha256": "d78961f3df7e34f6934ff5b0bd4fa7d95807195e41690597f3c2468f274fcd77",
+    "boot_python": "3.14.9",
+    "running_gateway_interpreter_verified": false
+  },
+  "bare_isolated_probe": {
+    "flags": [
+      "-I",
+      "-B"
+    ],
+    "python": "3.14.9",
+    "yaml_spec": null,
+    "interpretation": "does not inspect the PM-selected generation; demonstrates loss of parent-only activated dependency path"
+  },
+  "native_reaper": {
+    "call": "os.waitpid(-1, os.WNOHANG)",
+    "watcher_uses_same_process_thread": true,
+    "configured_or_running_embedded_kanban_verified": false,
+    "condition": "conflicts with direct-child exclusive custody when this watcher is active"
+  },
+  "supported_dependency_launcher": "pm.environments.venv_command(root, selected_venv(root), options=(\"-I\", \"-B\"))",
+  "changes_performed": []
+}

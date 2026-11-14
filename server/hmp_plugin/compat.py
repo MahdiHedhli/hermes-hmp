@@ -1,21 +1,30 @@
-"""Read-compatibility gate (GU-2c, ERR-2a; research R8). Implementation: T023.
+"""Minimum-version eligibility (owner policy 2026-10-01; GU-2, GU-2c, ERR-2a).
 
-`CompatGate.evaluate()` runs before anything imports `bridge.py`. Its order is mandatory
-(controller ruling on T013):
+`evaluate_eligibility()` is the single runtime decision for every Hermes-dependent feature. Its
+order is mandatory:
 
 1. Locate the Hermes source root with `importlib.util.find_spec("hermes_constants").origin`.
-   This imports nothing.
-2. Compute the build identity with file reads only: the read-bridge fingerprint, always, plus the
-   git SHA when the install has git metadata (research R8 steps 2-3).
-3. If the build is unidentifiable, or `match_build` (the CS-19 rule, fixed in this module) finds no
-   entry in `read_compat_builds.json`, return UNSUPPORTED (`hermes_build_unsupported`) at once,
-   **without importing any Hermes module**. An unlisted build never has a Hermes internal imported
-   by HMP ("never a guessed call", GU-2c).
-4. Only for a listed build, run the dependency probe (`probe_read_dependencies`: import and
-   signature inspection, no calls). A failure is UNSUPPORTED (`hermes_read_dependency_missing`).
-5. Otherwise SUPPORTED, and only then may the bridge be imported and constructed.
+   This imports nothing. No root means every feature is unavailable (`hermes_not_found`).
+2. Read the Hermes version with file reads only (`hermes_version.read_hermes_version`).
+3. A feature whose own floor the version declares itself below is unavailable
+   (`hermes_version_below_floor`). When read is below its floor, return at once **without
+   importing any Hermes module**. An unknown, unreleased or newer version is never refused on
+   version grounds: it is attempted, subject to the probes below.
+4. Probe the read core dependencies (import and signature inspection, no calls). If one is
+   actually missing, read is unavailable and every other feature is `requires_read`: they all use
+   the bridge's authorization, profile-home and profile-scope primitives.
+5. Independently probe each other feature's own dependencies. One feature's missing dependency
+   never closes another.
+5a. `approvals` and `phone_chat` (spec 034) need read and send. Both use the send floor.
+   `approvals` has no dependency table of its own. `phone_chat` probes `PHONE_CHAT_DEPENDENCIES`
+   only when send is available, so below the floor or without send nothing is imported for them.
+5b. `local_media` (spec 011, D-M2/D-M3) depends on read alone, never on send or session browsing.
+   It uses the write floor, so below it nothing is probed or imported for it, and without read it
+   is `requires_read` with no probe. It has no build list, manifest, fingerprint or Git SHA reader.
+6. Exact build fingerprints and git SHAs are read only as test evidence (`tested_label`). No gate
+   reads that field.
 
-`probe_read_dependencies` is the only function outside `bridge.py` allowed to import Hermes modules
+`probe_dependencies` is the only function outside `bridge.py` allowed to import Hermes modules
 dynamically. `tools/ci/check_plugin_surface.py` enforces that. This module never imports `bridge`.
 """
 
@@ -29,17 +38,22 @@ import json
 import os
 import re
 import sysconfig
-from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass, fields, is_dataclass
 from enum import StrEnum
 from pathlib import Path
 from typing import Protocol
 
+from . import hermes_version
 from .contract import OtherWhy
 
-READ_COMPAT_FILE = "read_compat_builds.json"  # GU-2c list (starts empty; populated by T064)
+# The tested-sample manifests are EVIDENCE only (owner policy 2026-10-01): they describe the
+# builds a fixture or native run covered and never admit or refuse a build at runtime.
+READ_COMPAT_FILE = "read_compat_builds.json"  # tested read samples
 WRITE_SUPPORTED_FILE = "write_supported_builds.json"  # GU-2a matrix (stays empty in F1)
-DIRECT_SEND_COMPAT_FILE = "direct_send_supported_builds.json"  # guarded-write qualification
+DIRECT_SEND_COMPAT_FILE = "direct_send_supported_builds.json"  # tested send samples
+CRON_COMPAT_FILE = "mobile_cron_supported_builds.json"  # tested jobs samples
+MODEL_COMPAT_FILE = "mobile_model_supported_builds.json"  # tested model samples
 
 # The runtime packages the plugin needs, as Hermes provides them (research R7).
 RUNTIME_DEPENDENCIES: tuple[str, ...] = ("aiohttp", "cryptography")
@@ -129,7 +143,8 @@ class CompatResult:
     status: CompatStatus
     why: OtherWhy | None = None  # an ERR-2a value when UNSUPPORTED
     identity: BuildIdentity | None = None
-    entry: BuildEntry | None = None
+    entry: BuildEntry | None = None  # tested-sample evidence only; never read by a gate
+    eligibility: Eligibility | None = None
 
     @property
     def supported(self) -> bool:
@@ -285,10 +300,13 @@ def _resolve_ref(dirs: _GitDirs, ref: str, *, _seen: frozenset[str] = frozenset(
 
 def resolve_git_head_sha(root: Path) -> str | None:
     """Research R8 step 2: HEAD resolved to a 40-hex SHA by reading git metadata only (no
-    subprocess). `None` means no `.git` at all (a valid "no git metadata" install). Any other
-    failure (a `.git` file pointer, loose ref, or `packed-refs` that cannot be resolved) raises
+    subprocess). `None` means `<root>/.git` itself is absent (`lstat` raises ENOENT): a valid
+    "no git metadata" install. A present `.git` that cannot be resolved (a dangling symlink, an
+    unreadable entry, a bad `.git` file pointer, loose ref, or `packed-refs`) raises `OSError` or
     `ValueError` — R8 step 5 treats that as unidentifiable, never as "no git"."""
-    if not (root / ".git").exists():
+    try:
+        (root / ".git").lstat()  # lstat, not exists(): a dangling link is present, not absent
+    except FileNotFoundError:
         return None
     dirs = _resolve_gitdir(root)
     head_text = (dirs.worktree / "HEAD").read_text(encoding="utf-8").strip()
@@ -342,25 +360,38 @@ class GitFingerprintReader:
             return None
 
 
+
+
 @dataclass(frozen=True)
 class DependencySpec:
-    """One §12 internal the read bridge may reach: a module path, and an optional dotted
-    attribute chain within it (e.g. `"GatewayRunner.served_profile_names"` — a class then one of
-    its methods, resolved by `getattr` chaining, never by instantiating anything). `gap` is the
-    HMP_V1.md §12 gap id, kept only for diagnostics."""
+    """One Hermes internal a feature may reach: a module path, and an optional dotted attribute
+    chain within it (e.g. `"GatewayRunner.served_profile_names"` -- a class then one of its
+    methods, resolved by `getattr` chaining, never by instantiating anything). `gap` is the
+    HMP_V1.md §12 gap id, kept only for diagnostics.
+
+    `params` names parameters the callable must declare as real `POSITIONAL_OR_KEYWORD` or
+    `KEYWORD_ONLY` parameters. A `**kwargs` catch-all never satisfies a name: a writer that
+    silently swallowed `paused` would create an active job. `min_positional` is the number of
+    leading positional parameters the callable must accept. `dataclass_field` names a field the
+    resolved class must declare as a real dataclass field (an attribute alone never counts)."""
 
     module: str
     qualname: str | None = None
     gap: str = ""
+    params: frozenset[str] = frozenset()
+    min_positional: int = 0
+    dataclass_field: str | None = None
+
+    @property
+    def label(self) -> str:
+        """HMP's own fixed label for this row; never Hermes-provided text."""
+        base = f"{self.module}.{self.qualname}" if self.qualname else self.module
+        return f"{base}.{self.dataclass_field}" if self.dataclass_field else base
 
 
-# HMP_V1.md §12 "Hermes internals used", narrowed to the F1 read/roster/authorize subset (F1
-# registers no write, submit, approval or clarify route — FR-053 — so the §12 rows that exist only
-# for those, e.g. `tools.approval`/`tools.clarify_gateway`/`gateway.platforms.event`, are not
-# reached by this build and are intentionally not probed here). `bridge.py` (T028) is free to
-# extend this table as its actual reach is finalized; that never changes `CompatGate`'s evaluation
-# order (server-modules.md "Startup order") since the probe is injected.
-READ_DEPENDENCIES: tuple[DependencySpec, ...] = (
+# HMP_V1.md §12 "Hermes internals used" by the read/roster/authorize bridge. If any row here is
+# actually missing, the bridge cannot authorize or route anything and read is unavailable.
+READ_CORE_DEPENDENCIES: tuple[DependencySpec, ...] = (
     DependencySpec("gateway.run", "GatewayRunner", gap="E-GAP-14"),
     DependencySpec(
         "gateway.run", "GatewayRunner._is_user_authorized_for_source", gap="E-GAP-22/25"
@@ -403,86 +434,101 @@ READ_DEPENDENCIES: tuple[DependencySpec, ...] = (
     DependencySpec("hermes_state", "SessionDB.get_active_message_ids", gap="E-GAP-6/7"),
     DependencySpec("hermes_state", "SessionDB.resolve_resume_session_id", gap="E-GAP-6/7"),
     DependencySpec("hermes_state", "SessionDB.get_compression_chain", gap="E-GAP-6/7"),
-    # Amendment A1 (session browsing, OD-F9/OD-F10; SES-1/SES-2). Both resolve, via
-    # `inspect.getsourcefile`, to `hermes_state_sessions.py` -- already in `bridge_files` (it is
-    # what `SessionDB.get_compression_chain`, `resolve_resume_session_id` and `get_active_message_
-    # ids` above already require containment of via the sibling-mixin argument, and it is where
-    # `get_compression_chain` itself and `get_session`/`list_sessions_rich` are all defined). No
-    # file needs to be added to `bridge_files` for these two entries (A1 design doc §1.5): CS-21
-    # containment is a property of `inspect.getsourcefile`, not of which entries name a file, and
-    # this file is already listed. Fingerprints are therefore unchanged by this addition.
+)
+
+# Session browsing (amendment A1, SES-1/SES-2) depends on two further SessionDB methods. Their
+# absence closes only the session routes (404), never the rest of read.
+SESSION_BROWSING_DEPENDENCIES: tuple[DependencySpec, ...] = (
     DependencySpec("hermes_state", "SessionDB.list_sessions_rich", gap="E-GAP-6/7"),
     DependencySpec("hermes_state", "SessionDB.get_session", gap="E-GAP-6/7"),
 )
 
-# Amendment F2 (direct send, HMP_V1.md §7a DS-4/GAP-2): probed only when the owner-dogfood
-# `direct_send` flag is on (gate.py's own `direct_send_gate`), never as part of the F1 startup
-# gate above -- `CompatGate.evaluate()` itself is unchanged (server-modules.md "Startup order").
-# `get_session_by_title` resolves, via `inspect.getsourcefile`, to the same `hermes_state_sessions.
-# py` `get_session`/`list_sessions_rich` above already require containment of (A1's own
-# reasoning, reused verbatim here) -- no NEW `bridge_files` entry for it. Only
-# `active_session_registry_snapshot` is genuinely new: `hermes_cli/active_sessions.py` is not in
-# the committed `bridge_files` list and must be added there for this probe to ever pass containment
-# (`direct_send_supported_builds.json`, not `read_compat_builds.json` -- this is a write-path
-# dependency, never needed for F1's reads).
-# Review BLOCKER #2 (round 2): `get_compression_lineage` resolves, via `inspect.getsourcefile`, to
-# `hermes_state_compression.py` -- already in `bridge_files` (required by `READ_DEPENDENCIES`'s own
-# `SessionDB.get_compression_chain` entry above). No new `bridge_files` entry needed for it either.
+# Everything the read bridge and session browsing reach (kept for tooling and the reach test).
+READ_DEPENDENCIES: tuple[DependencySpec, ...] = (
+    READ_CORE_DEPENDENCIES + SESSION_BROWSING_DEPENDENCIES
+)
+
+# Amendment F2 (direct send, HMP_V1.md §7a DS-4/GAP-2).
 DIRECT_SEND_DEPENDENCIES: tuple[DependencySpec, ...] = (
     DependencySpec(
         "hermes_cli.active_sessions", "active_session_registry_snapshot", gap="E-GAP-6/7"
     ),
+    DependencySpec("hermes_state", "SessionDB.get_session", gap="E-GAP-6/7"),
     DependencySpec("hermes_state", "SessionDB.get_session_by_title", gap="E-GAP-6/7"),
     DependencySpec("hermes_state", "SessionDB.get_compression_lineage", gap="E-GAP-6/7"),
 )
 
+# Phone chat (spec 034, HMP_V1.md §7b): only the Hermes callables HMP calls in process. The Bot Chat
+# `approvals` member has no table: its answers use Hermes's native run-approval route. Behavior-
+# bearing classes (busy queue, inbound mixin, turn runner, room grants, pairing, secret scope) are
+# deliberately not listed: importing them never proved behavior. `retire_clarify_card` is not listed
+# either: it is not defined on the base adapter (Hermes finds it on the adapter's own class).
+PHONE_CHAT_DEPENDENCIES: tuple[DependencySpec, ...] = (
+    DependencySpec(
+        "tools.approval",
+        "resolve_gateway_approval",
+        gap="E-GAP-9",
+        params=frozenset({"request_id", "resolve_all"}),
+    ),
+    DependencySpec("tools.approval", "list_gateway_approvals", gap="E-GAP-9"),
+    DependencySpec("tools.clarify_gateway", "resolve_gateway_clarify", gap="E-GAP-9/20"),
+    DependencySpec("tools.clarify_gateway", "mark_awaiting_text", gap="E-GAP-9/20"),
+    DependencySpec("tools.clarify_gateway", "get_clarify_timeout", gap="E-GAP-9/20"),
+    DependencySpec("tools.approval_context", "_get_approval_timeout", gap="E-GAP-9"),
+    DependencySpec(
+        "gateway.platforms.base", "BasePlatformAdapter._send_exec_approval_prompt", gap="E-GAP-9"
+    ),
+    DependencySpec("gateway.platforms.base", "BasePlatformAdapter.send_clarify", gap="E-GAP-9/20"),
+    DependencySpec(
+        "gateway.platforms.event",
+        "MessageEvent",
+        gap="F3 control",
+        dataclass_field="allow_gateway_control",
+    ),
+)
 
-def probe_direct_send_dependencies(
-    *,
-    hermes_root: Path | None = None,
-    bridge_files: Sequence[str] = (),
-) -> Sequence[str]:
-    """DS-2(b)/GAP-2: the same shape-and-containment probe as `probe_read_dependencies`, run
-    against `DIRECT_SEND_DEPENDENCIES` instead. Non-empty result means the guarded write gate
-    must stay closed for this build -- never a partial "some direct-send features work"."""
-    return probe_read_dependencies(
-        hermes_root=hermes_root, bridge_files=bridge_files, specs=DIRECT_SEND_DEPENDENCIES
-    )
+# Local media (spec 011, D-M2): exactly the native callables the media path reaches beyond the read
+# core. `get_session` and `get_session_by_title` are also rows of other tables; each member is
+# probed from its own table, so a missing row closes a member only through its own table. There is
+# no image-producer row: a changed producer spelling is refused per candidate by the lexical check.
+LOCAL_MEDIA_DEPENDENCIES: tuple[DependencySpec, ...] = (
+    DependencySpec("hermes_state", "SessionDB.get_session", min_positional=2, gap="E-GAP-6/7"),
+    DependencySpec(
+        "hermes_state", "SessionDB.get_session_by_title", min_positional=2, gap="E-GAP-6/7"
+    ),
+    DependencySpec(
+        "hermes_state", "SessionDB.get_compression_lineage", min_positional=2, gap="E-GAP-6/7"
+    ),
+)
 
+# Mobile jobs (`bridge.create_mobile_cron` / `edit_mobile_cron`). The scheduler wrapper forwards
+# `**kwargs` to `cron.jobs.create_job`, so the named-parameter check (`paused` above all) is made on
+# the writer that actually defines them. `HermesApi.create_mobile_cron` always passes `paused=True`.
+CRON_DEPENDENCIES: tuple[DependencySpec, ...] = (
+    DependencySpec("cron.scheduler", "create_job_with_scheduler_registration"),
+    DependencySpec(
+        "cron.jobs",
+        "create_job",
+        params=frozenset(
+            {"name", "schedule", "prompt", "deliver", "paused", "repeat", "context_from"}
+        ),
+    ),
+    DependencySpec("tools.cronjob_prompt_scan", "_scan_cron_prompt"),
+    DependencySpec("cron.jobs", "get_job"),
+    DependencySpec("cron.jobs", "update_job"),
+    DependencySpec("cron.lifecycle_guard", "check_gateway_lifecycle"),
+    DependencySpec("cron.scheduler", "_notify_provider_jobs_changed"),
+)
 
-def direct_send_build_qualified(
-    read_identity: BuildIdentity | None,
-    *,
-    hermes_root: Path | None = None,
-    compat_path: Path | None = None,
-) -> bool:
-    """Admit guarded sends only for an independently qualified exact build.
-
-    The read fingerprint omits two files used by direct send. Recompute the larger
-    fingerprint and check its own list before probing those extra Hermes dependencies.
-    Any missing file, moved Git ref, probe error, or malformed list closes this gate.
-    """
-    if not isinstance(read_identity, BuildIdentity):
-        return False
-    try:
-        root = hermes_root if hermes_root is not None else locate_hermes_root()
-        if root is None:
-            return False
-        path = compat_path if compat_path is not None else Path(__file__).with_name(
-            DIRECT_SEND_COMPAT_FILE
-        )
-        qualified = load_read_compat_list(path)
-        send_files = getattr(qualified, "bridge_files")  # noqa: B009
-        identity = GitFingerprintReader(send_files).read(root)
-        if identity is None or identity.git_sha != read_identity.git_sha:
-            return False
-        if match_build(identity, qualified.builds) is None:
-            return False
-        return not probe_direct_send_dependencies(
-            hermes_root=root, bridge_files=send_files
-        )
-    except Exception:
-        return False
+# Bot default model (`bridge.model_config` / `write_profile_model`). `fastapi` is a third-party
+# package and is deliberately not probed: a missing one fails the call and is already mapped to
+# `model_unavailable`.
+MODEL_DEPENDENCIES: tuple[DependencySpec, ...] = (
+    DependencySpec("hermes_cli.config", "load_config"),
+    DependencySpec(
+        "hermes_cli.web_routers.profiles", "_write_profile_model", min_positional=3
+    ),
+)
 
 
 def _resolve_qualname(module: object, qualname: str) -> object:
@@ -526,6 +572,9 @@ def _wrapper_chain_source_files(
     return (source, *rest)
 
 
+_THIRD_PARTY_DIRS = frozenset({"site-packages", "dist-packages"})
+
+
 def _stdlib_dir() -> Path:
     path = sysconfig.get_paths().get("stdlib")
     return Path(path).resolve() if path else Path(os.devnull)
@@ -539,69 +588,115 @@ def _is_under(path: Path, root: Path) -> bool:
     return True
 
 
-def _source_in_bridge_files(source: str | None, root: Path, allowed: frozenset[str]) -> bool:
+def _hermes_home_plugins() -> Path | None:
+    home = os.environ.get("HERMES_HOME")
+    if not home:
+        return None
+    try:
+        return (Path(home) / "plugins").resolve()
+    except OSError:
+        return None
+
+
+def _source_contained(
+    source: str | None, root: Path, stdlib_dir: Path, plugins_dir: Path | None
+) -> bool:
+    """CS-21 containment: a source file counts only when it lives in the Hermes tree or the
+    standard library, outside any `site-packages`/`dist-packages` directory and outside the Hermes
+    home's `plugins` directory. This rejects a shadow module installed into the environment or
+    shipped by another plugin, and does not depend on which Hermes file defines the symbol."""
     if source is None:
         return False
     try:
-        rel = Path(source).resolve().relative_to(root)
-    except ValueError:
+        resolved = Path(source).resolve()
+    except OSError:
         return False
-    return rel.as_posix() in allowed
+    if plugins_dir is not None and _is_under(resolved, plugins_dir):
+        return False
+    for base in (root, stdlib_dir):
+        if _is_under(resolved, base):
+            return not _THIRD_PARTY_DIRS & set(resolved.relative_to(base).parts)
+    return False
 
 
 def _chain_contained(
-    files: Sequence[str], root: Path, allowed: frozenset[str], stdlib_dir: Path
+    files: Sequence[str], root: Path, stdlib_dir: Path, plugins_dir: Path | None
 ) -> bool:
-    """Every layer's file must be in `bridge_files`, or under the stdlib (SR-3): a Hermes-defined
-    decorator (e.g. `functools.wraps`-based) living outside `bridge_files` must never pass just
-    because the innermost function it wraps happens to be listed."""
-    for source in files:
-        if _source_in_bridge_files(source, root, allowed):
-            continue
-        try:
-            resolved = Path(source).resolve()
-        except OSError:
+    """Every layer's file must be contained (SR-3): a decorator living outside the Hermes tree
+    must never pass just because the innermost function it wraps is inside it."""
+    return all(_source_contained(f, root, stdlib_dir, plugins_dir) for f in files)
+
+
+def _signature_satisfies(obj: object, spec: DependencySpec) -> bool:
+    """The callable's own signature: required parameter names are real named parameters (a
+    `**kwargs` never counts) and enough leading positional parameters exist."""
+    try:
+        parameters = inspect.signature(obj).parameters  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return False
+    if spec.params:
+        named = {
+            name
+            for name, p in parameters.items()
+            if p.kind in (p.POSITIONAL_OR_KEYWORD, p.KEYWORD_ONLY)
+        }
+        if not spec.params <= named:
             return False
-        if not _is_under(resolved, stdlib_dir):
+    if spec.min_positional:
+        positional = [
+            p
+            for p in parameters.values()
+            if p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD)
+        ]
+        if len(positional) < spec.min_positional:
             return False
     return True
 
 
-def probe_read_dependencies(
+def _field_satisfies(obj: object, spec: DependencySpec) -> bool:
+    """A required dataclass field: `obj` must be a class and a dataclass that declares it. An
+    attribute that is not a declared field (a property, a class variable) does not count."""
+    if spec.dataclass_field is None:
+        return True
+    if not inspect.isclass(obj) or not is_dataclass(obj):
+        return False
+    try:
+        return any(f.name == spec.dataclass_field for f in fields(obj))
+    except TypeError:
+        return False
+
+
+def probe_dependencies(
     *,
     hermes_root: Path | None = None,
-    bridge_files: Sequence[str] = (),
-    specs: Sequence[DependencySpec] = READ_DEPENDENCIES,
+    specs: Sequence[DependencySpec] = READ_CORE_DEPENDENCIES,
 ) -> Sequence[str]:
-    """Research R8 step 6: import each bridge dependency and check its signature shape without
-    calling it, and (when `bridge_files` is given) that `inspect.getsourcefile` of everything
-    reached is contained in it (CS-21). Returns the label of each dependency that is missing,
-    mis-shaped, or resolves outside `bridge_files`. The only function outside `bridge.py` allowed
-    to import Hermes modules dynamically (`tools/ci/check_plugin_surface.py` enforces that); it is
-    called only after a listed build has matched (`CompatGate.evaluate` step 4).
-
-    `hermes_root` defaults to `locate_hermes_root()`; `bridge_files` defaults to empty, which
-    skips the containment check (there is nothing to contain it in) — `default_gate()` always
-    supplies both from the loaded `read_compat_builds.json`.
+    """Import each dependency and check its signature shape without calling it, and that
+    `inspect.getsourcefile` of everything reached is contained in the Hermes tree or the standard
+    library (CS-21). Returns the label of each dependency that is missing, mis-shaped, or resolves
+    outside that containment. With no locatable Hermes root nothing can be contained, so every
+    label is reported. The only function outside `bridge.py` allowed to import Hermes modules
+    dynamically (`tools/ci/check_plugin_surface.py` enforces that); the eligibility function calls
+    it only when a feature's version floor is met.
     """
     root = hermes_root if hermes_root is not None else locate_hermes_root()
-    resolved_root = root.resolve() if root is not None else None
-    allowed = frozenset(bridge_files)
+    labels = [s.label for s in specs]
+    if root is None:
+        return tuple(labels)
+    resolved_root = root.resolve()
+    stdlib_dir = _stdlib_dir()
+    plugins_dir = _hermes_home_plugins()
     missing: list[str] = []
 
-    for spec in specs:
-        label = f"{spec.module}.{spec.qualname}" if spec.qualname else spec.module
+    for spec, label in zip(specs, labels, strict=True):
         try:
             module = importlib.import_module(spec.module)
         except Exception:
             missing.append(label)
             continue
 
-        module_source = _safe_getsourcefile(module)
-        if (
-            allowed
-            and resolved_root is not None
-            and not _source_in_bridge_files(module_source, resolved_root, allowed)
+        if not _source_contained(
+            _safe_getsourcefile(module), resolved_root, stdlib_dir, plugins_dir
         ):
             missing.append(label)
             continue
@@ -618,89 +713,331 @@ def probe_read_dependencies(
         if not (inspect.isclass(obj) or callable(obj)):
             missing.append(label)
             continue
-        try:
-            inspect.signature(obj)  # shape only; never called
-        except (TypeError, ValueError):
+        if not _signature_satisfies(obj, spec):  # shape only; never called
+            missing.append(label)
+            continue
+        if not _field_satisfies(obj, spec):
             missing.append(label)
             continue
 
-        if allowed and resolved_root is not None:
-            chain_files = _wrapper_chain_source_files(obj)
-            # SR-3: an undeterminable chain (a cycle, or any layer whose file cannot be found --
-            # a `functools.partial`, a callable instance, a C function) is MISSING. It never
-            # falls back to `module_source`: that fallback is exactly what let an
-            # unidentifiable object pass just because its enclosing module happened to be listed.
-            if chain_files is None or not _chain_contained(
-                chain_files, resolved_root, allowed, _stdlib_dir()
-            ):
-                missing.append(label)
+        # SR-3: an undeterminable chain (a cycle, or any layer whose file cannot be found -- a
+        # `functools.partial`, a callable instance, a C function) is MISSING. It never falls back
+        # to `module_source`.
+        chain_files = _wrapper_chain_source_files(obj)
+        if chain_files is None or not _chain_contained(
+            chain_files, resolved_root, stdlib_dir, plugins_dir
+        ):
+            missing.append(label)
 
     return tuple(missing)
 
 
+def probe_direct_send_dependencies(*, hermes_root: Path | None = None) -> Sequence[str]:
+    """DS-2(b)/GAP-2: the same probe run against `DIRECT_SEND_DEPENDENCIES`. A non-empty result
+    means the guarded write gate stays closed -- never a partial "some send features work"."""
+    return probe_dependencies(hermes_root=hermes_root, specs=DIRECT_SEND_DEPENDENCIES)
+
+
+# --------------------------------------------------------------------------------------------
+# Eligibility
+# --------------------------------------------------------------------------------------------
+
+
+class Feature(StrEnum):
+    """The closed set of version-gated features. `approvals` and `phone_chat` (spec 034) both need
+    read and send. `local_media` (spec 011) needs read alone. Reaching a floor never implies one."""
+
+    READ = "read"
+    SESSION_BROWSING = "session_browsing"
+    SEND = "send"
+    JOBS = "jobs"
+    MODEL = "model"
+    APPROVALS = "approvals"
+    PHONE_CHAT = "phone_chat"
+    LOCAL_MEDIA = "local_media"
+
+
+class Unavailable(StrEnum):
+    """Fixed reason codes; the only failure text that is ever logged or reported."""
+
+    HERMES_NOT_FOUND = "hermes_not_found"
+    VERSION_BELOW_FLOOR = "hermes_version_below_floor"
+    DEPENDENCY_MISSING = "dependency_missing"
+    PROBE_FAILED = "probe_failed"
+    REQUIRES_READ = "requires_read"
+    REQUIRES_SEND = "requires_send"
+
+
+@dataclass(frozen=True)
+class FeatureStatus:
+    available: bool
+    reason: Unavailable | None = None
+    # Labels from HMP's own dependency tables only; never Hermes-provided text.
+    missing: tuple[str, ...] = ()
+    # Evidence: the tested-sample label, or None. NEVER read by a gate.
+    tested_label: str | None = None
+
+
+@dataclass(frozen=True)
+class Eligibility:
+    version: hermes_version.HermesVersion
+    git_sha: str | None  # evidence only
+    features: Mapping[Feature, FeatureStatus]
+    # Neutral diagnostic (spec 034 R4): whether the Bot Chat session-stream approval hook is present
+    # in this Hermes source. Evidence only: no gate reads it. None = not determined.
+    stream_approval_hook: bool | None = None
+
+    def available(self, feature: Feature) -> bool:
+        status = self.features.get(feature)
+        return status is not None and status.available
+
+    def unavailable(self) -> tuple[tuple[Feature, FeatureStatus], ...]:
+        return tuple((f, st) for f, st in self.features.items() if not st.available)
+
+
+_PROBE_TABLES: Mapping[Feature, Sequence[DependencySpec]] = {
+    Feature.SESSION_BROWSING: SESSION_BROWSING_DEPENDENCIES,
+    Feature.SEND: DIRECT_SEND_DEPENDENCIES,
+    Feature.JOBS: CRON_DEPENDENCIES,
+    Feature.MODEL: MODEL_DEPENDENCIES,
+    # Read alone gates this table (the loop below runs only once read is available).
+    Feature.LOCAL_MEDIA: LOCAL_MEDIA_DEPENDENCIES,
+}
+
+_EVIDENCE_FILES: Mapping[Feature, str] = {
+    Feature.READ: READ_COMPAT_FILE,
+    Feature.SESSION_BROWSING: READ_COMPAT_FILE,
+    Feature.SEND: DIRECT_SEND_COMPAT_FILE,
+    Feature.JOBS: CRON_COMPAT_FILE,
+    Feature.MODEL: MODEL_COMPAT_FILE,
+}
+
+# `Probe` takes the located root and the table; injectable so each step can be tested alone.
+Probe = Callable[[Path, Sequence[DependencySpec]], Sequence[str]]
+EvidenceMatcher = Callable[[Path], Mapping[Feature, str | None]]
+HookProbe = Callable[[Path], bool | None]
+
+_STREAM_HOOK_FILE = ("gateway", "platforms", "api_server.py")
+_STREAM_HOOK_DEF = b"def _register_session_stream_approval("
+_STREAM_HOOK_READ_CAP = 4 * 1024 * 1024
+
+
+def stream_hook_present(root: Path) -> bool | None:
+    """Neutral diagnostic: does the Bot Chat session-stream approval hook exist in this Hermes
+    source? A bounded file read, with no import and no execution. It never gates and never sets a
+    minimum: where the hook is absent Hermes emits no `approval.request` and HMP invents no card.
+    `None` means it could not be determined (unreadable, outside the tree, or too large)."""
+    try:
+        base = root.resolve()
+        target = base.joinpath(*_STREAM_HOOK_FILE).resolve()
+        if not _is_under(target, base):
+            return None
+        with open(target, "rb") as handle:
+            data = handle.read(_STREAM_HOOK_READ_CAP + 1)
+    except OSError:
+        return None
+    if len(data) > _STREAM_HOOK_READ_CAP:
+        return None
+    return _STREAM_HOOK_DEF in data
+
+
+def _default_probe(root: Path, specs: Sequence[DependencySpec]) -> Sequence[str]:
+    return probe_dependencies(hermes_root=root, specs=specs)
+
+
+def match_evidence(root: Path) -> Mapping[Feature, str | None]:
+    """Tested-sample labels for display and tooling. File reads only; any failure is None. The
+    result is evidence: no availability decision reads it."""
+    labels: dict[Feature, str | None] = {}
+    cache: dict[str, str | None] = {}
+    for feature, filename in _EVIDENCE_FILES.items():
+        if filename not in cache:
+            try:
+                tested = load_read_compat_list(Path(__file__).with_name(filename))
+                identity = GitFingerprintReader(getattr(tested, "bridge_files")).read(root)  # noqa: B009
+                entry = match_build(identity, tested.builds) if identity is not None else None
+                cache[filename] = entry.label if entry is not None else None
+            except Exception:
+                cache[filename] = None
+        labels[feature] = cache[filename]
+    return labels
+
+
+def _floor(feature: Feature) -> hermes_version.Floor:
+    return hermes_version.FEATURE_FLOORS[feature.value]
+
+
+def evaluate_eligibility(
+    *,
+    root_locator: Callable[[], Path | None] = locate_hermes_root,
+    version_reader: Callable[[Path], hermes_version.HermesVersion] = (
+        hermes_version.read_hermes_version
+    ),
+    probe: Probe = _default_probe,
+    evidence: EvidenceMatcher = match_evidence,
+    hook_probe: HookProbe = stream_hook_present,
+) -> Eligibility:
+    """Decide, once, which features this Hermes install can serve. Never raises."""
+    features: dict[Feature, FeatureStatus] = {}
+    try:
+        root = root_locator()
+    except Exception:
+        root = None
+    if root is None:
+        gone = FeatureStatus(False, Unavailable.HERMES_NOT_FOUND)
+        return Eligibility(hermes_version.UNKNOWN_VERSION, None, dict.fromkeys(Feature, gone))
+
+    try:
+        version = version_reader(root)
+    except Exception:
+        version = hermes_version.UNKNOWN_VERSION
+
+    below = {
+        f: hermes_version.classify(version, _floor(f)) is hermes_version.FloorStatus.BELOW_FLOOR
+        for f in Feature
+    }
+    for feature in Feature:
+        if below[feature]:
+            features[feature] = FeatureStatus(False, Unavailable.VERSION_BELOW_FLOOR)
+
+    def run(table: Sequence[DependencySpec]) -> tuple[str, ...] | None:
+        """Missing labels, or None when the probe itself failed."""
+        try:
+            return tuple(probe(root, table))
+        except Exception:
+            return None
+
+    if not below[Feature.READ]:
+        core = run(READ_CORE_DEPENDENCIES)
+        if core is None or core:
+            features[Feature.READ] = FeatureStatus(
+                False,
+                Unavailable.PROBE_FAILED if core is None else Unavailable.DEPENDENCY_MISSING,
+                core or (),
+            )
+            for feature in Feature:
+                features.setdefault(feature, FeatureStatus(False, Unavailable.REQUIRES_READ))
+        else:
+            features[Feature.READ] = FeatureStatus(True)
+            for feature, table in _PROBE_TABLES.items():
+                if below[feature]:
+                    continue
+                missing = run(table)
+                if missing is None:
+                    features[feature] = FeatureStatus(False, Unavailable.PROBE_FAILED)
+                elif missing:
+                    features[feature] = FeatureStatus(
+                        False, Unavailable.DEPENDENCY_MISSING, missing
+                    )
+                else:
+                    features[feature] = FeatureStatus(True)
+            # Spec 034: both members need send. A member below its floor was set above and is
+            # skipped; otherwise it is closed without importing anything when send is not
+            # available, and `phone_chat` alone probes its own helpers after that.
+            for member in (Feature.APPROVALS, Feature.PHONE_CHAT):
+                if below[member]:
+                    continue
+                if not features[Feature.SEND].available:
+                    features[member] = FeatureStatus(False, Unavailable.REQUIRES_SEND)
+                elif member is Feature.APPROVALS:
+                    features[member] = FeatureStatus(True)
+                else:
+                    missing = run(PHONE_CHAT_DEPENDENCIES)
+                    if missing is None:
+                        features[member] = FeatureStatus(False, Unavailable.PROBE_FAILED)
+                    elif missing:
+                        features[member] = FeatureStatus(
+                            False, Unavailable.DEPENDENCY_MISSING, missing
+                        )
+                    else:
+                        features[member] = FeatureStatus(True)
+    else:
+        # Read is below its floor: nothing else is probed, so no Hermes module is imported.
+        for feature in Feature:
+            features.setdefault(feature, FeatureStatus(False, Unavailable.REQUIRES_READ))
+
+    git_sha: str | None
+    try:
+        git_sha = resolve_git_head_sha(root)
+    except Exception:
+        git_sha = None
+    try:
+        labels = evidence(root)
+    except Exception:
+        labels = {}
+    resolved = {
+        f: FeatureStatus(st.available, st.reason, st.missing, labels.get(f))
+        for f, st in features.items()
+    }
+    hook: bool | None = None
+    if features[Feature.APPROVALS].available:
+        try:
+            raw_hook = hook_probe(root)
+            hook = raw_hook if isinstance(raw_hook, bool) else None
+        except Exception:
+            hook = None
+    return Eligibility(version, git_sha, {f: resolved[f] for f in Feature}, hook)
+
+
+_READ_WHY: Mapping[Unavailable, OtherWhy] = {
+    Unavailable.HERMES_NOT_FOUND: OtherWhy.HERMES_BUILD_UNSUPPORTED,
+    Unavailable.VERSION_BELOW_FLOOR: OtherWhy.HERMES_BUILD_UNSUPPORTED,
+    Unavailable.DEPENDENCY_MISSING: OtherWhy.HERMES_READ_DEPENDENCY_MISSING,
+    Unavailable.PROBE_FAILED: OtherWhy.HERMES_READ_DEPENDENCY_MISSING,
+}
+
+
+def read_why(status: FeatureStatus) -> OtherWhy:
+    """The existing ERR-2a `why` for a failed read. No new wire value."""
+    return _READ_WHY.get(status.reason, OtherWhy.HERMES_BUILD_UNSUPPORTED)  # type: ignore[arg-type]
+
+
 class CompatGate:
-    """The `Compat` implementation. The evaluation order and the CS-19 matching rule are fixed
-    here. The identity reader, the list data and the probe are injected so each step can be
-    tested alone."""
+    """The `Compat` implementation: a thin wrapper that evaluates eligibility and exposes its
+    read view as a `CompatResult`. The pieces are injectable so each step can be tested alone."""
 
     def __init__(
         self,
-        identity_reader: BuildIdentityReader,
-        compat_list: ReadCompatList,
-        probe: DependencyProbe = probe_read_dependencies,
+        *,
         root_locator: Callable[[], Path | None] = locate_hermes_root,
+        version_reader: Callable[[Path], hermes_version.HermesVersion] = (
+            hermes_version.read_hermes_version
+        ),
+        probe: Probe = _default_probe,
+        evidence: EvidenceMatcher = match_evidence,
+        hook_probe: HookProbe = stream_hook_present,
     ) -> None:
-        self._identity_reader = identity_reader
-        self._compat_list = compat_list
-        self._probe = probe
-        self._root_locator = root_locator
+        self._kwargs = {
+            "root_locator": root_locator,
+            "version_reader": version_reader,
+            "probe": probe,
+            "evidence": evidence,
+            "hook_probe": hook_probe,
+        }
 
     def evaluate(self) -> CompatResult:
-        unsupported = CompatStatus.UNSUPPORTED
-        build_unsupported = OtherWhy.HERMES_BUILD_UNSUPPORTED
-
-        # Steps 1-3: file reads only. Any failure is an unidentifiable build (fail closed).
-        try:
-            root = self._root_locator()
-            identity = self._identity_reader.read(root) if root is not None else None
-            if not isinstance(identity, BuildIdentity):
-                return CompatResult(unsupported, build_unsupported)
-            identity.__post_init__()  # re-validate: never trust the injected reader's object
-            entry = match_build(identity, self._compat_list.builds)
-        except Exception:
-            return CompatResult(unsupported, build_unsupported)
-        if entry is None:
-            return CompatResult(unsupported, build_unsupported, identity)
-
-        # Step 4: listed build only.
-        try:
-            missing = self._probe()
-        except Exception:
-            missing = ("<probe failed>",)
-        if missing:
-            return CompatResult(
-                unsupported, OtherWhy.HERMES_READ_DEPENDENCY_MISSING, identity, entry
-            )
-        return CompatResult(CompatStatus.SUPPORTED, None, identity, entry)
-
-
-_DEFAULT_READ_COMPAT_PATH = Path(__file__).with_name(READ_COMPAT_FILE)
+        eligibility = evaluate_eligibility(**self._kwargs)  # type: ignore[arg-type]
+        read = eligibility.features[Feature.READ]
+        if read.available:
+            return CompatResult(CompatStatus.SUPPORTED, None, eligibility=eligibility)
+        return CompatResult(CompatStatus.UNSUPPORTED, read_why(read), eligibility=eligibility)
 
 
 def default_gate(*, read_compat_path: Path | None = None) -> CompatGate:
-    """The production gate: `GitFingerprintReader` over the on-disk `read_compat_builds.json`
-    (defaulting to the file next to this module), and a probe that checks CS-21 containment
-    against that same file's `bridge_files` list."""
-    path = read_compat_path if read_compat_path is not None else _DEFAULT_READ_COMPAT_PATH
-    compat_list = load_read_compat_list(path)
-    # `getattr(...)`, not `compat_list.bridge_files`: `test_compat_module_source_never_names_
-    # bridge` greps this file's source for the literal substring ".bridge" as a cheap guard
-    # against a `bridge.py` import creeping in, and a dotted access on the `bridge_files` field
-    # would otherwise false-positive that check.
-    bridge_files = getattr(compat_list, "bridge_files")  # noqa: B009
-    reader = GitFingerprintReader(bridge_files)
+    """The production gate. `read_compat_path` is accepted for tooling that points evidence at
+    another tested-sample list; it never changes availability."""
+    if read_compat_path is None:
+        return CompatGate()
 
-    def probe() -> Sequence[str]:
-        return probe_read_dependencies(bridge_files=bridge_files)
+    def evidence(root: Path) -> Mapping[Feature, str | None]:
+        labels = dict(match_evidence(root))
+        try:
+            tested = load_read_compat_list(read_compat_path)
+            identity = GitFingerprintReader(getattr(tested, "bridge_files")).read(root)  # noqa: B009
+            entry = match_build(identity, tested.builds) if identity is not None else None
+            labels[Feature.READ] = entry.label if entry is not None else None
+        except Exception:
+            labels[Feature.READ] = None
+        return labels
 
-    return CompatGate(reader, compat_list, probe)
+    return CompatGate(evidence=evidence)

@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for helping improve HMP. Please open an issue for behavior or contract changes before implementing them. Keep pull requests focused and describe the Hermes revision used for compatibility testing.
+Thanks for helping improve HMP. Please open an issue for behavior or contract changes before implementing them. Keep pull requests focused and describe the Hermes revision used for compatibility testing (it is evidence, not an allowlist).
 
 ## Local checks
 
@@ -17,7 +17,7 @@ Fixture and compatibility tests need extracted Hermes source builds and a real P
 ## Review rules
 
 - Keep the plugin registration surface closed: one platform adapter and one operator CLI.
-- Preserve fail-closed behavior on unknown Hermes builds.
+- Refuse only Hermes versions below the minimum supported version and features whose own required API is missing. Attempt newer and unknown versions; never admit or refuse a build by commit SHA, fingerprint or file list.
 - Add or update the [contract](docs/architecture/contracts/HMP_V1.md) when wire behavior changes.
 - Never commit secrets, real device IDs, private host paths, private addresses, or owner evidence. Run the zero-baseline privacy scan before pushing.
 - Keep app code and private research evidence out of this repository.

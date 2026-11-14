@@ -49,7 +49,6 @@ import signal
 import subprocess
 import sys
 import time
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -58,27 +57,21 @@ import _fixture_common as fc
 THIS_DIR = Path(__file__).resolve().parent
 FIXTURE_SEED = THIS_DIR / "fixture_seed.py"
 FIXTURE_PAIRING_CLI = THIS_DIR / "fixture_pairing_cli.py"
-HERMES_BUILDS_DIR_TOOL = fc.REPO_ROOT / "tools" / "hermes_builds"
 DEFAULT_CONVERSATION_ID = "default"
 DEFAULT_BUILDS_DIR_ENV = "HMP_HERMES_BUILDS_DIR"
 
 
 def fixture_plugin_dir(out_dir: Path) -> Path:
     """A scratch COPY of `server/hmp_plugin`, under `--out`, that fixture instances symlink into
-    instead of the tracked package directly. `bootstrap_compat_entry` patches only this copy's
-    `read_compat_builds.json` -- the committed one (`server/hmp_plugin/read_compat_builds.json`)
-    is never touched. `server/tests/unit/test_compat.py::
-    test_load_the_committed_read_compat_builds_json` asserts that file's `builds` list is empty
-    (T013's untouched skeleton, pending T063/T064); mutating it would be a global, persistent side
-    effect on a tracked file every other worker and CI run also reads, breaking that assertion for
-    everyone, not just this fixture run."""
+    instead of the tracked package directly, so a fixture run never touches tracked package files.
+    No manifest or per-build list is written into the copy: read availability comes from the
+    runtime minimum-version gate (`require_read_eligible`)."""
     return Path(out_dir).resolve() / "_hmp_plugin"
 
 
 def refresh_fixture_plugin_copy(out_dir: Path) -> Path:
     """(Re)copy `server/hmp_plugin` into `fixture_plugin_dir(out_dir)`, always fresh (so a local
-    code change is picked up), preserving nothing from a previous copy except what
-    `bootstrap_compat_entry` re-derives afterwards."""
+    code change is picked up), preserving nothing from a previous copy."""
     dest = fixture_plugin_dir(out_dir)
     if dest.exists():
         shutil.rmtree(dest)
@@ -86,74 +79,53 @@ def refresh_fixture_plugin_copy(out_dir: Path) -> Path:
     return dest
 
 
-def _resolve_source_sha(build_label: str) -> str | None:
-    """The extraction's commit (fixture-format.md rule 8: "provenance only"), read the same
-    read-only way `tools/hermes_builds/extract.py` (T004) does: no fetch, no working-tree touch.
-    Returns `None` if it cannot be determined -- `source_sha` is optional."""
-    if str(HERMES_BUILDS_DIR_TOOL) not in sys.path:
-        sys.path.insert(0, str(HERMES_BUILDS_DIR_TOOL))
-    import extract as extract_mod
-
-    try:
-        builds = extract_mod.load_builds()
-        refs_dir = extract_mod.find_refs_dir(HERMES_BUILDS_DIR_TOOL)
-    except SystemExit:
-        return None
-    for b in builds:
-        if b.label == build_label:
-            return extract_mod.ref_resolves(refs_dir / b.clone, b.ref)
-    return None
+# The only child-supplied text the readiness check echoes is a code from this fixed vocabulary;
+# everything else (including missing-API labels, reported only as a count) is never reproduced.
+_READ_REASON_CODES = frozenset(
+    {
+        "hermes_not_found", "hermes_version_below_floor", "dependency_missing", "probe_failed",
+        "requires_read", "requires_send",
+    }
+)
 
 
-def bootstrap_compat_entry(build: fc.BuildInfo, plugin_copy_dir: Path) -> None:
-    """T023's compat gate (`server/hmp_plugin/compat.py`) fails EVERY route except `/ready` closed
-    until a build is listed in `read_compat_builds.json` -- by design (GU-2c), and correct: an
-    unlisted build must never serve reads. Populating that list for real is T063 (run the read
-    suite, compute candidates) and T064 (publish them); neither has landed. Without at least a
-    fingerprint-only entry for THIS extracted build, no HTTP read or even P1-P4 pairing can ever
-    succeed against a fixture instance -- which would make `--serve`'s reference-client pairing,
-    `selfcheck.py` (T061) and `server/tests/integration/test_reads_fixture.py` (T030) permanently
-    unrunnable, not merely skipped.
+def require_read_eligible(build: fc.BuildInfo) -> None:
+    """Fail closed unless the real `compat.default_gate()` says this build serves reads.
 
-    Patches ONLY `plugin_copy_dir`'s `read_compat_builds.json` (`refresh_fixture_plugin_copy`'s
-    scratch copy fixture instances actually import -- never the tracked
-    `server/hmp_plugin/read_compat_builds.json`; see `fixture_plugin_dir`'s docstring for why).
-    The fingerprint itself is a property of the HERMES install (`bridge_files` under
-    `hermes_root`), not of wherever `hmp_plugin` is imported from, so computing it via
-    `fixture_seed.py compat-identity` (which still runs against the TRACKED `hmp_plugin` -- byte-
-    identical code, just not the file this function writes to) yields the exact same value
-    `compat.default_gate()` will see when it runs against the copy.
-
-    Only if that exact fingerprint is not already listed in the copy's file, ADDS one fingerprint-
-    only entry (`git_sha: null` -- git-archive extractions have no `.git`, matching rule 8's
-    "fingerprint-only entries"). It never removes or edits an existing entry, and never marks a
-    build "supported" without checking its real, current fingerprint first. This is a bootstrap
-    for test tooling, clearly labelled as such in `qualified_by`; a real T063 run against the
-    tracked package is unaffected by anything this function does.
+    Read availability is decided at runtime from the build's own version (the minimum-version
+    floor) and the read APIs actually present (spec 013/034); no per-build list is consulted, so
+    a build's fingerprint is neither required nor written here and `read_compat_builds.json` is
+    never touched. `fixture_seed.py compat-identity` runs the production gate inside the build's
+    venv. `identity` is legitimately null for an eligible build, so this reads `supported`, never
+    the fingerprint. Anything but an explicit `supported: true` (a below-floor version, a missing
+    read API, an unparseable or incomplete answer) raises, and only fixed reason codes are echoed.
     """
-    identity = json.loads(fc.run_seed_script(build, FIXTURE_SEED, "compat-identity").stdout)
-    fingerprint = identity["fingerprint"]
-    if fingerprint is None:
+    proc = fc.run_seed_script(build, FIXTURE_SEED, "compat-identity")
+    try:
+        result = json.loads(proc.stdout)
+    except ValueError:
+        result = None
+    if not isinstance(result, dict) or result.get("ok") is not True:
         raise fc.FixtureSafetyError(
-            f"build {build.label!r}: could not compute a read-bridge fingerprint at all "
-            "(a listed bridge file is missing from this extraction) -- cannot bootstrap"
+            f"build {build.label!r}: the compat-identity helper gave no usable answer"
         )
-    compat_path = plugin_copy_dir / "read_compat_builds.json"
-    data = json.loads(compat_path.read_text(encoding="utf-8"))
-    for entry in data.get("builds", []):
-        if entry.get("fingerprint") == fingerprint and entry.get("git_sha") is None:
-            return  # already listed (a prior bootstrap run against this same copy)
-    data.setdefault("builds", []).append(
-        {
-            "fingerprint": fingerprint,
-            "git_sha": None,
-            "label": f"fixture-bootstrap-{build.label}",
-            "qualified_by": "tools/fixtures/build_fixture.py (T060 bootstrap pending T063/T064)",
-            "qualified_at": datetime.now(UTC).isoformat(),
-            "source_sha": _resolve_source_sha(build.label),
-        }
+    supported = result.get("supported")
+    if not isinstance(supported, bool):
+        raise fc.FixtureSafetyError(
+            f"build {build.label!r}: the compat-identity helper did not report a boolean "
+            "'supported'"
+        )
+    if supported:
+        return
+    reason = result.get("read_reason")
+    reason_text = reason if isinstance(reason, str) and reason in _READ_REASON_CODES else "unknown"
+    missing = result.get("read_missing")
+    count = len(missing) if isinstance(missing, list) else 0
+    detail = f" ({count} missing read API labels)" if count else ""
+    raise fc.FixtureSafetyError(
+        f"build {build.label!r} is not read-eligible: {reason_text}{detail} -- below the minimum "
+        "supported Hermes version or missing a required read API; refusing to build a fixture"
     )
-    compat_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
 
 
 def _deterministic_user_id(instance_key: str, user_key: str) -> str:
@@ -266,6 +238,7 @@ def build_instance(
     plugin_dir: Path,
     *,
     force: bool,
+    private_seed_diagnostics: bool = False,
 ) -> dict[str, Any]:
     fc.assert_instance_paths_safe(paths)
     if paths.home.exists() or paths.xdg_state.exists():
@@ -373,6 +346,7 @@ def build_instance(
                 seeded = fc.run_seed_script(
                     build,
                     FIXTURE_SEED,
+                    *(["--diagnostic-stacks"] if private_seed_diagnostics else []),
                     "seed-messages",
                     "--home", str(paths.home),
                     "--profile", name,
@@ -438,6 +412,7 @@ def build_instance_if_needed(
     plugin_dir: Path,
     *,
     force: bool,
+    private_seed_diagnostics: bool = False,
 ) -> dict[str, Any]:
     """`--serve` on an existing `--out` reuses it (profiles, seeded history and any `mutate.py`
     change survive a restart) instead of rebuilding -- `server/tests/integration/
@@ -451,7 +426,10 @@ def build_instance_if_needed(
                 return inst
         # Home exists (e.g. from a differently-scoped prior run) but no meta recorded -- rebuild
         # is the only way to know what is really there.
-    return build_instance(build, paths, manifest, instance, plugin_dir, force=force)
+    return build_instance(
+        build, paths, manifest, instance, plugin_dir, force=force,
+        private_seed_diagnostics=private_seed_diagnostics,
+    )
 
 
 class _GatewayHandle:
@@ -703,8 +681,17 @@ def main(argv: list[str] | None = None) -> int:
         "--force", action="store_true",
         help="wipe and rebuild an instance home that already exists",
     )
+    parser.add_argument(
+        "--private-seed-diagnostics", action="store_true",
+        help="offline only: seed-messages dumps all Python thread stacks once to its stderr after "
+        "90 s (nonfatal). The stderr is sensitive: use only with private capture.",
+    )
     args = parser.parse_args(argv)
 
+    if args.private_seed_diagnostics and args.serve:
+        parser.error(
+            "--private-seed-diagnostics is offline-only; it cannot be combined with --serve"
+        )
     builds_dir = args.builds_dir or os.environ.get(DEFAULT_BUILDS_DIR_ENV)
     if not builds_dir:
         parser.error(f"--builds-dir is required (or set ${DEFAULT_BUILDS_DIR_ENV})")
@@ -717,7 +704,7 @@ def main(argv: list[str] | None = None) -> int:
     # `aiohttp` at module scope; `--serve` additionally needs it to actually listen.
     fc.ensure_runtime_deps(build)
     plugin_dir = refresh_fixture_plugin_copy(args.out)
-    bootstrap_compat_entry(build, plugin_dir)
+    require_read_eligible(build)
 
     wanted = set(args.instances.split(",")) if args.instances else None
     built: list[dict[str, Any]] = []
@@ -727,7 +714,10 @@ def main(argv: list[str] | None = None) -> int:
         paths = fc.instance_paths(args.out, instance["key"])
         print(f"==> instance {instance['key']!r} ({build.label}) at {paths.home}", file=sys.stderr)
         built.append(
-            build_instance_if_needed(build, paths, manifest, instance, plugin_dir, force=args.force)
+            build_instance_if_needed(
+                build, paths, manifest, instance, plugin_dir, force=args.force,
+                private_seed_diagnostics=args.private_seed_diagnostics,
+            )
         )
 
     write_fixture_meta(args.out, build, built)

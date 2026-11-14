@@ -2,24 +2,28 @@
 
 ## Requirements
 
-- Hermes Agent `v0.21.5` (`v2026.9.24`) is the earliest public tag with both
-  Bot Chat reads and guarded sends verified. `v0.21.4` (`v2026.9.21`) passed
-  the read checks, but its send path has not been qualified. Installing HMP
-  is not blocked by the Hermes version. Pairing and
-  Bot Chat access require a qualified bridge build. The exact Omarchy Y520
-  commit is also qualified. Older v0.21.x tags need a bridge adapter; newer
-  builds are watched but may need HMP updated before pairing works. See
-  [the release matrix](RELEASE_COMPAT_WATCH.md).
+- Hermes Agent `v0.21.4` (`v2026.9.21`) or later for pairing, Bot Chat reads and
+  session browsing. `v0.21.5` (`v2026.9.24`) or later for guarded sends, scheduled
+  jobs and default-model management. Later releases and development builds are
+  attempted: a feature is turned off only when this Hermes lacks an API it needs,
+  not because the build is unlisted. Older v0.21.x tags need a bridge adapter. See
+  [the release matrix](RELEASE_COMPAT_WATCH.md) for the builds that were tested.
 - Tailscale on the phone and host. The HMP listener accepts loopback and
   Tailscale address ranges; an arbitrary private VPN address cannot bind it.
 - Hermes gateway profile routing configured as described in [Deployment](../server/DEPLOYMENT.md).
 
+On a multi-profile host, read Deployment's topology warning before setting
+`gateway.multiplex_profiles: true`. That setting can bypass Hermes's migration
+preflight and change API ingress and secret scoping.
+
 Install the runtime plugin directory from its public repository. Hermes scans
 the selected directory, so this avoids scanning research documents and test
-fixtures as executable plugin content. The current runtime scan has two
-medium findings for subprocess calls; both use fixed argument lists, no shell,
-and bounded timeouts. Review any scanner warning before accepting it. Never
-disable the scanner or use `--allow-removed`.
+fixtures as executable plugin content. For exact candidate `5e247a6` on November 6, 2026, native `plugin-guard-v12`
+reports **safe, with 12 medium heuristic matches**: three fixed subprocess sites
+and nine binary-format/Unicode-validation literals. Independent source review
+found no new security issue in those matches; this is not a zero-finding or
+dynamic-runtime claim. Review the actual scanner output before accepting it.
+Never disable the scanner or use `--allow-removed`.
 
 ```sh
 hermes plugins install 'MahdiHedhli/hermes-hmp#server/hmp_plugin' --enable
@@ -55,15 +59,53 @@ Once routing is configured, continue:
 ```sh
 hermes gateway restart
 hermes hmp compat
+hermes hmp setup check
 hermes hmp instance show
 hermes hmp pair offer
 ```
 
-`hermes hmp compat` checks the Hermes build, not whether the listener ran.
+`hermes hmp compat` shows the Hermes version, HMP's minimum versions and whether each
+feature is available. It does not check whether the listener ran. If a feature is
+unavailable after a real failure, it prints a warning and a hint. To report a failure you
+saw on the phone, run `hermes hmp compat --issue-draft --feature jobs --failure-code
+cron_unavailable` (use the feature and the code that failed). It prints a GitHub issue
+draft to review and paste; nothing is sent, and only the Hermes and HMP versions, the OS
+family, the Python version and fixed feature and error codes can appear. With no failure
+to report it says so. A permission or setting code (for example `forbidden`) is explained
+rather than drafted, because it is not a version problem.
 If `pair offer` says there is no current instance identity after a restart,
 check the three `platforms.hmp` keys and the gateway start log. A successfully
 started listener creates the identity. Do not copy an identity or private key
 from another host.
+
+For Bot Chat sends and the scheduled-job and default-model previews, each
+named profile needs its own `API_SERVER_KEY` in that profile's private `.env`.
+Use a distinct value of at least 16 characters for each profile; the default
+profile's key does not authorize a named profile. Keep each API server bound to
+loopback, keep keys out of source control and support logs, and use the
+profile's Hermes configuration workflow to set and rotate them. A missing or
+unusable key leaves that bot's write controls unavailable; pairing and reads
+can still work.
+
+After the gateway starts, run `hermes hmp health check` to inspect every served
+bot's enabled send, jobs, and model prerequisites. The command uses a fresh
+gateway snapshot and the same pinned listener check as `setup check`. A missing
+profile-scoped key or loopback route makes that bot's enabled channels
+unavailable and returns a nonzero exit code; intentionally disabled channels
+are reported as disabled. The private snapshot contains only status codes, no
+keys or endpoints. Recheck after changing profile configuration and restarting
+the gateway. This is a prerequisite diagnostic: device authorization and the
+outcome of a later request are checked separately by HMP's routes.
+
+The source candidate also adds `hermes hmp health presentation`, a read-only
+desktop appearance binding diagnostic. It prints **bound (not probed)** or
+**unavailable**, using the current private operator socket and pinned listener.
+It fetches no avatar or metadata and tests no phone permission or image rendering.
+An older listener, changed listener or expired observation returns unavailable
+and a nonzero exit code. It does not identify a missing permission or flag, and
+does not grant access, enable a feature or change existing health checks. See
+[the diagnostic contract](../specs/046-bot-presentation-integration/OPERATOR_BINDING_DIAGNOSTIC.md)
+for the source checks and remaining installed-host/device qualification.
 
 Scan the offer in the mobile app, compare the short security code on both screens,
 and confirm on the host. Selecting `y` at **Allow the phone to use all of these?**
@@ -77,7 +119,125 @@ pairing list means the phone has not sent that profile's request yet; it is
 not a request to approve. Never approve another device's pending row. Keep the
 offer and approval codes out of logs, screenshots, and support requests.
 
+Pairing asks separately whether this phone may manage scheduled jobs and bot default models. Type `GRANT` on the host to allow those controls; any other answer leaves them off. This decision applies to that device only, even when two phones share an HMP user.
+
+A saved grant is only a permission for that phone. It does not enable scheduled jobs or default models, which also need their host feature flags, a Hermes that provides the APIs they need, the profile API and key, and bot authorization. Use `hermes hmp health check` and the preview sections below to check host prerequisites. Health checks do not verify this phone's permission or its bot authorization.
+
+To change that decision later, use `hermes hmp devices list` on the host to find the active device, then run `hermes hmp devices grant-controls <device-id>` or `hermes hmp devices deny-controls <device-id>`. These commands require an interactive host terminal. Revoking the device also stops its privileged access. Do not put device IDs in support reports.
+
 The plugin belongs to the Hermes instance where it is installed. Do not copy its instance keys or device store between hosts. See [Host hardening](../server/HOST_HARDENING.md) before exposing any Hermes host service.
+
+## Host-local generated images (candidate; not activated)
+
+Current checkpoints: [bounded C6b native evidence](research/local-media-c6b-root-acceptance-2026-11-06.md) and [exact HMP source/runtime-package review](research/local-media-delivery-source-review-2026-11-06.md) are accepted. These do not establish installation, loaded-listener availability, mobile display or release qualification. Preserve existing flag values and device rights during any separately authorized deployment.
+
+Descriptor minting and authenticated fetch code exist in the feature candidate.
+It supports both legacy `cache/images` and current `cache/generated/images`
+through separate closed layouts, with no namespace fallback. A
+[current native cache-helper sample](research/local-media-native-cache-layouts-2026-11-06.md)
+completed alongside the legacy control.
+One [bounded native-storage/route sample](research/local-media-native-serving-sample-2026-11-06.md)
+completed with synthetic authority, and a separate descriptor/fetch regression
+passed. These results do not qualify phone display, an actual image producer,
+large-image memory/deadlines, Linux, full plugin-PM installation or production
+activation. Do not infer availability on an installed host or phone from them.
+
+The complete shipping manifest dependency union has separately
+[built with the pinned native core graph](research/local-media-native-pm-union-2026-11-06.md)
+in a fresh private PM environment. This excludes core-project installation and
+uses a dependency-only plugin member; it is not a plugin loading or host
+activation check. The original native source and locks stayed unchanged.
+
+A [native-backed four-fetch memory sample](research/local-media-native-memory-2026-11-06.md)
+also passed the unchanged provisional ceilings on its pinned Darwin runtime,
+including cancelled handlers with late workers. Bounded streaming clients are
+included in the measured process. This records the sampled Darwin T12 measurement,
+not Linux, phone, release or activation qualification.
+
+The candidate is default off and restricted to approval-owner devices; jobs/model
+controls alone do not grant that ownership. It also needs
+`platforms.hmp.extra.local_media.enabled`, Hermes at or above `v0.21.5` (or a
+development build) providing the required session APIs, and per-bot authorization.
+It uses minimum-version/API eligibility, not a build list or qualification
+manifest; a disabled direct-send switch does not close it. The `local_media` compat
+line reports API eligibility, not the host flag, device permission or successful
+image delivery. Runtime binding checks in-memory module coherence and retains
+listener-scoped references. The sample's exact source pins are measurements, not
+a requirement to qualify every future Hermes version.
+
+Assistant `MEDIA:` paths remain ordinary text and cannot authorize a host file
+read. Candidate delivery derives references from strict same-profile
+`image_generate` tool records and performs bounded authenticated image loading;
+it does not publish files or fall back to a public URL. See
+[spec 011](../specs/011-local-image-serving/spec.md) for the contract and open gates.
+
+## Scheduled jobs preview
+
+Scheduled jobs are disabled by default. The host must run Hermes `v0.21.5` or later (or a
+development build) that provides the scheduler APIs, with a working profile-scoped
+loopback API server and key. Grant the specific phone at pairing or with
+`hermes hmp devices grant-controls <device-id>`, then set the HMP gateway platform's
+`extra.cron.enabled: true` in private host configuration. Do not commit device IDs or API
+server keys to this repository. Saving the permission does not
+turn the preview on. Enable the host flag with
+`hermes config set platforms.hmp.extra.cron.enabled true`, then restart the gateway with
+`hermes gateway restart`; if jobs or chats are running, wait for the gateway to drain first
+so active work is not interrupted. Run `hermes hmp health check` afterward. A phone that
+still gets a service-unavailable answer is missing the flag, a Hermes that provides the APIs, the profile
+API and key, or bot authorization. A new job is always created paused;
+review it in the app and choose Resume when ready. A timed-out create may have succeeded,
+so refresh the list before creating another job.
+
+For new jobs, the phone defaults to this bot's Bot Chat. Choose “Run history only”
+when no chat reply is wanted. Continuity lets each run see this job's previous
+output. An existing job's result destination does not change until edited. On
+the tested builds, HMP writes create/edit through Hermes's profile-scoped
+cron writer because the profile API does not persist `context_from`. HMP checks
+that the writer exists and names its `paused` parameter; it never creates an active
+job, and the jobs feature closes alone if the writer is missing.
+
+Build `hermes-ca705dbf-git` was tested for the paused-job writer and
+routes only: create, list, edit, and delete of paused jobs, profile isolation,
+key and permission gates, and corrupt-store failure. See the
+[evidence](compat/ca705dbf-mobile-jobs.md). Actual scheduler delivery and
+previous-run continuity are not verified on that build; the earlier tested
+builds keep the delivery and continuity checks recorded in their own evidence.
+
+Those results are evidence about the tested builds. They do not decide which Hermes
+builds may use the preview; a later build is attempted, and a failure is reported as above.
+Installing the plugin does not enable the preview; the operator must grant the device and
+enable the cron flag. Existing `extra.owner_device_ids` entries remain a legacy fallback;
+an explicit host denial for that device takes precedence.
+
+## Bot default model preview
+
+Model management is disabled by default. The host must run Hermes `v0.21.5` or later (or a
+development build) that provides the model reader and writer, with its profile-scoped API
+server available locally. Grant the phone at pairing or with
+`hermes hmp devices grant-controls <device-id>`, then set
+`extra.model_management.enabled: true` in private host configuration.
+This is separate from scheduled jobs: enabling one does not enable the other, and model
+management is offered only when this Hermes provides what it needs. The phone
+then offers only models from Hermes's authenticated provider catalog for that bot. A model
+change affects new sessions and is never retried automatically; refresh the setting after
+an uncertain response. Do not commit device IDs, provider credentials, or API server keys.
+
+The preview closes on a Hermes that lacks what it needs. Installing the plugin does not
+enable it; the operator must grant the device and enable the model flag. Existing
+`extra.owner_device_ids` entries remain a legacy fallback, subject to explicit per-device denial.
+
+## Updating a pinned HMP install
+
+`hermes update` updates Hermes core but does not advance a custom HMP Git-SHA
+pin. A pinned plugin's `hermes plugins check-updates` result also does not
+compare it with newer HMP revisions. Check the public repository and its
+release notes explicitly, keep the current installed SHA for rollback, and
+review a candidate commit before reinstalling HMP with `--ref <full-sha>`.
+Check the new Hermes/HMP combination with `hermes hmp compat` and
+`hermes hmp health check` after the gateway restarts, then verify a real
+client send separately. Do not infer send readiness from a read-only setup
+check. A release-aware check and explicit rollback flow are tracked in
+[issue #18](https://github.com/MahdiHedhli/hermes-hmp/issues/18).
 
 ## Local compatibility tests
 

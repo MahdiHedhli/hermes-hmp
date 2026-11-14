@@ -1,0 +1,66 @@
+{
+  "artifact": "independent-static-test-vectors",
+  "contract_revision": "92a719f303fa5ef9f1e542089a70118924e1ce89",
+  "source_basis": [
+    "docs/architecture/contracts/HMP_V1.md PN-ISS-1 and PN-KEY",
+    "docs/architecture/contracts/HMP_PUSH_RELAY_V1.md PR-2"
+  ],
+  "method": "Python standard library only: HMAC-SHA256; no implementation imports or execution.",
+  "key_grace_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+  "key_is_synthetic_test_material": true,
+  "transcript_encoding": "ASCII tag || for each field: u32be(byte_length) || field bytes; u64 fields encoded u64be; strings UTF-8; binary raw.",
+  "vectors": [
+    {
+      "label": "synthetic-basic-ascii",
+      "synthetic_only": true,
+      "inputs": {
+        "iid": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "H": 7,
+        "H_u64be_hex": "0000000000000007",
+        "device_id": "fixture-device-A",
+        "device_id_utf8_hex": "666978747572652d6465766963652d41",
+        "family_id": "fixture-family-A",
+        "family_id_utf8_hex": "666978747572652d66616d696c792d41",
+        "G": 1,
+        "G_u64be_hex": "0000000000000001",
+        "salt_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+        "scope_exact": "profiles/fixture-a",
+        "scope_utf8_hex": "70726f66696c65732f666978747572652d61"
+      },
+      "route_transcript_hex": "484d50312d505553482d524f555445000000346161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616100000008000000000000000700000010666978747572652d6465766963652d4100000010666978747572652d66616d696c792d4100000008000000000000000100000020000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "route_raw_hex": "7dd6443a794f25bbcc9666511cab006c07dd17e67e07a70eb28bbe8116255318",
+      "route_sha256_hex": "b1aab26d34eed1ee5d9d0a075d356c599c049970bf5825153d957fe81dc85312",
+      "route_b64u": "fdZEOnlPJbvMlmZRHKsAbAfdF-Z-B6cOsou-gRYlUxg",
+      "collapse_transcript_hex": "484d50312d505553482d434f4c4c4150534500000020b1aab26d34eed1ee5d9d0a075d356c599c049970bf5825153d957fe81dc853120000001270726f66696c65732f666978747572652d61",
+      "collapse_full_hmac_b64u": "T6Dx0lZcs8MEnvNxTKAAI6GKI2zQhLQwBGaOHL5K6xM",
+      "collapse_raw24_hex": "4fa0f1d2565cb3c3049ef3714ca00023a18a236cd084b430",
+      "collapse_b64u_32": "T6Dx0lZcs8MEnvNxTKAAI6GKI2zQhLQw"
+    },
+    {
+      "label": "synthetic-utf8-high-generation",
+      "synthetic_only": true,
+      "inputs": {
+        "iid": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "H": 4294967305,
+        "H_u64be_hex": "0000000100000009",
+        "device_id": "fixture-device-é",
+        "device_id_utf8_hex": "666978747572652d6465766963652dc3a9",
+        "family_id": "fixture-family-雪",
+        "family_id_utf8_hex": "666978747572652d66616d696c792de99baa",
+        "G": 9007199254740991,
+        "G_u64be_hex": "001fffffffffffff",
+        "salt_hex": "202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f",
+        "scope_exact": "profiles/fixture-é/東京",
+        "scope_utf8_hex": "70726f66696c65732f666978747572652dc3a92fe69db1e4baac"
+      },
+      "route_transcript_hex": "484d50312d505553482d524f555445000000346262626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262626200000008000000010000000900000011666978747572652d6465766963652dc3a900000012666978747572652d66616d696c792de99baa00000008001fffffffffffff00000020202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f",
+      "route_raw_hex": "bdf862a8c9676e7e9d247bb5288516011575e286f9808d7e61d01823f26c09dd",
+      "route_sha256_hex": "16b84f58155331eb288bb2d8f79eff08d724199fc798861448ebc360b19fc1dd",
+      "route_b64u": "vfhiqMlnbn6dJHu1KIUWARV14ob5gI1-YdAYI_JsCd0",
+      "collapse_transcript_hex": "484d50312d505553482d434f4c4c415053450000002016b84f58155331eb288bb2d8f79eff08d724199fc798861448ebc360b19fc1dd0000001a70726f66696c65732f666978747572652dc3a92fe69db1e4baac",
+      "collapse_full_hmac_b64u": "1jwaYyOQ6r7rhRjtkZRt0pQo99HVi7na8u7KPtla3FQ",
+      "collapse_raw24_hex": "d63c1a632390eabeeb8518ed91946dd29428f7d1d58bb9da",
+      "collapse_b64u_32": "1jwaYyOQ6r7rhRjtkZRt0pQo99HVi7na"
+    }
+  ]
+}

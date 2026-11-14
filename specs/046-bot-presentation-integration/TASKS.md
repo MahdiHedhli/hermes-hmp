@@ -1,0 +1,1467 @@
+## Native service implementation checkpoint — November11
+
+- [x] **NS3-ADAPTER-LIFECYCLE** Actual HmpAdapter retains the original NativePresentationOwner across reconnects; normal HmpServer startup probes/binds the service, guarded by a thread-safe listener fence. Owned startup is joined before cleanup, with state checks after setup/purge/site/push and final operator/approval awaits. Connect/disconnect serialize; original-server callbacks cannot retire a replacement. Reader/writer/dependency debt survives cancellation, failed/partial startup and ambiguous cleanup; generation/Store/runner close attempts are adopted before effects and unknown closes are never automatically replayed. Both runtimes pass716 identical parent cases plus93 subtests (809 aggregate),574 source fingerprints. Thirty lifecycle cases use real adapter/server/Store/TLS/Unix components with synthetic native bridge/platform APIs: held native readers/exporters, unknown start, partial/lost close acknowledgements, startup and identity races, concurrent calls, and cancellation-resistant native setup. Actual GatewayRunner/normal loader/real bridge/API/home qualification, decoder/devices/platforms/release remain OPEN; no installed host or device changed.
+- [x] **NS3-HTTP-PROBE-TLS-SLICE** Actual service construction probes installed response/writer APIs and default uncompressed/immediate-header mode before native reader work; a failed probe prevents optional service binding. Both runtimes pass661 identical parent cases plus93 subtests (754 aggregate),573 source fingerprints. Actual TLS1.3 certificate-fingerprint-pinned multi-chunk delivery and peer-only disconnect settle native sender/exporter/result/leases while the test listener remains open. A controlled native SSL pause proves encrypted outgoing bytes can remain after exporter destruction while capacity/result credit stay held and no second chunk is created; peer close empties the original protocol queues. This is bounded transport/API evidence, not arbitrary SSL-fault, hard-RSS, native adapter/GatewayRunner, decoder or device qualification. The native service imports only its12 presentation/pure modules in fresh-process observations; that is not a whole-gateway startup-performance pass.
+- [x] **NS3-ROUTE-CONTEXT** Add authenticated metadata/revision-bound static-avatar GETs and typed optional503; original actor/profile input/rate gates precede native work, existing bot-policy refusal mapping remains intact, and current same-context service alone advertises roster capability1. Borrow original native Context at admission and retain it through actual thread join/known discard. Both runtimes pass651 identical parent cases plus93 subtests (744 aggregate),573 source fingerprints. Real ServerContext/build_app tests cover delivery, stale revision, auth/bot refusals, roster negotiation, HEAD404/rate429 before source and prepared-stream failure without a second JSON error. The latter uses a synthetic failing emitter after actual prepare/write on a real peer; it does not prove native-writer/TLS fault composition. Adapter binding remains CLOSED; no deployment or physical qualification follows.
+- [x] **NS2-MEMORY** Portable16MiB/64-live-buffer logical reservations; explicit copy/conversion/result/stream accounting, identity-bound original leases, no forged/double/altered release and no automatic cancellation release. Both runtime17-case suites independently reviewed;559 source maps/log/XML/IDs verified. No actual buffer/reader/worker/authority qualification follows.
+- [x] **NS2-RAW-SOURCE** Independently accepted original registry-bound single-use claims and real fixed nofollow POSIX metadata/static-avatar transaction. Both61-case suites pass with563 matching source files/log/XML/unique IDs. Causal tests cover full size/work bounds, unsafe links/ambiguous sources, mutation/revocation/deadline, foreign registry/clock, unknown close and growth-byte credit/cleanup. Tests use temporary POSIX files and unit-issued claims, not native authentication. No route or capability is enabled.
+- [x] **NS2-PROJECTION** Independently accepted fixed reader -> startup-bound sequential token/event parser -> full closed name/classic/blobatar/static-image DTO composition. Hash actual image once on the shared ledger; preserve stale revision as a closed distinct reason. Both runtimes pass386 identical parent cases plus93 subtests (479 JUnit aggregate),567 source fingerprints; includes maximum65,536 metadata/2M image, disposal/privacy/deadline/work/memory and narrow import-surface causals. Structural image admission is not decoding, and constructor import location is not proof of actual startup binding.
+- [x] **NS3-ACQUISITION** Independently accepted private service uses real original bearer/Store auth and native per-bot/home calls before original registered claim issuance; all raw source/projection and one-shot final metadata observation share the2s deadline/work budget. Actual owned threads, status-only futures/opaque handles, six retained slots (4metadata/2avatar),16 zero-payload waiting descriptors, one profile, native-policy/home/token/listener changes and cancellation/start/join/FD/payload-cleanup uncertainty retain ownership/debt. An owner refuses fresh generation until retired and drained; actual adapter must retain it. Both runtimes pass420 identical parent cases plus93 subtests (513 aggregate), with569 source hashes; distinct-actor Store concurrency separately passes1 each. Synthetic bot bridge is not actual GatewayRunner qualification. No HTTP writer/capability/adapter binding or Store-close safety is inferred.
+- [ ] **NS2-NATIVE-BINDING** Adapter/server source binding is implemented and component-tested above; qualification through the actual native GatewayRunner/normal loader and real per-bot/home APIs remains unfinished. Do not fake old worker GO; raw source/projection/acquisition results are not emission authority.
+- [x] **NS3-HTTP-COMPONENT** Independently accepted plaintext HTTP sender: one30s prepare/write/EOF budget after closed2s acquisition; original actor/instance/profile/listener/transport checks, one actual weakrefable64KiB exporter/memoryview, no next chunk until actual exporter death and native transport bufferZERO. Retain result/128KiB stream reservation/slot through actual Task completion, held views/slices/copies and unknown abort/start/error cleanup. Detach bounded error tracebacks; never clear foreign execution frames. Fixed uncompressed content-length/immediate-header/no raw-body-hook path only. Both runtimes pass445 identical parent cases plus93 subtests (538 aggregate),571 source fingerprints, actual30s expiry and real aiohttp GETs. TLS/kernel/RSS and native adapter/route/client qualification are NOT inferred.
+- [ ] **NS3-EMISSION-LIFECYCLE** Actual native setup must feature-probe/bind required aiohttp writer APIs/modes before advertising, qualify TLS abort/plaintext/backlog ownership, and integrate every disconnect/error/cancel/partial-bind/reconnect drain BEFORE Store/identity close. Prove retained owner adoption on normal native startup. Production route must abort without global error middleware sending a second JSON body after prepare.
+- [ ] **NS4–NS7** Actual native factory/bridge/API integration, full normal/fault/client/device/platform/release qualification remain open. Bounded owned worker/mailbox/debt/reconnect/drain and route component acceptance above is not this end-to-end evidence.
+
+## Selected implementation — native presentation service, November11
+
+- [x] **NS1** Explicit architecture/privacy/authority/lifecycle contract independently reviewed; full character/name/blobatar/static-image parity retained. [Amendment, plan, checklist and NS2–NS7 tasks](NATIVE_PRESENTATION_SERVICE_AMENDMENT.md).
+- [ ] **NS2–NS7** Implement and qualify the native reader, owned service, adapter/routes and actual client/device/release journeys. No production feature/capability is enabled by NS1.
+- Historical RGA/broker tasks below remain unfinished for that alternative. Do not treat their source-prefix passes as character delivery or as prerequisites waived inside the broker boundary.
+
+## November11: rooted call-route implementation stage
+
+- [ ] **RGA-01e-ROOTED-CALL-ROUTE** Draft early-retained execution/resource checker retains the FULL generic owner guard. Current17 resource-prefix cases independently verified with557 source maps; minimum17 and actual lifetime caller still pending. No optimized guard/startup/feature acceptance.
+- [ ] **RGA-01e-LIFETIME-CALLER** Actual original consumer/operation/resource ownership and held-callee/root-prefix tests; a setup-variable ordering bug in private harness corrected before execution. No direct-call substitute.
+
+## November 11: coherent registered Scope integration
+
+- [ ] **RGA-01e-SCOPE-DISPATCH** Implement the complete rooted link-execution Scope unit in [RGA_SCOPE_DISPATCH.md](RGA_SCOPE_DISPATCH.md). Qualify actual held execution/resource/operation routes first, early-retain the new fixed callee, and keep generic _native_scope_current/_native_walk_scope unchanged. Do not bootstrap through the recursive selector or replace full guards with nine partial DATA components. Preserve non-link/active-bootstrap behavior.
+- [ ] **RGA-01e-CAUSAL-NATIVE** Actual dispatch/root graft/callback/GC/lifecycle/cleanup causals on both runtimes, then unchanged native60s alone. No physical/feature/release pass inferred.
+
+## November 11: generated closure primitive candidate
+
+- [x] **RGA-01d-GENERATED-COLLECTIONS-PRIMITIVES** Original default/caller primitive joins and actual field-count/name identity, canonical roles, no foreign primitive invocation. Focused166/134 and broad1698/1474 pass; independent final review verifies556 source maps, unique IDs and common1076 ordering. Bounded primitive acceptance only.
+- [ ] **RGA-01d-ANNOTATION-JOURNEY-BOUNDARY** Preserve current checks; inventory fixed/transitive calls and observe original annotation/lazy evaluator entries during actual final graph/native journey. Zero calls required for exclusion; any observed evaluation requires specific closure review. Deep evaluation is conditional, not a new prerequisite to implement the coherent DAG; see ANNOTATION_EXECUTION_BOUNDARY.md.
+- [ ] Full original-root/caller/callee/GC/callback/freshgraph, unchanged native60s, full feature/physical/Linux/provider/release qualification remain required.
+
+## November 11: generated method metadata (bounded source acceptance)
+
+- [x] **RGA-01d-GENERATED-METADATA** Append generated-role metadata after original12 typepin fields, all16 types, preserve all99 declared roles and ordinary-function rules/native wrapper checks/final reseals. Focused469/277 and final1533/1341 pass,555 source hashes, common1074 IDs and independent bounded review; no native-effect authority.
+- [x] **RGA-01d-GENERATED-SYS-KEY-FENCE** New collector red foreign-equality control corrected to native namespace/key fence before lookup, fixed refusal/zero hooks. OldScope4 child60s timeouts remain uncertainty, not admission proof.
+- [ ] **RGA-01d-GENERATED-PRIMITIVES** Independent native primitive joins and field correspondence; deep annotation DATA/lazy dependencies and legitimate cache-state lifecycle. Metadata identity does not establish these requirements.
+- [ ] Full original root/caller/callee/GC/callback/freshgraph, unchanged native60s and all feature/physical/Linux/provider/release qualification remain required.
+
+## November 11: cache planner and final constructor freshness
+
+- [x] **RGA-01d-CACHE-CANDIDATES** Prewarm cache_candidates; append its two classes/five source functions and PlannedCachePath constructor. Helper11/55/99, parent7/16, existing indices/widths preserved; five aliases joined at all six mirrors.
+- [x] **RGA-01d-CONSTRUCTOR-FINAL-SEAL** Both parent paths repeat all native module/16 constructor pins after last checker callback; retain actual successful-return counterexamples before repair.
+- [x] Baseline26 missing-refusal controls, corrected110 both interpreters and final1070 identical cases/source maps; no failure/error/skip. Original-root and other security requirements preserved.
+- [ ] **RGA-01d-RUNTIME-GENERATED**49/33 remaining callable attributes; independently held collections/typing globals and closure contents, no plain-function widening or exact-version feature allowlist.
+- [ ] Full original-root/caller/callee/GC/callback/freshgraph, native60s and complete feature/device/Linux/provider/release qualification.
+
+## November 11: declared runtime classmethods
+
+- [x] **RGA-01d-RUNTIME-CLASSMETHODS** Eight exact native wrappers/functions, 94 helper roles, primitive21; old roles and indices preserved.
+- [x] Focused103 and full956 cases pass both interpreters, identical IDs, all553 source hashes match; independent bounded review.
+- [x] Preserve strict original root/callee assertions; separate late-code pure audit/final refusal without effects.
+- [ ] **RGA-01d-RUNTIME-GENERATED** Generated helpers, private-global and cache_candidates transitive custody; measured43/29 remaining class attributes.
+- [ ] Full original-root/caller/callee/GC/callback/fresh graph, native60s, complete feature/device/Linux/provider/release qualification.
+
+## November 11: complete runtime constructor metadata
+
+- [x] **RGA-01d-RUNTIME-CONSTRUCTORS** Retain seven runtime constructors via
+      appended parent modules/types:6modules/15types, old indices unchanged.
+      Pin9→12 adds kw/kwpairs/privateglobals pairs; code/default/global/closure,
+      field/base/dispatch/native tuple checks apply at all parent/encoding/Scope
+      consumers. Engine's unrelated nine-field rows remain unchanged.
+- [x] Class dictionary key fences precede metadata lookup; exact CodeType/str
+      filename, exact defaults/kw/globals storage and duplicate-free snapshots
+      with live-to-private identity comparisons. No foreign callback in tests.
+- [x] Retain baseline42(6controls/36DIDNOTRAISE); focused58+actualScope8 pass both
+      runtimes. Additional baseline18 retains6child60s timeouts as uncertainty,
+      not an admission/foreign-execution proof; seven filename omissions and
+      class/keyword key failures remain distinct from three passing controls.
+- [x] Final853 identical cases current/minimum pass with all552 source hashes,
+      log/XML binding and independent bounded review. No native speedup claimed.
+- [ ] **RGA-01d-RUNTIME-CLASSMETHODS** Append only the eight declared source
+      classmethods with exact original native wrapper/type and raw.__func__
+      checks, preserve strict plain roles and row widths; append classmethod as
+      primitive21 through collectors/checkers/parent/Scope mirrors and authenticate
+      any new factory default independently. Cover code/default/kw, wrong wrappers,
+      hidden/coherent defaults, late returns and both publication refusals.
+- [ ] Generated helper/private-global and cache-candidate/transitive closure;
+      current census51/37 class attributes outside plain-helper+constructor records.
+- [ ] Full root/caller/callee/bothScope/GC/callback/freshgraph, native60s,
+      full feature/physical/Linux/provider/release and documentation qualification.
+
+## November 11: persistent runtime plain-code custody
+
+- [x] **RGA-01d-RUNTIME-PLAIN** Append the three prewarmed runtime modules,
+      twelve declared classes and44 plain functions/methods to the actual early
+      packet. Preserve old positions and six-field API; newcounts10/53/86.
+      Cacheowner/root/fact are live values only; their keys remain mandatory.
+- [x] Join39 imported aliases to defining held modules in both checkers, both
+      parent audits and both Scope publication audits. Initial coherent wrong
+      aliases refuse; no imported wrapper function is executed by inspection.
+- [x] Retain132 drift and39 initial-alias failing controls, then green candidates;
+      six actual Scope code causals require private refusal/zero foreign calls,
+      work/reservations/registration/success at both publication points. Baseline
+      already rejects2entry-lineage controls;4cache/plan cases call changed code.
+- [x] Final765 broad cases plus22 dedicated started-parent cases per current/
+      minimum runtime pass. Repair independently reproduced pre-start test setup
+      dependency with explicit definition import and observed0generic fallback.
+      Production/actual broad test bytes unchanged after765; dedicated22 matches
+      all551 server-source hashes. Independent review preserves these limits.
+- [ ] **RGA-01d-RUNTIME-CALLABLES** Complete actual classmethod/generated helper/
+      constructor code/globals/default/cell custody; these12classes still expose
+      unrecorded callable attributes58on3.14.9 vs44on3.11.15. Include cache-candidate
+      dependency closure and native constructor source/alias prerequisites.
+- [ ] Preserve full original caller/root/callee/transitive/GC/callback checks and
+      fresh final graph reseal before dispatch; no graph shortcut is activated.
+- [ ] Unchanged native60s, complete feature/device/Linux/provider/release gates,
+      full roadmap and documentation objective remain required and active.
+
+## November 11: fixed runtime prewarm custody
+
+- [x] **RGA-01d-PREWARM-TRANSIENT** Prepare runtime_files, entry_files and
+      cache_context under the original Entry seals before helper capture; retain
+      their declared classes/functions/generated constructors across callbacks.
+- [x] Bind only declared missing aliases during genuine initialization with an
+      active matching module frame and unpublished Entry origin. Reject stale or
+      foreign aliases, malformed class/module/spec keys before protocol lookup;
+      inspect existing modules before importlib and use held native spec getter.
+- [x] Original parent three readiness controls fail; corrected29 focused and
+      final224 identical current/minimum cases pass, nofail/error/skip/source drift.
+      Independent review accepts transient custody; earlier222 predates class-key fix.
+- [ ] **RGA-01d-PREWARM-PERSISTENT** Extend the actual early helper module/type/
+      function/constructor/source record and original parent/bothScope checks.
+      Current packet7modules/41classes/42functions is unchanged. No fast dispatch.
+- [ ] Full graph/caller/callee/runtime/actor/API/cache/GC integration, native60s,
+      feature/device/release acceptance; retain all existing roadmap requirements.
+
+## November 11: cycle-safe definition staging prerequisite
+
+- [x] **RGA-01d-DEFINITION-STAGING** Move only cycle-causing Entry/entry-file
+      imports after entry-file/cache-context definitions. Original aliases and
+      method behavior unchanged; no lazy binder, alias repair or capture expansion.
+- [x] Three isolated entry/entryfiles/cachefirst import orders observe actual
+      Entry capture definition readiness and exact final aliases/no owners or
+      bootstrap. Baseline2 cyclic failures/1pass; newsource3pass.
+- [x] Same195 current/minimum regressions, nofail/error/skip, unchanged source;
+      prior145 +3staging +25cache +22approvalimportorders, independent binding review.
+- [ ] Fixed prewarm under held original Entry seal; genuine-initialization-only
+      declared alias handling, original classes/functions/constructors and source
+      pins before helpercapture and bothScope publication. Gatewayentry-first
+      still does not load these modules at capture; staging is not admission.
+- [ ] Final whole graph/caller/root/callee/transitive/actor/API/cache/runtime/GC/
+      callback integration, original60s/feature/physical/release and full roadmap.
+
+## November 11: graph checker early code capture
+
+- [x] **RGA-01d-GRAPH-CODE-PINS** Append9 graph functions to original early
+      helper roles:42functions/41classes/7modules, six-field packet unchanged,
+      prior33indices preserved. Parent and both Scope seals use same roles.
+- [x] New27 code/default/kwdefault controls +18 actual late-code publication
+      controls, zero foreign dispatch/work/reservation/registration/success,
+      exact private refusal. Corrected exactold-role red27allDIDNOTRAISE retained;
+      earlier9freevar witness errors not counted as causal omission evidence.
+- [x] Repair stale import-order observers/injection to actual capture_bound
+      and verify literal record/layout/packet and Entry retained-record identity.
+      Previous-role baseline reproduced same4 failures; original earlier386
+      runs remain failed382pass4fail, corrected final386current/minimum allpass.
+- [ ] Complete original caller/Entry/Scope/callee transitive dependency and
+      class/source provenance, actual actor/API observations, cache/runtime
+      semantic closure and final pure live graph. No fast guard enabled.
+- [ ] Integrate and run actual graft/callback/GC/cleanup/original60s/fullfeature/
+      device/release gates; all original roadmap requirements remain active.
+
+## November 11: interpreter and native API field checks
+
+- [x] **RGA-01d-INTERPRETER-FIELDS** Unintegrated runtime/cache/hash/compiler/
+      decoder metadata comparison; proper SimpleNamespace member descriptor and
+      class mappingproxy access; exact primitive/key/metadata fences.
+- [x] **RGA-01d-NATIVE-API-FIELDS** Unintegrated native export/flags/errors/actor
+      reference checks. No native operation, decoder/compiler/loader or actor call.
+- [x] **RGA-01d-REQUIRED-SYS-EXPORTS** Actual nullablepycache_prefix deletion red
+      corrected with required-key fences; retained evidence, no deployed incident.
+- [x] Same145 current/minimum: prior136 +9 new cases,130 export mutations and
+      foreignmetadata/key/shortstorage/copyDATA controls, no native/loader work.
+- [ ] Bind selected new predicates to original early-held code and caller/Scope/
+      Entry roots, fresh actor/API observations and full final live graph; cache/
+      runtime semantic closure still required. No partial guard replacement.
+- [ ] Actual integration/graft/callback/GC/cleanup/original60s/fullfeature/device/
+      release acceptance and remaining original roadmap, no new deployment.
+
+## November 11: Entry and settled activation field checks
+
+- [x] **RGA-01d-ACTIVATION-FIELDS** Unintegrated settled-state roots/flags,
+      path/PM function/module-origin/spec/legacy-alias field comparison. No
+      native actor/bootstrap calls or original-class/code authority conferred.
+- [x] **RGA-01d-ENTRY-FIELDS** Unintegrated started/global/owner/data/argv/main,
+      activation bootstrap, native lineage/policy record/ledger shape joins.
+      Representation-valid failed ledger is not work permission.
+- [x] Same136 current/minimum cases: existing graph31 + newactivation6 +
+      originalactivation25 + newentry6 + originalentry68; source-bound final
+      suite receipts. Preserve strict settled-only and sentinel semantics.
+- [ ] Interpreter/native API currentness and fresh actor/API observations,
+      original-root/callee/code proof and complete final pure graph reseal.
+- [ ] Integrate only under rooted fixed-callee dispatch with unchanged full
+      generic guards, then actual graft/callback/GC/cleanup/original60s and full
+      feature/device/release qualification. Components are not BI1 delivery.
+
+## November 11: operator approval field component and real API correction
+
+- [x] **RGA-01d-APPROVAL-FIELDS** Unintegrated owner/module/activation/count/
+      buffer/fact/read-chain/API-metadata field projection; native dictionary and
+      tuple fences. No API call, production caller or authority granted.
+- [x] **RGA-01d-API-FILENAME** Reproduce foreign co_filename equality in both
+      new projection and existing _api_state, correct exact CodeType/str fences,
+      restore coherent synthetic graph and verify zero foreign hooks/API calls.
+- [x] Same79 current/minimum regressions: graph31, operator44 and snapshot4;
+      retain both red receipts. Independent correction review complete.
+- [ ] **RGA-01d-FRESH-DAG** Complete original Entry/activation/root/callee,
+      actor/API observations and final pure live graph, with native closure and
+      cache semantics. Integrate only after provenance and causal qualification.
+- [ ] Original60s, complete feature/service/device/release; no fast-path delivery.
+
+## November 11: cache metadata correction and retained field component
+
+- [x] **RGA-01d-CACHE-GETTER** Correct actual cache getter validation: native
+      source storage/type, exact registry/module keys and exact string metadata
+      before equality. Eleven causal cases reproduced seven failures before fix.
+- [x] **RGA-01d-CACHE-FIELDS** Unintegrated retained cache/snapshot/input/plan/
+      activation joins; required nullable keys and getter metadata. DATA only,
+      no production guard or original authority and no live cwd observation.
+- [x] Same 27 current/minimum cases: getter11 + existing lifecycle14 + two
+      actual retained fixtures with42 field faults each. No extra native work;
+      initial wrong final row-count assertion preserved as failed evidence.
+- [ ] Complete original-root/callee, approval/API, entry/runtime/activation/actor
+      and final full pure live DAG; retain full generic validators and integrate
+      only after provenance/causal review. Original60s/device/release remain open.
+
+## November 11: descriptor and scan graph field components
+
+- [x] **RGA-01d-CLOSED-FIELDS** Canonical allocation/open/close receipt DATA with
+      native tuple storage fences; Scope-slot/lineage/ledger and legacy closures.
+- [x] **RGA-01d-SCAN-FIELDS** Package Scan status/key/descriptor fences and inline
+      Scope/file comparison in shared-node body, no project-checker delegation.
+- [x] Same23 current/minimum cases:80 prior owner faults,33 receipt/shape faults,
+      legacy/scan/slot/unknown/short-storage and maintained AST copies. Explicit
+      coherent fake-DATA limit prevents an original-authority claim. Independent
+      final source/evidence review complete. Components remain unintegrated DATA.
+- [ ] **RGA-01d-FRESH-DAG** Approval/API, cache, entry/runtime, activation/actor,
+      original root/callee and final complete pure live graph reseal; no guard
+      may be replaced by partial mirrors. Generic APIs stay complete.
+- [ ] Integrated differential/coherent graft/callback/GC/cleanup/broader runtimes,
+      unchanged native60s, full feature/service/device/release qualification.
+
+## November 11: shared graph implementation component
+
+- [x] **RGA-01d-SHARED-FIELDS** Implement unintegrated native dictionary field
+      comparison for package/recipe/selection; required keys/roots/flags/facts/
+      counters/buffers/activation links. DATA only, no authority or guard replacement.
+- [x] Same7 current/minimum tests, including80 actual owner changes/deletions with
+      restore/positive and no native work, foreign-key refusal/native getter bypass. Independent
+      source/final evidence review complete; prior failed setup retained separately.
+- [ ] **RGA-01d-FRESH-DAG** Complete remaining descriptor/approval/cache/entry/
+      actor/runtime/root/callee predicates and final callback-free full graph
+      reseal, then integrate after original native roots. Existing guards stayfull.
+- [ ] Actual integrated differential/coherent graft/callback/GC/cleanup/broader
+      runtime/original60s/physical/release qualification. Component is not delivery.
+
+## November 11: measured next graph unit
+
+- [x] Measure actual native consumer full-engine/fixed-live/closed-selector costs
+      without new native work; current/minimum24samples each. Reject costly full
+      closed-selector delegation; no such replacement enabled.
+- [x] Generic `_parts` UTF8 byte scan with original two-guard callback order,
+      post-callback bound freshness and full Unicode equivalence; final58 pass
+      current/minimum. Original native60s still fails, not a speedup acceptance.
+- [ ] **RGA-01d-FRESH-DAG** Implement fixed registered-artifact source+runtime DAG
+      together after original root/callee proof, final pure mutable reseal and
+      unchanged full generic paths. Evaluate actual native registration boundary;
+      no self-stored eligibility or cached verdict. Contract contains live fields.
+- [ ] Qualify original/copied/coherent/late-callback/GC/counter/descriptor/cleanup
+      differentials, both runtimes, unchanged native60s and full device delivery.
+
+## November 11: RGA-01c input-pointer prerequisite
+
+- [x] Hold registered Scope parent/runtime and original snapshot inputs/rootcell
+      before validators; native dictionary reads and post-callback identity seals.
+- [x] Actual prefix9 current/minimum checks distinguish original/equal-copy inputs
+      and rootcells at before/parent-return/engine-return boundaries; no work growth.
+- [ ] Complete independent original-root/callee bootstrap and coherent graft tests
+      before any reduced dispatch; keep all full audits until then.
+- [ ] Full fresh mutable graph audit, matching broader regressions, original60s,
+      complete native/service/device character acceptance. Prefix9 is not startup.
+
+## November 11: RGA-01 native consumer dispatch decision
+
+- [x] **RGA-01c-CARRIER-DECISION** Source and independent read-only review
+      identify the existing registered Scope parent/runtime as original carriers;
+      no extra blueprint source pointer selected. This is a design decision,
+      not completed runtime custody or performance acceptance.
+- [ ] **RGA-01c-ROOT-FIRST-DISPATCH** Establish actual registered Scope and
+      independent Entry roots before any schema-omitting dispatch; authenticate
+      fixed function/layout through original early origin. Keep generic APIs full.
+- [ ] **RGA-01d-FRESH-GRAPH** Implement complete mutable graph predicates and
+      pre/post-callback rejoins; no saved currentness verdict or permission bypass.
+- [ ] **RGA-01e-CAUSALS** Actual copied/coherent-graft/registration/late-mutation/
+      cleanup dispatch controls on current and minimum Python, then original60s
+      and complete feature/device qualification. See [contract](RETAINED_GRAPH_ROOT_CONTRACT.md).
+
+## November 10: RGA-01 original retained-graph custody
+
+- [x] Trace blueprint, digest, original entry inputs and artifact publication.
+      Original `_Inputs` already retains package/recipe owners and bindings;
+      blueprint/digest alone do not. See [contract](RETAINED_GRAPH_ROOT_CONTRACT.md).
+- [x] **RGA-01a** Add explicit original entry-input package/selection member
+      join before policy capture; no audit skipped. Focused actual-prefix causals
+      distinguish original members from mismatches; no full completion claimed.
+- [x] **RGA-01b** Rejoin held original package-source/input/binding pointers
+      before/after the parent checker and both raw publication windows. No generic
+      audit removed; callback causals and final regression recorded in contract.
+- [ ] **RGA-01** Prove original entry-input/root custody at every intended reduced
+      audit consumer, then implement the fresh graph audit with pre/post callback
+      rejoins and complete generic fallback APIs. No reduced parser is enabled.
+- [ ] Qualify actual dispatch/graft/mutation/cleanup causals on both runtimes and
+      unchanged native60s, then full feature/service/device acceptance.
+
+## November 10: RBH-02 early parent and publication binding
+
+The parent environment is now env7 with a literal retained-helper capsule;
+engine6 and all original direct/nested audits remain. Bootstrap checks precede
+component dispatch, and selected-helper predicates are repeated inline after the
+final engine callback and at both Scope publication seals. Exact module/registry
+checks precede vars(). The same120 selected cases pass on both actual runtimes,
+including14 actual publication faults and1 early-entry control. Full transitive
+coverage and broader regression remain open; full native traversal still times
+out60seconds after44typed observations/one retired capsule. No performance,
+image/service/device/release pass or host/settings/install change is claimed.
+
+## November 10: selected retained-helper preparation
+
+RBH-01 adds an unintegrated inspection DATA component for selected package/recipe
+helpers. The same 64 local checks pass on actual current/minimum Python. No audit
+is skipped. Original early-parent custody, the component's own primitive/global/
+function authentication, post-callback reseals and transitive-helper coverage
+remain prerequisites to RBH-04 consolidation. See
+SELECTED_RETAINED_HELPER_ORIGIN.md for exact scope and RBH-02 through RBH-05.
+Normal/native/service/routes/images/physical/release remain unqualified.
+
+## November 10: immediate native control and next prerequisite
+
+Kept production remains unchanged after a withheld class-column vector experiment.
+A fresh immediate native control still times out60s (65typed/two retired capsules,
+not completion). Four added live-class controls pass in41cases on both runtimes.
+Next is original package/recipe helper custody before any same-call audit
+consolidation; see RETAINED_BINDING_AUDIT_PLAN.md. No skipped permission/fresh
+mutable checks, helper self-nomination, host/device/install/release changes.
+
+## November 10: fixed-width audit checks
+
+Claim and closed-descriptor checks use direct indexed predicates after the same
+exact tuple3/list2 fences. Every original type, identity, live ledger and cleanup
+check remains; no mutable verdict is retained. Independent bounded implementation
+and test review accepted the change. Same source and matching case sets pass
+302 regression plus25 close/status checks on both actual Python 3.14.9 and 3.11.15.
+Four added actual pending-close cases reject integer/foreign state slots before
+Cclose or ledger debit, then restore and close exactly once.
+
+An actual original-claim helper benchmark is about20percent faster; it is not
+whole-startup evidence. Fresh current normal-artifact completion still times out
+at60seconds with checked._ready unchanged. No full native/service/route/image,
+physical-device or release acceptance; no host/device/settings/install changes.
+
+# BI1 integration tasks
+
+## November 10 finite audit increment
+
+- [x] **LP3-NATIVE-KEY-PRIMITIVES** Fresh per-call namespace identity index;
+      original checker-pair and native primitive binding in capture, parent and
+      both actual Scope seals. Independently reviewed; 281 current and minimum
+      Python cases pass on unchanged source. This finite task does not close
+      LP3-COUPLED-AUDIT-FUSION, full native, service or physical acceptance.
+- [ ] **BI1-PRESENTATION-INTERFACE-REVALIDATION** Inspect current pinned upstream
+      presentation read contracts and update the existing integration plan before
+      selecting a metadata delivery route. Do not call broad profile/config/asset
+      discovery then label filtered results a narrow read. Preserve full character
+      and image requirements; optional/null metadata is not proof of absent asset.
+
+## Native interface reuse audit
+
+- [x] Inspect exact Desktop asset reader and canonical roster; record why neither
+      establishes HMP-safe asset delivery. See [audit](NATIVE_AVATAR_INTERFACE_AUDIT.md).
+- [ ] Finish actual runtime/native acceptance and physical avatar delivery; no
+      legacy Desktop RPC bypass or source-helper completion claim.
+
+## Executable leaf-link integration
+
+- [x] **LP3-IMMUTABLE-LAYOUT-CUSTODY** Retain original expected class columns
+      with engine6/env6 and exact parent/selector/execution/two Scope joins.
+      Repair late invocation/getter ordering discovered by actual graft controls.
+      Same302 current/minimum cases pass, including22 actual refusal cases.
+      This finite custody task does not close LP3-IMMUTABLE-EXPECTED-LAYOUT's
+      fast audit use, full native traversal, service, physical or release gates.
+
+Current diagnostic priority: [actual inclusive audit cost](LINK_AUDIT_COST.md).
+The owner/package/activation chain dominates the observed completed-call time;
+do not assume a local class-column benchmark resolves the full native deadline.
+
+- [x] **LP3-OWNER-GUARD-RUNTIME** Remove only the two runtime audits duplicated
+      by the original owner guard, retaining immediate original runtime joins,
+      fresh guard validation and all later native/resource/byte/custody checks.
+      Independent source review accepted; 243 local plus 12 real startup refusal
+      cases pass on both Python versions. This closes the finite reduction only,
+      not LP3 native-path/image/service/device acceptance.
+
+- [ ] **LP3-COUPLED-AUDIT-FUSION** Resolve the measured full-path 60-second timeout
+      after actual early binding. Before-hop/target 44/44 typed observations and
+      first raw-capsule retirement are subset evidence only. Retain all original
+      dependency/parent/actor/custody/operation/byte/close checks, performing fresh
+      complete audits after real callback boundaries; no reusable audit grant,
+      relaxed deadline, fake native receipt or lost-result retry. Finish actual
+      all-phase/constructor/return-loss/partial-store/finalizer causals and broad
+      startup checks before installation or image serving.
+
+
+- [ ] **LP3-IMMUTABLE-EXPECTED-LAYOUT** Implement the original-bootstrap layout
+      only if it retains actual early identity through EntryOrigin, lineage and
+      both Scope seals. Precompute immutable schema, never current authority;
+      preserve every mutable check and full native qualification. See
+      [reviewed design constraints](IMMUTABLE_LINK_AUDIT_LAYOUT.md). The two vector
+      prototypes were slower and withheld; fast use of the retained layout is not yet implemented.
+
+- [ ] **LP3-NATIVE-ACCEPTANCE** Complete the coupled typed metadata/readlink path,
+      raw retirement and literal finish/snapshot/recheck publication. The new
+      actual-startup contract test is deliberately red on current Python;
+      minimum-Python instrumentation timed out, not a causal pass. No native
+      path/service/physical image completion follows from earlier DATA checks.
+      The following draft history predates the current env5 binding; the early
+      binding now exists but full-path qualification still fails the deadline.
+      The Link metadata/kernel/policy draft was written while early admission was
+      deliberately unavailable. Its local/bootstrap tests and existing Directory
+      compatibility do not close this task. Add op5, full driver/finishes and
+      actual early property/core bindings before connecting the native caller.
+      The distinct op5 shared producer/count/result/ACK draft is now also written;
+      actual op5 C-call, partial-store and complete path/finish qualification
+      remain open. Do not rebuild these families or count local DATA tests as
+      delivered images.
+      The fixed-order driver/finish draft is now written. It holds the actual
+      pre-C allocation independently and consumes reserved reverse close once,
+      including a lost open return. Review caught and corrected mutable-holder
+      adoption and finish exception-context retention. Full actual Link
+      history/snapshot/recheck and callback/constructor causals remain required;
+      this task is still open; later env5 binding is not an acceptance pass.
+      Raw-free snapshot/fact construction and metadata-only recheck are now
+      written before the later env5 binding. Snapshot constructors retain every
+      literal hop/target finish; final mirrors join adjacent native work spans
+      and byte-count cells. Historical validation permits later healthy work
+      while rejecting torn result/inflight states. Complete early binding and
+      actual admitted constructor/return-loss/weak-mutation coverage remain
+      required before wiring; local shape tests do not close LP3.
+
+- [x] **GR2-LINKS-L1** Explicit recipe2/interpreter2 document loader under original immutable version/root/IO/counter ownership, no detection/fallback/retry; D1 rejects recipe2 before artifact acquisition. Bounded independent source review accepted. This loads pinned DATA only.
+- [x] **GR2-LINKS-L2** Decode/retain the closed selected interpreter link plan against original entry/runtime bindings, canonical target/UID/executable-mode constraints and raw/normalized path policy. Preserve stricter pins during deduplication and reserve both text observations in the original limits. Independent source review accepted the plan boundary; actual completion is tracked separately in L3.
+- [x] **GR2-LINKS-L3** Retain descriptor-relative leaf-link observations before/after target hashing through the SAME original aggregate IO owner, charge both actual readlink observations, and verify the complete real-link/target refusal matrix. Hardlinks/ancestor links remain refused.
+- [ ] **GR2-LINKS-L4** Actual installed runtime/loader and native/key/broker/physical character delivery; no source snapshot substitutes for acceptance.
+
+See [selected executable link contract](EXECUTABLE_LINK_SNAPSHOT.md). All four belong to the existing character-delivery goal; L1 does not close GR2 or qualify a symlink.
+
+## Fixed startup factory implementation order
+
+See [fixed startup factory contract](GATEWAY_STARTUP_FACTORY.md).
+
+- [x] **PS1-ANCHOR** Freeze trusted installer/entry root selection and implement
+      independent private approval-anchor loader, avoiding circular hash approval.
+      Source/review and original-prefix composed tests complete; see OPERATOR_APPROVAL.md.
+- [x] **PS1-CONTINUATION-DATA** Retain original completed startup lineage before
+      native imports, with sticky refusal and callback identity fences. See
+      [contract](STARTUP_CONTINUATION.md). This does not complete PS1-LOADER.
+- [x] **PS1-BYTECODE-HEADER-DATA** Observe selected headers during original hashing
+      and classify against original interpreter magic without execution or extra IO.
+      See [scope and remaining gates](BYTECODE_HEADERS.md); not runtime admission.
+- [x] **PS1-CACHE-PATH-DATA** Implement/review complete supported POSIX source-cache
+      location mapping, including CPython root/CWD edge. See [scope](CACHE_CANDIDATES.md).
+      Actual original pre-IO context and cache/absence observations remain open.
+- [x] **PS1-CACHE-CONTEXT** Retain original entry/recipe/plugin/interpreter and required
+      CWD on the fixed snapshot inputs before artifact IO allocation; preserve the
+      actual fact through continuation. [Context DATA only](CACHE_CONTEXT.md).
+- [x] **PS1-CACHE-OBSERVE** Reserve and observe declared caches plus unresolved
+      no-follow absence probes in the same original aggregate owner before completion.
+      Never infer loose-cache absence or extend a completed owner.
+      Original-owner loose absence source and sidecar are implemented;
+      [verification scope](CACHE_OBSERVATIONS.md) remains separately tracked.
+- [x] **PS1-SOURCE-DIGEST** Compute original source digests in the existing prefix/
+      pending file reads and consume exact immutable facts through continuation.
+      [Implementation and remaining qualification](SOURCE_DIGESTS.md); not cache
+      equivalence or runtime admission.
+- [x] **PS1-CACHE-INPUT-RULES** Capture original source timestamp and implement/review
+      supported source-loader input-attempt rules.60 current and52 actual floor
+      child cases pass; [scope](SOURCE_CACHE_INPUTS.md), not runtime admission.
+- [x] **PS1-CACHE-INPUT-BIND** Bind actual original source/cache receipts and
+      absence/nonfile observations under original mode/magic/location before
+      any runtime use; reseal held allocations after callbacks. See
+      [implementation and runtime limits](SOURCE_CACHE_INPUTS.md).
+- [x] **PS1-RUNTIME-SOURCE-READ** Fresh original-continuation source phase with
+      independent IO/read-effect budget, final content seal and original-buffer
+      cleanup. Implementation and bounded source review accepted;130 focused
+      reader/scanner checks and15 actual floor child cases passed;1162 unchanged
+      startup checks passed. Fixture-only line wrap preserves script AST and
+      passes one current/two floor rechecks plus full lint. Linux CI pending.
+      [Contract and runtime limits](RUNTIME_SOURCE_READ.md).
+- [x] **PS1-SOURCE-COMPILATION** Capture original actual compiler resolution and
+      own one native source compilation without execution. Isolated implementation
+      and bounded source review accepted;37 current matrix cases plus stronger
+      parity/syntax checks pass.38 actual floor children and1185 unchanged-source
+      startup regressions pass; Linux/operational qualification remains separate. [Contract and limits](SOURCE_COMPILATION_CONTRACT.md).
+- [x] **PS1-CACHE-DECODE-ORIGIN** Hold original native marshal/fixer and frozen
+      helper origins; refuse substitutions before dispatch.17 current and17
+      actual floor cases and1202 unchanged-source shared-startup cases pass;
+      bounded review accepted; this is not owned decoding or execution.
+      [Contract and limits](RUNTIME_CACHE_INPUT_CONTRACT.md).
+- [x] **PS1-CACHE-METADATA-PROBE** Fresh no-follow original-row diagnostic probe,
+      with bounded review;11 current/11 actual floor cases,122 scanner checks,
+      and1,220 unchanged-source startup cases passed. Five later cleanup fault
+      cases passed on both actual interpreters. No payload/fallback authority.
+- [ ] **PS1-RUNTIME-CACHE-IO** Fresh original-row diagnostic metadata probe is
+      implemented with bounded independent source acceptance;11 current and11
+      actual floor child cases pass.1220 unchanged-source startup checks passed. Cache
+      payload IO, typed failure/effect provenance and fallback authority remain
+      incomplete. See [probe scope](RUNTIME_CACHE_PROBE.md).
+- [x] **PS1-DECLARED-CACHE-READ** Original declared-row byte reader implemented
+      in an isolated branch, with independent bounded source acceptance after
+      effect/claim custody repairs.141 current checks (14 reader,127 scanner) and14
+      actual floor child cases and1,244 unchanged-source startup checks passed.
+      Source-only phase complete; operational resource qualification remains open. This does
+      not cover known native unavailability, source fallback or code decoding.
+      [Contract and review limits](DECLARED_CACHE_READ.md).
+- [ ] **PS1-SELECTED-CACHE-DECODE** Implement fixed actual-successful-reader-only
+      native decode/fixer custody with recomputed original selection evidence,
+      ephemeral payload handling and historical effect facts. Independent bounded
+      contract and source review accepted this separate increment; 19 current and 19
+      actual floor causal cases passed. Combined broader tests remain pending.
+      Known-unavailability/fallback and operational resource gates stay open. [Contract and exact limits](OWNED_CACHE_DECODE.md).
+- [ ] **PS1-NATIVE-FILE-MACHINERY** Retain original observed POSIX C bindings,
+      aliases, flags and result/error classes at interpreter entry. Metadata-only
+      implementation has bounded source acceptance; 17 current and 17 actual floor
+      cases passed with verified receipt/source binding. Combined startup pending.
+      Actual typed outcomes, audit/ABI/resource policy and fallback stay open.
+      [Exact scope](NATIVE_FILE_IO_ORIGIN.md).
+- [ ] **PS1-LOADER** Enforce actual platform runtime/current and future import policy;
+      snapshot DATA cannot mint startup admission.
+      Next reviewed executable slice: original source-hash builtin/key/machinery,
+      same-read temporary buffer/counter ownership, timestamp/hash cache selection
+      and fallback enforcement consumed at fixed runtime boundaries. See
+      [exact implementation requirements](LOADER_POLICY_IMPLEMENTATION.md).
+      Archive members, ABI/library closure and full runtime admission stay open.
+- [ ] **PS1-LISTENER** Bind original admitted startup to actual listener/native owner,
+      with fixed currentness methods and explicit PresentationNativeService wiring.
+- [ ] **PS1-KEYS** Acquire only the gateway role key after those joins; broker and
+      terminal/ACK/PRE_EMIT remain separate acceptance tasks.
+
+## Installed-startup and native acceptance critical path
+
+See [paired startup composition](PAIRED_STARTUP_COMPOSITION.md). These are HMP
+implementation tasks, not an established upstream Hermes blocker.
+
+- [x] PS1 observation prerequisite: retain original early bootstrap/PM/import-origin
+      DATA with no selection query, sticky partial ownership and callback/late-import
+      fences;25 isolated synthetic cases plus308 layout/import checks pass.
+      This does not complete PS1 admission/native composition.
+- [x] PS1 selected-file observation prerequisite: bounded original-context descriptor
+      ownership, no-follow traversal, actual bytes/hash/metadata and one-close cleanup;
+     18 file cases +25 activation +309 layout/import checks pass (352 total).
+      Expected-file tuples are not approved configuration or complete inventory.
+- [x] PS1 private-file loader prerequisite: fixed filename/modes/canonical schema,
+      independently expected bytes, original buffer/root fact ownership and late-load
+      refusal;30 config cases plus shared artifact/activation/import checks pass (383).
+      Loaded configuration is DATA, not trusted-entry/operator approval.
+- [x] PS1 HMP-package snapshot prerequisite: pinned full table, unexpected-entry
+      refusal, all-file hashes, original file/directory/ancestor metadata and loaded
+      HMP-origin consistency;19 cases plus startup/import coverage pass (403 total).
+      This is not the complete gateway runtime/dependency/loader admission recipe.
+- [ ] GR1–GR3: implement the [complete versioned gateway recipe](GATEWAY_RECIPE.md),
+      original child pins/entry/runtime coverage and actual native/key composition.
+      Existing schema1 package snapshots cannot satisfy this gate.
+- [ ] PS1 configuration/inventory join: fixed trusted entry/operator approval of loader inputs,
+      independent expected roots/bytes, complete reachable tree and unexpected-file,
+      future-import/extension/OS-loader validation before native/key composition.
+- [ ] PS1: original gateway startup owner, actual activated PM generation/HMP
+      entry binding, native observation/drain composition and gateway-only key custody.
+- [ ] PS2: independently selected isolated broker runtime/parser/worker and
+      manager/reaper ownership, broker-only keys closed before worker creation.
+- [ ] PS3: exact original role/channel/handshake binding and revocation preserving
+      local cleanup debt; no caller-provided qualification flag.
+- [ ] PS4: original normal native terminal acceptance, DRAIN, signed counted ACK,
+      original controller acceptance, distinct journal/native credit release and
+      fresh PRE_EMIT before authenticated candidate publication.
+- [ ] PS5: cleanup/ABORTED/earlier terminal variants and actual Linux/Darwin runtime,
+      installation, physical and release qualification, each with its own evidence.
+
+## Current envelope stop preparation
+
+- [x] Reseal completed normal correlation DATA through original fact/allocation,
+      canonical original terminal bytes and current actor/key/custody before consumer use.
+
+- [x] Add pre-adoption original-task normal terminal DATA reception, owned readiness,
+      original parser/credit provenance, candidate withdrawal and I/O-debt preservation.
+- [ ] Complete native terminal acceptance, signed ACK and native resource release;
+      qualify trusted runtime and physical character display separately.
+
+- [x] Add separate bounded RESULT/result2-body digest DATA from the actual fresh
+      frame or captured original native hash copy, preserving frozen native and
+      original full-frame digests; sanitized feed refusals and source-drift checks.
+- [x] Correlate completed-RESULT TERMINAL/2 DATA against actual original input,
+      profile/operation, generation/domain and retained RESULT-body digest;
+      original-actor admission and final held-cell refusal causals are covered.
+- [x] Publish signed sender cleanup stamp only as a minimum on the original
+      native budget after current correlation; reject future/expired continuation,
+      wrong actor and lost/drifted publication without renewal, restore or replay.
+- [x] Join normal signed RESULT counted transfer after payload withdrawal with
+      the actual original native local closure observation/input in LocalStartedProducer;
+      independent payload-hash/scope/count refusal and withdrawal causals are covered.
+- [x] Freeze original normal signed producer handoff and prepare a one-shot
+      signed TERMINAL/2 envelope from current original broker role/context; enforce
+      exact handoff body, wrong-actor/no-retry and late cause/key/scope refusal.
+- [x] Qualify normal AVATAR and METADATA export/counting in the native synthetic
+      fixture, retaining same socket/task/budget and fixed signed-result write-slot
+      ownership; cover short/zero/EAGAIN/lost-ack/cause/current-owner drift refusals.
+- [ ] Explain expanded-run stopped-reader nextfeedrows first-frame refusal;
+      isolated/related green runs do not prove its cause or remove that gate.
+- [ ] Qualify trusted runtime/startup, cleanup-time/aborted exporters, remote
+      acceptance, earlier/direct terminal positions, EAGAIN waiting, lifecycle,
+      original control-reader ACK and native release before production routing.
+
+- [x] Separate historical native wake/custody binding from the existing strict
+      frozen digest wrappers; actual3-byte original-digest advancement preserves
+      binding but refuses old currentness/release and retains UNKNOWN/counts.
+      No authority path switches to weaker binding-only helpers.
+
+- [x] Qualify one bounded original-task/socket native receive with post-clock fixed
+      FD/mode probes, final metadata/I/O claim fences, independent native-count and
+      pending-byte ownership, fixed cleanup observer and work-exit pending retirement.
+      No parser/feed/hash/frame credit, readiness continuation or cooperative route.
+- [x] Causally verify raw same-parser feed cannot reuse frozen stopped-reader
+      proof: actual received8-byte prefix, unknown refusal, retained native count
+      and dropped pending aliases. Independent read-only review accepted; no handoff.
+- [x] Consume one actual native pending allocation on its original work actor into
+      the SAME bound authentication parser or original body digest. Independent
+      pre-boundary attempt/progress cells, irreversible consumption, fixed cleanup
+      observer, postcallback currentness and no replay; reviewed one-shot slice.
+- [x] Continue immediate nonblocking exact-needed reads on the original reader;
+      original flags unchanged, one current step/ledger, actual syscall-attempt /
+      received / parsed accounting, no linked history, record-boundary refusal.
+- [ ] Qualify waiting after EAGAIN with fresh owned registration/retirement under
+      the original actor/deadline; never reuse the retired selector registration.
+- [x] Verify the completed original auth record once, with independently retained
+      attempt/result, finished-parser continuity, held pre-crypto counts and post-
+      callback native/role/alias seals. Positive RESULT and nine refusal causals.
+- [x] Parse bounded committed RESULT/TERMINAL frame DATA from header prefix through
+      exact full digest; no auth replay, RESULT buffer or terminal claim authority.
+      Independently anchored header/digest/hash, bounded metadata transfer and25
+      positive/refusal cases; native binding below remains required.
+- [x] Bind newly completed authentication to one original-reader RESULT/1 or
+      TERMINAL/1 frame stage; fixed parser dispatch, actual allocation continuity,
+      cumulative counts and eight synthetic positive/refusal causals. DATA only.
+- [x] Admit captured-complete authentication plus retained outer header without
+      new auth-byte receive/consume credit, parser reset or fabricated progress;
+      exact original allocations, zero seed, cleanup observer/work-exit binding,
+      actual four-byte retained header RESULT path and five refusal causals.
+- [x] Complete an originally partial body using its SAME original digest; exact
+      original progress/stream/hash joins, retained finish/result and frozen counts,
+      finished-state observer and ten synthetic positive/refusal cases. Consistency
+      only; the new-frame parser is not substituted for this original digest.
+- [x] Advance actual completed RESULT/1 into a distinct TERMINAL/2 authentication
+      record on the same task/socket, with cumulative counts, current predecessor
+      seals and bounded step retirement; both full-frame/partial-body predecessors.
+      Thirteen new private-socket cases; authentication DATA only.
+- [x] Read the next authenticated TERMINAL/2 frame/body and verify its full hash
+      on the same native reader, separately retained parser/counters and bounded
+      metadata, including both original RESULT completion paths. Consistency only.
+- [ ] Qualify terminal domain claim and inherited cleanup end, keeping direct/
+      earlier terminal lifecycle positions separate. No auth restart/fallback or
+      captured-prefix byte credit.
+- [ ] Explain the pre-terminal-frame auth acquisition refusal observed in the
+      constructor causal's first grouped run; retain original250ms budget/guards
+      and distinguish the later isolated pass from root-cause evidence.
+
+- [x] Retain one-shot original-reader IDLE admission before native currentness;
+      independently anchor owner/scope/fact, exact bounded count/original minimum
+      end, malformed metadata refusal, partial attribution and held-original failure.
+- [ ] Qualify active digest/framing handoff and native receive progress separately
+      from IDLE admission; keep original stopped-validator and signing gates intact.
+
+- [x] Retain original stopped authentication parser/outer-header framing or SAME
+      partial-body digest, with independent parser/state allocations before effects
+      and postcallback currentness. Exact-type replacement and partial-init refusal.
+- [x] Authenticate early TERMINAL sequence data against retained expected sequence;
+      RESULT only1, TERMINAL exact0..2. Lifecycle/ABORTED claim admission remains open.
+- [ ] Qualify native receive/registration and exact next-byte accounting on this
+      original bound reader, without enabling concurrent signing or publication.
+
+- [x] Add fixed original-reader post-notification stop-currentness validation,
+      repeating actual Future/fact/cursor/role/actor seals after native callbacks.
+      Data only; exact parser/digest admission and receive ownership remain open.
+
+- [x] Retain one bounded partial cleanup authentication record through exact-needed
+      reads; fixed signed phase consistency, no overread/restart, permanent refusal.
+      Component data only, with independent read-only review and focused causals.
+
+- [x] Authenticate broker RESULT/1 or TERMINAL/0..2 at the retained expected sequence;
+      closed context and signature, no fallback. Independent read-only review passed.
+- [ ] Bind boundary dispatch to original native cursor/transition and validate direct
+      ABORTED terminal body; this helper alone grants no lifecycle or read permission.
+
+- [x] Retain payload-free original pre-await envelope waiter/Future/scope/deadline
+      and byte counters through actual Task-cancellation validation and historical
+      release; reject paired Future substitution after immediate wait checks.
+- [x] Wire the actual native cleanup-cause wake into envelope waits with distinct
+      typed current/historical stop receipts and frozen signed capture correlation.
+      Independent read-only review accepted the bounded local-stop implementation.
+- [x] Implement/review bounded signed RESULT discard DATA continuation from partial
+      authentication/header or SAME supplied partial-body digest; no body retention,
+      scanning or runtime read authority. Parser/digest allocation binding is retained;
+      native receive ownership remains open.
+- [x] Implement/review disabled signed reservation preflight from actual registered
+      envelope/partial-body wait, original write-quiescence/current role/frozen
+      budget and post-cause custody. Request still False; no suppression/read grant.
+- [x] Implement/review original-work one-shot signed stop notice, with actual Future
+      and fact allocation cells, native partial initialization/dispatch uncertainty,
+      correlated stop/current role/earliest-budget seals and no publication retry.
+      Stop-data consumers exist; no receive/signing authority or cooperative route is enabled.
+- [x] Verify actual broker parked-CANCEL expiry under the original250ms timeout:
+      receipt retained, late consumption refused, frozen end unchanged, no credit/
+      closure. Controlled causal does not resolve earlier broad broker failures.
+- [ ] Diagnose original broad-suite broker cancellation failures from actual
+      bounded state/underlying-task evidence; passing reruns are not resolution.
+      November7 broad failures include go_relay control-read refusal/closeFalse
+      and body_adopt_capture_phase cancellation-adoption refusal. Both remain
+      unqualified despite passing isolated reruns; primitive diagnostics retained.
+- [x] Add/review fixed original-cleanup current stop-DATA validation and bounded
+      original notice/work wait with actual Future/task dispatch fences. Separate
+      sender/receiver actors; actual live/completed-work and partial-body causals.
+      No read-admission, concurrent CANCEL, legacy fact or work-join relaxation.
+- [ ] Qualify distinct signed request reservation and original-work read-ready
+      notice, with current frozen budget/quiescence/role checks; no legacy fact or
+      fabricated work-join substitution. See [integration contract](SIGNED_CLEANUP_HANDOFF.md).
+- [ ] Qualify signed cooperative cursor transfer/drain and terminal/ACK against
+      the same original capture/budget; no whole-work-join relaxation is enabled.
+
+See [bounded source checkpoint](../../docs/research/presentation-envelope-wait-hold-2026-11-06.md).
+
+## Current credential direction
+
+The independently reviewed local role-credential contract supersedes the
+unfinished Mach production-admission tasks below. Those dated tasks remain
+historical, not an alternative live authorization path or resolved incident.
+
+- [x] Implement and independently review data-only HBA1 codec, four-record signed
+      transcript consistency and original input3 scope binding (`7c37b4f`).
+      Root ran 167 focused tests; independent review was source/test read-only.
+- [x] Implement/review data-only signed phase/body checks (`46c697c`) and
+      startup-only role key-file acquisition/retirement (`33beebe`), with no
+      signer or runtime permission. Root's expanded focused suite passed 213.
+- [x] Implement/review the retained original-task handshake and external channel
+      IO/close claim, with synthetic socket tests and 452-pass/one-skip focused
+      regression. Native qualification is mocked in the actor tests; no production
+      factory or phase/native permission follows.
+- [x] Implement/review the one-attempt original native-input correlation join,
+      with actual policy-thread/shared-slot model, final-current refusal causals
+      and 640-pass/one-skip affected regression. This grants no phase authority.
+- [x] Implement/review bounded data-only full-frame streaming digest, all seven
+      phase bodies/max result and one-shot/drift/thread refusal cases; expanded
+      affected regression 658 passed, one skipped. This is not cursor/native authority.
+- [x] Implement/review original work-task no-IO BEGIN intent reservation after
+      actual PRE_GO; caller/duplicate/intent/no-write assertions retained and
+      affected regression 928 passed, one skipped.
+- [x] Implement/review the fixed BEGIN work-role signing producer in the caller/start-barrier
+      gap, preserving original work allocation and the SAME reserved intent.
+      Final affected regression: 940 passed, one skipped; no transport/GO activation.
+      See [actual task/producer contract](PHASE_WORK_OWNER.md).
+- [x] Implement/review fixed BEGIN unadopted signed-claim staging and complete
+      input3/frame/hash/scope/deadline data checks. Affected regression: 956 passed,
+      one skipped. No broker cursor/native-adoption authority follows.
+- [x] Implement/review the standalone original broker signed-record/read cursor
+      and current role context, actual bounded socket reads and safe failure cleanup.
+      Affected regression: 967 passed, one skipped. No native input adoption.
+- [x] Implement/review original service connection/registry one-attempt queue and
+      input-receipt adoption, current receiver revalidation and sticky late failure.
+      Expanded affected regression: 1,099 passed, one skipped; no resources/GO.
+- [x] Implement/review the original adopted connection's queued-current owner,
+      original input/budget/grammar references, key/task/socket/work-end checks
+      and callback-boundary refusal tests; 1,114 affected passed, one skipped.
+      No resource or GO permission is minted; partial owner is retained on failure.
+- [x] Refuse legacy direct GO/CANCEL/result IO on credential channels before native
+      claims; preserve known-refusal grammar/budget and original controller task.
+      Affected regression: 1,116 passed, one skipped. No signed control activation.
+- [x] Review the fixed original [signed control handoff contract](SIGNED_CONTROL_OWNER.md).
+- [x] Implement/review the no-IO original controller allocation/key-context
+      preparation handoff, with work guards hard-closed and partial objects retained.
+      Affected regression: 1,120 passed, one skipped. This is NOT a signed reader.
+- [x] Implement/review role-material checks on the actual controller reader Task,
+      original control scope and callback-safe reference seals, without borrowing
+      creator authority. 1,123 affected passed, one skipped; no phase/IO permission.
+- [x] Implement/review the original-task first signed control frame cursor, with
+      signature/header/body/scope validation, callback-safe byte custody and no
+      native receipt/grammar/window/resource effects. Full lifecycle remains below.
+- [x] Implement/review original signed pre-GO CANCEL-to-native grammar/budget/receipt
+      and owned local controller park/stop; 1,151 affected passed, one skipped;
+      final focused55 includes unusable post-notification failure. This does not
+      integrate ordinary service receipt consumers or release native debt.
+- [x] Implement/review the dedicated original-service receipt validator/consumer without
+      relaxing generic credential work guards; reject stale/revoked/late failures.
+- [x] Implement/review authenticated GO read/native receipt followed by one signed
+      CANCELseq2 on the SAME original controller cursor under original work time;
+      pre-GO CANCELseq1 remains supported. Modeled READY is not resource qualification.
+- [x] Implement/review authenticated cleanup-time control under the original earliest
+      budget, including partial auth/header/body expiry and original cause retention.
+- [x] Implement/review fixed signing-only READY producer from actual independently
+      started/staged fixture resources and native completed-input write observation.
+      1,262 affected passed, one skipped; no socket/grammar/resource admission grant.
+- [x] Repair CI736 fixture cause/GO ordering without changing protocol deadlines;
+      prior exact-source failures remain recorded; exact replacement `22bc509`
+      passed CI738 plugin and Python 3.12/3.13/3.14 Unicode jobs.
+- [x] Implement/review original-task write-slot readiness with immutable direction,
+      opposite-reader preservation and one-shot initialization/debt retention.
+      This notification primitive sends no READY bytes and grants no protocol phase.
+- [x] Implement/review actual fixed signed READY write from retained original resource/
+      input facts, one write/grammar intent and original completion-Future allocation.
+      Same-reader GO joins that exact completion; production startup and worker relay
+      remain closed. See [write evidence and limits](../../docs/research/presentation-signed-ready-write-2026-11-06.md).
+- [x] Implement/review source signed GO/CANCEL receiver/context on the existing original
+      controller task/cursor and frozen budget before any credential resource/READY
+      startup. No legacy fallback, new parser task or boolean gate opening.
+      Source fixture acceptance does not qualify signed READY/resources or production startup.
+- [x] Implement/review cancellation-only local retirement for the original signed
+      control read's exact positively retired readiness wait, with original held
+      task/cursor/count/buffer/wake/Future/handle binding and no authenticated completion.
+      Historical closure requires actual original Task.done+cancelled. Unknown native/
+      readiness/pending/drift/fake/stale state remains debt, without retry or resource credit.
+- [x] Implement/review the fixed original-work signed BEGIN socket writer on the SAME
+      reserved native intent; concrete full-wire progress and one completion check
+      precede native write fact. Partial/unknown no retry, original maximum input3
+      envelope and native actor scope retained. No production caller/READY read.
+- [x] Implement/review original-work signed READY read from completed signed BEGIN
+      evidence, one existing native receive claim, original deadline/cursor and
+      broker signature/context/hash. Read success is separate from fresh native
+      PRE_GO/READY transition, resources and GO; production caller remains closed.
+- [ ] Wire only through qualified production startup/service dispatch; preserve
+      the exact original adopted connection plus current native phase authority
+      before any credential resource/GO path. Ticket/capacity alone is insufficient.
+- [ ] Integrate operator-selected paired runtime/source/credential startup,
+      capacity and rotation with the retained handshake on its original channel,
+      task/cursor and known local write completion facts.
+- [ ] Integrate signed phase commitments with original native phase owners;
+      complete actual GO, all character output variants, transfer/custody,
+      TERMINAL/ACK/journal/DRAIN/PRE_EMIT and authenticated HTTP publication.
+- [ ] Implement the separately bounded existing-state STATUS contract.
+- [ ] Complete independent runtime/security acceptance and separately authorized
+      installation, physical-device and release qualification.
+
+## Historical endpoint and Mach research
+
+- [x] Review and execute one owned-child native request/typed-retirement path:
+      root20 checks, independent source/toolchain/25-artifact readback accepted.
+      Child cleanup is reported; parent wait/retirement/endpoint release observed.
+      No production authority or native failure-path qualification follows.
+
+- [x] Implement/review typed-dead-only reply retirement with held-name queries,
+      one typed decrement, actual-effect capture and timely-close fact. Cover
+      live/uncertain refusal, errors, reentry and expiry in the 70-scenario model.
+      This does not qualify native requests or general live-right disposal.
+
+- [x] Implement observation-only retained request receipt and closed header/trailer
+      validation, with source review and 47 causal model scenarios. Received or
+      uncertain copied rights block close/disposal; no message authority follows.
+- [ ] Review and implement original message/reply disposal ownership and qualify
+      actual owned-destination request/error/reentry behavior before a live
+      receiver. Account for kernel send-once notifications and process teardown.
+
+- [x] Implement and independently review the retained native endpoint foundation
+      and causal boundary model (PR118), then observe one own-right native
+      lifecycle run (PR119: 17 checks, independent artifact readback). This
+      completes only endpoint lifecycle, not admission/message authority;
+      exact-source CI and production composition remain separate.
+
+- [ ] Implement the reviewed retained Mach boot/channel admission owner with
+      endpoint, reply-right, audit incarnation, original lifetime and deadline
+      ownership. Keep it observation-only until independently selected startup
+      owners/runtime recipes and native phase/digest or kernel-origin control
+      binding are joined. Reject delegated UDS holders across the actual binding;
+      no BEGIN/GO/control/terminal permission from a boot handshake. Integrate at
+      StartupEnrollment/SocketChannel, ParentAuthorityAdapter.bind_remote and
+      RemoteOperationOwner without admitting synthetic_no_go or decoded data.
+      See [selected issuer direction](RUNTIME_ISSUER.md).
+
+- [x] Complete independent artifact review and CI for the fresh-child native
+      sender experiment. Root's single actual Darwin run plus portable checks
+      passes 57 cases; PR117 is integrated with all four CI jobs green (7,286 tests).
+      Production authority remains unqualified. Historical
+      first-route recipient uncertainty remains open. See
+      [native sender evidence](NATIVE_SENDER_AUDIT.md).
+
+- [x] Implement/review the owned-child lifetime/possession experiment and perform
+      one bounded actual Darwin run. Root passes 20 checks (nine native modes,
+      eleven guards); reviewer independently matches source/log/artifact hashes,
+      no reviewer execution. All nine cleanups known; delegated fresh echo after
+      original exit refuses. This does not qualify ambient gateway FD custody,
+      production issuer, bidirectional terminal transcript or native release.
+      See [exact experiment scope](PEER_LIFETIME_PROBE.md).
+
+- [ ] Review and implement the actual trusted startup/runtime issuer, separate
+      from synthetic_no_go inventories and enrollment DATA, together with one
+      actual original-task terminal transcript. See [issuer contract](RUNTIME_ISSUER.md).
+      No new permit or dispatch is admitted by this planning item.
+
+- [x] Independently accept bounded cooperative post-GO cleanup reader, owned minimum-deadline wake and adversarial coupling matrix (467 focused cases on Python 3.13); exact source/test scope is in [CLEANUP_READER.md](CLEANUP_READER.md). No image route or terminal authority is enabled.
+
+- [x] Compose existing HMP/mobile presentation foundations with current candidate.
+- [x] Implement explicit POSIX backend and actual synthetic kernel transaction tests.
+- [x] Implement native authority observer; independent review accepted0eef repair.
+- [x] Implement actual YAML token/event adapter; independent review accepted51fc fix.
+- [x] Connect file/parser/raster/closed DTO pipeline.
+- [x] Add bounded pinned client read, roster capability and foreground fencing.
+- [x] Connect classic renderer to live roster rows (not deployed capability).
+- [ ] Review complete proposed transport/custody contract and mobile integration.
+- [x] Implement one nonresetting fixed-file/YAML/raster work ledger; bounded source review accepted d1521fd.
+- [x] Implement bounded child control/GO and result processing primitives; source review accepted recorded repairs.
+- [x] Implement actual fixed processing-only child bootstrap and schema2 processing; independent bounded source reviews accepted.
+- [ ] Qualify installed interpreter/dependency/code and bytecode-cache provenance before launching from a live listener.
+- [x] Implement reviewed fixed process launch/exact wait, owned result pipes and one-use input/GO/control-close primitives.
+- [ ] Qualify runtime reaper/source premises and implement hard termination/full JobOwner drain binder.
+- [x] Add retained-owner cancellation/termination and exact stream/control closure projection; bounded review accepted the large-result repair in 017abd6. Synthetic codec composition is separate from live custody qualification.
+- [x] Compose policy/launch/input/GO/read/wait/group/control/final-native-emission phases into a retained supervisor; independently reviewed actual-process and adversarial tests. No live activation certification.
+- [ ] Qualify runtime/code/dependency/exclusive-reaper premises and synchronous syscall latency or external watchdog before claiming a hard wall-clock bound in a live listener.
+- [x] Implement explicit frozen startup parser-package launch under -I -B -S, with namespace-only parser binding, no site activation and reviewed static imports.
+- [ ] Bind and attest the actual listener PM generation, interpreter/stdlib/parser/bytecode closure; parent sys.path activation is not inherited by the current -I child. See RUNTIME_FINDINGS.md.
+- [x] Review external OS-supervised custodian architecture and implement bounded source-only frame codec (BR1/BR2); no service or remote closure authority.
+- [x] Implement/review read-only broker kernel peer observation with actual Darwin separate-process identity checks (BR4a); no service or endpoint attestation.
+- [x] Implement/review BR3a message grammar and retained64-serial replay window, including sticky scope/role/mode guards; not native/remote custody authority.
+- [x] Implement/review and run bounded BR8a temporary launchd crash fixture; new-session reader socket remains open, shared-group socket EOF observed, own-job/communication cleanup verified. This is not production process closure.
+- [x] Implement and independently review fixture-only retained Darwin exit observer (`1996c03`); 41 focused cases and serial floor/current combined suites pass. Registration/exit/local close facts remain distinct from service containment.
+- [x] Compose and independently review actual verified bootstrap/registry/fixed-reader crash fixture (`d86d9d4`); one owned-label run observes broker/reader kernel exit and exact job/monitor cleanup. No input/GO/host activation, manager causality remains unproven.
+- [x] Implement/review and run one instrumented Darwin new/shared-group control (`dfa2858`) with retained kernel observers, independent reader lifetime and cleanup after outcome freeze; bounded contrast passes with no leftover fixture debt.
+- [ ] Qualify production service-manager crash/orphan policy before broker activation. Broker readers share its group; the older direct reader creates a new session and must not inherit the broker containment claim. Arbitrary descendants, Linux, restart/multi-operation service policy and runtime admission remain unqualified.
+- [x] Implement/review source-only shared-group broker child owner, exact wait and one-use child-only termination; real two-child isolation, no group closure API.
+- [x] Implement/review bounded broker registry retention, replay-burning capacity admission, original-deadline launch guards and never-launched global ACK; started-owner terminal release remains unavailable until actual resource binder.
+- [x] Implement/review retained partial control acquisition, native close observations and bounded local-FD-only discard; no descendant/native/registry closure inferred. Resource binding is tracked separately below.
+- [x] Bind retained metadata/avatar resources before launch; enforce original scope/deadline, one-use candidate transfer, cancellation, exact local drain and cross-operation isolation. Source-only; 38 resource cases and 746 plus 66 subtests on each Python 3.11/3.14.9.
+- [x] Implement/review held private endpoint snapshots with FD-relative ancestry, exact private owner/modes, replacement refusal and one-use local close; 56 focused cases independently pass. No connection/service authority.
+- [x] Implement/review the [fixed-install verifier plus namespace-only synthetic bootstrap](BROKER_BOOTSTRAP.md); external expected manifest trust and explicit runtime/bytecode/OS-loader premises; actual retained no-GO child and generation/deadline refusal tested. Production audit/service/crash gates remain separate.
+- [x] Independently audit the fixed own-code worker and PyYAML 6.0.3 token/event path for process/group/FD-transfer calls; source-path evidence only, not OS confinement. See [audit](BROKER_WORKER_SOURCE_AUDIT.md).
+- [x] Implement/review native Popen retention before initialization, opaque partial state, fresh-process empty-active guards and original-deadline checks; 120 focused cases independently pass. Constructor-internal cleanup remains UNKNOWN; no reaper patch or ECHILD-to-success conversion.
+- [ ] Qualify multi-operation service lifecycle under the fresh-runtime/exclusive-reaper premises, including crash/orphan containment and retained unknown debt; see [reviewed bounded fixture sequence](BROKER_SERVICE_CONTAINMENT_FIXTURE.md).
+- [x] Compose enrolled no-GO private service spine (`e0fe0e7`): actual socket framing/registry/resources, READY/cancel/STATUS, before-effect accept retention, sticky cancellation and local close proof; 29 local cases independently pass with peer identity explicitly mocked.
+- [x] Implement/review the separate-process no-GO fixture and outbound scope guard (`8a77d13`);54 focused cases pass on3.11/3.14.9. Actual run supplies peer/boot rejection, READY/cancel/local drain/reader exit, then refuses before STATUS/shutdown; cleanup known, lock retained. This is partial evidence only.
+- [x] Independently review bounded fixture polling/control count and private phase diagnostics (`e0eafcf`),26 component cases; original actual FrameError attribution remains unproven, no repeat run or service-acceptance claim.
+- [x] Observe one reviewed externally supervised no-GO service fixture (`0bea1c8`/product`89734eb`) with real mutual kernel identities/enrollment, peer/boot refusal, READY/cancel/local drain/PENDING, terminal STATUS and shutdown/known cleanup. Independent artifact review accepted118 private files; no GO/native/started-release/production qualification. See [actual fixture](SERVICE_PROCESS_FIXTURE.md).
+- [x] Implement/review the dedicated bodyless terminal STATUS owner: actual initial PeerObservation seal, unchanged deadline, current local/generation guards, queuedEOF vs singleSHUT_WR+EOF, strict CLOSED/ACK, sticky refusal and both native nonblocking/timeout guards.83 focused cases independently pass. See [terminal repair](TERMINAL_STATUS.md); original actual failure attribution/new runtime qualification remain open.
+- [x] Implement/review the [native-owned remote BEGIN/READY prerequisite](REMOTE_OPERATION.md): existing admission credits, exact joined policy packet, shared retained remote slot, exclusive channel, fresh original native checks and post-peer deadline/cancellation guards. Local custody/release shortcuts are refused; source `0a4fbeb` passes independent 100+2 focused checks and root 1,379+190 subtests on each 3.11/3.14.9. GO/result/terminal release remain closed.
+- [x] Implement/review nonrenewing original cancellation arithmetic and explicitly selected v2 framing (`1a02abe`); 384 independent focused cases and 1,422+190 subtests on each root runtime pass. Existing service remains v1; no clock/transport/release qualification.
+- [x] Implement/review retained native clock observer (`37fd2da`), real Darwin private-peer observation, Linux peer-pidfd/procfs/nsfs source path and refusal/close causals. Independent 46PASS/1skip; root serial 1,469PASS/1skip+190 subtests on each runtime. This is not native Linux or production startup qualification. See [native clock](NATIVE_CLOCK.md).
+- [x] Implement/review irreversible cleanup-only original native clock (`9f975f7`), prospective local-vs-peer failure planes, exact domain seals and real private-helper first-budget preservation; 62 independent focused cases / 1 Linux-native skip and serial 1,485+190 root subtests. No transport activation or terminal proof.
+- [x] Implement/review selected-v2 enrollment/native clock lifecycle (`2e2f4f8`) and Linux self-pidfd/proc PID-realm repair (`6aa829f`). Nine-field guards, retained partial initialization, no fallback, concrete boundaries and distinct close facts; v2 dispatch/cancellation remain refused. Root final serial 1,529+190 subtests / 1 Linux-native skip on each runtime. See [selected protocol](SELECTED_PROTOCOL.md) and [realm repair](PROC_PID_REALM.md).
+- [x] Bind one original budget before native observation and broker resource effects, seal remote/resource references, freeze explicit parent cancellation immediately and reject caused-budget launches. Independent current focused review: 195 cases plus 23 subtests. This is local custody plumbing, not joined transport.
+- [x] Join native remote BEGIN/READY to its exact selected protocol, qualified clock/domain/value/qualification seals and original budget; callback-free ownership fencing protects both sides of native sampling. Independent 170 cases / 1 Linux-native skip. No CANCEL/task/dispatch/GO/result/release activation.
+- [x] Implement/review selected grammar and exclusive broker CANCEL1 receiver/adoption: original domain/budget, partial bytes across work expiry, exact task allocation/init proof, fail-closed construction, metadata callback guards and native nonblocking checks. Independent 94 cases pass; no service v2 dispatch or gateway send activation. See [inherited cancellation](INHERITED_CANCEL.md).
+- [ ] Adopt the inherited minimum at both transport ends under the original qualified clock/domain and exact operation before cleanup effects. Source framing/clock/local-owner facts alone cannot authorize this.
+- [x] Retain selected-v2 work/cleanup tasks and partial native Future/Task allocations before effects; immutable allocation seals, caller cancellation shielding, same-budget first-cause retirement, actual work join and distinct local socket/clock facts. Independent85 cases pass; source only, no CANCEL frame or release. See [retained cleanup](REMOTE_CLEANUP.md).
+- [x] Independently review coupled one-use CANCEL sender, immutable BEGIN-write fact and private v2 BEGIN/READY/CANCEL service retirement. Independent 243 cases pass on Python3.13; preserve original cutoff, retained partial tasks and no release. See [transport](INHERITED_CANCEL.md).
+- [x] Review [retained async GO contract](ASYNC_GO.md) and implement READY notification with the original work task parked through READY; immutable Future/fact ownership, partial initialization and final native-reference fences independently accepted. That prerequisite alone did not open GO; the following coupled task adds it.
+- [x] Implement and independently review retained GO-request/shared intent states, fresh native GO admission, continuous broker control cursor, concrete GO-write facts/CANCEL1-or2 and one-use service relay together. Partial GO never gets an appended frame; scope/allocation drift refuses before callbacks. Synthetic source evidence only, no result/release or runtime shortcuts.
+- [x] Implement/review [private result2 transport](RESULT_TRANSPORT.md): same original work/service tasks, original credited accumulator and transferred payload ownership, independently validated challenge/epoch/parent chain/totals/hash/revision, metadata-only notification/token and cancellation wipe. No publication/COMPLETE or release.
+- [x] Implement/review typed local started-reader producer, immutable input receipt and bounded data-only claim codec; exact child-wait/control/pipe/signal facts and completed-transfer digest. Independent 82 focused cases pass on Python3.13. No remote proof or release. See [terminal contract](STARTED_TERMINAL.md).
+- [x] Bind/review original candidate identity, bounded canonical header integrity and streaming wire digest; discard all owned payload aliases on central revocation without following foreign slots. Independent103 focused cases pass on Python3.13, including cross-operation custody/scope/failure/finally drift. Private data only, no completion/publication/release.
+- [x] Implement/review selected-v2 TERMINAL/digest ACK codec and transcript grammar, immutable metadata seal and shared body ceiling; preserve legacy v1, late-cancellation invalidation and no producer/release authority. Independent290 integration cases before seal addendum plus final192 codec/lifecycle cases pass on Python3.13. Actual dispatch and STATUS remain closed pending joined custody integration.
+- [x] Implement/review bounded terminal handoff envelope with sender minimum cleanup stamp; immutable deep values, whole-envelope ACK correlation, no raw-claim fallback. Independent319 focused cases pass on Python3.13. No budget adoption, qualification, transport activation or release from decoded data.
+- [x] Implement/review original-work write-quiescence fact/Future, irreversible ordinary-write retirement and one-use CANCEL consumption while retaining whole-task-join/readFalse gates. Independent332 focused cases pass on Python3.13, including partial initialization, scope/actor substitution and failed-mint no-retry. No cleanup-reader/terminal transport activation. See [write quiescence](WRITE_QUIESCENCE.md).
+- [x] Implement/review owned readiness-only notification primitive after confirming sock_recv cancellation can lose consumed bytes; independent46 cases pass on Python3.13, including scheduler and original-Future refusal fences. No receive-path activation. See [readiness/cursor boundary](READINESS_CURSOR.md).
+- [x] Independently review normal RESULT readiness/cursor integration with retained outer/body offsets, original digest and sticky ambiguous IO. Independent178 focused cases plus final EAGAIN/cancellation causal pass on Python3.13; no cleanup-reader activation.
+- [x] Independently review broker control readiness/cumulative-cursor integration, immediate queued-control draining and original work-to-cleanup timeout transition. Independent153 focused cases plus the final cross-channel isolation causal pass on Python3.13; no ACK continuation or release. See [broker control cursor](BROKER_CONTROL_CURSOR.md).
+- [x] Independently review selected-v2 retained pre-result BEGIN/READY cursor, callback-free final remote custody fence and readiness-proof-before-current ordering. Independent231-case regression and final9-case owner-binding causals pass on Python3.13; preserve v1 and no cleanup activation. See [pre-result cursor](PRE_RESULT_CURSOR.md).
+- [ ] Extend the reviewed post-GO write-quiescence/cleanup-reader coupling to pre-READY and continue the original broker controller after CANCEL toward qualified ACK; retain legacy join gates outside the reviewed scope. See [joined transport prerequisites](TERMINAL_TRANSPORT.md).
+- [x] Integrate the bounded DATA-only local-producer handoff freeze. The
+      [reviewed source](LOCAL_HANDOFF_FREEZE.md) binds immutable envelope bytes
+      to original custody and the actual minimum budget; it supplies DATA only.
+      Root's local 418 coupled plus 230 budget/grammar cases pass on each of
+      Python 3.11.15 and 3.14.4. Integrated source797dbbc passes exact
+      CI42129488493: 7,219 passed, 21 skipped, 190 subtests and Unicode jobs.
+      Qualified factories and any sender/receiver/ACK permission remain open.
+- [x] Implement and independently source-review original pre-READY/READY-wait
+      cleanup-reader coupling, preserving the original Task/cursor/buffer and
+      earliest shared budget. Root's exact-source serial nine-module regression
+      passes 334 cases on each of Python 3.11.15 and 3.14.4, with 74 dedicated
+      causals and no unobserved-task warnings. Reviewer execution is not claimed.
+      Integrated source2c2a14e passes exact CI42124526459 (7,192 passed,
+      21 skipped, 190 subtests plus Unicode jobs); no ACK/native release,
+      route activation or runtime/device qualification follows from this check.
+      See [bounded prerequisite](PRE_READY_CLEANUP.md); the combined task above
+      and complete character/host-local image delivery remain open.
+- [x] Implement and independently source-review the original broker cancellation
+      adoption notice and bounded controller park, separate from Task/FD closure.
+      Exact native Future/Task descriptors reject shadowed methods on supported
+      runtimes; original cursor bytes/cumulative offsets, same cleanup end and
+      one-use stop/join remain retained. No ACK/terminal permission is enabled.
+      See [controller prerequisite](BROKER_CONTINUATION.md); the full combined
+      pre-READY/qualified-ACK task above remains open.
+- [ ] Complete selected-v2 STATUS lifecycle, fresh PRE_EMIT, typed started-terminal proof and native/credential retirement before publication; no replay or release shortcuts. See [cancellation contract](CANCELLATION_CLOCK.md).
+- [ ] Qualify broker service/runtime and authenticated transport, integrate native gateway routes and bind started terminal release; local observations alone retain PENDING.
+- [ ] Resolve direct-child native Kanban waitpid(-1) interference through an ownership-aware native contract or a separately reviewed external broker; do not disable Kanban or reinterpret ECHILD as closure.
+- [x] Add reviewed cleanup-only discard after exact child/group/control closure (bf24a54); frozen cleanup budget, actual EOF, buffered wipe and unknown-debt causals.
+- [x] Review and implement refusal-only post-GO cancellation closure without treating discarded/missing worker output as successful work; keep ambiguous native/policy resources retained. Actual parent GO-write/termination test uses synthetic native authority; runtime containment premise remains unqualified.
+- [x] Review schema3 parent policy/work accounting and implement directory-only policy acquisition.
+- [x] Bind actual policy thread/join to native-authorized reserved job; callback closure reviewed a2746c8.
+- [x] Bind result2 job receiver to retained parent identity/work; reviewed7955c06.
+- [x] Transfer private input3 once after native postcheck; reviewed1784355.
+- [x] Close independent review of pre-transfer abort/credential retirement (4ea76f2, twelve cases).
+- [ ] Implement reviewed listener startup/shutdown and authenticated metadata route.
+- [x] Implement source-only revision-bound client avatar transport, bounded codec and per-widget image owner; independently reviewed.
+- [x] Review stable app-level aggregate avatar budget binding (3881fa2); screen regression122cases pass.
+- [ ] Sample aggregate avatar resources on exact signed physical devices.
+- [ ] Implement authenticated host avatar route and qualify revision/cache behavior physically.
+- [ ] Complete header/details, blobatar v2 and custom static image parity.
+- [ ] Run exact native/transport/UI causal checks and independent security review.
+- [ ] Update host/app candidate, deploy authorized dogfood and qualify physical phones.
+- [ ] Reconcile app/plugin feature inventories and upstream Gist with verified scope.
+
+- [x] Complete bounded independent source review and affected regression of
+      original-task native READY transition after signed READY plus fresh PRE_GO:
+      1,438 passed/one skipped; phase identity tripwire included. Production
+      wiring/GO remain closed; earlier cancellation failure cause remains unproven.
+
+- [x] Qualify bounded original-task signed exchange composition (BEGIN writer, READY
+      reader, fresh PRE_GO/native READY): three focused cases, 841 selected
+      affected tests and lint pass; independent read-only review accepted.
+      Production selection/startup and GO stay closed.
+
+- [x] Finalize bounded internal credential READY dispatch through the existing original
+      work/caller barrier; three direct cases and independent source review pass.
+      Full regression 1,444 passed/one skipped; final explicit-join focused172
+      passed/lint passed. Final readback review accepted; startup/GO/release remain open.
+
+- [x] Qualify bounded fixed GO signing-only producer from actual native GO_INTENT and
+      original BEGIN/READY/transition/admission; eight focused cases and bounded
+      source review pass. Selected853 passed before final value join; focused8
+      and lint pass afterward. Final review accepted; transport remains closed.
+
+- [x] Finalize bounded signed GO transport on original native intent/work Task:
+      twelve causal cases, lint and independent repair review pass; final affected
+      regression 1,466 passed/one skipped. Production sender/GO_SENT/relay remain open.
+
+- [x] Integrate bounded internal signed GO dispatch through original native
+      admission/single GO_SENT and full-write proof. Six direct cases, selected872
+      and lint pass; independent boundary repair review accepted. Shared cause
+      wait is fenced; no unsigned RESULT fallback/result token or execution credit.
+- [ ] Integrate authenticated cleanup/result/terminal custody and actual broker
+      worker relay before qualifying complete character delivery/startup/release.
+
+- [x] Qualify bounded fixed original-cleanup current role material separately from work
+      authority: six direct actor/tail cases and independent read-only review pass;
+      selected878 and lint pass. CANCEL signer/writer remains open.
+
+- [x] Qualify bounded after-READY fixed CANCEL signing on original cleanup Task:
+      one native preparation/window, seq1/seq2, no interval renewal. Eight focused
+      cases, selected887 and lint pass; independent read-only review accepted.
+      Socket transport, pre-READY cancellation and remote custody remain open.
+
+- [x] Qualify bounded after-READY signed CANCEL socket writer on the same native
+      preparation/window: twelve causal cases, 1,500 affected/one skipped, lint
+      and independent final repair review pass. Routing/pre-READY/custody remain open.
+
+- [x] Qualify bounded BEGIN/GO final descriptor-tail audit repairs: reproduced unsafe
+      synthetic writes retained (BEGIN2586/GO1617); fixed pure custody + role/actor
+      seals and nine new zero-send causals pass independent source review.
+      Selected909 and lint pass; no live deployment qualification follows.
+
+- [x] Finalize bounded internal signed CANCEL routing: original cleanup actor,
+      partial-owner retention before native effects, no retries/unsigned fallback.
+      Five direct route + two actual peer-correlation cases/source review pass;
+      full1,516/one skipped and lint pass. The subsequent known no-IO local-close
+      follow-up is recorded separately below; remote settlement remains unproven.
+- [x] Complete/review automatic solely-local cleanup after known no-IO post-READY
+      signing refusal, with exact original actor/frozen budget and repeated no-IO seals.
+      Expiry/cancellation/unknown-read causals retain debt; remote UNKNOWN and
+      original refusal survive actual local close. 100 focused tests passed.
+
+- [ ] Implement signed pre-READY cleanup under the explicit original READY-wait
+      retirement and distinct BEGIN-derived signer contract in
+      [SIGNED_PRE_READY_CLEANUP.md](SIGNED_PRE_READY_CLEANUP.md). No fabricated
+      READY transition, replacement reader, unsigned fallback or ACK inference.
+
+- [x] Implement/review cancellation-only local retirement of the original signed
+      READY wait: exact minted selector proof, original Task done+cancelled for
+      historical release, payload-free count fact and wiped bytes. Seven causals
+      and 104 READY-reader module tests pass; no pre-READY CANCEL/ACK enabled.
+
+- [x] Implement/review distinct BEGIN-derived pre-READY CANCEL signing-only owner:
+      original cleanup Task, completed BEGIN/cancelled read, earliest native seq1
+      preparation and reciprocal signer exclusion. Final reader-release custody
+      seals reject key/unknown/intent drift. Transport/ACK/publication stay open.
+
+- [x] Implement/review fixed pre-READY signed CANCEL writer on the original cleanup
+      Task/end, with native count/fact reciprocity, typed BEGIN slot handoff and
+      thirteen known/unknown/current-custody causals. Automatic route/correlation
+      and remote ACK/resource/native publication remain open.
+
+- [x] Compose/review original pre-READY signed CANCEL route and actual broker
+      seq1/window/end correlation before READY, preserving existing READY/GO
+      paths. Three peer and 31 component cancellation cases pass. No ACK,
+      worker GO or remote/native settlement is inferred.
+- [x] Implement/review automatic solely-local cleanup after known no-IO pre-READY
+      signing refusal; fixed reciprocal owner/no-output/no-writer proofs repeat
+      after native budget boundaries. Expiry/cancelled actor/unknown read deny
+      new credit; post-socket expiry retains only actual socket close. Remote
+      UNKNOWN/original refusal remain; 13 focused route/refusal cases pass.
+
+- [x] Implement/review original-service current signed GO receipt validator:
+      exact signature/frame/current role/clock/uncased budget and original actor;
+      wrong actor/early query does not poison, currentness refusal stays sticky.
+      Returns a read fact only; worker GO and generic work gates stay closed.
+- [x] Implement/review fixed original-service signed worker-GO relay component,
+      with reciprocal final native pipe-write credential fence and local fact,
+      native count/unknown-debt preservation, original completed READY/input and
+      original actor/budget. 17 peer stages plus five field-shape tests pass;
+      actual native OK result observed independently. Production dispatch and
+      signed RESULT/TERMINAL integration remain open. See
+      [SIGNED_GO_RELAY.md](SIGNED_GO_RELAY.md).
+- [ ] Integrate the qualified fixed credential service worker-relay route with
+      signed RESULT transport and original retained TERMINAL/ACK lifecycle. No
+      unsigned fallback, decoded-claim permission or publication shortcut.
+
+- [x] Implement/review original-service immutable native RESULT signing-only owner:
+      actual historical GO relay, drained resources, reciprocal GO/adoption/cursor
+      custody and current role/actor/frozen budget; one native take, sticky refusal
+      and pure cancellation payload withdrawal before cleanup sampling. Seven
+      focused peer stages pass. No wire transfer/terminal/publication credit.
+- [ ] Integrate counted signed RESULT streaming and original-controller write
+      retirement, then original gateway cursor and retained terminal/ACK lifecycle.
+      Preserve actual byte counts, unknown delivery debt and no unsigned fallback.
+
+- [x] Qualify original-service signed RESULT writer and fixed READY slot handoff:
+      actual bounded socket sends/counts, original-controller cancellation and
+      payload withdrawal; thirteen focused peer cases plus channel tripwire.
+      Final1,599 passed/one skipped101.50s; lint/whitespace and independent review
+      pass. No production dispatch or terminal/publication credit.
+- [ ] Compose signed RESULT with original gateway work cursor under
+      [SIGNED_RESULT_READ.md](SIGNED_RESULT_READ.md), then retained
+      terminal/ACK/startup/native publication. Local full-count fact is not receipt.
+
+- [x] Qualify fixed gateway GO_SENT result-custody tail with original credential
+      work actor/material, native policy/admission/listener/context and uncaused
+      frozen budget. Seven causals include actual earlier-phase refusal. Final
+      confirmation1,606 passed/one skipped102.87s; lint/whitespace/source review pass.
+      Earlier existing signed-cancellation failure is unresolved and preserved.
+      This is not a result reader, I/O grant or publication transition.
+
+- [x] Qualify original gateway signed RESULT envelope cursor with fixed native
+      GO_SENT admission, bounded HBA1/header reads, reciprocal historical READY
+      read claim and exact local cancellation retirement. Twenty-one cases in
+      final1,628 passed/one skipped108.30s; lint/whitespace/source review pass.
+      Envelope only; no image body, native candidate or publication credit.
+- [ ] Continue that same signed cursor through committed image body/result2 and
+      original native parent/revision validation, then typed candidate withdrawal,
+      cleanup discard/terminal continuation and production dispatch. No second
+      reader or envelope-to-image/terminal/publication shortcut.
+
+- [x] Qualify same-original-task signed body streaming and private candidate:
+      independent original native buffer/custody, actual signed frame/body hash,
+      native result2/parent/revision checks, independent stream/hash allocation,
+      typed first-cause discard and exact local wait retirement. Nineteen actual
+      private-peer cases; final1,648 passed/one skipped123.36s, lint/whitespace and
+      independent source review pass. No native adoption or public delivery.
+- [ ] Add reviewed typed native candidate adoption/result notification and same
+      cooperative signed cleanup cursor/terminal continuation. Preserve private
+      ownership, earliest cause and no competing reader or cancelled-task revival.
+
+- [x] Qualify private candidate-use refusal boundaries: exact original actor scopes,
+      primitive signed-stream/fact fields, canonical header identity, sticky admitted
+      withdrawal and payload-free exception context. Five additional foreign nested
+      metadata cases prove no getter execution and no actor poisoning (5 passed,
+      0.38s); independent read-only review accepts the bounded tests. This is not
+      native candidate adoption or phone display.
+- [x] Implement a distinct fixed post-adoption authority tail for the exact signed
+      body owner, preserving original native job/token/candidate joins, current
+      keys/policy/clock/budget and first-cause withdrawal. The original envelope
+      and result-intent tails remain GO_SENT-only; the new tail is fixed to actual
+      RESULT_VALIDATED, without phase reset/selector or legacy owner substitution.
+      Cooperative cleanup/terminal and publication remain open below.
+
+- [x] Implement and independently review private signed native candidate adoption:
+      dedicated original owner slot, independent adoption/token allocation, original
+      actor one-shot native RESULT_VALIDATED transition, fixed post-adoption tail,
+      first-cause native/private withdrawal and payload-free refusal. Twenty-eight
+      body cases passed in 18.81s, nine exercising adoption/currentness. Final
+      affected regression: 1,662 passed/one skipped in 126.11s; lint/whitespace and
+      independent read-only review pass. Earlier cleanup refusal remains unresolved;
+      no production publication credit.
+- [x] Qualify original-caller signed result notification without reusing the
+      original-work actor gate. No generic caller-selected actor/phase bypass,
+      fake legacy owner, phase reset or competing receiver. Production/cleanup
+      integration remains separate below.
+
+- [x] Implement and independently review original-work signed result notification
+      and fixed original-caller readiness, retaining actual native Future/barrier/
+      allocation and role/policy/socket/budget. Nine actual private-peer causals
+      passed in 7.84s, including final dispatch substitution and native ambiguous
+      scheduling failure. Final expanded affected regression: 1,738 passed, one
+      skipped in 142.79s, including legacy result-ready consumers; lint/whitespace
+      and independent read-only review pass. No image/terminal/release returned.
+- [ ] Compose original signed receiver/body/adoption/notification into production
+      only with the reviewed same cooperative cleanup cursor and signed terminal/ACK;
+      retain original actor, budget and native cancellation/unknown debt. Then
+      qualify startup/publication and physical/release delivery without shortcuts.
+
+- [x] Capture original signed cleanup progress before first-cause poisoning as
+      frozen DATA: actual envelope/body/hash allocation and native wait scope,
+      Future, registration/flags. Preserve zero image-body copy, no new read/clock/
+      deadline, enum-identity checks and no signed-to-legacy fallback. Independent
+      read-only review and targeted actual envelope/body/adoption/notice cases pass.
+      Final expanded affected regression: 1,742 passed/one skipped in 146.11s;
+      lint/whitespace pass. The inspector grants no IO, quiescence, retirement,
+      transfer or release; historical broker failures remain unresolved.
+- [ ] Qualify a distinct typed same-original-Task signed cleanup transition from
+      held progress, with actual native cause wake/known wait retirement, current
+      original custody/role, original write quiescence and minimum budget. Keep
+      signed request disabled until those checks and causal isolation tests pass;
+      then continue signed body discard/terminal authentication without a new reader.
+
+- [x] Retain actual original registered-wake retirement after native owned-interest
+      removal/opposite-direction preservation. Seal original pre-await identities,
+      exact retained receipt and original uncancelled actor after final guards;
+      generic early wakes and genuine Task cancellation stay distinct. Ninety-one
+      readiness cases pass in 0.41s; independent read-only review accepts the
+      prerequisite. Final expanded regression: 1,757 passed/one skipped in 150.03s;
+      lint/whitespace pass. No current kernel/role/budget/IO/transfer permission.
+- [ ] Wire the same signed envelope/body wait to its actual native cause and
+      correlate this actual retirement receipt with frozen original progress,
+      current registration/custody, write quiescence and original minimum budget.
+      Keep signed request disabled until full typed cooperative transition and
+      isolation/expiry/stale-ack/unknown-retirement cases pass.
+
+- [x] Bind signed BODY waits to the held actual native cleanup cause and correlate
+      actual registered-wake retirement to original signed capture/wait/hash/counts/
+      custody and original uncancelled actor. Separate historical completion checks
+      preserve local stop only; exact error type and both waiter aliases are sealed
+      after final guards. Eleven cause cases pass in 7.36s; nine genuine external
+      cancellation cases pass in 6.03s; independent read-only review accepts scope.
+      Final expanded regression: 1,768 passed/one skipped in 149.49s; lint/whitespace
+      pass. Historical broker failures remain unresolved; no transfer/IO grant.
+- [ ] Wire signed envelope cause and qualify actual same-cursor cooperative
+      continuation/current registration/role/write-quiescence/minimum budget.
+      Signed request remains disabled; no concurrent read, terminal, release or
+      publication follows from local stop. Retain existing whole-work-join CANCEL.
+
+### PS1 historical handoff checkpoint — November 7, 2026
+
+- [x] Retain original immutable configuration/package DATA across native startup and namespace eviction, with original context/fact/custody checks; focused416 checks pass.
+- [ ] Compose fixed trusted entry, full runtime/dependency/loader recipe and actual native/key factory; historical data alone cannot satisfy admission.
+
+### PS1 entry/bootstrap checkpoint — November 7, 2026
+
+- [x] Separate source entry retains original invocation before fixed bootstrap import, rejoins original scope/cell and aliases, captures activation;18 synthetic bootstrap cases/434 combined checks pass.
+- [ ] Independently admit/install exact entry and qualify native PM re-exec; compose remaining runtime/operator/native/key joins. No launch entrypoint is installed by this component.
+
+### PS1 native command-builder fixture checkpoint — November 7, 2026
+
+- [x] Observe actual disposable exec and wrapper re-entry for script/module launch using pinned native relaunch_command source; provenance reviewed;436 combined checks pass.
+- [ ] Qualify actual installed entry and native bootstrap/PM activation/lease continuity; this fixture does not satisfy those gates or complete PS1.
+
+### GR1 explicit version-selection slice — November 7, 2026
+
+- [x] Freeze complete recipe pin/child/native-boundary contract; independently reviewed.
+- [x] Preserve fixed schema1 loading and add explicit schema2 selection DATA, with no fallback/alternate recapture; package-only verifier refuses schema2 before IO;477 combined checks pass.
+- [x] GR1 source document IO: actual complete-recipe/four fixed child reads, canonical common envelopes and shared aggregate budget;39 cases/517 combined checks pass. Fixed entry/operator wiring remains open.
+- [ ] Finish GR2 entry/dependency/runtime/link/loader and GR3 actual native/key joins; no authority or deployment is enabled by this checkpoint.
+
+### GR1 original document publication checkpoint — November 7, 2026
+
+- [x] Bind published recipe/child DATA to independently held actual returned byte objects; later-child/final-callback row substitution refuses.
+- [x] Retain partial initialization and unknown read/close debt; foreign plan/fact state is preserved; busy owners refuse before fresh capture.
+- [ ] GR2 validate complete child tables, entry/dependency/runtime/link/loader closure and original artifact-count handoff.
+- [ ] GR3 bind actual native listener/store/bridge/identity service and role keys; broker startup and terminal acceptance/ACK/release remain required.
+
+### GR2 recipe-to-plugin child checkpoint — November 7, 2026
+
+- [x] Consume actual retained schema2 recipe plugin bytes/expectations through verify_recipe; no caller replacement payload/digest or schema1 downgrade.
+- [x] Carry actual document count allocation into package IO; seal post-read/document-hash/final-package count identity and retain final actual cell;14 composed cases/534 combined checks pass.
+- [x] Preserve historical recipe/configuration/data custody after namespace/path drift; occupied package refuses before fresh capture.
+- [x] Carry actual original selection count into recipe/plugin/entry accounting;576 startup checks pass.
+- [ ] Complete later dependency/interpreter accounting in one combined original-owner plan; see [composition](DEPENDENCY_FILE_COMPOSITION.md).
+- [ ] Complete GR2 entry/dependency/interpreter/link/loader closure, then GR3 native listener/store/bridge/identity/key factory. Full character-image runtime remains unfinished.
+
+### GR2 original entry observation checkpoint — November 7, 2026
+
+- [x] Retain independent started publication joining original invocation/activation/bootstrap and actual import-time module/function/code observations; final callback fences, historical data and fresh queries;32 entry cases/548 combined checks pass.
+- [x] Cover foreign publication/aliases, namespace/argv/source changes and wrong-thread/actual-fork refusal without poisoning historical records.
+- [ ] Qualify actual selected entry package/wrapper files and execution/control flow, with a reviewed typed original-owner/recipe binding. These observations are not artifact admission.
+- [ ] Complete remaining GR2 dependencies/interpreter/link/loader/budget and GR3 actual native/key factory; physical character display remains unfinished.
+
+### GR2 entry/wrapper filesystem checkpoint — November 7, 2026
+
+- [x] Consume original entry child with original entry/recipe/plugin owner joins; closed complete entry table and actual wrapper path, exact internal dedup, no replacement digest/root.
+- [x] Own metadata trees before/after actual file hashes and wrapper ancestry/identity joins; preserve unknown scan/close debt and no replay.
+- [x] Retain/complete file lifecycle with one-shot-before-native-effects, actual metadata/count publication, compatible legacy facts and typed prior package budget;18 entry/21 artifact cases,569 combined checks pass.
+- [ ] Complete actual installed wrapper execution/control-flow and independent operator qualification; snapshots alone do not attest executed bytes.
+- [ ] Complete remaining dependency/interpreter/link/loader accounting and native/key factory, broker/ACK/release and physical image qualification.
+
+### Combined entry preparation checkpoint — November 7, 2026
+
+- [x] Separate original entry retention from one-shot file completion, with no
+      artifact IO allocated during preparation; exact inactive attempt anchor,
+      zero-IO copied-attempt refusal and failed/successful no-replay causals.
+      Independent source review accepted;580 affected startup checks passed.
+- [ ] Freeze/integrate the complete combined dependency/interpreter plan before
+      completion; entry preparation alone neither implements this plan nor grants
+      runtime/native/key authority or physical image qualification.
+
+### Original interpreter continuity checkpoint — November 7, 2026
+
+- [x] Capture original interpreter observations before bootstrap and rejoin them
+      after callbacks; historical DATA is distinct from current runtime admission.
+- [x] Preserve exact original opaque stdlib typing aliases without weakening other
+      nonmodule refusals;595 startup checks and49 actual3.11 child cases passed.
+- [ ] Integrate original interpreter inputs with the complete combined file plan,
+      measured HMP dependency closure and explicit link/loader/operator/native/key
+      requirements. No physical avatar or production image route is qualified.
+
+### D1 combined runtime-file checkpoint — November 7, 2026
+
+- [x] Freeze and implement closed dependency/interpreter schemas through one
+      original entry/recipe/plugin preparation and file IO owner, no fallback.
+- [x] Join all declared package/loose file metadata and original prior receipts,
+      exact shared-row deduplication, inherited counts and current module origins.
+      Independent source review accepted;632 startup checks and59 actual3.11 child
+      cases passed with unchanged source. Namespace/non-file origins refuse.
+- [ ] Qualify actual installation closure, required links, future imports and
+      OS-loaded libraries plus executed entry/operator/native/key factory. D1 is
+      file DATA only; broker acceptance/ACK/release and physical images remain open.
+
+### Original native file effects — proposed November 8, 2026
+
+- [x] Review and freeze [held native effects](NATIVE_FILE_EFFECTS.md), including
+      original result claims, actor/in-flight exclusion, aggregate cap, reserved
+      close capacity, raw/exception lifetimes and no operational fallback.
+      Independent read-only contract review accepted; implementation remains open.
+- [ ] Integrate all six held native operations through the original IO scope,
+      preserving actual outcomes, descriptor custody, byte progress and unknown debt.
+- [ ] Complete current/floor/affected causals and independent security review;
+      this work cannot mark startup, service delivery or physical images complete.
+
+- [ ] Qualify the first shared original-lineage source implementation across all
+      listed scopes. Ten new causals passed on actual3.14.9 and3.11.15 with
+      source unchanged; bounded source review accepted corrected0ebe76e.
+      Existing modified inheritance assertions and broader affected regression
+      remain required. No operation/effect authority is implemented.
+
+## BI1-BA original bound-audit implementation boundary — November 10
+
+See [BOUND_ENGINE_AUDIT.md](BOUND_ENGINE_AUDIT.md). The full desktop-character
+feature and unchanged native 60-second gate remain required; this does not replace
+them with a carrier probe or faster subset. The nine representation facts pass on
+actual Python 3.14.9/3.11.15: partial's direct attributes are read-only, but native
+`__setstate__` replaces their state. Fresh original func/args/keyword identity and
+function provenance would remain mandatory even on the same partial object. The
+selected implementation instead uses an exact immutable tuple DATA record plus
+held fixed dispatch, independently retained through original root custody; no
+partial/callable carrier is introduced. Mutable contained values stay freshly checked.
+
+- [x] BI1-BA1: source-backed coherent implementation contract and actual-runtime
+  carrier facts; independent architecture review accepted the boundary.
+- [ ] BI1-BA2: actual factory-return/root custody through EntryOrigin, STARTED/CELL,
+  lineage, Scope, both final publication windows and all selectors.
+- [ ] BI1-BA3: fixed live-audit body with immutable-only parsing omitted.
+- [ ] BI1-BA4: current/minimum causals/differential tests and exact independent review.
+- [ ] BI1-BA5: original native 60-second completion, then full startup acceptance.
+- [ ] BI1-BA6/7: current-media-safe service/route/character integration and physical,
+  native-storage/accessibility/security-release acceptance.
+
+
+BA2 immediate-parent progress (2026-11-10): literal record retained in parent
+loopback environment field7 (width8), full generic validator preserved with
+pre/post record joins. Eight focused cases passed on each supported interpreter;
+independent bounded source review found no introduced issue. Original entry,
+lineage, Scope, final publication windows and selectors remain pending. BA2 is
+still unchecked; no startup or deployment qualification.
+
+BA2 entry/lineage progress (2026-11-10): append literal record at EntryOrigin11
+and lineage5; constructor/owner/invocation/STARTED-CELL identity joins added.
+Twenty focused cases passed on each supported interpreter, independent bounded
+production-source review found no introduced issue. Real-child lineage test
+extended but not executed here. Scope, both final publication seals and selectors
+remain incomplete; BA2 and deployment stay unqualified.
+
+BA2 Scope/selector wiring (2026-11-10 draft): append Scope18, preserve blueprint17,
+join original record at both publication seals and selectors; generic full audit
+unchanged. 115 regression cases pass each runtime, actual coherent-record graft
+refusal both publication windows (2 each) and actual selector late-key/malformed
+refusal (3 each) pass current/minimum. Review-found dictionary fences and fresh-
+probe field-count regression repaired. Original full normal publication/native
+traversal and unobserved Scope normal still timeout60s, real fresh-probe normal
+remains pending. No BA2 completion/BA3 fast dispatch/deployment acceptance.
+
+BA3 implementation split clarified (2026-11-10 independent architecture review):
+keep record3/generic field2 and explicit full-generic parent current; prehold a
+separate live-checker role in engine rows, append a strict rooted parent entrypoint
+without moving existing indices, and migrate actual rooted callers plus inline
+seals together. Missing roots refuse rather than selecting generic fallback.
+No code fast dispatch exists yet; original deadlines and mutable checks remain.
+
+BA3 fixed target source progress (2026-11-10): preheld distinct livechecker row,
+static live body omits only immutable layout parsing; generic fullvalidator and
+record3genericrow retained.124 selected cases pass current/minimum; independent
+source-only AST comparison accepted. Strict rooted parent/caller wiring still
+pending, no production selector calls newtarget; no integratedperformance pass.
+
+BA3 strict parent component (2026-11-10): appended original current_started row7,
+width8 contracts agree; original roots and livechecker provenance pre/post/final
+joins implemented, fullgeneric current retained. Review-found lateowner-class
+rejoin repaired with actual trapping-subclass callback control.213 selected cases
+pass each runtime. Production Scope/selectors still use generic path; coherent
+caller activation/all original engine sites and unchanged nativegate remain open.
+
+BA3 actual caller activation (2026-11-10 draft): Scope link_rejoin row7 and actual
+closed metadata selector now use strict rooted parent/live checker, with original
+root+postcallee provenance reseals. Review-found postcallee gap repaired; own8
+schema guards corrected with blueprintfactory/guard positive controls. Final223
+current selection passed; minimum pending. Originalnative nowagain60stimeout,
+not initialsetuprefusal. Selected-helper immutable-layout candidate has explicit
+construction/root/callback/security requirements; not implemented or qualification.
+
+Final actualcaller checkpoint (2026-11-10): registration field/getter drift gap
+fixed with native tuple reads +original complete class predicates, reviewed and
+12actual late-selector cases included.227 selected cases pass each runtime,
+source unchanged. Finalsource originalnative run alone still60stimeout,44typed /
+event4/work963/reserved0; BA3/full startup/feature delivery remain unchecked.
+No live deploy or media6796 rollback; next immutableselected-helper layout needs
+its original capsule/root binding and complete causal acceptance.
+
+Selected-helper layout construction (2026-11-10): original capture6/current
+unchanged; new independent capture_bound returns literal packet/layout/checker
+record, target current_live stillfullgeneric.240 helper/factory/construction cases
+pass both runtimes after correcting collector/provenance namespace shadowing;
+bounded independent review accepted. Parentcapsule append/actualroot wiring and
+immutable-only omission not implemented; no startup or performance acceptance.
+
+Selected-helper native refusal repair (2026-11-10): explicit custom-constructor
+callback regression reproduced and corrected in the new unwired factory/live
+paths;243 focused cases pass both actual runtimes with unchanged source. Legacy
+generic API unchanged. Parent capsule/actual root integration remains next,
+and native startup timeout/full feature/device gates remain open.
+
+Selected-helper parent capsule integration (2026-11-10): actual record appended
+at capsule7, packet6 unchanged, four authenticated roles with actual returned
+checker row retained. Factory defaults bound to original components; immediate
+postreturn prefix and both Scope publication pointer seals added. Final
+418-case combined suites pass both actual runtimes with unchanged source and no
+failures/errors/skips, including independent native-error default binding.
+Final-source original native run alone still times out at the unchanged60s.
+No selected immutable omission enabled; rooted-before-live native-fenced reorder,
+mutable causal checks and unchanged native deadline remain required next.
+
+Rooted selected-live audit checkpoint (2026-11-10):
+- [x] Prove original roots before fixed live dispatch; native tuple and ownerdict fences.
+- [x] Original immutable columns in live target, parent final and both Scope bodies; generic DATA stays complete.
+- [x] Reproduce/fix owner-class key lookup; explicit lateGC, root/callee and mutable-state causals.
+- [x] Independently compare all3 inline bodies;454 checks pass current/minimum.
+- [ ] Original60s native traversal: stillTimeoutExpired, no BA3/startup acceptance.
+- [ ] Profile remaining activation/package/runtime seals; review next root-bound immutable-only optimization.
+- [ ] Full startup/media integration, OS/device and release qualification remain required; no deployment claimed.
+
+Path-validator cost checkpoint (2026-11-10):
+- [x] Extended retained-graph diagnostic, corrected setup mistake and preserved failed evidence.
+- [x] Exact equivalent C-backed control-byte scan; every generic validation rule retained.
+- [x] Full Unicode/control/type/boundary/aggregate causals;600 checks pass current/minimum.
+- [ ] Original native60s remainsTimeoutExpired; no startup or feature/device acceptance.
+- [ ] Separate repeated approval API/closed-custody costs before selecting the next graph optimization.
+- [ ] No C-combinator prototype wiring without proven benefit and independent boundary review.

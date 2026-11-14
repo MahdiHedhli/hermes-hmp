@@ -73,6 +73,7 @@ def revoke_device(store: Any, device_id: str, *, now: int) -> RevokeResult:
     with store.transaction() as conn:
         result = _revoke_in(conn, device_id, now, "operator_revoke")
     if result.found:
+        store.cleanup_push_after_commit(now=now)
         log_event("operator_revoke", outcome="revoked", device_id=device_id)
     return result
 
@@ -120,6 +121,7 @@ def self_revoke(store: Any, iid: str, device_id: str, body: dict[str, Any], *, n
         if state is None or state["state"] != "ACTIVE":
             raise HmpError(ErrorCode.REVOKED)
         _revoke_in(conn, device_id, now, "self_revoke")
+    store.cleanup_push_after_commit(now=now)
     log_event("self_revoke", outcome="revoked", device_id=device_id)
 
 

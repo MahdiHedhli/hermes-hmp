@@ -6,10 +6,13 @@ A static AST scan; it never imports or runs the plugin. Standard library only.
 Rules:
   S1  Imports. Outside `bridge.py`, a module may import only the standard library, the approved
       runtime packages (aiohttp, cryptography; qrcode in `cli.py` only, and only lazily, inside a
-      function, not at module level) and its own package. `qrcode` is restricted to `cli.py`
+      function, not at module level; yaml only in presentation_yaml_adapter.py,
+      as an exact lazy module import) and its own package. `qrcode` is restricted to `cli.py`
       even for `bridge.py`, which is otherwise exempt from this rule for Hermes internals.
       Every other absolute import is treated as a Hermes internal, which fails closed for unknown
       packages.
+      HMP-owned startup type joins are allowed only lazily in the artifact owner,
+      with the exact module/name pairs checked below.
       Closed exceptions, exact (module, name) pairs, only as `from … import …`:
       - `adapter.py` may import exactly `gateway.platforms.base.{BasePlatformAdapter, SendResult}`
         and `gateway.config.Platform`, the documented platform-plugin API (ruling on T013);
@@ -18,7 +21,7 @@ Rules:
   S2  Dynamic imports. `__import__`, `import_module`, `module_from_spec`, `exec_module`,
       `load_module`, `spec_from_file_location`, `spec_from_loader`, and the builtins `exec`,
       `eval` and `compile` are allowed only in `bridge.py` and inside `compat.py`'s
-      `probe_read_dependencies`.
+      `probe_dependencies`.
       `find_spec` is allowed only in `bridge.py` and `compat.py`.
   S3  Bridge isolation. No module imports `bridge` at module level; `compat.py` never imports it.
       `bridge.py` is imported only after the compat gate reports SUPPORTED.
@@ -46,7 +49,7 @@ DEFAULT_PACKAGE = Path(__file__).resolve().parents[2] / "server" / "hmp_plugin"
 
 BRIDGE_MODULE = "bridge.py"
 COMPAT_MODULE = "compat.py"
-PROBE_FUNCTION = "probe_read_dependencies"
+PROBE_FUNCTION = "probe_dependencies"
 INIT_MODULE = "__init__.py"
 ADAPTER_MODULE = "adapter.py"
 IDENTITY_MODULE = "identity.py"
@@ -55,7 +58,13 @@ THIRD_PARTY_ALLOWED: frozenset[str] = frozenset({"aiohttp", "cryptography"})
 # Third-party packages allowed in exactly one module. `qrcode` is the operator CLI's terminal QR
 # renderer (T032; reviews/dependencies.md): only `cli.py` may import it.
 CLI_MODULE = "cli.py"
-MODULE_ONLY_THIRD_PARTY: dict[str, str] = {"qrcode": CLI_MODULE}
+# The BI1 worker uses only bounded scanner/parser events, never yaml.load/config reads.
+# The native adapter has its separate exact startup-constructor rule below. Keep
+# these exceptions local and lazy; every other import, including bridge.py, refuses.
+MODULE_ONLY_THIRD_PARTY: dict[str, str] = {
+    "qrcode": CLI_MODULE,
+    "yaml": "presentation_yaml_adapter.py",
+}
 
 # S1 closed exception: (module file, imported module) -> allowed names. Exact pairs only.
 DOCUMENTED_PLUGIN_API: dict[tuple[str, str], frozenset[str]] = {
@@ -128,6 +137,7 @@ class _ModuleScanner(ast.NodeVisitor):
         self.violations: list[Violation] = []
         self._func_stack: list[str] = []
         self._depth = 0  # >0 inside a def or class body
+        self._function_depth = 0  # eager class bodies are not lazy imports
         self._type_checking = 0  # >0 inside `if TYPE_CHECKING:`
 
     def _add(self, rule: str, node: ast.AST, message: str) -> None:
@@ -137,7 +147,10 @@ class _ModuleScanner(ast.NodeVisitor):
     def _visit_scope(self, node: ast.AST, name: str) -> None:
         self._func_stack.append(name)
         self._depth += 1
+        is_function = not isinstance(node, ast.ClassDef)
+        self._function_depth += int(is_function)
         self.generic_visit(node)
+        self._function_depth -= int(is_function)
         self._depth -= 1
         self._func_stack.pop()
 
@@ -172,6 +185,27 @@ class _ModuleScanner(ast.NodeVisitor):
     # --- S1 / S3 ---
     def _check_absolute(self, node: ast.AST, module: str, names: list[str] | None) -> None:
         root = module.split(".", 1)[0]
+        if root == "yaml" and self.name == "presentation_native_yaml.py":
+            # Separate native-service adapter: dependency binding only in its
+            # fixed startup constructor. No general YAML import/call exemption.
+            allowed = (
+                self._func_stack == ["NativePresentationYaml", "__init__"]
+                and self._function_depth == 1
+                and (
+                    (module == "yaml" and names == ["error", "events", "tokens"])
+                    or (module == "yaml.loader" and names == ["SafeLoader"])
+                )
+            )
+            if not allowed:
+                self._add("S1", node, "native yaml permits only fixed startup dependency binding")
+            return
+        if root == "yaml":
+            allowed = (
+                module in {"yaml", "yaml.error", "yaml.events", "yaml.tokens"} and names is None
+            ) or (module == "yaml.loader" and names == ["SafeLoader"])
+            if not allowed:
+                self._add("S1", node, "yaml permits only the fixed worker token/event imports")
+                return
         only_module = MODULE_ONLY_THIRD_PARTY.get(root)
         if only_module is not None:
             # A module-restricted third-party package (qrcode: cli.py only, lazily). This check
@@ -187,7 +221,7 @@ class _ModuleScanner(ast.NodeVisitor):
                     f"{self.name}",
                 )
                 return
-            if self._depth == 0 and not self._type_checking:
+            if self._function_depth == 0 and not self._type_checking:
                 self._add(
                     "S1",
                     node,
@@ -195,6 +229,57 @@ class _ModuleScanner(ast.NodeVisitor):
                     f"level, in {only_module}",
                 )
                 return
+            return
+        # HMP-owned sibling package, not an upstream Hermes API. Keep the
+        # circular entry/IO join lazy and closed to its exact required types.
+        if root == "hmp_startup":
+            local_types = {
+                "hmp_startup.gateway_entry": {
+                    "GatewayEntryOwner", "_NativeFileLineage", "_NativeFileLedger",
+                },
+                "hmp_startup.entry_files": {"EntryFileSnapshotOwner"},
+                "hmp_startup.gateway_approval": {"GatewayApprovalOwner"},
+                "hmp_startup.runtime_reader": {"RuntimeSourceReadOwner"},
+                "hmp_startup.cache_probe": {"RuntimeCacheProbeOwner"},
+                "hmp_startup.cache_reader": {"DeclaredCacheReadOwner"},
+                "hmp_startup.runtime_files": {"ExecutableLinkPlan", "RuntimeFilePlan"},
+            }
+            cache_joins = {
+                "hmp_startup.cache_context": {"CacheContextOwner"},
+                "hmp_startup.entry_files": {"EntryFileSnapshotOwner", "_Inputs"},
+                "hmp_startup.runtime_files": {"RuntimeFilePlan", "_inside", "_path"},
+            }
+            if (self.name == "presentation_link_path_policy.py"
+                    and self._function_depth > 0 and names
+                    and module == "hmp_startup.runtime_files"
+                    and set(names) <= {"ExecutableLinkPlan", "LinkHop"}):
+                return
+            if (self.name == "presentation_source_digest.py" and self._function_depth > 0
+                    and names
+                    and ((module == "hmp_startup.gateway_entry"
+                          and set(names) <= {"GatewayEntryOwner", "_interpreter_current"})
+                         or (module == "hmp_startup.runtime_reader"
+                             and set(names) <= {"RuntimeSourceReadOwner"}))):
+                return
+            if (self.name == "presentation_startup_cache.py"
+                    and self._function_depth > 0 and names
+                    and set(names) <= cache_joins.get(module, set())):
+                return
+            if (
+                self.name in (
+                    "presentation_startup_artifacts.py", "presentation_startup_selection.py")
+                and self._function_depth > 0
+                and names
+                and set(names) <= local_types.get(module, set())
+                and (self.name == "presentation_startup_artifacts.py"
+                     or module == "hmp_startup.gateway_approval")
+            ):
+                return
+            self._add(
+                "S1",
+                node,
+                "hmp_startup permits only the fixed lazy original-owner type joins",
+            )
             return
         if root in STDLIB or root in THIRD_PARTY_ALLOWED or self.name == BRIDGE_MODULE:
             return
@@ -217,7 +302,7 @@ class _ModuleScanner(ast.NodeVisitor):
             return
         if self.name == COMPAT_MODULE:
             self._add("S3", node, f"{COMPAT_MODULE} must never import bridge")
-        elif self._depth == 0 and not self._type_checking:
+        elif self._function_depth == 0 and not self._type_checking:
             self._add("S3", node, "bridge imported at module level (import it only after the gate)")
 
     def visit_Import(self, node: ast.Import) -> None:
