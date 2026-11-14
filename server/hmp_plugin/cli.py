@@ -800,8 +800,12 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
         "check", help="Check the Hermes build, HMP identity, and pinned listener"
     )
     health = groups.add_parser("health", help="Check each served bot's enabled channels")
-    health.add_subparsers(dest="health_command").add_parser(
+    health_commands = health.add_subparsers(dest="health_command")
+    health_commands.add_parser(
         "check", help="Read the gateway's current bot-channel health snapshot"
+    )
+    health_commands.add_parser(
+        "presentation", help="Inspect appearance service binding without fetching images"
     )
     push = groups.add_parser("push", help="Read configured push state and store counts")
     push.add_subparsers(dest="push_command").add_parser(
@@ -2574,6 +2578,40 @@ def _cmd_health_check(env: CliEnv) -> int:
     return EXIT_OK if healthy else EXIT_REFUSED
 
 
+def _cmd_health_presentation(env: CliEnv) -> int:
+    """Current same-listener binding metadata, never a rendering/access verdict."""
+    from . import identity
+    from .operator_read import SOCKET_NAME, read_presentation_context
+
+    status, record = _checked_setup(env)
+    if status != EXIT_OK or record is None:
+        return EXIT_REFUSED
+    try:
+        kw = env.identity_kwargs
+        custody = identity.resolve_custody(
+            env=kw.get("env", env.environ), hermes_root=kw.get("hermes_root"),
+            binding_root=kw.get("binding_root"),
+        )
+        path = listener_record_path(custody.anchor_dir)
+        result = read_presentation_context(path.parent / SOCKET_NAME,
+                                           iid=record.iid, nonce=record.nonce)
+        after = read_listener_record(path, iid=record.iid, pid_alive=env.pid_alive)
+        if ((after.pid, after.nonce, after.iid) != (record.pid, record.nonce, record.iid)
+                or env.verify_listener_live(after, record.iid) is not True
+                or not result["sample_ms"] <= int(time.monotonic() * 1_000)
+                    < result["expires_ms"]):
+            raise ListenerRecordError("listener changed")
+    except Exception:
+        env.stdout.write("Desktop appearance binding: unavailable; inspect HMP startup.\n")
+        env.stdout.write("Images and phone access were not tested.\n")
+        return EXIT_REFUSED
+    bound = result["state"] == "bound_not_probed"
+    env.stdout.write("Desktop appearance binding: "
+                     + ("bound (not probed).\n" if bound else "unavailable.\n"))
+    env.stdout.write("Images and phone access were not tested.\n")
+    return EXIT_OK if bound else EXIT_REFUSED
+
+
 _STORE_COMMANDS: dict[tuple[str, str], Callable[[_Context, argparse.Namespace], int]] = {
     ("pair", "offer"): _cmd_offer,
     ("pair", "list"): _cmd_list,
@@ -2615,6 +2653,8 @@ def dispatch(args: argparse.Namespace, env: Optional[CliEnv] = None) -> int:  # 
             return _cmd_setup_check(env)
         if (group, action) == ("health", "check"):
             return _cmd_health_check(env)
+        if (group, action) == ("health", "presentation"):
+            return _cmd_health_presentation(env)
         if (group, action) == ("push", "status"):
             return _cmd_push_status(env)
         handler = _STORE_COMMANDS.get((group or "", action or ""))

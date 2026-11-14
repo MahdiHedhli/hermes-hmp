@@ -2458,6 +2458,19 @@ releases whose session stream has no approval notifier, so it is not an availabi
 | `MEDIA_WORKER_WAIT_S` / `MEDIA_WRITE_DEADLINE_S` (v1.6 draft) | 20 (shared by both phases) / 30 (including EOF) | |
 | `MEDIA_MAX_BYTES` (v1.6 draft) | 8 388 608 | |
 
+## 13a. Local appearance binding observation (spec 046, source candidate)
+
+`hermes hmp health presentation` uses the existing same-UID, private Unix operator
+socket; it adds no mobile HTTP route or authorization. The closed operation
+`host_presentation_binding_context` and its request/reply schemas, owning-loop
+sampling, identity worker, exact-source rejoin, two-second observation lifetime,
+absolute client transport deadline and final listener/TLS/freshness check are
+specified in [OPERATOR_BINDING_DIAGNOSTIC.md](../../../specs/046-bot-presentation-integration/OPERATOR_BINDING_DIAGNOSTIC.md).
+It reports only `bound_not_probed` or `unavailable`. Neither state grants access
+or establishes avatar delivery, native operation authority, provider readiness,
+phone permissions or a specific failure cause. Existing operator request schemas,
+capacity/retirement and mobile capability/security gates remain unchanged.
+
 ## 14. Residuals this contract accepts explicitly
 
 - **RES-1.** Bearer access tokens, not sender-constrained (E-GAP-27): an exposure window of `ACCESS_TTL_S`. Decision deferred, with a gate (`R0_FREEZE_REVIEW.md` §9).

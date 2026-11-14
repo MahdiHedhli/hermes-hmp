@@ -192,6 +192,68 @@ def _media_request(raw: bytes, *, iid: str, nonce: str) -> tuple[str, str]:
     return obj["request_id"], obj["challenge"]
 
 
+def _presentation_request(raw: bytes, *, iid: str, nonce: str) -> str:
+    obj = _closed_json(raw, frozenset({"protocol", "operation", "iid", "nonce", "challenge"}))
+    if (type(obj["protocol"]) is not int or obj["protocol"] != 1
+            or obj["operation"] != "host_presentation_binding_context"
+            or obj["iid"] != iid or obj["nonce"] != nonce
+            or type(obj["challenge"]) is not str
+            or _NONCE.fullmatch(obj["challenge"]) is None):
+        raise OperatorUnavailableError("operator context unavailable")
+    return obj["challenge"]
+
+
+def _presentation_snapshot(ctx: Any) -> tuple[tuple[Any, ...], tuple[Any, ...], bool]:
+    """Loop-only binding metadata, never an image/receipt/operation permission."""
+    from .presentation_native_service import NativePresentationService
+
+    try:
+        loop = asyncio.get_running_loop()
+        service, callback = ctx.presentation_service, ctx.presentation_available
+        current = callback()
+        if type(current) is not bool or type(ctx.iid) is not str:
+            raise OperatorUnavailableError("operator context unavailable")
+        refs = (service, loop, ctx, ctx.bridge, ctx.store, ctx.identity, callback)
+        values = (ctx.iid, current)
+        if type(service) is not NativePresentationService:
+            return refs, values, False
+        own_current, worker_current = service._current(), service._worker_current()
+        if (type(own_current) is not bool or type(worker_current) is not bool
+                or type(service._retired) is not bool or type(service._iid) is not str):
+            raise OperatorUnavailableError("operator context unavailable")
+        bound = (current and own_current and worker_current and not service._retired
+                 and service._ctx is ctx and service._loop is loop
+                 and service._bridge is ctx.bridge and service._store is ctx.store
+                 and service._identity is ctx.identity and service._iid == ctx.iid)
+        return ((*refs, service._ctx, service._loop, service._bridge, service._store,
+                 service._identity, service._current, service._worker_current),
+                (*values, service._iid, service._retired, own_current, worker_current), bound)
+    except Exception:
+        raise OperatorUnavailableError("operator context unavailable") from None
+
+
+def _same_presentation_snapshot(before, after) -> bool:
+    # Never call application objects' equality methods during source rejoin.
+    return (len(before[0]) == len(after[0])
+            and all(a is b for a, b in zip(before[0], after[0], strict=True))
+            and before[1:] == after[1:])
+
+
+def _collect_presentation(ctx: Any, _unused: str, challenge: str, nonce: str,
+                          generation: str, deadline: float) -> dict[str, object]:
+    """Identity-only worker; no new service capture/use or loop-affine calls."""
+    for _ in range(2):
+        if (ctx.identity.still_current() is not True or ctx.readiness_generation != generation
+                or time.monotonic() >= deadline):
+            raise OperatorUnavailableError("operator context unavailable")
+    sampled = int(time.monotonic() * 1_000)
+    if sampled >= int(deadline * 1_000):
+        raise OperatorUnavailableError("operator context expired")
+    return {"protocol": 1, "operation": "host_presentation_binding_context",
+            "challenge": challenge, "iid": ctx.iid, "nonce": nonce, "generation": generation,
+            "sample_ms": sampled, "expires_ms": int(deadline * 1_000)}
+
+
 def _source_snapshot(
     ctx: Any, record: Any, deadline: float, generation: str,
 ) -> tuple[dict[str, object], frozenset[str]]:
@@ -434,18 +496,20 @@ class OperatorReadService:
             self._drained.set()
 
     async def _context(self, request_id: str, challenge: str,
-                       *, media: bool = False) -> dict[str, object]:
+                       *, media: bool = False, presentation: bool = False) -> dict[str, object]:
         ctx = self.ctx
         loop = asyncio.get_running_loop()
         if self._read_loop is None:
             self._read_loop = loop
-        if (self._stopping or self._read_pool is None or self._read_loop is not loop
+        if ((media and presentation) or self._stopping
+                or self._read_pool is None or self._read_loop is not loop
                 or ctx is not self._read_origin_ctx or self._read_budget is None
                 or ctx.read_worker_budget is not self._read_budget):
             raise OperatorUnavailableError("operator context unavailable")
         execution_context = contextvars.copy_context()
         generation = ctx.readiness_generation
         deadline = time.monotonic() + DEADLINE_S
+        snapshot = _presentation_snapshot(ctx) if presentation else None
         intent = object()  # preconditions/allocations precede capacity acquisition
         try:
             self._read_operations[intent] = None
@@ -466,9 +530,11 @@ class OperatorReadService:
             self._stopping = True
             raise OperatorUnavailableError("operator context unavailable")
         try:
+            collect = (_collect_presentation if presentation else
+                       _collect_media if media else _collect)
             original = self._read_pool.submit(
                 execution_context.run,
-                _collect_media if media else _collect,
+                collect,
                 ctx, request_id, challenge, self.nonce, generation, deadline,
             )
             self._read_operations[intent] = original
@@ -495,6 +561,11 @@ class OperatorReadService:
                     or ctx.read_worker_budget is not self._read_budget
                     or ctx.readiness_generation != generation or time.monotonic() >= deadline):
                 raise OperatorUnavailableError("operator context unavailable")
+            if presentation:
+                final = _presentation_snapshot(ctx)
+                if not _same_presentation_snapshot(snapshot, final):
+                    raise OperatorUnavailableError("operator context changed")
+                result["state"] = "bound_not_probed" if final[2] else "unavailable"
             return result
         except BaseException:
             raise OperatorUnavailableError("operator context unavailable") from None
@@ -515,10 +586,17 @@ class OperatorReadService:
             try:
                 request_id, challenge = _request(raw[:-1], iid=self.ctx.iid, nonce=self.nonce)
             except OperatorUnavailableError:
-                device_id, challenge = _media_request(
-                    raw[:-1], iid=self.ctx.iid, nonce=self.nonce,
-                )
-                payload = await self._context(device_id, challenge, media=True)
+                try:
+                    device_id, challenge = _media_request(
+                        raw[:-1], iid=self.ctx.iid, nonce=self.nonce,
+                    )
+                except OperatorUnavailableError:
+                    challenge = _presentation_request(
+                        raw[:-1], iid=self.ctx.iid, nonce=self.nonce,
+                    )
+                    payload = await self._context("", challenge, presentation=True)
+                else:
+                    payload = await self._context(device_id, challenge, media=True)
             else:
                 payload = await self._context(request_id, challenge)
             if not _safe_ijson(payload):
@@ -542,7 +620,7 @@ class OperatorReadService:
 
 
 def _exchange(path: Path, message: dict[str, object],
-              response_keys: frozenset[str]) -> dict[str, Any]:
+              response_keys: frozenset[str], *, deadline: float | None = None) -> dict[str, Any]:
     """Shared bounded same-UID transport; individual operations validate closed replies."""
     fd, parent = _parent_fd(path)
     try:
@@ -554,8 +632,15 @@ def _exchange(path: Path, message: dict[str, object],
                              ensure_ascii=True, allow_nan=False).encode("ascii") + b"\n"
         if len(request) > MAX_REQUEST:
             raise OperatorUnavailableError("operator request unavailable")
+        def remaining() -> float:
+            if deadline is None:
+                return DEADLINE_S
+            value = deadline - time.monotonic()
+            if value <= 0:
+                raise OperatorUnavailableError("operator context expired")
+            return value
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
-            client.settimeout(DEADLINE_S)
+            client.settimeout(remaining())
             client.connect(str(path))
             if _peer_uid(client) != os.getuid():
                 raise OperatorUnavailableError("operator peer unavailable")
@@ -569,9 +654,11 @@ def _exchange(path: Path, message: dict[str, object],
                     or (named_parent.st_dev, named_parent.st_ino)
                     != (parent.st_dev, parent.st_ino)):
                 raise OperatorUnavailableError("operator socket changed")
+            client.settimeout(remaining())
             client.sendall(request)
             chunks = bytearray()
             while len(chunks) <= MAX_RESPONSE:
+                client.settimeout(remaining())
                 block = client.recv(min(4096, MAX_RESPONSE + 1 - len(chunks)))
                 if not block:
                     break
@@ -685,6 +772,41 @@ def read_media_context(path: Path, *, iid: str, nonce: str, device_id: str) -> d
         decision = MediaReadDecision(**result["decision"])
         decision.validate()
         if decision.iid != iid or decision.device_id != device_id:
+            raise OperatorUnavailableError("operator context unavailable")
+        return result
+    except (OSError, ValueError, TypeError, KeyError) as exc:
+        raise OperatorUnavailableError("operator context unavailable") from exc
+
+
+def read_presentation_context(path: Path, *, iid: str, nonce: str) -> dict[str, Any]:
+    """Read binding metadata only; no phone rights, image read or native grant."""
+    try:
+        if (type(iid) is not str or _IID.fullmatch(iid) is None
+                or type(nonce) is not str or _NONCE.fullmatch(nonce) is None):
+            raise OperatorUnavailableError("operator context unavailable")
+        deadline = time.monotonic() + DEADLINE_S
+        challenge = os.urandom(16).hex()
+        message = {"protocol": 1, "operation": "host_presentation_binding_context",
+                   "iid": iid, "nonce": nonce, "challenge": challenge}
+        result = _exchange(path, message, frozenset({
+            "protocol", "operation", "iid", "nonce", "challenge", "generation",
+            "state", "sample_ms", "expires_ms",
+        }), deadline=deadline)
+        if (type(result["protocol"]) is not int or result["protocol"] != 1
+                or result["operation"] != message["operation"]
+                or result["iid"] != iid or result["nonce"] != nonce
+                or result["challenge"] != challenge
+                or type(result["generation"]) is not str
+                or _NONCE.fullmatch(result["generation"]) is None
+                or type(result["state"]) is not str
+                or result["state"] not in {"bound_not_probed", "unavailable"}
+                or type(result["sample_ms"]) is not int
+                or type(result["expires_ms"]) is not int
+                or not 0 <= result["sample_ms"] < result["expires_ms"]
+                or result["expires_ms"] - result["sample_ms"] > 2_000
+                or not result["sample_ms"] <= int(time.monotonic() * 1_000)
+                    < result["expires_ms"]
+                or time.monotonic() >= deadline or not _safe_ijson(result)):
             raise OperatorUnavailableError("operator context unavailable")
         return result
     except (OSError, ValueError, TypeError, KeyError) as exc:

@@ -97,6 +97,16 @@ keys or endpoints. Recheck after changing profile configuration and restarting
 the gateway. This is a prerequisite diagnostic: device authorization and the
 outcome of a later request are checked separately by HMP's routes.
 
+The source candidate also adds `hermes hmp health presentation`, a read-only
+desktop appearance binding diagnostic. It prints **bound (not probed)** or
+**unavailable**, using the current private operator socket and pinned listener.
+It fetches no avatar or metadata and tests no phone permission or image rendering.
+An older listener, changed listener or expired observation returns unavailable
+and a nonzero exit code. It does not identify a missing permission or flag, and
+does not grant access, enable a feature or change existing health checks. See
+[the diagnostic contract](../specs/046-bot-presentation-integration/OPERATOR_BINDING_DIAGNOSTIC.md)
+for the source checks and remaining installed-host/device qualification.
+
 Scan the offer in the mobile app, compare the short security code on both screens,
 and confirm on the host. Selecting `y` at **Allow the phone to use all of these?**
 selects the profiles to approve; the phone must still send its bot-access
