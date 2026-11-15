@@ -28,8 +28,8 @@ Middleware order (outermost first):
    includes the peer address and that same raw text via `exc_info` — never reaches the log either;
    it always emits exactly `event=http_parse_error outcome=bad_request`.
 5. `compat` (ERR-2a): on an unsupported build every path except `/hmp/v1/ready` and the
-   authenticated readiness capability path answers `503 other {why}`. The capability handler
-   returns only its fixed compatibility projection and does not call the bridge.
+   authenticated readiness capability path or exact own-Controls GET answers `503 other {why}`.
+   These additive reads never call native feature APIs or widen feature-operation gates.
 
 Rate limits (TR-6) are applied inside the P2, P4 and P5 handlers, because the contract orders
 them against the body checks and keys two of them on body fields.
@@ -150,6 +150,7 @@ from .request_ctx import (
     parse_peer_ip,
     peer_key,  # noqa: F401
     read_json_body,
+    single_header,
 )
 from .request_ctx import (
     ReadWorkerBudget as ReadWorkerBudget,
@@ -163,6 +164,7 @@ _AT1_SERVER_MODULE = sys.modules[__name__]
 F1_ROUTES: tuple[tuple[str, str, str], ...] = (
     ("GET", "/ready", "PR0-1"),
     ("GET", "/readiness/capabilities", "AR1"),
+    ("GET", "/devices/self/controls-readiness", "AR1-P1"),
     ("GET", "/bots/{p}/readiness", "AR1"),
     ("GET", "/bots/{p}/media-readiness", "LM-ENT1"),
     ("GET", "/media-readiness/capabilities", "LM-ENT1"),
@@ -397,9 +399,14 @@ async def limits_middleware(request: web.Request, handler: Handler) -> web.Strea
 
 @web.middleware
 async def compat_middleware(request: web.Request, handler: Handler) -> web.StreamResponse:
-    """ERR-2a: readiness capabilities is the one authenticated additive exception (AR1)."""
+    """ERR-2a: retain existing exceptions plus the exact authenticated self-read GET."""
     ctx = context(request)
-    if not ctx.compat.supported and request.path not in READ_COMPAT_EXEMPT_PATHS:
+    self_controls_read = (
+        request.method == "GET"
+        and request.path == PATH_PREFIX + "/devices/self/controls-readiness"
+    )
+    if (not ctx.compat.supported
+            and request.path not in READ_COMPAT_EXEMPT_PATHS and not self_controls_read):
         why = ctx.compat.why or OtherWhy.HERMES_BUILD_UNSUPPORTED
         refusal = READ_COMPAT_REFUSALS.get(why)
         if refusal is None:  # never expected; fail closed on the build-unsupported refusal
@@ -458,6 +465,85 @@ def _readiness_bearer(request: web.Request) -> Any:
         if exc.code in {
             ErrorCode.UNAUTHENTICATED, ErrorCode.REVOKED, ErrorCode.WRONG_INSTANCE,
         }:
+            raise
+        raise HmpError(ErrorCode.READINESS_UNAVAILABLE) from None
+    except Exception:
+        raise HmpError(ErrorCode.READINESS_UNAVAILABLE) from None
+
+
+async def handle_self_controls_readiness(request: web.Request) -> web.Response:
+    """AR1-P1: own Controls observation, never a feature/API authorization grant."""
+    _readiness_empty_get(request)
+    ctx = context(request)
+    origin = (ctx.identity, ctx.store, ctx.bridge)
+    iid = ctx.iid
+    generation = ctx.readiness_generation
+    deadline = time.monotonic() + _READINESS_DEADLINE_S
+    authorization = single_header(request, "Authorization")
+    instance = single_header(request, "HMP-Instance")
+    lane = ctx.readiness_reads
+
+    def current() -> None:
+        # Only exact origin fields/time here: no Store or source callback on the loop.
+        if (ctx.identity is not origin[0] or ctx.store is not origin[1]
+                or ctx.bridge is not origin[2] or ctx.iid != iid
+                or ctx.readiness_generation != generation
+                or type(generation) is not str
+                or readiness.GENERATION_RE.fullmatch(generation) is None
+                or time.monotonic() >= deadline):
+            raise readiness.ReadinessUnavailableError()
+
+    def authenticate(expected: Any = None) -> Any:
+        current()
+        if ctx.identity.still_current() is not True:
+            raise readiness.ReadinessUnavailableError()
+        who = Authenticator(origin[1], iid, ctx.now).authenticate(authorization, instance)
+        current()
+        if ctx.identity.still_current() is not True:
+            raise readiness.ReadinessUnavailableError()
+        if expected is not None and who != expected:
+            raise readiness.ReadinessUnavailableError()
+        return who
+
+    def admission() -> tuple[Any, int]:
+        who = authenticate()
+        now = _readiness_now(ctx)
+        current()
+        return who, now
+
+    def observe(expected: Any) -> dict[str, object]:
+        authenticate(expected)
+        entitlement = _readiness_controls(ctx, expected.device_id)
+        authenticate(expected)
+        if _readiness_controls(ctx, expected.device_id) != entitlement:
+            raise readiness.ReadinessUnavailableError()
+        # Re-authenticate AFTER both reads: revocation is definitive even if bytes match.
+        authenticate(expected)
+        _readiness_now(ctx)
+        current()
+        return {"protocol": 1, "generation": generation, "entitlement": entitlement,
+                "scope": ["jobs", "model"], "api_reachability": "not_probed"}
+
+    try:
+        if not isinstance(lane, ReadinessReadService):
+            raise readiness.ReadinessUnavailableError()
+        async with lane.activity(admission, deadline=deadline) as (who, now):
+            current()
+            if context(request) is not ctx:
+                raise readiness.ReadinessUnavailableError()
+            ctx.limiter.check("readiness", who.device_id, 30, now)
+        async with lane.activity(partial(observe, who), deadline=deadline) as payload:
+            current()
+            if context(request) is not ctx:
+                raise readiness.ReadinessUnavailableError()
+            body = wire.dump_json(payload)
+            if len(body) > 512:
+                raise readiness.ReadinessUnavailableError()
+            return web.Response(body=body, content_type="application/json",
+                                headers={"Cache-Control": "no-store"})
+    except HmpError as exc:
+        if exc.code in {ErrorCode.UNAUTHENTICATED, ErrorCode.REVOKED,
+                        ErrorCode.WRONG_INSTANCE, ErrorCode.RATE_LIMITED}:
             raise
         raise HmpError(ErrorCode.READINESS_UNAVAILABLE) from None
     except Exception:
@@ -1695,6 +1781,7 @@ def build_app(ctx: ServerContext) -> web.Application:
     handlers: dict[str, Handler] = {
         "/ready": handle_ready,
         "/readiness/capabilities": handle_readiness_capabilities,
+        "/devices/self/controls-readiness": handle_self_controls_readiness,
         "/bots/{p}/readiness": handle_readiness,
         "/bots/{p}/media-readiness": handle_media_readiness,
         "/media-readiness/capabilities": handle_media_readiness_capabilities,
