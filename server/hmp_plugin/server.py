@@ -126,6 +126,7 @@ from .logging_policy import (
 )
 from .pairing import handle_pair_complete, handle_pair_request
 from .push_dispatch import PushDispatcher, RelayPort
+from .readiness_work import ReadActivityUnavailableError, ReadinessReadService
 from .reads import require_bot_authorized
 
 # `request_ctx` is the leaf module `ServerContext`/`CTX_KEY`/`context()`/the body and bearer
@@ -765,76 +766,56 @@ async def _handle_readiness(request: web.Request, *, media: bool) -> web.Respons
         raise HmpError(ErrorCode.READINESS_UNAVAILABLE)
     authorization = request.headers.get("Authorization")
     instance = request.headers.get("HMP-Instance")
-    if not ctx.read_worker_budget.reserve(operator=False):
+    lane = ctx.readiness_reads
+    if not isinstance(lane, ReadinessReadService):
         raise HmpError(ErrorCode.READINESS_UNAVAILABLE)
     deadline = time.monotonic() + _READINESS_DEADLINE_S
+    collect = partial(
+        _collect_media_readiness if media else _collect_readiness,
+        ctx, authorization=authorization, instance=instance, expected=who,
+        profile=profile, device_id=who.device_id, deadline=deadline, generation=generation,
+    )
     try:
-        work = asyncio.create_task(asyncio.to_thread(
-            _collect_media_readiness if media else _collect_readiness,
-            ctx,
-            authorization=authorization,
-            instance=instance,
-            expected=who,
-            profile=profile,
-            device_id=who.device_id,
-            deadline=deadline,
-            generation=generation,
-        ))
-    except Exception:
-        ctx.read_worker_budget.release(operator=False)
+        async with lane.activity(collect, deadline=deadline) as payload:
+            if media:
+                if not media_context_current():
+                    raise HmpError(ErrorCode.READINESS_UNAVAILABLE)
+                # Final synchronous authority/readback fence after the worker await. Never await
+                # between this comparison and response construction. These authority readers can
+                # perform SQLite/native config I/O; this is not a nonblocking performance claim.
+                try:
+                    current = _collect_media_readiness(
+                        ctx, authorization=authorization, instance=instance, expected=who,
+                        profile=profile, device_id=who.device_id, deadline=deadline,
+                        generation=generation,
+                    )
+                    if (not media_context_current()
+                            or current["media"] != payload["media"]
+                            or current["_authority"] != payload["_authority"]):
+                        raise readiness.ReadinessUnavailableError()
+                except HmpError:
+                    raise
+                except Exception:
+                    raise HmpError(ErrorCode.READINESS_UNAVAILABLE) from None
+                payload.pop("_authority")  # internal snapshot never enters the wire DTO
+            try:
+                body = wire.dump_json(payload)
+            except Exception:
+                raise HmpError(ErrorCode.READINESS_UNAVAILABLE) from None
+            if len(body) > readiness.MAX_RESPONSE_BYTES:
+                raise HmpError(ErrorCode.READINESS_UNAVAILABLE)
+            return web.Response(
+                body=body,
+                content_type="application/json",
+                headers={"Cache-Control": "no-store"},
+            )
+    except (TimeoutError, readiness.ReadinessUnavailableError, ReadActivityUnavailableError):
         raise HmpError(ErrorCode.READINESS_UNAVAILABLE) from None
-
-    def release_worker(done: asyncio.Task[Any]) -> None:
-        with contextlib.suppress(asyncio.CancelledError):
-            done.exception()
-        ctx.read_worker_budget.release(operator=False)
-
-    work.add_done_callback(release_worker)
-    try:
-        payload = await asyncio.wait_for(asyncio.shield(work), timeout=_READINESS_DEADLINE_S)
-    except TimeoutError:
-        raise HmpError(ErrorCode.READINESS_UNAVAILABLE) from None
-    except readiness.ReadinessUnavailableError:
-        raise HmpError(ErrorCode.READINESS_UNAVAILABLE) from None
-    except HmpError as exc:
-        if exc.code is ErrorCode.READINESS_UNAVAILABLE:
-            raise HmpError(ErrorCode.READINESS_UNAVAILABLE) from None
+    except HmpError:
         raise
     except Exception as exc:
         log_handler_exception(exc)
         raise HmpError(ErrorCode.READINESS_UNAVAILABLE) from None
-    if media:
-        if not media_context_current():
-            raise HmpError(ErrorCode.READINESS_UNAVAILABLE)
-        # Final synchronous authority/readback fence after the worker await. Never await
-        # between this comparison and response construction. These authority readers can
-        # perform SQLite/native config I/O; this is not a nonblocking performance claim.
-        try:
-            current = _collect_media_readiness(
-                ctx, authorization=authorization, instance=instance, expected=who,
-                profile=profile, device_id=who.device_id, deadline=deadline,
-                generation=generation,
-            )
-            if (not media_context_current()
-                    or current["media"] != payload["media"]
-                    or current["_authority"] != payload["_authority"]):
-                raise readiness.ReadinessUnavailableError()
-        except HmpError:
-            raise
-        except Exception:
-            raise HmpError(ErrorCode.READINESS_UNAVAILABLE) from None
-        payload.pop("_authority")  # internal snapshot never enters the wire DTO
-    try:
-        body = wire.dump_json(payload)
-    except Exception:
-        raise HmpError(ErrorCode.READINESS_UNAVAILABLE) from None
-    if len(body) > readiness.MAX_RESPONSE_BYTES:
-        raise HmpError(ErrorCode.READINESS_UNAVAILABLE)
-    return web.Response(
-        body=body,
-        content_type="application/json",
-        headers={"Cache-Control": "no-store"},
-    )
 
 
 def _query_int(request: web.Request, name: str, *, default: int | None, lo: int, hi: int) -> int:
@@ -1680,6 +1661,11 @@ def build_app(ctx: ServerContext) -> web.Application:
     docstring). Importing them at this module's own top level binds this app's route table to the
     same load as everything else it uses.
     """
+    if ctx.readiness_reads is None:
+        ctx.readiness_reads = ReadinessReadService(ctx)
+    elif (not isinstance(ctx.readiness_reads, ReadinessReadService)
+          or not ctx.readiness_reads.is_for(ctx)):
+        raise RuntimeError("readiness owner unavailable")
     app = web.Application(
         middlewares=[
             current_key_middleware,
@@ -1696,6 +1682,11 @@ def build_app(ctx: ServerContext) -> web.Application:
         },
     )
     app[CTX_KEY] = ctx
+
+    async def stop_readiness(_app: web.Application) -> None:
+        ctx.readiness_reads.stop()
+
+    app.on_cleanup.append(stop_readiness)
     # S5: this app's own fetch service (dedicated executor, permits); never module-global. Threads
     # start lazily on the first submission, and cleanup closes admissions without waiting.
     app[media_fetch.MEDIA_SERVICE_KEY] = media_fetch.MediaFetchService()
@@ -1956,6 +1947,7 @@ class HmpServer:
         self._operator_read: Any = None
         self._operator_read_drained: Any = None
         self.operator_worker_debt = 0
+        self.readiness_worker_debt = 0
         # The actual adapter retains the owner across reconnects. A standalone
         # server without that owner never silently creates a replacement pool.
         self._presentation_owner = presentation_owner
@@ -2219,6 +2211,14 @@ class HmpServer:
             log_event("identity_changed", outcome="listener_closed")
             self._stopping = asyncio.get_running_loop().create_task(self.stop())
 
+    async def wait_readiness_drain(self) -> None:
+        service = self.ctx.readiness_reads
+        if service is None:
+            if self.readiness_worker_debt:
+                raise RuntimeError("readiness drain unavailable")
+            return
+        await service.wait_drained()
+
     async def wait_operator_drain(self) -> None:
         service = self._operator_read_drained
         if service is not None:
@@ -2280,6 +2280,8 @@ class HmpServer:
                     raise
             except Exception:
                 log_event('listener_start', outcome='unavailable')
+        if self.ctx.readiness_reads is not None:
+            self.readiness_worker_debt = self.ctx.readiness_reads.stop()
         presentation = self._presentation_service
         if presentation is not None:
             self.presentation_worker_debt = not await presentation.close_and_join()

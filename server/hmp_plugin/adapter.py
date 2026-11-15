@@ -629,6 +629,7 @@ class HmpAdapter(BasePlatformAdapter):
         self._start_cleanup_task: asyncio.Task[None] | None = None
         self._failed_start_server: server.HmpServer | None = None
         self._dependency_closers: set[asyncio.Task[None]] = set()
+        self._readiness_dependency_closers: set[asyncio.Task[None]] = set()
         self._dependency_close_unknown: server.HmpServer | None = None
         self._record: Path | None = None
         # Live-bug fix: the nonce this incarnation's record was written with (SR-7 -- a fresh
@@ -690,6 +691,8 @@ class HmpAdapter(BasePlatformAdapter):
         if self._server is not None:
             return (self._server._stop_owner is None and self._server._stopping is None
                     and not self._server.closed.is_set())
+        if self._readiness_dependency_closers:
+            return False
         if self._dependency_close_unknown is not None or any(
             task.done() and (task.cancelled() or task.exception() is not None)
             for task in self._dependency_closers
@@ -941,7 +944,8 @@ class HmpAdapter(BasePlatformAdapter):
             task.cancel()  # fire-and-forget: this callback itself is synchronous (server.py)
         self._drop_record()
         try:
-            if srv.operator_worker_debt or srv.presentation_worker_debt:
+            if (srv.operator_worker_debt or srv.presentation_worker_debt
+                    or getattr(srv, "readiness_worker_debt", 0)):
                 self._defer_dependency_close(srv)
             else:
                 self._close_dependencies(srv)
@@ -971,7 +975,8 @@ class HmpAdapter(BasePlatformAdapter):
                 self._server = None
             self._drop_record()
             self._mark_disconnected()
-            if srv.operator_worker_debt or srv.presentation_worker_debt:
+            if (srv.operator_worker_debt or srv.presentation_worker_debt
+                    or getattr(srv, "readiness_worker_debt", 0)):
                 self._defer_dependency_close(srv)
             else:
                 self._close_dependencies(srv)
@@ -980,6 +985,8 @@ class HmpAdapter(BasePlatformAdapter):
             self._mark_disconnected()
 
     async def _close_after_operator_drain(self, srv: server.HmpServer) -> None:
+        if getattr(srv, "readiness_worker_debt", 0):
+            await srv.wait_readiness_drain()
         await srv.wait_operator_drain()
         await srv.wait_presentation_drain()
         self._close_dependencies(srv)
@@ -987,6 +994,9 @@ class HmpAdapter(BasePlatformAdapter):
     def _close_dependencies(self, srv: server.HmpServer) -> None:
         if srv._dependencies_closed:
             return
+        readiness_owner = getattr(srv.ctx, "readiness_reads", None)
+        if readiness_owner is not None and not readiness_owner.drained:
+            raise RuntimeError("readiness dependency drain unavailable")
         if self._dependency_close_unknown is not None or srv._dependencies_close_unknown:
             raise RuntimeError('dependency cleanup unavailable')
         self._dependency_close_unknown = srv  # retain before first possible partial effect
@@ -1006,6 +1016,8 @@ class HmpAdapter(BasePlatformAdapter):
         task = asyncio.get_running_loop().create_task(self._close_after_operator_drain(srv))
         srv._dependency_close_task = task
         self._dependency_closers.add(task)
+        if getattr(srv, "readiness_worker_debt", 0):
+            self._readiness_dependency_closers.add(task)
         # Keep failed/cancelled owners too: their outcome is not a dependency
         # close proof, and no automatic replay is safe after an uncertain close.
         task.add_done_callback(self._dependency_close_finished)
@@ -1014,6 +1026,7 @@ class HmpAdapter(BasePlatformAdapter):
     def _dependency_close_finished(self, task: asyncio.Task[None]) -> None:
         if not task.cancelled() and task.exception() is None:
             self._dependency_closers.discard(task)
+            self._readiness_dependency_closers.discard(task)
 
     async def _cleanup_failed_start(self, srv: server.HmpServer) -> None:
         await self._cancel_profile_refresh()
@@ -1022,7 +1035,8 @@ class HmpAdapter(BasePlatformAdapter):
             self._server = None
         self._drop_record()
         self._mark_disconnected()
-        if srv.operator_worker_debt or srv.presentation_worker_debt:
+        if (srv.operator_worker_debt or srv.presentation_worker_debt
+                    or getattr(srv, "readiness_worker_debt", 0)):
             self._defer_dependency_close(srv)
         else:
             self._close_dependencies(srv)

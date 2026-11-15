@@ -51,6 +51,19 @@ CONTRACT_MODULES = {
     "mobile_model.py",
     "server.py",
     "readiness.py",
+    # Existing baseline modules, explicitly included in the closed import contract.
+    "media_permissions.py",
+    "media_readiness.py",
+    "presentation_memory.py",
+    "presentation_native_claim.py",
+    "presentation_native_files.py",
+    "presentation_native_http.py",
+    "presentation_native_link.py",
+    "presentation_native_projection.py",
+    "presentation_native_raster.py",
+    "presentation_native_service.py",
+    "presentation_native_yaml.py",
+    "presentation_routes.py",
     # BI1 pure closed presentation projection and fixed Unicode 17 tables; no Hermes import.
     "presentation.py",
     "presentation_files.py",
@@ -165,6 +178,8 @@ CONTRACT_MODULES = {
     "controls_requests.py",
     "controls_request_routes.py",
     "operator_read.py",
+    # Owned HTTP read worker + caller-tail retirement, no new endpoint authority.
+    "readiness_work.py",
     "request_ctx.py",
     "adapter.py",
     "cli.py",

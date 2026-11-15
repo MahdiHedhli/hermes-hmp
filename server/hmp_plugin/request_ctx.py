@@ -301,6 +301,7 @@ class ServerContext:
     readiness_settings: Callable[[], object] | None = field(default=None, repr=False)
     readiness_generation: str = field(default_factory=lambda: secrets.token_hex(16), repr=False)
     read_worker_budget: ReadWorkerBudget = field(default_factory=ReadWorkerBudget, repr=False)
+    readiness_reads: Any = field(default=None, init=False, repr=False)
     cron_flag: Callable[[], bool] = field(default=lambda: False)
     cron_available: Callable[[], bool] = field(default=lambda: False)
     model_flag: Callable[[], bool] = field(default=lambda: False)
