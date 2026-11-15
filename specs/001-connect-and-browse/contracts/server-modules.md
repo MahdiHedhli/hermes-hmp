@@ -282,7 +282,7 @@ SHA. Unresolvable git metadata or a missing listed file is unidentifiable, hence
 | Method | Path | Clause | Auth |
 |---|---|---|---|
 | GET | `/hmp/v1/ready` | PR0-1 | none |
-| GET | `/hmp/v1/readiness/capabilities` | AR1 v1.6 | bearer + current instance; only additional compatibility exemption |
+| GET | `/hmp/v1/readiness/capabilities` | AR1 v1.6 | bearer + current instance; authenticated additive compatibility exemption |
 | POST | `/hmp/v1/pair/request` | PR2-* | none (offer secret + signature) |
 | POST | `/hmp/v1/pair/complete` | PR4-* | none (signature) |
 | POST | `/hmp/v1/auth/token` | PR5-* | signature |
@@ -1194,3 +1194,22 @@ for the entry/lineage composition. These experimental components do not register
 a service or route, grant native admission, or establish device/release
 qualification. The module inventory remains an explicit exact set; this update
 does not relax the import surface or derive permitted names from the directory.
+
+
+## AR1-P1 own-device Controls observation
+
+GET `/hmp/v1/devices/self/controls-readiness` is an exact-method/path additive compatibility
+exception. It authenticates only the calling device; no selector, profile/native/settings read or
+permission write exists here. Authentication phase A and repeat-auth/Controls phase B each use
+the original listener-owned read lane sequentially under one handler/read-work deadline of2s;
+the existing per-device readiness30 limiter runs between phases on the loop. Existing outer
+identity middleware remains unchanged and outside that deadline. Final worker authentication
+follows both Controls reads; postawait checks and serialization stay inside the caller lease.
+
+Success is no-store JSON, at most512 UTF8 bytes, with exactly protocol1, opaque generation,
+entitlement granted|missing, scope[jobs,model], api_reachability not_probed. Unknown source is
+fixed503, original definitive authentication refusals stay401, rate limit429. This observes own
+Controls only, not feature/API availability or operation authority. Source tests do not qualify
+an installed host, mobile client/UI, device or release. Existing unsupported feature operations
+remain gated. Controls source uses the existing strict Store override and legacy owner fallback;
+no new schema, import exception, upstream API or admin authority.
