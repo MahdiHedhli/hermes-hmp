@@ -63,25 +63,33 @@ class Authenticator:
         token = bearer_token(authorization)
         if token is None:
             raise HmpError(ErrorCode.UNAUTHENTICATED)
-        row = self._store.get_access_token(crypto.sha256(token))
+        row = self._store.access_authority_snapshot(crypto.sha256(token))
         if row is None:
             raise HmpError(ErrorCode.UNAUTHENTICATED)
-        if not crypto.constant_time_equal(str(row["iid"]), self._iid):
+        if not isinstance(row, dict) or not isinstance(row.get("access_iid"), str):
             raise HmpError(ErrorCode.UNAUTHENTICATED)
-        family = self._store.get_token_family(row["family_id"])
-        device = self._store.get_device(row["device_id"])
-        if family is None or device is None or family["device_id"] != row["device_id"]:
+        if not crypto.constant_time_equal(row["access_iid"], self._iid):
             raise HmpError(ErrorCode.UNAUTHENTICATED)
-        if device["state"] == "REVOKED" or family["revoked_at"] is not None:
+        if (
+            not isinstance(row.get("access_family_id"), str)
+            or not isinstance(row.get("access_device_id"), str)
+            or row.get("family_found_id") != row["access_family_id"]
+            or row.get("family_device_id") != row["access_device_id"]
+            or row.get("device_found_id") != row["access_device_id"]
+            or not isinstance(row.get("device_user_id"), str)
+        ):
+            raise HmpError(ErrorCode.UNAUTHENTICATED)
+        if row.get("device_state") == "REVOKED" or row.get("family_revoked_at") is not None:
             raise HmpError(ErrorCode.REVOKED)
-        if device["state"] != "ACTIVE":
+        if row.get("device_state") != "ACTIVE":
             raise HmpError(ErrorCode.UNAUTHENTICATED)
-        if self._now() >= int(row["expires_at"]):
+        expires_at = row.get("access_expires_at")
+        if type(expires_at) is not int or self._now() >= expires_at:
             raise HmpError(ErrorCode.UNAUTHENTICATED)
         return AuthContext(
-            device_id=str(device["device_id"]),
-            user_id=str(device["user_id"]),
-            family_id=str(family["family_id"]),
+            device_id=row["access_device_id"],
+            user_id=row["device_user_id"],
+            family_id=row["access_family_id"],
         )
 
 

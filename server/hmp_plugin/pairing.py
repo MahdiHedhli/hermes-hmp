@@ -363,6 +363,8 @@ class PairingService:
                 "INSERT INTO audit (ts, event, id_prefix8, outcome) VALUES (?, ?, ?, ?)",
                 (now, "pair_complete", pairing_id[:8], outcome),
             )
+        if issued:
+            store.cleanup_push_after_commit(now=now)
         log_event("pair_complete", outcome=outcome, device_id=device_id)
         return CompleteOutcome(
             pending=False, device_id=device_id, user_ref=str(live["user_id"]), grant=grant

@@ -1,0 +1,53 @@
+{
+  "native_source": "ed1afb082eb3e46cf2edae9d8f68fb67b09ee4df",
+  "native_helper_files_match_immutable_git": true,
+  "native_helper_sha256": {
+    "tools/approval.py": "83ff9b1b4e5f313ad652ac6ef849066dffa18a9ed7b327eed45ccabe30a2896b",
+    "tools/approval_gateway_wait.py": "cb637ab95a335feec3141ecb05f27df4783c341ad53e2dcf7d794057e0f7e45c",
+    "tools/interrupt.py": "3127f53b4ca1431df828015a3eb06d29ffd43ea9b6a51954d3a45bc69483917b"
+  },
+  "hmp_repair": "4ad1344",
+  "python": "3.14.9",
+  "probe": "tools/compat/approval_test_native_probe.py",
+  "scope": "exported-source synthetic producer/helper sample; not live CLI/IPC/paired-phone qualification",
+  "observed_cases": [
+    {
+      "choice": "once",
+      "outcome": "once_acknowledged",
+      "cleanup_joined": true,
+      "rows_empty": true,
+      "native_queue_empty": true,
+      "slot_released": true
+    },
+    {
+      "choice": "deny",
+      "outcome": "denied",
+      "cleanup_joined": true,
+      "rows_empty": true,
+      "native_queue_empty": true,
+      "slot_released": true
+    },
+    {
+      "choice": "cancel",
+      "outcome": "cancelled",
+      "cleanup_joined": true,
+      "rows_empty": true,
+      "native_queue_empty": true,
+      "slot_released": true
+    },
+    {
+      "choice": "expiry",
+      "outcome": "expired",
+      "cleanup_joined": true,
+      "rows_empty": true,
+      "native_queue_empty": true,
+      "slot_released": true
+    }
+  ],
+  "attempts_through_instrumented_apis": 0,
+  "instrumentation_is_os_sandbox": false,
+  "independent_review": "four outcomes and joined cleanup independently reproduced; final tool admission repair accepted",
+  "live_host_changes": [],
+  "physical_card_observed": false,
+  "operator_ipc_observed": false
+}

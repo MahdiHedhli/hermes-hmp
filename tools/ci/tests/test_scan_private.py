@@ -76,6 +76,17 @@ def test_clean_sample_passes() -> None:
         assert result.returncode == 0, result.stdout + result.stderr
 
 
+def test_slugged_home_path_fails() -> None:
+    with tempfile.TemporaryDirectory() as d:
+        bad = Path(d) / "scratch_export.txt"
+        bad.write_text(
+            "/private/tmp/session/-Users-" + "agentuser-Documents-Coding-project/scratchpad\n"
+        )
+        result = run_scanner(bad)
+        assert result.returncode == 1, result.stdout + result.stderr
+        assert "HOME_PATH" in result.stdout
+
+
 def test_full_tree_scan_clean_without_suppressions() -> None:
     """The public tree must scan clean without a baseline or synthetic allowlist."""
     result = run_scanner()
@@ -86,6 +97,7 @@ def test_full_tree_scan_clean_without_suppressions() -> None:
 if __name__ == "__main__":
     test_seeded_bad_sample_fails()
     test_clean_sample_passes()
+    test_slugged_home_path_fails()
     test_full_tree_scan_clean_without_suppressions()
     print(
         "OK: scan_private fails on a seeded bad sample and passes on the full tree "

@@ -1,0 +1,369 @@
+{
+  "sourceCommit": "744d75dfd215c2d3302762baa09bd88bc0dbd8bb",
+  "scope": "Startup descriptor producers and consumers; lexical census, not proof of exhaustive graph authority",
+  "files": [
+    {
+      "path": "server/hmp_plugin/presentation_startup_artifacts.py",
+      "sha256": "73051b3a66de6491bccca0e00a409728669ba8df27f7049d0360ccb0816de29a",
+      "sites": [
+        {
+          "line": 92,
+          "source": "class _Descriptor:"
+        },
+        {
+          "line": 268,
+          "source": "and row.attempted is True and row.returned is True and row.unknown is False"
+        },
+        {
+          "line": 933,
+          "source": "and all(type(row) is _Descriptor and row.closed is True"
+        },
+        {
+          "line": 934,
+          "source": "and row.unknown is False and row.close_attempted is True"
+        },
+        {
+          "line": 989,
+          "source": "and all(type(row) is _Descriptor and row.closed is True"
+        },
+        {
+          "line": 990,
+          "source": "and row.unknown is False and row.close_attempted is True"
+        },
+        {
+          "line": 1086,
+          "source": "row = _Descriptor()"
+        },
+        {
+          "line": 1120,
+          "source": "and row.fd is None and row.attempted is True"
+        },
+        {
+          "line": 1121,
+          "source": "and row.close_attempted is False and row.closed is False"
+        },
+        {
+          "line": 1122,
+          "source": "and row.unknown is False and s.records is records"
+        },
+        {
+          "line": 1129,
+          "source": "row.fd = fd"
+        },
+        {
+          "line": 1136,
+          "source": "row.unknown = self._unknown = True"
+        },
+        {
+          "line": 1137,
+          "source": "if type(fd) is int and row.fd is fd and row.close_attempted is False:"
+        },
+        {
+          "line": 1141,
+          "source": "row.unknown = self._unknown = True"
+        },
+        {
+          "line": 1152,
+          "source": "and type(row) is _Descriptor"
+        },
+        {
+          "line": 1153,
+          "source": "and row.fd is fd"
+        },
+        {
+          "line": 1155,
+          "source": "and row.close_attempted is False"
+        },
+        {
+          "line": 1167,
+          "source": "row.close_attempted = True"
+        },
+        {
+          "line": 1170,
+          "source": "row.closed = True"
+        },
+        {
+          "line": 1174,
+          "source": "row.unknown = self._unknown = True"
+        },
+        {
+          "line": 1468,
+          "source": "row.unknown = self._unknown = True"
+        },
+        {
+          "line": 1731,
+          "source": "row.unknown = self._unknown = True"
+        }
+      ]
+    },
+    {
+      "path": "server/hmp_plugin/presentation_gateway_package.py",
+      "sha256": "cd1e179d62e329ea2571e16c55f618931450d7d84c1261927af769cae35d0c19",
+      "sites": [
+        {
+          "line": 25,
+          "source": "_Descriptor,"
+        },
+        {
+          "line": 352,
+          "source": "_require(all(type(r) is _Descriptor and r.closed is True and r.unknown is False"
+        },
+        {
+          "line": 410,
+          "source": "and all(type(row) is _Descriptor and row.closed is True"
+        },
+        {
+          "line": 411,
+          "source": "and row.unknown is False and row.close_attempted is True"
+        },
+        {
+          "line": 413,
+          "source": "and all(type(row) is _Scan and row.closed is True and row.unknown is False"
+        },
+        {
+          "line": 414,
+          "source": "and row.close_attempted is True for row in s.expected.scans))"
+        },
+        {
+          "line": 565,
+          "source": "row.unknown = self._unknown = failed = True"
+        }
+      ]
+    },
+    {
+      "path": "server/hmp_plugin/presentation_gateway_recipe.py",
+      "sha256": "49dd3cab65cc4fa8429d4de48b565fd6ef029eb06545f1191598d9ba6b9920a3",
+      "sites": [
+        {
+          "line": 14,
+          "source": "_Descriptor,"
+        },
+        {
+          "line": 175,
+          "source": "and all(type(row) is _Descriptor and row.closed is True"
+        },
+        {
+          "line": 176,
+          "source": "and row.close_attempted is True and row.unknown is False"
+        },
+        {
+          "line": 215,
+          "source": "and all(type(row) is _Descriptor and row.closed is True"
+        },
+        {
+          "line": 216,
+          "source": "and row.close_attempted is True and row.unknown is False"
+        }
+      ]
+    },
+    {
+      "path": "server/hmp_plugin/presentation_startup_selection.py",
+      "sha256": "1231b9d5a2480f4d58b7e2c7c261cf0968846fe45655f217ac0ab92c56648147",
+      "sites": [
+        {
+          "line": 22,
+          "source": "_Descriptor,"
+        },
+        {
+          "line": 302,
+          "source": "and all(type(row) is _Descriptor and row.closed is True"
+        },
+        {
+          "line": 303,
+          "source": "and row.unknown is False and row.close_attempted is True"
+        }
+      ]
+    },
+    {
+      "path": "server/hmp_plugin/presentation_startup_cache.py",
+      "sha256": "52f98a2b8d7d0c4319f94c1195ad012d982bd7b38678a66678fab14c68fd75fe",
+      "sites": [
+        {
+          "line": 302,
+          "source": "from .presentation_startup_artifacts import _Descriptor"
+        },
+        {
+          "line": 328,
+          "source": "and all(type(row) is _Descriptor and row.closed is True"
+        },
+        {
+          "line": 329,
+          "source": "and row.close_attempted is True and row.unknown is False"
+        }
+      ]
+    },
+    {
+      "path": "server/hmp_startup/entry_files.py",
+      "sha256": "548bc165b8a47bb7d311199a1f284c7929bada55651e0f222a401794a9a91dff",
+      "sites": [
+        {
+          "line": 26,
+          "source": "_Descriptor,"
+        },
+        {
+          "line": 334,
+          "source": "and all(type(row) is _Descriptor and row.closed is True"
+        },
+        {
+          "line": 335,
+          "source": "and row.unknown is False and row.close_attempted is True"
+        },
+        {
+          "line": 337,
+          "source": "and all(type(row) is _Scan and row.closed is True and row.unknown is False"
+        },
+        {
+          "line": 338,
+          "source": "and row.close_attempted is True for row in inputs.scans)"
+        },
+        {
+          "line": 560,
+          "source": "row.unknown = io._unknown = self._unknown = True"
+        },
+        {
+          "line": 603,
+          "source": "row.unknown = io._unknown = self._unknown = True"
+        },
+        {
+          "line": 642,
+          "source": "row.unknown = io._unknown = self._unknown = True"
+        }
+      ]
+    },
+    {
+      "path": "server/hmp_startup/runtime_reader.py",
+      "sha256": "73343c3d3961d7edc168cf12d378a19ea2d54d47bcfd93fdc508fe30e7646066",
+      "sites": [
+        {
+          "line": 285,
+          "source": "and all(row.closed is True and row.close_attempted is True"
+        },
+        {
+          "line": 286,
+          "source": "and row.unknown is False for row in s.records))"
+        }
+      ]
+    },
+    {
+      "path": "server/hmp_startup/cache_reader.py",
+      "sha256": "d0975391a97df8146ee8a5696c784ae4ca013f61bfb2db6a9ef6e75ed1d16928",
+      "sites": [
+        {
+          "line": 12,
+          "source": "_Descriptor,"
+        },
+        {
+          "line": 182,
+          "source": "and all(type(row) is _Descriptor and row.closed is True"
+        },
+        {
+          "line": 183,
+          "source": "and row.close_attempted is True and row.unknown is False"
+        },
+        {
+          "line": 186,
+          "source": "and row.unknown is False for row in reads))"
+        },
+        {
+          "line": 412,
+          "source": "and all(type(row) is _Descriptor and row.closed is True"
+        },
+        {
+          "line": 413,
+          "source": "and row.close_attempted is True and row.unknown is False"
+        },
+        {
+          "line": 416,
+          "source": "and row.unknown is False for row in reads)"
+        },
+        {
+          "line": 425,
+          "source": "and all(type(row) is _Descriptor and row.closed is True"
+        },
+        {
+          "line": 426,
+          "source": "and row.close_attempted is True and row.unknown is False"
+        },
+        {
+          "line": 429,
+          "source": "and row.unknown is False for row in reads)"
+        }
+      ]
+    },
+    {
+      "path": "server/hmp_startup/cache_probe.py",
+      "sha256": "01d90a17f45aecb64bed599990e580eb28abb2d62078d89731658bd197b8ec4c",
+      "sites": [
+        {
+          "line": 17,
+          "source": "_Descriptor,"
+        },
+        {
+          "line": 184,
+          "source": "and type(item[0]) is _Descriptor and type(item[1]) is int"
+        },
+        {
+          "line": 361,
+          "source": "row.unknown = self._unknown = failed = True"
+        },
+        {
+          "line": 375,
+          "source": "and all(type(row) is _Descriptor and row.fd is fd and row.closed is True"
+        },
+        {
+          "line": 376,
+          "source": "and row.close_attempted is True and row.unknown is False"
+        }
+      ]
+    },
+    {
+      "path": "server/hmp_startup/gateway_approval.py",
+      "sha256": "ba4f4495e5ad1ee2d940870a044074e59b3f6567a118cbf23a1a0797cb8b76ce",
+      "sites": [
+        {
+          "line": 23,
+          "source": "_Descriptor,"
+        },
+        {
+          "line": 315,
+          "source": "and all(actual is held and type(held) is _Descriptor"
+        },
+        {
+          "line": 316,
+          "source": "and held.closed is True and held.close_attempted is True"
+        },
+        {
+          "line": 317,
+          "source": "and held.unknown is False for actual, held in zip("
+        }
+      ]
+    },
+    {
+      "path": "server/hmp_startup/gateway_continuation.py",
+      "sha256": "de195424586fed5a130901fd688b421adb4ec8d0b6d92396c71d948c7d1c8ae7",
+      "sites": [
+        {
+          "line": 23,
+          "source": "_Descriptor,"
+        },
+        {
+          "line": 275,
+          "source": "and all(actual is held and type(held) in (_Descriptor, _Scan)"
+        },
+        {
+          "line": 276,
+          "source": "and held.closed is True and held.close_attempted is True"
+        },
+        {
+          "line": 277,
+          "source": "and held.unknown is False"
+        }
+      ]
+    }
+  ],
+  "excluded": {
+    "presentation_clock.py": "distinct local descriptor owner; no shared _Descriptor migration",
+    "presentation_remote.py": "distinct _HeldDirectory lifetime; not startup-file cleanup",
+    "presentation_parent_policy.py": "separate held-directory policy; no shared _Descriptor migration"
+  }
+}

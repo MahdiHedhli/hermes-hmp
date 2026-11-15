@@ -1,0 +1,51 @@
+# Fresh-probe complete engine prototype — not for installation
+
+November 9, 2026. Source `f840da6`, direct-admission causal successor `eda8143`.
+This branch is uninstalled and the legacy `observe` traversal is not switched.
+The full feature and PS1-FP-NATIVE remain incomplete. This is local HMP work,
+not an upstream Hermes capability blocker or a release candidate.
+
+The prototype executes the complete original missing/directory/declared-regular
+traversal with real native stat/fstat, ordered opened ancestors, final checks,
+reserved closes and zero reads. Three positive GC-disabled fixtures pass on
+Python 3.14.9. They do not qualify failure, lifetime, interruption or cleanup.
+The initial known-raised representation must also be replaced: a diagnostic is
+a distinct stable typed outcome, not returned-success or the common unknown bit.
+
+Independent read-only review found blocking contracts. Direct causal tests use
+the same normal `_start` admission now used by `observe`, then call the candidate
+from an ordinary Python frame so nested fault tracing really executes. They do
+not spoof owner flags, grant rights or bypass admission. At `eda8143`, the three
+new controls fail as intended and two existing legacy missing/declared probes
+pass. All runs bind unchanged source. Failed synthetic stages are retained
+privately; no paths, exceptions, credentials or user content are published here.
+
+| Contract | Observed or reviewed limitation |
+| --- | --- |
+| Current lifetime after actor sampling | Retiring continuation before the call still permits one stat; causal failure. |
+| Producer-unwound memory retirement | Lost actual return retains one raw capsule; causal failure with GC disabled. |
+| Known reserved cleanup | The same loss leaves one known ancestor unclosed because ended routing stays occupied; causal failure. |
+| Wrong actor before publication | Refusal still publishes execution and poisons the ledger despite no debit; causal failure. |
+| Partial ACK/late-finalizer seal | Source review found missing original ACK attempt and full final pure rejoin. |
+| Exact type and descriptor proofs | Source review found nested reads/comparisons before closed shapes and incomplete original live parent/component/flag checks. |
+| Foreign state and accounting | Failure must preserve foreign slots, own-ended routing must be retired conditionally, and final exact debit/reserve/byte/close accounting must be authoritative. |
+
+## Required coherent correction
+
+Factor one common lifecycle in `presentation_native_metadata` with closed typed
+directory/probe projections, retaining DirectoryConsumer's existing owner scope.
+Reuse the original factory/capsule, actor primitives, stat snapshot and reserved
+open/close mechanisms. Extract the hardened admission, outcome, consumption,
+partial ACK, caller-held producer-unwound retirement and late-callback seals;
+do not copy another independent per-site dispatcher or accept caller callbacks.
+The probe keeps its own branch policy, literal previous actual return and finish.
+Site index is not execution-history length; missing confirmation is distinct.
+
+Qualify retirement at the final actor boundary, wrong actor with zero publication,
+producer/ACK return loss, interrupted ACK stores, foreign slot preservation,
+late weak-reference mutation, wrong types with zero hooks, exact diagnostic
+class/errno/name/subclass behavior, first/confirmation drift and close reserves.
+Run actual missing/directory/declared and all existing probe regressions on both
+supported interpreters. Only then switch the complete actual caller. Startup
+before/after source effects, other policies/operations, service/resource bounds,
+authenticated image transport, physical devices and release remain separate.

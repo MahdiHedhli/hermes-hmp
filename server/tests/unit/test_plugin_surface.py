@@ -53,6 +53,39 @@ def _rules(pkg: Path) -> list[tuple[str, str]]:
     return [(v.rule, v.path) for v in surface.check_package(pkg)]
 
 
+@pytest.mark.parametrize(
+    "statement", ["from yaml import error, events, tokens", "from yaml.loader import SafeLoader"]
+)
+def test_native_yaml_fixed_imports_are_allowed_only_at_startup(pkg, statement):
+    _write(
+        pkg,
+        "presentation_native_yaml.py",
+        f"class NativePresentationYaml:\n    def __init__(self):\n        {statement}\n",
+    )
+    assert ("S1", "presentation_native_yaml.py") not in _rules(pkg)
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "from yaml.loader import SafeLoader\n",
+        "def request():\n    from yaml.loader import SafeLoader\n",
+        "class NativePresentationYaml:\n    def request(self):\n"
+        "        from yaml.loader import SafeLoader\n",
+        "class Other:\n    def __init__(self):\n        from yaml.loader import SafeLoader\n",
+        "class NativePresentationYaml:\n    def __init__(self):\n        from yaml import load\n",
+        "class NativePresentationYaml:\n    def __init__(self):\n"
+        "        from yaml.loader import UnsafeLoader\n",
+        "class NativePresentationYaml:\n    def __init__(self):\n        import yaml\n",
+        "class NativePresentationYaml:\n    def __init__(self):\n"
+        "        from yaml import error, events, tokens, constructor\n",
+    ],
+)
+def test_native_yaml_no_general_module_or_request_import_exemption(pkg, body):
+    _write(pkg, "presentation_native_yaml.py", body)
+    assert ("S1", "presentation_native_yaml.py") in _rules(pkg)
+
+
 # --- S1 imports ---------------------------------------------------------------------------------
 
 
@@ -305,3 +338,316 @@ def test_s6_manifest(pkg: Path, old: str, new: str) -> None:
     assert old in text
     path.write_text(text.replace(old, new, 1), encoding="utf-8")
     assert ("S6", "plugin.yaml") in _rules(pkg)
+
+
+def test_yaml_is_lazy_worker_only_and_other_imports_stay_closed(pkg: Path) -> None:
+    _append(pkg, "presentation_yaml_adapter.py", "def worker():\n    import yaml\n")
+    assert _rules(pkg) == []
+    for module in ("server.py", "adapter.py", "reads.py", "bridge.py", "cli.py"):
+        _append(pkg, module, "def forbidden():\n    import yaml\n")
+    assert {
+        ("S1", m) for m in ("server.py", "adapter.py", "reads.py", "bridge.py", "cli.py")
+    } <= set(_rules(pkg))
+
+
+def test_yaml_module_level_import_in_worker_is_rejected(pkg: Path) -> None:
+    _append(pkg, "presentation_yaml_adapter.py", "import yaml\n")
+    assert ("S1", "presentation_yaml_adapter.py") in _rules(pkg)
+
+
+@pytest.mark.parametrize(
+    "statement", ["from yaml import load", "from yaml import SafeLoader", "import yaml.constructor"]
+)
+def test_yaml_worker_from_and_submodule_imports_stay_closed(pkg: Path, statement: str) -> None:
+    _append(pkg, "presentation_yaml_adapter.py", f"def forbidden():\n    {statement}\n")
+    assert ("S1", "presentation_yaml_adapter.py") in _rules(pkg)
+
+
+@pytest.mark.parametrize(
+    "module, package", [("presentation_yaml_adapter.py", "yaml"), ("cli.py", "qrcode")]
+)
+@pytest.mark.parametrize(
+    "body",
+    [
+        "class Eager:\n    import {package}\n",
+        "class Outer:\n    class Eager:\n        import {package}\n",
+    ],
+)
+def test_module_restricted_imports_reject_eager_class_bodies(
+    pkg: Path, module: str, package: str, body: str
+) -> None:
+    _append(pkg, module, body.format(package=package))
+    assert ("S1", module) in _rules(pkg)
+
+
+def test_worker_function_local_class_import_is_lazy(pkg: Path) -> None:
+    _append(
+        pkg, "presentation_yaml_adapter.py", "def later():\n    class Local:\n        import yaml\n"
+    )
+    assert _rules(pkg) == []
+
+
+def test_bridge_import_in_eager_class_is_not_late_bound(pkg: Path) -> None:
+    _append(pkg, "reads.py", "class Eager:\n    from . import bridge\n")
+    assert ("S3", "reads.py") in _rules(pkg)
+
+
+@pytest.mark.parametrize(
+    "statement",
+    [
+        "import yaml.error",
+        "import yaml.events",
+        "import yaml.tokens",
+        "from yaml.loader import SafeLoader",
+    ],
+)
+def test_fixed_token_event_imports_are_lazy_adapter_only(pkg: Path, statement: str) -> None:
+    _append(pkg, "presentation_yaml_adapter.py", f"def worker():\n    {statement}\n")
+    assert _rules(pkg) == []
+    for module in (
+        "server.py",
+        "adapter.py",
+        "reads.py",
+        "bridge.py",
+        "cli.py",
+        "presentation_child.py",
+    ):
+        _append(pkg, module, f"def forbidden():\n    {statement}\n")
+    assert {
+        ("S1", module)
+        for module in (
+            "server.py",
+            "adapter.py",
+            "reads.py",
+            "bridge.py",
+            "cli.py",
+            "presentation_child.py",
+        )
+    } <= set(_rules(pkg))
+    _append(pkg, "presentation_yaml_adapter.py", statement + "\n")
+    assert ("S1", "presentation_yaml_adapter.py") in _rules(pkg)
+
+
+@pytest.mark.parametrize(
+    "statement",
+    [
+        "from yaml.loader import Loader",
+        "from yaml.loader import UnsafeLoader",
+        "from yaml.loader import SafeLoader, Loader",
+        "from yaml.events import *",
+        "from yaml.error import YAMLError",
+        "import yaml.cyaml",
+        "import yaml._yaml",
+    ],
+)
+def test_unreviewed_parser_import_variants_remain_closed(pkg: Path, statement: str) -> None:
+    _append(pkg, "presentation_yaml_adapter.py", f"def forbidden():\n    {statement}\n")
+    assert ("S1", "presentation_yaml_adapter.py") in _rules(pkg)
+
+
+@pytest.mark.parametrize(
+    "module,body,ok",
+    [
+        (
+            "presentation_startup_artifacts.py",
+            "def f():\n    from hmp_startup.gateway_approval import GatewayApprovalOwner\n",
+            True,
+        ),
+        (
+            "presentation_startup_selection.py",
+            "def f():\n    from hmp_startup.gateway_approval import GatewayApprovalOwner\n",
+            True,
+        ),
+        (
+            "presentation_startup_selection.py",
+            "def f():\n    from hmp_startup.entry_files import EntryFileSnapshotOwner\n",
+            False,
+        ),
+        (
+            "presentation_startup_selection.py",
+            "from hmp_startup.gateway_approval import GatewayApprovalOwner\n",
+            False,
+        ),
+        (
+            "presentation_startup_selection.py",
+            "def f():\n    from hmp_startup.gateway_approval import OtherOwner\n",
+            False,
+        ),
+        (
+            "reads.py",
+            "def f():\n    from hmp_startup.gateway_approval import GatewayApprovalOwner\n",
+            False,
+        ),
+        (
+            "presentation_startup_artifacts.py",
+            "def f():\n    from hmp_startup.entry_files import EntryFileSnapshotOwner\n",
+            True,
+        ),
+        (
+            "presentation_startup_artifacts.py",
+            "def f():\n    from hmp_startup.runtime_files import "
+            "ExecutableLinkPlan, RuntimeFilePlan\n",
+            True,
+        ),
+        (
+            "presentation_link_path_policy.py",
+            "def f():\n    from hmp_startup.runtime_files import ExecutableLinkPlan, LinkHop\n",
+            True,
+        ),
+        (
+            "presentation_link_path_policy.py",
+            "from hmp_startup.runtime_files import ExecutableLinkPlan, LinkHop\n",
+            False,
+        ),
+        (
+            "presentation_link_path_policy.py",
+            "def f():\n    from hmp_startup.runtime_files import RuntimeFilePlan\n",
+            False,
+        ),
+        (
+            "presentation_link_path_policy.py",
+            "def f():\n    from hmp_startup.runtime_files import *\n",
+            False,
+        ),
+        (
+            "presentation_link_path_policy.py",
+            "def f():\n    from hmp_startup.entry_files import EntryFileSnapshotOwner\n",
+            False,
+        ),
+        (
+            "reads.py",
+            "def f():\n    from hmp_startup.runtime_files import LinkHop\n",
+            False,
+        ),
+        (
+            "presentation_startup_artifacts.py",
+            "from hmp_startup.entry_files import EntryFileSnapshotOwner\n",
+            False,
+        ),
+        (
+            "presentation_startup_artifacts.py",
+            "def f():\n    from hmp_startup.entry_files import OtherOwner\n",
+            False,
+        ),
+        (
+            "presentation_startup_artifacts.py",
+            "def f():\n    from hmp_startup.entry_files import *\n",
+            False,
+        ),
+        (
+            "presentation_startup_artifacts.py",
+            "def f():\n    import hmp_startup.entry_files\n",
+            False,
+        ),
+        (
+            "reads.py",
+            "def f():\n    from hmp_startup.entry_files import EntryFileSnapshotOwner\n",
+            False,
+        ),
+        (
+            "bridge.py",
+            "def f():\n    from hmp_startup.entry_files import EntryFileSnapshotOwner\n",
+            False,
+        ),
+        ("presentation_startup_cache.py",
+         "def f():\n    from hmp_startup.cache_context import CacheContextOwner\n", True),
+        ("presentation_startup_cache.py",
+         "def f():\n    from hmp_startup.entry_files import EntryFileSnapshotOwner, _Inputs\n",
+         True),
+        ("presentation_startup_cache.py",
+         "def f():\n    from hmp_startup.runtime_files import RuntimeFilePlan, _inside, _path\n",
+         True),
+        ("presentation_startup_cache.py",
+         "from hmp_startup.cache_context import CacheContextOwner\n", False),
+        ("presentation_startup_cache.py",
+         "def f():\n    from hmp_startup.entry_files import *\n", False),
+        ("presentation_startup_cache.py",
+         "def f():\n    from hmp_startup.runtime_files import OtherOwner\n", False),
+        ("reads.py",
+         "def f():\n    from hmp_startup.runtime_files import _path\n", False),
+        ("presentation_startup_artifacts.py",
+         "def f():\n    from hmp_startup.runtime_reader import RuntimeSourceReadOwner\n", True),
+        ("presentation_startup_artifacts.py",
+         "from hmp_startup.runtime_reader import RuntimeSourceReadOwner\n", False),
+        ("presentation_startup_artifacts.py",
+         "def f():\n    from hmp_startup.runtime_reader import OtherOwner\n", False),
+        ("presentation_source_digest.py",
+         "def f():\n    from hmp_startup.runtime_reader import RuntimeSourceReadOwner\n", True),
+        ("presentation_source_digest.py",
+         "from hmp_startup.runtime_reader import RuntimeSourceReadOwner\n", False),
+        ("presentation_source_digest.py",
+         "def f():\n    from hmp_startup.runtime_reader import OtherOwner\n", False),
+        ("presentation_startup_selection.py",
+         "def f():\n    from hmp_startup.runtime_reader import RuntimeSourceReadOwner\n", False),
+        ("reads.py",
+         "def f():\n    from hmp_startup.runtime_reader import RuntimeSourceReadOwner\n", False),
+        ("presentation_startup_artifacts.py",
+         "def f():\n    from hmp_startup.cache_probe import RuntimeCacheProbeOwner\n", True),
+        ("presentation_startup_artifacts.py",
+         "from hmp_startup.cache_probe import RuntimeCacheProbeOwner\n", False),
+        ("presentation_startup_artifacts.py",
+         "def f():\n    from hmp_startup.cache_probe import OtherOwner\n", False),
+        ("presentation_startup_artifacts.py",
+         "def f():\n    from hmp_startup.cache_probe import *\n", False),
+        ("presentation_startup_selection.py",
+         "def f():\n    from hmp_startup.cache_probe import RuntimeCacheProbeOwner\n", False),
+        ("reads.py",
+         "def f():\n    from hmp_startup.cache_probe import RuntimeCacheProbeOwner\n", False),
+        ("presentation_source_digest.py",
+         "def f():\n    from hmp_startup.cache_probe import RuntimeCacheProbeOwner\n", False),
+        ("presentation_startup_artifacts.py",
+         "def f():\n    from hmp_startup.cache_reader import DeclaredCacheReadOwner\n", True),
+        ("presentation_startup_artifacts.py",
+         "from hmp_startup.cache_reader import DeclaredCacheReadOwner\n", False),
+        ("presentation_startup_artifacts.py",
+         "def f():\n    from hmp_startup.cache_reader import OtherOwner\n", False),
+        ("reads.py",
+         "def f():\n    from hmp_startup.cache_reader import DeclaredCacheReadOwner\n", False),
+        ("presentation_startup_selection.py",
+         "def f():\n    from hmp_startup.cache_reader import DeclaredCacheReadOwner\n", False),
+        ("presentation_source_digest.py",
+         "def f():\n    from hmp_startup.gateway_entry import GatewayEntryOwner\n", True),
+        ("presentation_source_digest.py",
+         "def f():\n    from hmp_startup.gateway_entry import _interpreter_current\n", True),
+        ("presentation_source_digest.py",
+         "from hmp_startup.gateway_entry import GatewayEntryOwner\n", False),
+        ("presentation_source_digest.py",
+         "def f():\n    from hmp_startup.gateway_entry import *\n", False),
+        ("presentation_source_digest.py",
+         "def f():\n    from hmp_startup.gateway_entry import OtherOwner\n", False),
+    ],
+)
+def test_startup_type_imports_stay_closed(pkg: Path, module: str, body: str, ok: bool) -> None:
+    _append(pkg, module, body)
+    assert (("S1", module) not in _rules(pkg)) is ok
+
+
+@pytest.mark.parametrize(
+    "module,body,ok",
+    [
+        ("presentation_startup_artifacts.py",
+         "def f():\n    from hmp_startup.gateway_entry import GatewayEntryOwner\n", True),
+        ("presentation_startup_artifacts.py",
+         "def f():\n    from hmp_startup.gateway_entry import _NativeFileLineage\n", True),
+        ("presentation_startup_artifacts.py",
+         "def f():\n    from hmp_startup.gateway_entry import _NativeFileLedger\n", True),
+        ("presentation_startup_artifacts.py",
+         "from hmp_startup.gateway_entry import _NativeFileLedger\n", False),
+        ("presentation_startup_artifacts.py",
+         "def f():\n    from hmp_startup.gateway_entry import _native_file_ledger_shape\n",
+         False),
+        ("presentation_startup_artifacts.py",
+         "def f():\n    from hmp_startup.gateway_entry import *\n", False),
+        ("presentation_startup_artifacts.py",
+         "def f():\n    import hmp_startup.gateway_entry\n", False),
+        ("reads.py",
+         "def f():\n    from hmp_startup.gateway_entry import _NativeFileLedger\n", False),
+        ("presentation_startup_selection.py",
+         "def f():\n    from hmp_startup.gateway_entry import _NativeFileLedger\n", False),
+    ],
+)
+def test_native_scope_type_joins_remain_exact_lazy_and_local(
+    pkg: Path, module: str, body: str, ok: bool
+) -> None:
+    _append(pkg, module, body)
+    assert (("S1", module) not in _rules(pkg)) is ok

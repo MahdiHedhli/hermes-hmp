@@ -1,0 +1,73 @@
+# Original bytecode header observations
+
+Status: bounded source classification prerequisite; not runtime admission.
+
+The existing artifact hash loop retains up to the first 16 bytes only for declared
+.pyc artifacts. The bytes come from the same actual chunks passed to SHA256,
+including split reads. No extra reads, descriptors, counters or allowances are
+introduced. Non-bytecode receipts retain an empty byte string. Private selection
+and operator-approval configuration paths do not retain this header. Receipt
+representations stay redacted, and only successful original receipts publish it.
+
+The original entry interpreter observation now retains the actual importlib.util
+module and MAGIC_NUMBER bytes allocation. Currentness compares these originals;
+no version-to-magic inference or later replacement baseline is used. This is an
+observation under the trusted installed-runtime premise, not complete import
+machinery qualification.
+
+selected_bytecode_headers accepts only the actual original continuation owner.
+It rejoins that continuation and the original interpreter, derives the selected
+.pyc records from the original plan and completed receipts, requires a complete
+16-byte header and the original magic, and classifies PEP552 flags 0, 1 or 3.
+Reserved/unsupported flags, short headers and magic changes refuse. The returned
+record retains the original receipt and a redacted representation. It does not
+unmarshal or execute bytecode. Timestamp/unchecked-hash/checked-hash formats do
+not by themselves prove source equivalence. The final original continuation and
+interpreter checks follow the native root callback before publication.
+
+Remaining mandatory work includes which caches a source loader can consume,
+exhaustive absence/presence and source/cache joins, actual current plugin and
+import machinery, archive/member declarations and bounded reader, extension ABI
+and non-system library closure, listener/native/key composition and physical
+character delivery. A hashed archive cannot qualify an undeclared member. No
+live gateway, key, permission, provider, model or scheduled job changes follow.
+
+Tests use synthetic headers and never execute those bytecode payloads. Actual
+artifact fixtures cover split reads, empty/short headers and unchanged aggregate
+byte counts; composed fixtures cover original continuation/magic and format
+refusals. Independent bounded source review accepted this scope.
+
+## Interpreter cache-policy qualification
+
+[PEP552](https://peps.python.org/pep-0552/) defines hash-based cache behavior and
+--check-hash-based-pycs default/always/never. Header classification does not
+qualify that effective setting. The remaining actual runtime policy must bind
+its original interpreter setting and every permitted source/cache candidate;
+it must not assume that checked-hash header flags force source validation.
+
+## Original effective cache-setting continuity
+
+The entry interpreter observation also retains the actual builtin _imp module,
+its exact default/always/never check_hash_based_pycs mode, sys.pycache_prefix and
+the exact boolean sys.dont_write_bytecode value. Prefixes are None or bounded
+canonical absolute paths; foreign objects are rejected before comparison or
+coercion. Existing original sys.flags observations retain optimization flags.
+Currentness requires the same _imp module and validated primitive values after
+callbacks; it never restores settings or silently adopts a changed policy.
+
+All three native hash-check modes may be observed. Observing never does not
+certify source checking, and no mode grants runtime permission. Cache candidate
+selection and complete approved source/cache artifact coverage remain separate
+unfinished requirements. A private observation type is not a new operator recipe
+schema or a permission/configuration write API. Tests mutate settings only in
+isolated synthetic fixture processes, never on a live gateway.
+
+## Original-read source-hash integration
+
+[Source digest custody](SOURCE_DIGESTS.md) now provides an explicit original-entry
+package hash path and carries the same context into pending file reads. Immutable
+receipt facts retain actual chunk/EOF observations and are resealed by
+selected_source_hashes through original continuation. Legacy receipts without
+this evidence refuse that consumer; there is no completed-owner reread or implicit
+upgrade. Cache source/header relationship, actual loader selection and
+listener/native/key/broker/physical admission remain separate unfinished work.

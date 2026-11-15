@@ -1,0 +1,8 @@
+{
+  "nativeCommit": "ed1afb082eb3e46cf2edae9d8f68fb67b09ee4df",
+  "source": "hermes_cli/venv_sync.py",
+  "sourceSha256": "7688851ccadc994bc3b799a4a25577edaf465b7553b8887892c8b36e1811ffe0",
+  "function": "relaunch_command",
+  "fixtureSha256": "3641bbbcc8303e69de7eae7eb13476cd6a9d72e473f4edb7f02c49941518e67a",
+  "scope": "Version-scoped native command-builder fixture only; not live PM/bootstrap qualification"
+}

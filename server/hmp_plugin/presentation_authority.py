@@ -1,0 +1,994 @@
+"""Parent-only BI1 authority custody and JobOwner ordering adapter.
+
+No route imports this module. The real native-owned read-only service is unbound. A
+CapturedLease, native-binding string, token digest, header pair or child frame is never
+an authorization grant. The service must reauthenticate the original headers and full
+native policy at every phase before this adapter may be bound to a route.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import inspect
+import math
+import time
+from collections.abc import Callable
+from contextlib import suppress
+from dataclasses import dataclass
+from typing import Protocol
+
+from .presentation_cancel_budget import CLEANUP_NS, MAX_NS, CancellationBudget
+from .presentation_jobs import (
+    JOB_SECONDS,
+    MAX_PROCESSES,
+    MAX_WAITING,
+    AuthorityPort,
+    CapturedLease,
+    FrameError,
+    JobHandle,
+    JobOwner,
+    RemoteSlot,
+    State,
+)
+
+MAX_RECORDS = MAX_WAITING + MAX_PROCESSES
+_HEADER_CEILING = 8192
+_PHASES = frozenset({"INITIAL", "BEFORE", "PRE_GO", "PRE_EMIT"})
+_HEADER_MINT = object()
+
+
+def _cancel_requested() -> bool:
+    """Treat a swallowed task cancellation as unresolved native ownership."""
+    try:
+        task = asyncio.current_task()
+    except RuntimeError:
+        return False
+    return task is not None and task.cancelling() > 0
+
+
+class AuthorityRefusalError(Exception):
+    """A closed parent-side refusal with no credential or native exception text."""
+
+    def __init__(self) -> None:
+        super().__init__("BI1_AUTHORITY_REFUSED")
+
+
+@dataclass(frozen=True, repr=False, init=False)
+class OriginalHeaders:
+    """Exact strings returned by existing request_ctx.single_header, parent custody only."""
+
+    __slots__ = ("_mint", "authorization", "instance")
+
+    def __init__(self, authorization: str, instance: str, *, _mint: object = None) -> None:
+        if (
+            _mint is not _HEADER_MINT
+            or type(authorization) is not str
+            or type(instance) is not str
+            or not authorization
+            or not instance
+            or not instance.isascii()
+            or len(authorization) > _HEADER_CEILING
+            or len(instance) > 256
+            or any(c in authorization for c in "\r\n\x00")
+            or any(c in instance for c in "\r\n\x00")
+        ):
+            raise AuthorityRefusalError
+        object.__setattr__(self, "authorization", authorization)
+        object.__setattr__(self, "instance", instance)
+        object.__setattr__(self, "_mint", _HEADER_MINT)
+
+    @classmethod
+    def from_request(cls, request: object) -> OriginalHeaders:
+        # Keep duplicate/missing-header semantics in the existing HMP parser.
+        from .auth import bearer_token
+        from .request_ctx import single_header
+
+        authorization = single_header(request, "Authorization")
+        instance = single_header(request, "HMP-Instance")
+        if bearer_token(authorization) is None:
+            raise AuthorityRefusalError
+        return cls(authorization, instance, _mint=_HEADER_MINT)
+
+    def __repr__(self) -> str:
+        return "<OriginalHeaders redacted>"
+
+
+class OpaqueOperation:
+    """Object identity is the lookup key. Its printable value conveys no authority."""
+
+    __slots__ = ()
+
+
+class ListenerFence:
+    """An explicit local listener-lifetime fence; not native policy authority."""
+
+    __slots__ = ("_epoch", "_retired")
+
+    def __init__(self, epoch: int) -> None:
+        if type(epoch) is not int or epoch < 1:
+            raise AuthorityRefusalError
+        self._epoch = epoch
+        self._retired = False
+
+    @property
+    def epoch(self) -> int:
+        return self._epoch
+
+    @property
+    def current(self) -> bool:
+        return not self._retired
+
+    def retire(self) -> None:
+        self._retired = True
+
+
+@dataclass(frozen=True, repr=False)
+class NativeObservation:
+    """Returned only by a future owned service after its complete native checks."""
+
+    iid: str
+    device_id: str
+    user_id: str
+    family_id: str
+    profile: str
+    native_home: str
+    listener: object
+    store: object
+    bridge: object
+    identity: object
+    native_owner: object
+    allowed: bool
+
+
+class NativeReadOnlyService(Protocol):
+    async def observe(self, record: _Record, phase: str) -> NativeObservation | None: ...
+
+    async def drain(self, record: _Record) -> bool: ...
+
+
+class UnboundNativeReadOnlyService:
+    async def observe(self, record: _Record, phase: str) -> None:
+        del record, phase
+        return None
+
+    async def drain(self, record: _Record) -> bool:
+        del record
+        # This port dispatched no native work, so refusal has a known closed owner.
+        return True
+
+
+@dataclass(repr=False)
+class _Permit:
+    operation: OpaqueOperation
+    handle: JobHandle
+    child: object
+    challenge: str
+    phase: str
+    epoch: int
+    used: bool = False
+
+
+@dataclass(frozen=True, repr=False)
+class _NativeClaim:
+    phase: str
+
+
+@dataclass(repr=False)
+class _Record:
+    operation: OpaqueOperation
+    handle: JobHandle
+    lease: CapturedLease
+    headers: OriginalHeaders | None
+    listener: object
+    fence: ListenerFence
+    fence_epoch: int
+    store: object
+    bridge: object
+    identity: object
+    native_owner: object
+    owner: JobOwner
+    deadline: float
+    cleanup_budget: CancellationBudget
+    cleanup_budget_snapshot: CancellationBudget
+    cleanup_sampling: bool = False
+    child: object | None = None
+    initial_home: str | None = None
+    initial_complete: bool = False
+    native_drained: bool = False
+    permit: _Permit | None = None
+    native_claim: _NativeClaim | None = None
+    policy_work: object | None = None
+    process_owner: object | None = None
+    process_binding: object | None = None
+    reader_collected: bool = False
+    reader_supervisor: object | None = None
+    remote_slot: RemoteSlot | None = None
+    remote_slot_snapshot: RemoteSlot | None = None
+    _custody_snapshot: tuple | None = None
+
+    @property
+    def remote_operation(self):
+        if (type(self.owner) is not JobOwner or type(self.handle) is not JobHandle
+                or type(self.remote_slot) is not RemoteSlot
+                or self.remote_slot is not self.remote_slot_snapshot):
+            raise AuthorityRefusalError
+        remote = RemoteSlot.read(self.remote_slot)
+        if self.handle in self.owner._jobs:
+            if self.owner.remote_slot(self.handle) is not self.remote_slot:
+                raise AuthorityRefusalError
+        elif remote is not None or self.handle not in self.owner._terminal:
+            raise AuthorityRefusalError  # only local terminal summaries can outlive their job
+        return remote
+
+
+class _OwnerAuthority(AuthorityPort):
+    def __init__(self, adapter: ParentAuthorityAdapter) -> None:
+        self.adapter = adapter
+
+    async def reauthenticate(self, lease: CapturedLease, stage: str) -> bool:
+        record = self.adapter._by_lease.get(id(lease))
+        if record is None or record.lease is not lease:
+            return False
+        if stage == "BEFORE":
+            return await self.adapter._observe(record, "BEFORE")
+        if stage == "AFTER":
+            if not await self.adapter._observe(record, "PRE_EMIT"):
+                return False
+            if record.child is None:
+                return False
+            record.permit = _Permit(
+                record.operation,
+                record.handle,
+                record.child,
+                record.owner.challenge(record.handle),
+                "PRE_EMIT",
+                record.fence_epoch,
+            )
+            return True
+        return False
+
+
+class ParentAuthorityAdapter:
+    """Wrap existing JobOwner; no second queue, child supervisor or native algorithm."""
+
+    def __init__(
+        self,
+        iid: str,
+        *,
+        service: NativeReadOnlyService | None = None,
+        clock: Callable[[], float] = time.monotonic,
+        challenge_source: Callable[[], str] | None = None,
+    ) -> None:
+        self._clock = clock
+        self._service = service if service is not None else UnboundNativeReadOnlyService()
+        self._by_operation: dict[OpaqueOperation, _Record] = {}
+        self._by_lease: dict[int, _Record] = {}
+        self._disabled = False
+        authority = _OwnerAuthority(self)
+        if challenge_source is None:
+            self.owner = JobOwner(iid, authority=authority, clock=clock)
+        else:
+            self.owner = JobOwner(
+                iid, authority=authority, clock=clock, challenge_source=challenge_source
+            )
+
+    @property
+    def disabled(self) -> bool:
+        return self._disabled or self.owner.disabled
+
+    def _record(self, operation: OpaqueOperation) -> _Record:
+        if type(operation) is not OpaqueOperation:
+            raise AuthorityRefusalError
+        record = self._by_operation.get(operation)
+        if record is None or record.operation is not operation:
+            raise AuthorityRefusalError
+        return record
+
+    def reserve(
+        self,
+        lease: CapturedLease,
+        operation: str,
+        headers: OriginalHeaders,
+        *,
+        listener: object,
+        fence: ListenerFence,
+        store: object,
+        bridge: object,
+        identity: object,
+        native_owner: object,
+    ) -> OpaqueOperation:
+        """Reserve JobOwner's own slot before retaining the exact original headers."""
+        if (
+            self.disabled
+            or type(lease) is not CapturedLease
+            or type(headers) is not OriginalHeaders
+            or headers._mint is not _HEADER_MINT
+            or type(fence) is not ListenerFence
+            or not fence.current
+            or fence.epoch != lease.epoch
+            or headers.instance != lease.iid
+            or any(x is None for x in (listener, store, bridge, identity, native_owner))
+            or len(self._by_operation) >= MAX_RECORDS
+            or id(lease) in self._by_lease
+        ):
+            raise AuthorityRefusalError
+        try:
+            now = self._clock()
+        except Exception:
+            raise AuthorityRefusalError from None
+        if (
+            type(now) not in (float, int)
+            or not 0 <= now < float("inf")
+            or not now + JOB_SECONDS < float("inf")
+        ):
+            raise AuthorityRefusalError
+        original_deadline = now + JOB_SECONDS
+        try:
+            original_end = int(original_deadline * 1_000_000_000)
+            if not 0 < original_end <= MAX_NS - CLEANUP_NS:
+                raise AuthorityRefusalError
+        except (OverflowError, ValueError):
+            raise AuthorityRefusalError from None
+        try:
+            handle = self.owner.queue(lease, operation)
+        except FrameError:
+            raise AuthorityRefusalError from None
+        # Resolve the earliest original ceiling once, before native observation
+        # or parent policy work. JobOwner's later sample cannot extend it.
+        job_deadline = self.owner._resolve(handle).deadline
+        if type(job_deadline) not in (int, float) or not 0 < job_deadline < float("inf"):
+            self.owner.unknown(handle)
+            raise AuthorityRefusalError
+        deadline = min(original_deadline, job_deadline)
+        budget = CancellationBudget(int(deadline * 1_000_000_000))
+        opaque = OpaqueOperation()
+        record = _Record(
+            opaque,
+            handle,
+            lease,
+            headers,
+            listener,
+            fence,
+            fence.epoch,
+            store,
+            bridge,
+            identity,
+            native_owner,
+            self.owner,
+            deadline,
+            budget,
+            budget,
+        )
+        record.remote_slot = record.remote_slot_snapshot = self.owner.remote_slot(handle)
+        record._custody_snapshot = (self.owner, handle, fence)
+        self._by_operation[opaque] = record
+        self._by_lease[id(lease)] = record
+        return opaque
+
+    def handle(self, operation: OpaqueOperation) -> JobHandle:
+        return self._record(operation).handle
+
+    def _budget_current(self, record: _Record) -> bool:
+        try:
+            if (type(record) is not _Record
+                    or type(record.deadline) not in (float, int)
+                    or not 0 < record.deadline < float("inf")
+                    or type(record.cleanup_budget) is not CancellationBudget
+                    or record.cleanup_budget is not record.cleanup_budget_snapshot):
+                return False
+            end, _, cleanup_end, failed = CancellationBudget.inspect(record.cleanup_budget)
+            if end != int(record.deadline * 1_000_000_000) or cleanup_end is not None or failed:
+                return False
+        except (FrameError, OverflowError, TypeError, ValueError):
+            return False
+        return True
+
+    def _current(self, record: _Record) -> bool:
+        if not ParentAuthorityAdapter._budget_current(self, record):
+            return False
+        if self.disabled or self._by_operation.get(record.operation) is not record:
+            return False
+        if not record.fence.current or record.fence.epoch != record.fence_epoch:
+            return False
+        if record.owner.epoch != record.lease.epoch:
+            return False
+        try:
+            now = self._clock()
+        except Exception:
+            return False
+        # The clock is foreign code: revalidate local authority after it returns.
+        return (
+            type(now) in (float, int)
+            and ParentAuthorityAdapter._budget_current(self, record)
+            and 0 <= now < record.deadline
+            and not self.disabled
+            and self._by_operation.get(record.operation) is record
+            and record.fence.current
+            and record.fence.epoch == record.fence_epoch
+            and record.owner.epoch == record.lease.epoch
+            and not record.owner.disabled
+        )
+
+    def _observation_matches(self, record: _Record, value: object) -> bool:
+        if type(value) is not NativeObservation or value.allowed is not True:
+            return False
+        lease = record.lease
+        if (
+            type(value.iid) is not str
+            or type(value.device_id) is not str
+            or type(value.user_id) is not str
+            or type(value.family_id) is not str
+            or type(value.profile) is not str
+            or value.iid != lease.iid
+            or value.device_id != lease.device_id
+            or value.user_id != lease.user_id
+            or value.family_id != lease.family_id
+            or value.profile != lease.profile
+            or type(value.native_home) is not str
+            or not value.native_home
+            or value.listener is not record.listener
+            or value.store is not record.store
+            or value.bridge is not record.bridge
+            or value.identity is not record.identity
+            or value.native_owner is not record.native_owner
+        ):
+            return False
+        return record.initial_home is None or value.native_home == record.initial_home
+
+    def _claim_native(self, record: _Record, phase: str) -> _NativeClaim | None:
+        # Claim synchronously, before service code can suspend or dispatch work.
+        if record.native_claim is not None:
+            self._unknown(record)
+            return None
+        claim = _NativeClaim(phase)
+        record.native_claim = claim
+        return claim
+
+    def _phase_state(self, record: _Record, phase: str) -> bool:
+        required = {
+            "INITIAL": State.QUEUED,
+            "BEFORE": State.QUEUED,
+            "PRE_GO": State.STARTING,
+            "PRE_EMIT": State.COMPLETE,
+        }.get(phase)
+        if required is None:
+            return False
+        try:
+            return record.owner.inspect(record.handle)[0] is required
+        except FrameError:
+            return False
+
+    async def _observe(self, record: _Record, phase: str) -> bool:
+        if record.native_claim is not None:
+            self._unknown(record)
+            return False
+        if phase not in _PHASES or not self._current(record):
+            return False
+        if phase != "INITIAL" and not record.initial_complete:
+            return False
+        if not self._phase_state(record, phase):
+            return False
+        claim = self._claim_native(record, phase)
+        if claim is None:
+            return False
+        try:
+            observed = await self._service.observe(record, phase)
+        except Exception:
+            self._unknown(record)
+            return False
+        except BaseException:
+            self._unknown(record)
+            raise
+        if record.native_claim is not claim or self.disabled or _cancel_requested():
+            self._unknown(record)
+            return False
+        # The service returned normally; this exact native invocation is known closed.
+        record.native_claim = None
+        if (
+            not self._current(record)
+            or not self._phase_state(record, phase)
+            or not self._observation_matches(record, observed)
+        ):
+            return False
+        if phase == "INITIAL":
+            record.initial_home = observed.native_home
+            record.initial_complete = True
+        return True
+
+    def _unknown(self, record: _Record) -> None:
+        self._disabled = True
+        record.permit = None
+        snapshot = record._custody_snapshot
+        if (type(snapshot) is not tuple or len(snapshot) != 3
+                or type(snapshot[0]) is not JobOwner or type(snapshot[1]) is not JobHandle
+                or type(snapshot[2]) is not ListenerFence):
+            return  # disabled and retained; never invoke drifted metadata callbacks
+        owner, handle, fence = snapshot
+        ListenerFence.retire(fence)
+        with suppress(FrameError):
+            JobOwner.unknown(owner, handle)
+
+    async def initialize(self, operation: OpaqueOperation) -> bool:
+        record = self._record(operation)
+        if record.owner.inspect(record.handle)[0] is not State.QUEUED:
+            raise AuthorityRefusalError
+        try:
+            if not await self._observe(record, "INITIAL"):
+                record.owner.cancel(record.handle)
+                return False
+            await record.owner.authorize(record.handle)
+        except BaseException:
+            self._unknown(record)
+            raise
+        return record.owner.inspect(record.handle)[0] is State.AUTHORIZED and self._current(record)
+
+    def start(self, operation: OpaqueOperation) -> None:
+        record = self._record(operation)
+        if not self._current(record):
+            record.owner.cancel(record.handle)
+            return
+        record.owner.start(record.handle)
+
+    def bind_remote(self, operation: OpaqueOperation, channel, binding, packet):
+        """Retain one remote allocation in the existing native/job shared slot."""
+        from .presentation_policy_binding import NativePolicyWork
+        from .presentation_remote import RemoteOperationOwner
+
+        record = self._record(operation)
+        if record.remote_operation is not None:
+            self._unknown(record)  # duplicate adoption cannot revive or replace the retained owner
+            raise AuthorityRefusalError
+        if (self._clock is not time.monotonic or self.owner._clock is not self._clock
+                or record.child is not None
+                or record.process_owner is not None or record.reader_supervisor is not None
+                or not record.initial_complete or type(record.policy_work) is not NativePolicyWork
+                or record.owner.inspect(record.handle)[0] is not State.STARTING
+                or record.owner._resolve(record.handle).parent_result_context is None):
+            raise AuthorityRefusalError
+        remote = RemoteOperationOwner.__new__(RemoteOperationOwner)
+        try:
+            record.owner.bind_remote(record.handle, remote)
+            remote.__init__(self, operation, channel, binding, packet)
+        except Exception:
+            self._unknown(record)  # do not clear/replace the partially initialized owner
+            raise AuthorityRefusalError from None
+        except BaseException:
+            self._unknown(record)
+            raise
+        return remote
+
+    def retain_process(self, operation: OpaqueOperation, process: object) -> None:
+        from .presentation_process import PresentationProcessOwner
+
+        record = self._record(operation)
+        if (
+            type(process) is not PresentationProcessOwner
+            or record.remote_operation is not None
+            or record.process_owner is not None
+            or record.child is not None
+            or not record.initial_complete
+            or record.owner.inspect(record.handle)[0] is not State.STARTING
+            or not self._current(record)
+        ):
+            raise AuthorityRefusalError
+        # _current calls a foreign clock; recheck custody after that callback.
+        if (
+            record.process_owner is not None
+            or record.child is not None
+            or not record.initial_complete
+            or record.owner.inspect(record.handle)[0] is not State.STARTING
+        ):
+            raise AuthorityRefusalError
+        binding = object()
+        process.claim(binding)
+        record.process_owner = process
+        record.process_binding = binding
+        if (
+            not self._current(record)
+            or not process.owns(binding)
+            or record.process_owner is not process
+            or record.process_binding is not binding
+            or record.child is not None
+            or record.owner.inspect(record.handle)[0] is not State.STARTING
+        ):
+            self._unknown(record)
+            raise AuthorityRefusalError
+
+    def bind_child(self, operation: OpaqueOperation, child: object) -> None:
+        record = self._record(operation)
+        if record.remote_operation is not None:
+            self._unknown(record)
+            raise AuthorityRefusalError
+        if record.process_owner is not None and (
+            not record.process_owner.owns(record.process_binding)
+            or record.process_owner.child is not child
+        ):
+            raise AuthorityRefusalError
+        record.owner.bind_child(record.handle, child)
+        if record.owner.inspect(record.handle)[0] in (State.STARTING, State.DRAINING):
+            record.child = child
+
+    def _consume(self, record: _Record, permit: _Permit, phase: str) -> bool:
+        if (
+            record.permit is not permit
+            or permit.used
+            or permit.operation is not record.operation
+            or permit.handle is not record.handle
+            or permit.child is not record.child
+            or permit.phase != phase
+            or permit.epoch != record.fence_epoch
+            or permit.challenge != record.owner.challenge(record.handle)
+            or not self._current(record)
+        ):
+            return False
+        permit.used = True
+        record.permit = None
+        return True
+
+    async def go_inline(
+        self,
+        operation: OpaqueOperation,
+        child: object,
+        send_go: Callable[[JobHandle, object, str], None],
+    ) -> bool:
+        record = self._record(operation)
+        if (
+            record.remote_operation is not None
+            or child is None
+            or child is not record.child
+            or record.owner.inspect(record.handle)[0] is not State.STARTING
+            or not self._current(record)
+            or not record.initial_complete
+        ):
+            record.owner.cancel(record.handle)
+            return False
+        if not await self._observe(record, "PRE_GO"):
+            record.owner.cancel(record.handle)
+            return False
+        if (
+            child is not record.child
+            or record.owner.inspect(record.handle)[0] is not State.STARTING
+            or not self._current(record)
+        ):
+            record.owner.cancel(record.handle)
+            return False
+        permit = _Permit(
+            operation,
+            record.handle,
+            child,
+            record.owner.challenge(record.handle),
+            "PRE_GO",
+            record.fence_epoch,
+        )
+        record.permit = permit
+        if not self._consume(record, permit, "PRE_GO"):
+            record.owner.cancel(record.handle)
+            return False
+        if inspect.iscoroutinefunction(send_go):
+            self._unknown(record)
+            return False
+        record.owner.go(record.handle, child, permit.challenge)
+        if record.owner.inspect(record.handle)[0] is not State.RUNNING:
+            self._unknown(record)
+            return False
+        try:
+            result = send_go(record.handle, child, permit.challenge)
+        except Exception:
+            self._unknown(record)
+            return False
+        if result is not None:
+            if inspect.iscoroutine(result):
+                result.close()
+            self._unknown(record)
+            return False
+        return True
+
+    async def reauthorize(self, operation: OpaqueOperation) -> bool:
+        record = self._record(operation)
+        if record.owner.inspect(record.handle)[0] is not State.COMPLETE:
+            return False
+        await record.owner.reauthorize(record.handle)
+        state = record.owner.inspect(record.handle)[0]
+        if state is not State.REAUTHORIZED or record.permit is None or not self._current(record):
+            record.permit = None
+            return False
+        return True
+
+    def emit_inline(
+        self,
+        operation: OpaqueOperation,
+        sink: Callable[[dict[str, object], bytes], None],
+    ) -> bool:
+        record = self._record(operation)
+        permit = record.permit
+        if (
+            permit is None
+            or permit.phase != "PRE_EMIT"
+            or record.owner.inspect(record.handle)[0] is not State.REAUTHORIZED
+        ):
+            return False
+
+        # JobOwner invokes this memory-only predicate immediately before its synchronous sink.
+        def still_current(lease: CapturedLease) -> bool:
+            return lease is record.lease and self._consume(record, permit, "PRE_EMIT")
+
+        record.owner.emit_inline(record.handle, still_current, sink)
+        return record.owner.inspect(record.handle)[0] is State.EMIT
+
+    def cancel(self, operation: OpaqueOperation) -> None:
+        record = self._record(operation)
+        snapshot = record._custody_snapshot
+        budget = record.cleanup_budget_snapshot
+        if (type(snapshot) is not tuple or len(snapshot) != 3
+                or type(snapshot[0]) is not JobOwner or type(snapshot[1]) is not JobHandle
+                or type(snapshot[2]) is not ListenerFence
+                or type(budget) is not CancellationBudget):
+            self._unknown(record)
+            return
+        owner, handle, fence = snapshot
+        ListenerFence.retire(fence)  # revoke work before the foreign clock boundary
+        record.permit = None
+        if record.cleanup_sampling is not False:
+            CancellationBudget.refuse(budget)
+            self._unknown(record)
+            return
+        record.cleanup_sampling = True
+        try:
+            original, _, _, failed = CancellationBudget.inspect(budget)
+            if (record.cleanup_budget is not budget or failed
+                    or type(record.deadline) not in (int, float)
+                    or not math.isfinite(record.deadline)
+                    or original != int(record.deadline * 1_000_000_000)):
+                raise AuthorityRefusalError
+            now = self._clock()
+            if (type(now) not in (int, float) or not math.isfinite(now)
+                    or record.cleanup_budget is not budget
+                    or record.cleanup_budget_snapshot is not budget
+                    or record.cleanup_sampling is not True):
+                raise AuthorityRefusalError
+            CancellationBudget.local(budget, int(now * 1_000_000_000))
+        except BaseException:
+            CancellationBudget.refuse(budget)
+            self._unknown(record)
+            return
+        finally:
+            record.cleanup_sampling = False
+        if record.native_claim is not None:
+            # Native completion is not established by cancellation of the awaiter.
+            self._unknown(record)
+            return
+        JobOwner.cancel(owner, handle)
+
+    def drain_cancelled_reader(
+        self,
+        operation: OpaqueOperation,
+        pipes: object,
+        control: object,
+        *,
+        cleanup_deadline: float | None = None,
+    ) -> bool:
+        """Discard after exact exit; never extend the original output deadline."""
+        from .presentation_control_pipe import OwnedControlPipe
+        from .presentation_pipes import OwnedPresentationPipes
+        from .presentation_process import PresentationProcessOwner
+
+        record = self._record(operation)
+        process = record.process_owner
+        if (
+            type(process) is not PresentationProcessOwner
+            or type(pipes) is not OwnedPresentationPipes
+            or type(control) is not OwnedControlPipe
+            or not process.owns(record.process_binding)
+            or process.uncertain
+            or record.child is None
+            or process.child is not record.child
+            or pipes._streams["result"] is not record.child.stdout
+            or pipes._streams["diagnostic"] is not record.child.stderr
+            or control._stream is not record.child.stdin
+            or control._child is not record.child
+            or control._handle is not record.handle
+            or not control.closed
+            or control.uncertain
+            or not process.reaped
+            or not process.group_absent
+            or not process.signals_retired
+        ):
+            return False
+        self.cancel(operation)
+        if record.owner.inspect(record.handle)[0] not in (State.DRAINING, State.UNKNOWN):
+            return False
+        try:
+            pipes.poll_discard(deadline=cleanup_deadline)
+        except FrameError:
+            return False
+        return pipes.drained
+
+    def collect_reader_closure(
+        self, operation: OpaqueOperation, pipes: object, control: object
+    ) -> bool:
+        """Project exact retained OS observations once, never a termination request."""
+        from .presentation_control_pipe import OwnedControlPipe
+        from .presentation_pipes import OwnedPresentationPipes
+        from .presentation_process import PresentationProcessOwner
+
+        record = self._record(operation)
+        process = record.process_owner
+        if (
+            type(process) is not PresentationProcessOwner
+            or type(pipes) is not OwnedPresentationPipes
+            or type(control) is not OwnedControlPipe
+            or not process.owns(record.process_binding)
+            or process.uncertain
+            or record.child is None
+            or process.child is not record.child
+            or pipes._streams["result"] is not record.child.stdout
+            or pipes._streams["diagnostic"] is not record.child.stderr
+            or control._stream is not record.child.stdin
+            or control._child is not record.child
+            or control._handle is not record.handle
+            or not pipes.drained
+            or not control.closed
+            or control.uncertain
+            or not process.reaped
+            or not process.group_absent
+            or not process.signals_retired
+        ):
+            return False
+        if record.reader_collected:
+            return False
+        aborted = pipes.output_discarded
+        if aborted and record.owner.inspect(record.handle)[0] is not State.DRAINING:
+            return False
+        record.reader_collected = True
+        output = pipes.output
+        for offset in range(0, len(output), 65536):
+            record.owner.feed_result(record.handle, output[offset : offset + 65536], record.child)
+        record.owner.diagnostic(record.handle, pipes.diagnostic_bytes)
+        for event in (
+            "RESULT_ABORTED_EOF" if aborted else "RESULT_EOF",
+            "DIAGNOSTIC_EOF",
+            "WAIT_OK" if process.exit_code == 0 else "WAIT_FAIL",
+            "GROUP_GONE",
+            "IPC_CLOSED",
+            "SIGNAL_CLOSED",
+        ):
+            record.owner.custody(record.handle, event, record.child)
+        return record.owner.inspect(record.handle)[0] in (State.COMPLETE, State.REFUSED)
+
+    def terminate_cancelled_reader(self, operation: OpaqueOperation) -> bool:
+        """Retire output authority before one termination request, retaining debt."""
+        from .presentation_process import PresentationProcessOwner
+
+        record = self._record(operation)
+        process = record.process_owner
+        if (
+            type(process) is not PresentationProcessOwner
+            or not process.owns(record.process_binding)
+            or record.child is None
+            or process.child is not record.child
+        ):
+            return False
+        record.permit = None
+        record.fence.retire()
+        record.owner.cancel(record.handle)
+        try:
+            return process.terminate_once()
+        except FrameError:
+            self._unknown(record)
+            return False
+
+    def refuse_policy_prelaunch(self, operation: OpaqueOperation) -> bool:
+        from .presentation_policy_binding import NativePolicyWork
+
+        record = self._record(operation)
+        work = record.policy_work
+        if (
+            type(work) is not NativePolicyWork
+            or record.remote_operation is not None
+            or work._authority is not self
+            or work._record is not record
+            or record.child is not None
+            or record.native_claim is not None
+        ):
+            return False
+        if record.process_owner is not None:
+            from .presentation_process import PresentationProcessOwner
+
+            process = record.process_owner
+            if type(process) is not PresentationProcessOwner or not process.owns(
+                record.process_binding
+            ):
+                return False
+            try:
+                process.seal_unlaunched()
+            except FrameError:
+                return False
+        if not work.close_pretransfer():
+            return False
+        record.permit = None
+        record.fence.retire()
+        record.owner.refuse_prelaunch(record.handle)
+        return True
+
+    @staticmethod
+    def _process_closed(record: _Record) -> bool:
+        from .presentation_process import PresentationProcessOwner
+
+        if record.remote_operation is not None:
+            return False  # no local/no-child shortcut for remote terminal custody
+        process = record.process_owner
+        if process is None:
+            return True  # legacy inert JobOwner fixtures have no OS process
+        if (
+            type(process) is not PresentationProcessOwner
+            or not process.owns(record.process_binding)
+            or process.uncertain
+        ):
+            return False
+        if process.never_launched_closed:
+            return record.child is None
+        return (
+            record.child is not None
+            and process.child is record.child
+            and process.reaped
+            and process.group_absent
+            and process.signals_retired
+        )
+
+    async def retire_known(self, operation: OpaqueOperation) -> bool:
+        """Release credentials only after both owner planes report known closure."""
+        record = self._record(operation)
+        if not self._process_closed(record):
+            return False
+        if record.policy_work is not None:
+            from .presentation_policy_binding import NativePolicyWork
+
+            if (
+                type(record.policy_work) is not NativePolicyWork
+                or not record.policy_work.resources_closed
+            ):
+                return False
+        try:
+            state, _, credit_released = record.owner.inspect(record.handle)
+        except FrameError:
+            self._unknown(record)
+            return False
+        if state not in (State.REFUSED, State.EMIT) or not credit_released:
+            return False
+        claim = self._claim_native(record, "DRAIN")
+        if claim is None:
+            return False
+        try:
+            drained = await self._service.drain(record)
+        except Exception:
+            self._unknown(record)
+            return False
+        except BaseException:
+            self._unknown(record)
+            raise
+        if record.native_claim is not claim or self.disabled or _cancel_requested():
+            self._unknown(record)
+            return False
+        if drained is not True:
+            self._unknown(record)
+            return False
+        record.native_claim = None
+        try:
+            state, _, credit_released = record.owner.inspect(record.handle)
+        except FrameError:
+            self._unknown(record)
+            return False
+        if state not in (State.REFUSED, State.EMIT) or not credit_released:
+            self._unknown(record)
+            return False
+        if record.policy_work is not None and not record.policy_work.resources_closed:
+            self._unknown(record)
+            return False
+        if not self._process_closed(record):
+            self._unknown(record)
+            return False
+        record.native_drained = True
+        record.headers = None  # drop immutable string references after both owners close
+        self._by_operation.pop(operation)
+        self._by_lease.pop(id(record.lease), None)
+        return True

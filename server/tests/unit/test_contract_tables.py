@@ -87,6 +87,23 @@ SECTION_13: dict[str, tuple[str, ...]] = {
     "DEVICE_NAME_MAX_BYTES": ("DEVICE_NAME_MAX_BYTES",),
     "Snapshot limit": ("SNAPSHOT_LIMIT_DEFAULT", "SNAPSHOT_LIMIT_MAX"),
     "History limit": ("HISTORY_LIMIT_DEFAULT", "HISTORY_LIMIT_MAX"),
+    "MEDIA_REF_TTL_S (v1.6 draft)": ("MEDIA_REF_TTL_S",),
+    "MEDIA_REFS_PER_DEVICE / MEDIA_REFS_TOTAL (v1.6 draft)": (
+        "MEDIA_REFS_PER_DEVICE",
+        "MEDIA_REFS_TOTAL",
+    ),
+    "MEDIA_DESCRIPTORS_PER_RESPONSE (v1.6 draft)": ("MEDIA_DESCRIPTORS_PER_RESPONSE",),
+    "MEDIA_FETCH_PER_MIN (v1.6 draft)": ("MEDIA_FETCH_PER_MIN",),
+    "MEDIA_PERMITS_PER_DEVICE / _PER_INSTANCE (v1.6 draft)": (
+        "MEDIA_PERMITS_PER_DEVICE",
+        "MEDIA_PERMITS_PER_INSTANCE",
+    ),
+    "MEDIA_WORKERS (v1.6 draft)": ("MEDIA_WORKERS",),
+    "MEDIA_WORKER_WAIT_S / MEDIA_WRITE_DEADLINE_S (v1.6 draft)": (
+        "MEDIA_WORKER_WAIT_S",
+        "MEDIA_WRITE_DEADLINE_S",
+    ),
+    "MEDIA_MAX_BYTES (v1.6 draft)": ("MEDIA_MAX_BYTES",),
 }
 
 
