@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 
 from hmp_plugin.contract import ErrorCode, HmpError
-from hmp_plugin.store import Store
+from hmp_plugin.store import SCHEMA_VERSION, Store
 
 KEY = b"k" * 32
 NOW = 4_000_000
@@ -134,7 +134,7 @@ def test_real_legacy_migration_preserves_data_and_reopens_idempotently(tmp_path,
             assert len(store.audit_events()) == 1
             assert store.owner_controls_decision("dev") is (True if version == 2 else None)
             meta = store._require_conn().execute("SELECT schema_version FROM meta").fetchone()
-            assert meta[0] == 3
+            assert meta[0] == SCHEMA_VERSION
             ddl = dict(
                 store._require_conn().execute(
                     "SELECT name,sql FROM sqlite_master WHERE type='table'"

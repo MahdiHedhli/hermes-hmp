@@ -51,3 +51,13 @@ This reproduces an actual readonly diagnostic defect, not a fixture-only issue.
 The WAL path keeps ordinary SQLite read-lock/SHM bookkeeping; it is not a claim
 that every file byte or access timestamp stays unchanged during a live read.
 Checkpointed immutable-read tests compare the complete fixture file hashes.
+
+
+## Related migration fixture correction
+
+The first six-file regression run has381 passes and two failures: the genuine
+legacy1/2 migration tests still expect literal3 after migration, although Store
+now declares and creates4. Their migrated-data, original DDL, controls decision,
+foreign-key and idempotent-reopen assertions remain unchanged. Compare the final
+metadata with the declared SCHEMA_VERSION rather than the obsolete literal; no
+migration code or acceptance of future diagnostic formats changes.
