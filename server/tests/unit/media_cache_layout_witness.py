@@ -6,7 +6,6 @@ closed inverse. Unknown or modified additions are never stripped. Test-only.
 
 from .historic_image_cache_witness import reverse_historic_image_cache
 
-
 REVERSES = {
     'local_media_candidate.py': (
         (
