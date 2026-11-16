@@ -1,7 +1,10 @@
 # Fresh native Linux image-cache qualification — November16
 
-Status: source/pin/unit amendment independently reviewed; one new experiment is
-prepared. No runtime pass, host update, device test or release is claimed yet.
+Status: all three complete synthetic native Linux scenarios passed in
+[run43857621548](https://github.com/MahdiHedhli/hermes-hmp/actions/runs/43857621548),
+exact harness583e39886c61aed471a8159934ff309502226cef. Artifact/report/source
+readback and independent bounded runtime review are accepted. No host update,
+physical device acceptance or release is claimed.
 The older b86/run43827844022 result remains valid only for its old183a inputs.
 
 ## Exact inputs and scope
@@ -44,6 +47,28 @@ experiment, with a separate additive correction recording the exact canonical
 manifest serialization. Neither source tests nor data-only report fixtures are
 runtime/Linux observations.
 
-Actual three-scenario success, encrypted artifact readback and independent runtime
-review remain required. Mac deleted-WAL scanning, private-host composition, phones,
-provider generation and release acceptance remain separate and unqualified.
+## Terminal runtime evidence
+
+All three independent actors (matrix, mutation, historic) completed, exited0 with
+PID0 and no OOM. Reports match their recorded SHA256 values. Artifact14224206279
+has4,712,760 bytes and SHA256
+7f70226bb46e48bbe0fe978766ba20c296f6f1cad7d01c32b1890570e4ec8f01.
+The source manifest matches the exact golden bytes above; the CPython3.14.9
+runtime manifest binds10,664 entries. Reviewed controller checks verify source
+and runtime before and after each actor; archived software trees were not
+independently re-executed during readback.
+
+Both original scenarios and the historic scenario observed authenticated TLS
+image bytes, two profiles/two synthetic devices, isolation, revocation/regrant,
+metadata/avatar revision checks, and natural waits of602.001997,602.002007 and
+602.002356seconds respectively. Historic evidence confirms both exact native
+image_cache profile roots and PNG bytes via the original helper. Canonical tool
+rows remain synthetic; this does not qualify live provider generation.
+
+Independent review verifies908 network-isolated container observations. All917
+captured Docker command stdout/stderr hashes match their receipts. Adapter,
+loader and event-loop cleanup checks pass. The status writer was idle but its
+daemon still alive before whole-process exit; do not claim all threads joined
+before exit. This result does not resolve old canceled-run cleanup or the Mac
+scanner's unknown worker lifetime. Private-union/Mac runtime, live host/phone
+rendering, physical startup and release acceptance remain unqualified.
