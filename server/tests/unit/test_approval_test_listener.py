@@ -9,6 +9,7 @@ from types import SimpleNamespace
 from typing import ClassVar
 
 import pytest
+from aiohttp import web
 
 from hmp_plugin import approval_test_host_transport, approval_test_routes, server
 
@@ -198,6 +199,10 @@ def test_adapter_only_activates_after_successful_same_nonce_record(
     monkeypatch.setattr(adapter_module, "open_components", lambda _adapter: env.ctx)
     observed = []
     async def start(srv):
+        # Own a real runner without opening a listening socket. Startup's current
+        # guard and shutdown must see the same runner, not a forged bound address.
+        srv._runner = web.AppRunner(server.build_app(srv.ctx))
+        await srv._runner.setup()
         srv.bound = ("127.0.0.1", 12345)
     async def activate(srv, record, nonce):
         assert observed == ["record"]
@@ -232,6 +237,9 @@ def test_adapter_disconnect_retains_record_store_and_pointer_until_real_join(
         class Listener:
             ctx = env.ctx
             operator_worker_debt = 0
+            presentation_worker_debt = 0
+            _dependencies_closed = False
+            _dependencies_close_unknown = False
             async def stop(self, **_kwargs):
                 events.append("fence")
                 entered.set()
@@ -284,6 +292,7 @@ def test_listener_store_destruction_waits_for_actual_service_producer_join():
         producer.close_and_join = owned_join
         r.ctx.push_hints = SimpleNamespace(clear=lambda: events.append("dependencies_live"))
         r.ctx.direct_send_deps = None
+        r.ctx.readiness_reads = None
         srv = server.HmpServer(r.ctx, server.ListenerSettings("127.0.0.1", 12345))
         srv._at1_live = True
         srv._at1_service = r.service
@@ -291,7 +300,9 @@ def test_listener_store_destruction_waits_for_actual_service_producer_join():
         srv._on_closed = lambda: events.append("store_destroyed")
         observer = asyncio.create_task(srv.stop())
         try:
-            await joined_entered.wait()
+            # This bounds only the test's observation, not the producer join.
+            # Early shutdown failure must reach finally instead of hanging here.
+            await asyncio.wait_for(joined_entered.wait(), timeout=5)
             assert not srv.closed.is_set() and "store_destroyed" not in events
             observer.cancel()
             with pytest.raises(asyncio.CancelledError):
@@ -341,21 +352,36 @@ def test_actual_owning_module_replacement_restore_cannot_revive_generation(
         env.store.close()
 
 
+@pytest.mark.parametrize("debt_kind", ["operator", "presentation", "readiness"])
 def test_composed_disconnect_keeps_store_until_readiness_debt_joins(
-        adapter_module, tmp_path, monkeypatch):
+        adapter_module, tmp_path, monkeypatch, debt_kind):
     env = Env(tmp_path)
     adapter = adapter_module.HmpAdapter(_Config({"bind": "127.0.0.1", "port": 12345}))
     original_close = env.ctx.store.close
     async def scenario():
         release = asyncio.Event()
         closed = asyncio.Event()
+        readiness = SimpleNamespace(drained=False) if debt_kind == "readiness" else None
+        env.ctx.readiness_reads = readiness
         class Listener:
             ctx = env.ctx
-            operator_worker_debt = 1
+            operator_worker_debt = int(debt_kind == "operator")
+            presentation_worker_debt = int(debt_kind == "presentation")
+            readiness_worker_debt = int(debt_kind == "readiness")
+            _dependencies_closed = False
+            _dependencies_close_unknown = False
+            _dependency_close_task = None
             async def stop(self, **_kwargs):
                 return None
             async def wait_operator_drain(self):
+                if self.operator_worker_debt:
+                    await release.wait()
+            async def wait_presentation_drain(self):
+                if self.presentation_worker_debt:
+                    await release.wait()
+            async def wait_readiness_drain(self):
                 await release.wait()
+                readiness.drained = True
         adapter._server = Listener()
         monkeypatch.setattr(adapter, "_drop_record", lambda: None)
         monkeypatch.setattr(env.ctx.store, "close", closed.set)
