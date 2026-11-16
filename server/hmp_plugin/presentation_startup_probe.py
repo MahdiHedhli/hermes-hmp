@@ -1080,11 +1080,9 @@ def _commit_shared_tail(owner, consumer, actual, commit):
         and consumer.commit[0] is commit
     )
     _require(
-        (
-            commit.outcome is None
-            if commit.cursor.action != "finished"
-            else type(commit.outcome) is tuple and policy._outcome(commit.cursor) == commit.outcome
-        )
+        commit.outcome is None
+        if commit.cursor.action != "finished"
+        else type(commit.outcome) is tuple and policy._outcome(commit.cursor) == commit.outcome
     )
     return commit
 

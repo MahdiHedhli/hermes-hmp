@@ -489,10 +489,10 @@ def _capture_engine(
         or _type(dependencies[0]) is not _module
         or (_type(dependencies[1]) is not _dict)
         or (_vars(dependencies[0]) is not dependencies[1])
-        or _any((_type(k) is not _str for k in dependencies[1]))
+        or _any(_type(k) is not _str for k in dependencies[1])
         or (_type(dependencies[2]) is not _dict)
         or (dependencies[1].get("modules") is not dependencies[2])
-        or _any((_type(k) is not _str for k in dependencies[2]))
+        or _any(_type(k) is not _str for k in dependencies[2])
         or (_type(dependencies[3]) is not _tuple)
         or (_len(dependencies[3]) != 5)
     ):
@@ -513,20 +513,18 @@ def _capture_engine(
             or (row[0] != expected_name)
             or (_type(row[1]) is not _module)
             or (_type(row[2]) is not _dict)
-            or _any((_type(k) is not _str for k in row[2]))
+            or _any(_type(k) is not _str for k in row[2])
             or (dependencies[2].get(expected_name) is not row[1])
             or (_vars(row[1]) is not row[2])
             or (_type(row[3]) is not _tuple)
             or (_len(row[2]) != _len(row[3]))
             or _any(
-                (
-                    _type(pair) is not _tuple
-                    or _len(pair) != 2
-                    or _type(pair[0]) is not _str
-                    or (pair[0] not in row[2])
-                    or (row[2][pair[0]] is not pair[1])
-                    for pair in row[3]
-                )
+                _type(pair) is not _tuple
+                or _len(pair) != 2
+                or _type(pair[0]) is not _str
+                or (pair[0] not in row[2])
+                or (row[2][pair[0]] is not pair[1])
+                for pair in row[3]
             )
             or (_type(row[4]) is not _tuple)
             or (_type(row[5]) is not _tuple)
@@ -541,18 +539,16 @@ def _capture_engine(
                 raise _error from None
             names = _vars(kind)
             if (
-                _any((_type(k) is not _str for k in names))
+                _any(_type(k) is not _str for k in names)
                 or _type(members) is not _tuple
                 or _len(names) != _len(members)
                 or _any(
-                    (
-                        _type(pair) is not _tuple
-                        or _len(pair) != 2
-                        or _type(pair[0]) is not _str
-                        or (pair[0] not in names)
-                        or (names[pair[0]] is not pair[1])
-                        for pair in members
-                    )
+                    _type(pair) is not _tuple
+                    or _len(pair) != 2
+                    or _type(pair[0]) is not _str
+                    or (pair[0] not in names)
+                    or (names[pair[0]] is not pair[1])
+                    for pair in members
                 )
             ):
                 raise _error from None
@@ -572,8 +568,8 @@ def _capture_engine(
                 or (_type(cells) is not _tuple)
             ):
                 raise _error from None
-            if not _any((namespace is prior for prior in checked_namespaces)):
-                if _any((_type(k) is not _str for k in namespace)):
+            if not _any(namespace is prior for prior in checked_namespaces):
+                if _any(_type(k) is not _str for k in namespace):
                     raise _error from None
                 checked_namespaces.append(namespace)
             if kw is None:
@@ -581,17 +577,15 @@ def _capture_engine(
                     raise _error from None
             elif (
                 _type(kw) is not _dict
-                or _any((_type(k) is not _str for k in kw))
+                or _any(_type(k) is not _str for k in kw)
                 or _len(kw) != _len(pairs)
                 or _any(
-                    (
-                        _type(pair) is not _tuple
-                        or _len(pair) != 2
-                        or _type(pair[0]) is not _str
-                        or (pair[0] not in kw)
-                        or (kw[pair[0]] is not pair[1])
-                        for pair in pairs
-                    )
+                    _type(pair) is not _tuple
+                    or _len(pair) != 2
+                    or _type(pair[0]) is not _str
+                    or (pair[0] not in kw)
+                    or (kw[pair[0]] is not pair[1])
+                    for pair in pairs
                 )
             ):
                 raise _error from None
@@ -906,10 +900,10 @@ def _capture_engine(
         or _type(dependencies[0]) is not _module
         or (_type(dependencies[1]) is not _dict)
         or (_vars(dependencies[0]) is not dependencies[1])
-        or _any((_type(k) is not _str for k in dependencies[1]))
+        or _any(_type(k) is not _str for k in dependencies[1])
         or (_type(dependencies[2]) is not _dict)
         or (dependencies[1].get("modules") is not dependencies[2])
-        or _any((_type(k) is not _str for k in dependencies[2]))
+        or _any(_type(k) is not _str for k in dependencies[2])
         or (_type(dependencies[3]) is not _tuple)
         or (_len(dependencies[3]) != 5)
     ):
@@ -930,20 +924,18 @@ def _capture_engine(
             or (row[0] != expected_name)
             or (_type(row[1]) is not _module)
             or (_type(row[2]) is not _dict)
-            or _any((_type(k) is not _str for k in row[2]))
+            or _any(_type(k) is not _str for k in row[2])
             or (dependencies[2].get(expected_name) is not row[1])
             or (_vars(row[1]) is not row[2])
             or (_type(row[3]) is not _tuple)
             or (_len(row[2]) != _len(row[3]))
             or _any(
-                (
-                    _type(pair) is not _tuple
-                    or _len(pair) != 2
-                    or _type(pair[0]) is not _str
-                    or (pair[0] not in row[2])
-                    or (row[2][pair[0]] is not pair[1])
-                    for pair in row[3]
-                )
+                _type(pair) is not _tuple
+                or _len(pair) != 2
+                or _type(pair[0]) is not _str
+                or (pair[0] not in row[2])
+                or (row[2][pair[0]] is not pair[1])
+                for pair in row[3]
             )
             or (_type(row[4]) is not _tuple)
             or (_type(row[5]) is not _tuple)
@@ -958,18 +950,16 @@ def _capture_engine(
                 raise _error from None
             names = _vars(kind)
             if (
-                _any((_type(k) is not _str for k in names))
+                _any(_type(k) is not _str for k in names)
                 or _type(members) is not _tuple
                 or _len(names) != _len(members)
                 or _any(
-                    (
-                        _type(pair) is not _tuple
-                        or _len(pair) != 2
-                        or _type(pair[0]) is not _str
-                        or (pair[0] not in names)
-                        or (names[pair[0]] is not pair[1])
-                        for pair in members
-                    )
+                    _type(pair) is not _tuple
+                    or _len(pair) != 2
+                    or _type(pair[0]) is not _str
+                    or (pair[0] not in names)
+                    or (names[pair[0]] is not pair[1])
+                    for pair in members
                 )
             ):
                 raise _error from None
@@ -989,8 +979,8 @@ def _capture_engine(
                 or (_type(cells) is not _tuple)
             ):
                 raise _error from None
-            if not _any((namespace is prior for prior in checked_namespaces)):
-                if _any((_type(k) is not _str for k in namespace)):
+            if not _any(namespace is prior for prior in checked_namespaces):
+                if _any(_type(k) is not _str for k in namespace):
                     raise _error from None
                 checked_namespaces.append(namespace)
             if kw is None:
@@ -998,17 +988,15 @@ def _capture_engine(
                     raise _error from None
             elif (
                 _type(kw) is not _dict
-                or _any((_type(k) is not _str for k in kw))
+                or _any(_type(k) is not _str for k in kw)
                 or _len(kw) != _len(pairs)
                 or _any(
-                    (
-                        _type(pair) is not _tuple
-                        or _len(pair) != 2
-                        or _type(pair[0]) is not _str
-                        or (pair[0] not in kw)
-                        or (kw[pair[0]] is not pair[1])
-                        for pair in pairs
-                    )
+                    _type(pair) is not _tuple
+                    or _len(pair) != 2
+                    or _type(pair[0]) is not _str
+                    or (pair[0] not in kw)
+                    or (kw[pair[0]] is not pair[1])
+                    for pair in pairs
                 )
             ):
                 raise _error from None
@@ -1219,10 +1207,10 @@ def _engine_origin_tail(
         or _type(dependencies[0]) is not _module
         or (_type(dependencies[1]) is not _dict)
         or (_vars(dependencies[0]) is not dependencies[1])
-        or _any((_type(k) is not _str for k in dependencies[1]))
+        or _any(_type(k) is not _str for k in dependencies[1])
         or (_type(dependencies[2]) is not _dict)
         or (dependencies[1].get("modules") is not dependencies[2])
-        or _any((_type(k) is not _str for k in dependencies[2]))
+        or _any(_type(k) is not _str for k in dependencies[2])
         or (_type(dependencies[3]) is not _tuple)
         or (_len(dependencies[3]) != 5)
     ):
@@ -1395,14 +1383,12 @@ def _engine_origin_tail(
             or (_type(row[3]) is not _tuple)
             or (_len(row[2]) != _len(row[3]))
             or _any(
-                (
-                    _type(pair) is not _tuple
-                    or _len(pair) != 2
-                    or _type(pair[0]) is not _str
-                    or (pair[0] not in row[2])
-                    or (row[2][pair[0]] is not pair[1])
-                    for pair in row[3]
-                )
+                _type(pair) is not _tuple
+                or _len(pair) != 2
+                or _type(pair[0]) is not _str
+                or (pair[0] not in row[2])
+                or (row[2][pair[0]] is not pair[1])
+                for pair in row[3]
             )
             or (_type(row[4]) is not _tuple)
             or (_type(row[5]) is not _tuple)
@@ -1421,14 +1407,12 @@ def _engine_origin_tail(
                 or _type(members) is not _tuple
                 or _len(names) != _len(members)
                 or _any(
-                    (
-                        _type(pair) is not _tuple
-                        or _len(pair) != 2
-                        or _type(pair[0]) is not _str
-                        or (pair[0] not in names)
-                        or (names[pair[0]] is not pair[1])
-                        for pair in members
-                    )
+                    _type(pair) is not _tuple
+                    or _len(pair) != 2
+                    or _type(pair[0]) is not _str
+                    or (pair[0] not in names)
+                    or (names[pair[0]] is not pair[1])
+                    for pair in members
                 )
             ):
                 raise _error from None
@@ -1460,14 +1444,12 @@ def _engine_origin_tail(
                 or _any(_map(_not_identity, _map(_type, kw), (_str,) * _len(kw)))
                 or _len(kw) != _len(pairs)
                 or _any(
-                    (
-                        _type(pair) is not _tuple
-                        or _len(pair) != 2
-                        or _type(pair[0]) is not _str
-                        or (pair[0] not in kw)
-                        or (kw[pair[0]] is not pair[1])
-                        for pair in pairs
-                    )
+                    _type(pair) is not _tuple
+                    or _len(pair) != 2
+                    or _type(pair[0]) is not _str
+                    or (pair[0] not in kw)
+                    or (kw[pair[0]] is not pair[1])
+                    for pair in pairs
                 )
             ):
                 raise _error from None
@@ -1504,12 +1486,10 @@ def _engine_origin_tail(
     kernel_names = vars(metadata)
     if not (
         checked_namespaces.get(_id(kernel_names)) is kernel_names
-        and all(
-            (type(row) is tuple and len(row) == 7 and (type(row[0]) is str) for row in origin[3])
-        )
+        and all(type(row) is tuple and len(row) == 7 and (type(row[0]) is str) for row in origin[3])
     ):
         raise _error from None
-    first = tuple((row for row in origin[3] if row[0] == "_link_function_pin"))
+    first = tuple(row for row in origin[3] if row[0] == "_link_function_pin")
     if not len(first) == 1:
         raise _error from None
     first = first[0]
@@ -1585,14 +1565,12 @@ def _engine_origin_tail(
                 kind is _LinkRead
                 and len(names) == len(members)
                 and all(
-                    (
-                        type(pair) is tuple
-                        and len(pair) == 2
-                        and (type(pair[0]) is str)
-                        and (pair[0] in names)
-                        and (names[pair[0]] is pair[1])
-                        for pair in members
-                    )
+                    type(pair) is tuple
+                    and len(pair) == 2
+                    and (type(pair[0]) is str)
+                    and (pair[0] in names)
+                    and (names[pair[0]] is pair[1])
+                    for pair in members
                 )
             ):
                 raise _error from None
@@ -1650,7 +1628,7 @@ def _engine_origin_tail(
         "_engine_live_tail",
     )
     if not (
-        all((type(row) is tuple and len(row) == 7 and (type(row[0]) is str) for row in origin[2]))
+        all(type(row) is tuple and len(row) == 7 and (type(row[0]) is str) for row in origin[2])
         and len(origin[2]) == len(required_functions)
         and (len({row[0] for row in origin[2]}) == len(required_functions))
         and all((name in required_functions for name, *_ in origin[2]))
@@ -1707,14 +1685,12 @@ def _engine_origin_tail(
                     )
                 )
                 and all(
-                    (
-                        type(pair) is tuple
-                        and len(pair) == 2
-                        and (type(pair[0]) is str)
-                        and (pair[0] in held_pin_row[5])
-                        and (held_pin_row[5][pair[0]] is pair[1])
-                        for pair in held_pin_row[6]
-                    )
+                    type(pair) is tuple
+                    and len(pair) == 2
+                    and (type(pair[0]) is str)
+                    and (pair[0] in held_pin_row[5])
+                    and (held_pin_row[5][pair[0]] is pair[1])
+                    for pair in held_pin_row[6]
                 )
             ):
                 raise _error from None
@@ -1750,14 +1726,12 @@ def _engine_origin_tail(
                     and len(row[5]) == len(row[6])
                     and (not _any(_map(_not_identity, _map(_type, row[5]), (_str,) * _len(row[5]))))
                     and all(
-                        (
-                            type(pair) is tuple
-                            and len(pair) == 2
-                            and (type(pair[0]) is str)
-                            and (pair[0] in row[5])
-                            and (row[5][pair[0]] is pair[1])
-                            for pair in row[6]
-                        )
+                        type(pair) is tuple
+                        and len(pair) == 2
+                        and (type(pair[0]) is str)
+                        and (pair[0] in row[5])
+                        and (row[5][pair[0]] is pair[1])
+                        for pair in row[6]
                     )
                 ):
                     raise _error from None
@@ -1801,14 +1775,12 @@ def _engine_origin_tail(
                     )
                 )
                 and all(
-                    (
-                        type(pair) is tuple
-                        and len(pair) == 2
-                        and (type(pair[0]) is str)
-                        and (pair[0] in held_pin_row[5])
-                        and (held_pin_row[5][pair[0]] is pair[1])
-                        for pair in held_pin_row[6]
-                    )
+                    type(pair) is tuple
+                    and len(pair) == 2
+                    and (type(pair[0]) is str)
+                    and (pair[0] in held_pin_row[5])
+                    and (held_pin_row[5][pair[0]] is pair[1])
+                    for pair in held_pin_row[6]
                 )
             ):
                 raise _error from None
@@ -1862,14 +1834,12 @@ def _engine_origin_tail(
         "_capture_link_byte_count",
         "_retain_link_byte_failure",
     )
-    if not all(
-        (type(row) is tuple and len(row) == 7 and (type(row[0]) is str) for row in origin[3])
-    ):
+    if not all(type(row) is tuple and len(row) == 7 and (type(row[0]) is str) for row in origin[3]):
         raise _error from None
-    kernel_roles = tuple((row[0] for row in origin[3]))
+    kernel_roles = tuple(row[0] for row in origin[3])
     if not (
         len(set(kernel_roles)) == len(kernel_roles)
-        and all((name in kernel_roles for name in required_kernel))
+        and all(name in kernel_roles for name in required_kernel)
     ):
         raise _error from None
     for row in origin[3]:
@@ -1917,14 +1887,12 @@ def _engine_origin_tail(
                 )
             )
             and all(
-                (
-                    type(pair) is tuple
-                    and len(pair) == 2
-                    and (type(pair[0]) is str)
-                    and (pair[0] in held_pin_row[5])
-                    and (held_pin_row[5][pair[0]] is pair[1])
-                    for pair in held_pin_row[6]
-                )
+                type(pair) is tuple
+                and len(pair) == 2
+                and (type(pair[0]) is str)
+                and (pair[0] in held_pin_row[5])
+                and (held_pin_row[5][pair[0]] is pair[1])
+                for pair in held_pin_row[6]
             )
         ):
             raise _error from None
@@ -1967,10 +1935,10 @@ def _engine_live_tail(
         or _type(dependencies[0]) is not _module
         or (_type(dependencies[1]) is not _dict)
         or (_vars(dependencies[0]) is not dependencies[1])
-        or _any((_type(k) is not _str for k in dependencies[1]))
+        or _any(_type(k) is not _str for k in dependencies[1])
         or (_type(dependencies[2]) is not _dict)
         or (dependencies[1].get("modules") is not dependencies[2])
-        or _any((_type(k) is not _str for k in dependencies[2]))
+        or _any(_type(k) is not _str for k in dependencies[2])
         or (_type(dependencies[3]) is not _tuple)
         or (_len(dependencies[3]) != 5)
     ):
@@ -2103,14 +2071,12 @@ def _engine_live_tail(
             or (_type(row[3]) is not _tuple)
             or (_len(row[2]) != _len(row[3]))
             or _any(
-                (
-                    _type(pair) is not _tuple
-                    or _len(pair) != 2
-                    or _type(pair[0]) is not _str
-                    or (pair[0] not in row[2])
-                    or (row[2][pair[0]] is not pair[1])
-                    for pair in row[3]
-                )
+                _type(pair) is not _tuple
+                or _len(pair) != 2
+                or _type(pair[0]) is not _str
+                or (pair[0] not in row[2])
+                or (row[2][pair[0]] is not pair[1])
+                for pair in row[3]
             )
             or (_type(row[4]) is not _tuple)
             or (_type(row[5]) is not _tuple)
@@ -2129,14 +2095,12 @@ def _engine_live_tail(
                 or _type(members) is not _tuple
                 or _len(names) != _len(members)
                 or _any(
-                    (
-                        _type(pair) is not _tuple
-                        or _len(pair) != 2
-                        or _type(pair[0]) is not _str
-                        or (pair[0] not in names)
-                        or (names[pair[0]] is not pair[1])
-                        for pair in members
-                    )
+                    _type(pair) is not _tuple
+                    or _len(pair) != 2
+                    or _type(pair[0]) is not _str
+                    or (pair[0] not in names)
+                    or (names[pair[0]] is not pair[1])
+                    for pair in members
                 )
             ):
                 raise _error from None
@@ -2168,14 +2132,12 @@ def _engine_live_tail(
                 or _any(_map(_not_identity, _map(_type, kw), (_str,) * _len(kw)))
                 or _len(kw) != _len(pairs)
                 or _any(
-                    (
-                        _type(pair) is not _tuple
-                        or _len(pair) != 2
-                        or _type(pair[0]) is not _str
-                        or (pair[0] not in kw)
-                        or (kw[pair[0]] is not pair[1])
-                        for pair in pairs
-                    )
+                    _type(pair) is not _tuple
+                    or _len(pair) != 2
+                    or _type(pair[0]) is not _str
+                    or (pair[0] not in kw)
+                    or (kw[pair[0]] is not pair[1])
+                    for pair in pairs
                 )
             ):
                 raise _error from None
@@ -2212,12 +2174,10 @@ def _engine_live_tail(
     kernel_names = vars(metadata)
     if not (
         checked_namespaces.get(_id(kernel_names)) is kernel_names
-        and all(
-            (type(row) is tuple and len(row) == 7 and (type(row[0]) is str) for row in origin[3])
-        )
+        and all(type(row) is tuple and len(row) == 7 and (type(row[0]) is str) for row in origin[3])
     ):
         raise _error from None
-    first = tuple((row for row in origin[3] if row[0] == "_link_function_pin"))
+    first = tuple(row for row in origin[3] if row[0] == "_link_function_pin")
     if not len(first) == 1:
         raise _error from None
     first = first[0]
@@ -2293,14 +2253,12 @@ def _engine_live_tail(
                 kind is _LinkRead
                 and len(names) == len(members)
                 and all(
-                    (
-                        type(pair) is tuple
-                        and len(pair) == 2
-                        and (type(pair[0]) is str)
-                        and (pair[0] in names)
-                        and (names[pair[0]] is pair[1])
-                        for pair in members
-                    )
+                    type(pair) is tuple
+                    and len(pair) == 2
+                    and (type(pair[0]) is str)
+                    and (pair[0] in names)
+                    and (names[pair[0]] is pair[1])
+                    for pair in members
                 )
             ):
                 raise _error from None
@@ -2358,7 +2316,7 @@ def _engine_live_tail(
         "_engine_live_tail",
     )
     if not (
-        all((type(row) is tuple and len(row) == 7 and (type(row[0]) is str) for row in origin[2]))
+        all(type(row) is tuple and len(row) == 7 and (type(row[0]) is str) for row in origin[2])
         and len(origin[2]) == len(required_functions)
         and (len({row[0] for row in origin[2]}) == len(required_functions))
         and all((name in required_functions for name, *_ in origin[2]))
@@ -2415,14 +2373,12 @@ def _engine_live_tail(
                     )
                 )
                 and all(
-                    (
-                        type(pair) is tuple
-                        and len(pair) == 2
-                        and (type(pair[0]) is str)
-                        and (pair[0] in held_pin_row[5])
-                        and (held_pin_row[5][pair[0]] is pair[1])
-                        for pair in held_pin_row[6]
-                    )
+                    type(pair) is tuple
+                    and len(pair) == 2
+                    and (type(pair[0]) is str)
+                    and (pair[0] in held_pin_row[5])
+                    and (held_pin_row[5][pair[0]] is pair[1])
+                    for pair in held_pin_row[6]
                 )
             ):
                 raise _error from None
@@ -2458,14 +2414,12 @@ def _engine_live_tail(
                     and len(row[5]) == len(row[6])
                     and (not _any(_map(_not_identity, _map(_type, row[5]), (_str,) * _len(row[5]))))
                     and all(
-                        (
-                            type(pair) is tuple
-                            and len(pair) == 2
-                            and (type(pair[0]) is str)
-                            and (pair[0] in row[5])
-                            and (row[5][pair[0]] is pair[1])
-                            for pair in row[6]
-                        )
+                        type(pair) is tuple
+                        and len(pair) == 2
+                        and (type(pair[0]) is str)
+                        and (pair[0] in row[5])
+                        and (row[5][pair[0]] is pair[1])
+                        for pair in row[6]
                     )
                 ):
                     raise _error from None
@@ -2509,14 +2463,12 @@ def _engine_live_tail(
                     )
                 )
                 and all(
-                    (
-                        type(pair) is tuple
-                        and len(pair) == 2
-                        and (type(pair[0]) is str)
-                        and (pair[0] in held_pin_row[5])
-                        and (held_pin_row[5][pair[0]] is pair[1])
-                        for pair in held_pin_row[6]
-                    )
+                    type(pair) is tuple
+                    and len(pair) == 2
+                    and (type(pair[0]) is str)
+                    and (pair[0] in held_pin_row[5])
+                    and (held_pin_row[5][pair[0]] is pair[1])
+                    for pair in held_pin_row[6]
                 )
             ):
                 raise _error from None
@@ -2570,14 +2522,12 @@ def _engine_live_tail(
         "_capture_link_byte_count",
         "_retain_link_byte_failure",
     )
-    if not all(
-        (type(row) is tuple and len(row) == 7 and (type(row[0]) is str) for row in origin[3])
-    ):
+    if not all(type(row) is tuple and len(row) == 7 and (type(row[0]) is str) for row in origin[3]):
         raise _error from None
-    kernel_roles = tuple((row[0] for row in origin[3]))
+    kernel_roles = tuple(row[0] for row in origin[3])
     if not (
         len(set(kernel_roles)) == len(kernel_roles)
-        and all((name in kernel_roles for name in required_kernel))
+        and all(name in kernel_roles for name in required_kernel)
     ):
         raise _error from None
     for row in origin[3]:
@@ -2625,14 +2575,12 @@ def _engine_live_tail(
                 )
             )
             and all(
-                (
-                    type(pair) is tuple
-                    and len(pair) == 2
-                    and (type(pair[0]) is str)
-                    and (pair[0] in held_pin_row[5])
-                    and (held_pin_row[5][pair[0]] is pair[1])
-                    for pair in held_pin_row[6]
-                )
+                type(pair) is tuple
+                and len(pair) == 2
+                and (type(pair[0]) is str)
+                and (pair[0] in held_pin_row[5])
+                and (held_pin_row[5][pair[0]] is pair[1])
+                for pair in held_pin_row[6]
             )
         ):
             raise _error from None
