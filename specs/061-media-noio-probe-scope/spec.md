@@ -25,7 +25,7 @@ threads, native execution, physical rendering or release.
 - [x] Scope the unchanged guard and preserve all assertions.
 - [x] Prove injected filesystem calls fail and restore globals before reporting.
 - [x] Run the complete candidate test file and appropriate related parser/scanner tests.
-- [ ] Independent review and focused source publication; preserve broad-suite gates.
+- [x] Independent review and focused source publication; preserve broad-suite gates.
 
 ## Observed results and remaining qualification
 
@@ -55,3 +55,6 @@ receipts remain authoritative; partial progress is not a terminal result or a
 whole-suite pass. Linux CI, actual native integration, device startup/rendering,
 private integration, and release qualification are not established by this test
 repair. Existing production and security gates remain in force.
+
+Published as [Draft PR176](https://github.com/MahdiHedhli/hermes-hmp/pull/176),
+stacked on the push-status schema repair. Publication does not deploy this source.
