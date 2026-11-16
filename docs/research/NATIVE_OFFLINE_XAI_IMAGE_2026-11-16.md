@@ -1,7 +1,9 @@
 # Native xAI result-path qualification — November 16
 
-Status: source experiment prepared; no fourth-scenario runtime pass or host
-deployment is claimed. The accepted older run43857621548 remains bound to its
+Status: [run43867859682](https://github.com/MahdiHedhli/hermes-hmp/actions/runs/43867859682),
+job133300957758, is confirmed in progress on exact head4c2fdcb6a6171a1ec5f2e1cd10b0b544b56a351a.
+The current step covers preparation and all four scenarios; no individual native
+result is inferred. No fourth-scenario runtime pass or host deployment is claimed. The accepted older run43857621548 remains bound to its
 three scenarios and exact583e3988 actor/controller inputs.
 
 ## Purpose and fixed inputs
@@ -69,6 +71,15 @@ and normalizes empty-string concatenation. Each matches the original actor's
 projection. This is neither allocation equivalence nor runtime qualification;
 the fresh experiment must still run all four scenarios. Unrelated formatter
 rewrites were removed so existing audit/TLS/cleanup code retains its original text.
+
+Generic CI on4c2fdcb6 stopped at hosted Ruff0.16.9 lint (288 findings), so its
+full unit/tool steps did not run. Five locations are in touched files: four exact
+flagged lines are present in the immutable base; one new long mode guard is
+corrected separately in [PR171](https://github.com/MahdiHedhli/hermes-hmp/pull/171).
+That one-expression wrapping retains the controller AST and actor bytes, and154
+checks pass again. Local Ruff0.15.22 is not hosted-version qualification. The fix
+branch does not trigger or replace the ongoing native experiment; no new-controller
+runtime result or overall CI pass is claimed. Full lint remains open.
 
 Independent contract/security review accepts this exact source for publication
 and one fresh four-scenario experiment. It has not accepted a runtime result.
