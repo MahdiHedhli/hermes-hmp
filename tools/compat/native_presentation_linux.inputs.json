@@ -19,15 +19,15 @@
   },
   "hmp": {
     "repository": "MahdiHedhli/hermes-hmp",
-    "commit": "a4a157a5d04a20f23dddc6d614d462b758a947f4",
+    "commit": "d438d35ac1006d9eb04d0554825079a562a080bf",
     "project": "server/pyproject.toml",
     "projectSHA256": "1de9ff9abf38fc242c50239893a98adab43b79b00bf46d6e7c3f0f0efc816b4c",
     "snapshot": "all regular Git files",
-    "snapshotFiles": 1021,
+    "snapshotFiles": 1057,
     "allSnapshotBytesMatchedGitBlobs": true
   },
   "sourceManifest": {
-    "sha256": "83e56c4033458c739da1660902fd5d72ef91afdb83a696287be7348eec3500a6",
+    "sha256": "2520ec71e8adcde4fb124da2b99934d6b6b21835ea08a3807e7182a303e759e1",
     "serialization": "json.dumps(sort_keys=True,indent=2), no trailing newline"
   },
   "resolution": {
@@ -51,7 +51,7 @@
     "hashes": 2113
   },
   "limits": [
-    "Fresh full four-scenario qualification is required for f8acc268; prior ed1afb08 runtime does not qualify this changed native source.",
+    "Fresh full four-scenario qualification is required for current HMP d438d35a; prior a4a157a5 runtime does not qualify the nine changed production files.",
     "Historic scenario uses native cache_image_from_bytes with synthetic tool rows; no provider generation is claimed.",
     "No live host/device/permission/provider/release changes.",
     "Linux results do not qualify macOS deleted-WAL scanner ownership."
@@ -79,5 +79,15 @@
     ],
     "requirementsUnchangedSHA256": "9edcfc564b10ad1ffca7a3d7a02d1a855a5d203cb807d566b85ce5598eb9df94",
     "qualification": "Existing synthetic fixture dependency environment only; not full native PM runtime or live upgrade qualification."
+  },
+  "currentHmpComparison": {
+    "previousQualifiedSource": "a4a157a5d04a20f23dddc6d614d462b758a947f4",
+    "currentCandidateSource": "d438d35ac1006d9eb04d0554825079a562a080bf",
+    "changedProductionFiles": 9,
+    "allRegularGitFilesRetained": true,
+    "hmpSnapshotBytes": 20580119,
+    "nativeUnchanged": true,
+    "dependencyRequirementsUnchanged": true,
+    "noRuntimeFeatureAllowlist": true
   }
 }

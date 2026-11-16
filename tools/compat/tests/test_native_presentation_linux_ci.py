@@ -75,7 +75,7 @@ def test_workflow_limits_trigger_permissions_and_exports_ciphertext_only():
     workflow = yaml.safe_load(path.read_text())
     assert workflow["permissions"] == {"contents": "read"}
     assert set(workflow["on"]) == {"push"}
-    assert workflow["on"]["push"]["branches"] == ["feat/native-f8-image-qualification-20261116"]
+    assert workflow["on"]["push"]["branches"] == ["feat/current-hmp-native-qualification-20261116"]
     job = workflow["jobs"]["complete-native-journey"]
     assert job["runs-on"] == "ubuntu-24.04" and job["timeout-minutes"] == 75
     steps = job["steps"]

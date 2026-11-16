@@ -21,8 +21,8 @@ from pathlib import Path, PurePosixPath
 
 _EXTENSIONS = frozenset((".py", ".json", ".toml", ".yaml", ".yml"))
 _NATIVE = "f8acc26834bf1275c34d09ccc3e51250bcd1e26b"
-_HMP = "a4a157a5d04a20f23dddc6d614d462b758a947f4"
-_MANIFEST = "83e56c4033458c739da1660902fd5d72ef91afdb83a696287be7348eec3500a6"
+_HMP = "d438d35ac1006d9eb04d0554825079a562a080bf"
+_MANIFEST = "2520ec71e8adcde4fb124da2b99934d6b6b21835ea08a3807e7182a303e759e1"
 _DRIVER = None
 
 
@@ -186,7 +186,7 @@ def stage_sources(root, native_repository, hmp_repository):
     sources = {}
     for label, repository, commit, extensions, count in (
         ("native", native_repository, _NATIVE, _EXTENSIONS, 14978),
-        ("hmp", hmp_repository, _HMP, None, 1021),
+        ("hmp", hmp_repository, _HMP, None, 1057),
     ):
         _require(
             driver._git(root, repository, ["cat-file", "-t", commit], label + "_kind", receipt)
