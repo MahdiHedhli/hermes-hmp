@@ -63,3 +63,9 @@ No host, provider, grant or device changes are included in source restoration.
 [bounded verification](071-approval-key-validation/VERIFICATION.md) cover inline
 key scans without cached authority or removed seals. The original normal-cache
 timeout remains unresolved; isolated helper timing is not full qualification.
+
+## Supervisor witness wait ownership
+
+[Spec072](072-supervisor-witness-owner-wait/spec.md) covers test-only original-owner
+monitoring with23 selected passes and two intended causal failures. The existing
+broad run and selected native delivery/runtime gates remain separate.

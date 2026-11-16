@@ -4846,3 +4846,13 @@ byte-identical. The isolated helper benchmark is faster, but the full normal
 cache-input case still times out at its original60-second deadline. This is a
 focused source change, not a deployed feature or operator/native/phone/release
 qualification. No permission, provider, model, job or host state changes.
+
+## Supervisor test witness ownership — November16, 2026
+
+[Spec072](specs/072-supervisor-witness-owner-wait/VERIFICATION.md) monitors the
+original supervisor while waiting for a synthetic native stage. Early completion
+now surfaces the original error/cancellation or fails explicitly; cleanup owns
+only the witness. All17 original cases and six new controls pass; two exclusive
+causal controls fail as intended. Production trees/assertions/native deadlines
+are unchanged. Both-pending waits and the separately live original broad run
+remain unresolved; this is not a native delivery, deployment or release pass.
