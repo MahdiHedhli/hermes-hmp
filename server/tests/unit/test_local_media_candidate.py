@@ -492,12 +492,16 @@ def test_no_filesystem_probe_detects_calls_and_restores_before_reporting(
 ) -> None:
     originals = (os.stat, os.path.abspath, pathlib.Path.resolve, builtins.open)
 
+    def open_probe() -> object:
+        with builtins.open("synthetic-probe-must-not-open") as stream:
+            return stream.read(1)
+
     def touches_filesystem(_image: object, _home: object) -> object:
         # Resolve the API at call time, after the original probe installs traps.
         calls = {
             "stat": lambda: os.stat("synthetic-probe-must-not-open"),
             "abspath": lambda: os.path.abspath("synthetic-probe-must-not-normalize"),
-            "open": lambda: builtins.open("synthetic-probe-must-not-open"),
+            "open": open_probe,
         }
         return calls[api]()
 
