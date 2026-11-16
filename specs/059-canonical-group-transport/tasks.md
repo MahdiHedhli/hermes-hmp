@@ -15,8 +15,13 @@
 - [x] GT1-CENSUS: pin56 source files and trace room/history/replica ownership
       plus supported plugin RPC. Existing state/log and RPC facade do not supply
       the required HMP phone/history fence; no blanket API-gap claim.
-- [ ] GT1-FENCE: complete supported extension/contract trace and resolve exact
-      original-authority/member/history transaction predicate before integration.
+- [x] GT1-FENCE-TRACE: recheck current f8acc268 and the published plugin/API/hook,
+      RPC, platform-action and SessionDB snapshot contracts; prior56blobs unchanged,
+      expanded137-file pins. Named native history-acquisition fence is a scoped
+      HERMES_API_GAP; see NATIVE_HISTORY_CAPABILITY_REQUEST.md, not a runtime pass.
+- [ ] GT1-FENCE: obtain/review a supported native-owned original-authority/member/
+      history transaction capability before integration. HGR1–HGR7 and causal
+      acceptance remain unimplemented; do not use private SQL or post-filtering.
 - [ ] GT2: implement internal bounded owner/deadline/pending/publication lifecycle
       with synthetic transports only and no runtime route/capability activation.
 - [x] GT3-CODEC: fixed profile-scoped control-ticket request/reply codec,

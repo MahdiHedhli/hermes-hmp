@@ -74,3 +74,18 @@ surface exists after the remaining extension/contract trace, record that precise
 primitive as an upstream dependency; do not reduce the requested group feature.
 Explicit phone group grants and full frame/decoder accounting remain independently
 open. Transport components, source tests and native OS identity are not those grants.
+
+
+## Completed published-surface follow-up — November16
+
+The [current native capability request](NATIVE_HISTORY_CAPABILITY_REQUEST.md)
+rechecks f8acc268, verifies the prior56 blobs unchanged and pins the expanded137-file
+source inventory. It explicitly traces the published plugin import catalog,
+PluginContext registries, RPC dispatch, existing room-activity observer, platform
+actions and the existing SessionDB transcript snapshot. These examined surfaces
+do not supply the named native authorize-before-room-history-acquisition contract.
+That precise capability is now an upstream dependency for this implementation
+path, not a blanket claim that group APIs/hooks or all snapshot facilities are
+absent. It is a draft request, not an upstream submission, native patch or runtime
+qualification. Phone policy, transport/decoder ownership and full group UX remain
+open; existing unactivated components are not enabled.

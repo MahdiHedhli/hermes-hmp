@@ -1,0 +1,856 @@
+{
+  "nativeCommit": "f8acc26834bf1275c34d09ccc3e51250bcd1e26b",
+  "sourceOnly": true,
+  "treeTruncated": false,
+  "previousNativeCommit": "4162ecf11f611400fa6e5c42d2f360188ce50b39",
+  "unchangedPriorGroupFiles": 56,
+  "files": [
+    {
+      "path": "AGENTS.md",
+      "gitBlob": "b78c10153e42ebe3767004d873873231f8b0689c",
+      "sha256": "8e808cfc0ec790978eed96ae604d2bb474b0c85ec9c58ae6708471cd23b079d0",
+      "bytes": 12132
+    },
+    {
+      "path": "agent/plugin_stream_hooks.py",
+      "gitBlob": "daa9281e0963883faaae9db917f53dd35f52e50e",
+      "sha256": "f952cdc5b70376cfcb3de13b5f1ef508cd9ff29d8525bf1a14e6fa0bff8b3f5c",
+      "bytes": 6744
+    },
+    {
+      "path": "gateway/AGENTS.md",
+      "gitBlob": "969c092dc7a6431dcf4a8c5f59fb2c771b35327a",
+      "sha256": "9fa7dd0cbb4d597bec8fd22e4290a859dff4dead4ac338b9bb82356e9ae79e8d",
+      "bytes": 18621
+    },
+    {
+      "path": "gateway/control_socket.py",
+      "gitBlob": "268455d8a3205d262d9d5a2ae1b00bb88dc9f1ce",
+      "sha256": "274f716b75b9abfaee0965af62ab9491fc36a219823b629acdf42fadfe69e261",
+      "bytes": 32258
+    },
+    {
+      "path": "gateway/hosted_room_attachments.py",
+      "gitBlob": "2f0ea01a7bee2eb491c985d3847b80a4d008156a",
+      "sha256": "d3924c52c8399a5520a918af875eb0439dd426ddea4cda4293e9a4161bc483a1",
+      "bytes": 56152
+    },
+    {
+      "path": "gateway/hosted_room_authority_history.py",
+      "gitBlob": "201a83ddbcf074c8280efa0a5736b6c70a49b967",
+      "sha256": "678a31c7a6453ffafa4ddb62a9b81f146b0de828814c1c9bcd5fbe295ca87e53",
+      "bytes": 5985
+    },
+    {
+      "path": "gateway/hosted_room_context.py",
+      "gitBlob": "82c0796d47901a596c36cf7c418b61a3511eefdc",
+      "sha256": "ee2eb8c84358eb1f3885da621e5ff797fd088160c0d9be8922d7ddd858c05aff",
+      "bytes": 10030
+    },
+    {
+      "path": "gateway/hosted_room_discussion.py",
+      "gitBlob": "c996c48d139c3a41e2b9c58396ac894fcda80b0e",
+      "sha256": "6dd2af9f2269d47b649d0dd11a516766b3afd282427cab0f5e1fa5300c3b5b4e",
+      "bytes": 58537
+    },
+    {
+      "path": "gateway/hosted_room_driver.py",
+      "gitBlob": "66d2257297a616b5e9880262085816d45e93fc9a",
+      "sha256": "d58d38cfb323bc451ab628ab6325544d0ab017ef4841b72ad55751815386e8a1",
+      "bytes": 57613
+    },
+    {
+      "path": "gateway/hosted_room_execution_policy.py",
+      "gitBlob": "1e3d1bc898e4984f004caf2ae7ca822ae6703160",
+      "sha256": "3141f5cbdf60c640239bcb44c2f38d4aa4afa9dbf30f4091d2b9f4f398970184",
+      "bytes": 7515
+    },
+    {
+      "path": "gateway/hosted_room_lead.py",
+      "gitBlob": "5af3bc7f10682042367a156cbb49e100d7ece81d",
+      "sha256": "fdd28be412d1e0da4bd70fba0f7e02235ca38385296afac1d362dd4cedb151f8",
+      "bytes": 9614
+    },
+    {
+      "path": "gateway/hosted_room_links.py",
+      "gitBlob": "10a391636ca53e3f3721e1123ee64888e8f617e0",
+      "sha256": "b4ac6a2ed11f64231140fc8ec18f6671b50b42e80fc3c559d5d87b4f37680053",
+      "bytes": 6745
+    },
+    {
+      "path": "gateway/hosted_room_peer.py",
+      "gitBlob": "1d88cf77691a4f4e8e1d41816d59f09e3d0e3e28",
+      "sha256": "c74147138331d0333dc44c33b0851578ef4eccfc377e53a5ce4bfb2ef1751d34",
+      "bytes": 28449
+    },
+    {
+      "path": "gateway/hosted_room_policy_checkpoint.py",
+      "gitBlob": "3bed4286c281c687641157afd75ffdd7ef169d13",
+      "sha256": "cd7b52ff6602c02b8c7ee0135d8815fa52413e1738926681e3b050fd1000e98d",
+      "bytes": 31234
+    },
+    {
+      "path": "gateway/hosted_room_replicas.py",
+      "gitBlob": "3a786b2f312b53a6be2730806e74b1a65b54da93",
+      "sha256": "1e3c5bda6e2c085ed9fb141555b8be63f8d52c21145f91db7219d27ec1a20f54",
+      "bytes": 16509
+    },
+    {
+      "path": "gateway/hosted_room_router.py",
+      "gitBlob": "b6006194e5865c5a1590f4dc96f3f73b3deeee05",
+      "sha256": "fdc0d3167166eda1d1a5a3ea8e14fa49c2f563be37791cee5d6ac5419897f4a0",
+      "bytes": 11322
+    },
+    {
+      "path": "gateway/hosted_room_task_input.py",
+      "gitBlob": "477df26d76a6253aaa81a881f29ca52bdb0d781a",
+      "sha256": "0b474b70e29043850acc4428ef280c4f28e5fd98a231102c7e34828341a37ca6",
+      "bytes": 969
+    },
+    {
+      "path": "gateway/hosted_room_work_lineage.py",
+      "gitBlob": "10d24064b6e2994ba43ef8e996733f934974df43",
+      "sha256": "b05d5910c527b64845d643de99b279aa87daba282c06fb1149d140c913380de7",
+      "bytes": 2264
+    },
+    {
+      "path": "gateway/hosted_room_work_records.py",
+      "gitBlob": "dd3346482ff33c42e43a7ad7c7a56c3d1ad14847",
+      "sha256": "201847dc8d8eeca2f63daf214328193ac54a7369ee8a75b4622ba3f4dc2221e5",
+      "bytes": 22241
+    },
+    {
+      "path": "gateway/hosted_room_work_storage.py",
+      "gitBlob": "1aad0f906eedfd6a5c3f71963354c22729f56b1c",
+      "sha256": "d5bc4ee64ba4c205aa99f80b57983c9f8fac2bf8aefd6109a8bcb15e334ad5b2",
+      "bytes": 14578
+    },
+    {
+      "path": "gateway/hosted_rooms.py",
+      "gitBlob": "a32138f6e5aa5dc4e7dc9abd4a98834fece774eb",
+      "sha256": "63d05323569900c32c0ba5e85ea8c99c7ae077f422a8642d272b8247332ed281",
+      "bytes": 79959
+    },
+    {
+      "path": "gateway/hosted_rooms_common.py",
+      "gitBlob": "5bd58e5c3f24651fe30b842c546aac8104a31796",
+      "sha256": "6d4b880834e68e8eb9a9b58f75a0abda22da4181028397639413036919ccfbaf",
+      "bytes": 6514
+    },
+    {
+      "path": "gateway/hosted_rooms_gateway_import.py",
+      "gitBlob": "03f40abb51bdc187c8845478e25d6b5027004845",
+      "sha256": "7f95d7f8dc6988e80db8992a350f1697197d9a7d084f150d36f5f513871e0863",
+      "bytes": 9957
+    },
+    {
+      "path": "gateway/hosted_rooms_legacy_import.py",
+      "gitBlob": "d817cbaa48a7154171c6c82dc79e749fbb9125a6",
+      "sha256": "dc89a48ecc56e5008aa4eab62aa3520bc8cda8064c55583964d8b9cb16766d7b",
+      "bytes": 7940
+    },
+    {
+      "path": "gateway/platforms/base.py",
+      "gitBlob": "d34672f8e303144cd44b9084aa7ee9b002d92ec8",
+      "sha256": "9820518ed01e88737dd07bc0927ed63d949a41bbbc851f012af5e79159c29bec",
+      "bytes": 269897
+    },
+    {
+      "path": "gateway/runtime_bootstrap.py",
+      "gitBlob": "97e860e480f877b014834032f2fff8e46d49d1f1",
+      "sha256": "1c1b50581275266133df687d625c066a7095fcbbb78b878eb7b770866dd58308",
+      "bytes": 4386
+    },
+    {
+      "path": "gateway/session_authorities.py",
+      "gitBlob": "0ff207262b4843c05601028c1aadbdda2bcfd22e",
+      "sha256": "7ff52e18a7c40b16c2551888b3d65f8cb2e932f10f029e06156fa5ac8266202b",
+      "bytes": 17163
+    },
+    {
+      "path": "gateway/session_authority.py",
+      "gitBlob": "400b90658434668bf05a9f9880c9cda0e12a56f3",
+      "sha256": "7707c8973647ea5bb223b3c0e44f6d7bf21d121a850a3ca194f4575c6dc2625d",
+      "bytes": 92990
+    },
+    {
+      "path": "gateway/session_controls.py",
+      "gitBlob": "e69a18d738956f78f2de3c599a0f7912b5043f23",
+      "sha256": "b7317ba18b74c4b23d9d5683551415ac0c7baaae2187762e9fe02c08d3120794",
+      "bytes": 63020
+    },
+    {
+      "path": "gateway/session_group_controls.py",
+      "gitBlob": "f2f57cabc04937cbeadaa74bfcce402a3a2bd5a8",
+      "sha256": "828ba909260d5aa44aa9d631794308421573ebf33b72d7743b35643fa27e0114",
+      "bytes": 34706
+    },
+    {
+      "path": "gateway/session_group_peers.py",
+      "gitBlob": "a8fb7aea5fe5bacac4ac82ed1328093b061609af",
+      "sha256": "359f12ffd61eb55c5c8620c8a9d6e06d229e0c11b37f7537323a65e86add6349",
+      "bytes": 11948
+    },
+    {
+      "path": "gateway/session_hosted_attachments.py",
+      "gitBlob": "15ebcb45450d8de8fb820f94fd1afb8ab529f768",
+      "sha256": "789a7019b1ea28f5c7d5daa3f63a05864ffb16068552321bbacceb4d872b28eb",
+      "bytes": 12130
+    },
+    {
+      "path": "gateway/session_hosted_controls.py",
+      "gitBlob": "a52030e46d45d1c2aee19866c5fcb023cfcb8c6c",
+      "sha256": "4fbc0d4a37981f988b68482ee60032310a02e771c112370b6a6c81938be89011",
+      "bytes": 10958
+    },
+    {
+      "path": "gateway/session_hosted_member_homes.py",
+      "gitBlob": "d0d6b4ff89b8ae3cb5edcfd68ad744e04b77b694",
+      "sha256": "5b839589b443ab7e796b7a46b87050782a99b2c37be4e6e50e6c0c069c1a0ead",
+      "bytes": 13338
+    },
+    {
+      "path": "gateway/session_hosted_members.py",
+      "gitBlob": "bf4a38a6281a720ad044bf491707666ca88468af",
+      "sha256": "8f4a88e37424e025e85e8ba87e2280d8ee018d2fd7efed2e8c3b101e972d6618",
+      "bytes": 6987
+    },
+    {
+      "path": "gateway/session_hosted_rpc.py",
+      "gitBlob": "cb90452f63331d5d5952708a37fa3e496c009f32",
+      "sha256": "ddb74fd2a307521a892ef86299e8a04f8f67952c665afd51e4320cf90d740872",
+      "bytes": 20210
+    },
+    {
+      "path": "gateway/session_hosted_service.py",
+      "gitBlob": "d5aefbe35f0ac39a3085b01ec543337fda550012",
+      "sha256": "7586a142f91cf28e3624f0979f790122ac7ed3e5d2469b3c698b737ac1be7be8",
+      "bytes": 22462
+    },
+    {
+      "path": "gateway/session_hosted_transport.py",
+      "gitBlob": "c55c7f2316a985b07027b57763d022e875463d48",
+      "sha256": "f498948980c3e8f69546ca40faf3e6100eb37eb6b3c01454a59786647883ef17",
+      "bytes": 19597
+    },
+    {
+      "path": "gateway/session_identity.py",
+      "gitBlob": "40484b885fed5ff9b73c0884532186ea100a7b96",
+      "sha256": "fe64439fa93674d11650ebbdfd7720376a45d7bb1e065d9a2d74b6e877e15660",
+      "bytes": 17465
+    },
+    {
+      "path": "gateway/session_plugin_rpc.py",
+      "gitBlob": "a1bc32a566f31254e7b9d761d57da7f00bb7d1b0",
+      "sha256": "a7fab13cc862ba56212d98dbe4ca053e60d7e601ed0b645e0232d8e46fe70b6e",
+      "bytes": 4533
+    },
+    {
+      "path": "gateway/status.py",
+      "gitBlob": "1dd56785090c8338b68b1084a27e4718a3a0ee86",
+      "sha256": "bae950051eac36f87a6f51ec061638fdfc7735cf4093b79cdedbc7b5863795c2",
+      "bytes": 103133
+    },
+    {
+      "path": "hermes_cli/AGENTS.md",
+      "gitBlob": "b7294e36f3d7300af13d6deea0bc45df299fc618",
+      "sha256": "6dc6618c8fdcf8cf189af1937b4fa2d6b736673939620e549f29847f87f4ac03",
+      "bytes": 17977
+    },
+    {
+      "path": "hermes_cli/data/plugin_api.json",
+      "gitBlob": "9852b32602c918fd63c6226fa03848ce5a2ff954",
+      "sha256": "66fe5bd23981b2f4821325455d641375757971a1a0162a4f1bb4abefa699c572",
+      "bytes": 7308
+    },
+    {
+      "path": "hermes_cli/gateway_client.py",
+      "gitBlob": "f5ac409cd638995b1ca963779cb03ce8f4ede121",
+      "sha256": "65c2d4e221a8eb5c1bc39f50d30d02ff859b651b3c4a7662afc153c82ae6262b",
+      "bytes": 20458
+    },
+    {
+      "path": "hermes_cli/gateway_runtime_discovery.py",
+      "gitBlob": "9988b063938f3bc23192adcce435d22633ba2125",
+      "sha256": "c8e3d10f25f3f2ffcf7ba1fc249f2decc3bc69340c29cbcec5036dff9cf18256",
+      "bytes": 11475
+    },
+    {
+      "path": "hermes_cli/gateway_runtime_tickets.py",
+      "gitBlob": "5e2fac6bb31566ce91ba6bca935d30971f23aef6",
+      "sha256": "7d49793080df8e8e0b4db2ae54abf4664d3c8c087a19556641482147d60378d3",
+      "bytes": 9143
+    },
+    {
+      "path": "hermes_cli/middleware.py",
+      "gitBlob": "2b41a782517bb0c8f08697f2d76eef68a7803e4a",
+      "sha256": "1fe2e27888aab268f5938b3efc33cb70cd137443c6dea1587c37bdb370b66a2d",
+      "bytes": 8811
+    },
+    {
+      "path": "hermes_cli/platform_actions.py",
+      "gitBlob": "16c8d9fbe79a010a3c072986fc47a576a066fc0e",
+      "sha256": "1436d28dd10c66e2b9d476efdb9827671349ff2129fc5694a2d25705a6b56e13",
+      "bytes": 9957
+    },
+    {
+      "path": "hermes_cli/plugin_capabilities.py",
+      "gitBlob": "e8c1a118f7d5ba55067632ede86d6c53f6ace07f",
+      "sha256": "0f54bb659a4945a62ec24e4aa91a392ea4a17429d0cb9d6ca26467b553ec9afe",
+      "bytes": 10189
+    },
+    {
+      "path": "hermes_cli/plugin_catalog.py",
+      "gitBlob": "d94376b2bf7540244e0c0fbdeddecd7024bbfd79",
+      "sha256": "f5623e3efa7b9a96798ca8ce5b8971c42407079b2252e98116deb7624155a49f",
+      "bytes": 30576
+    },
+    {
+      "path": "hermes_cli/plugin_catalog_presence.py",
+      "gitBlob": "e8feb1fe2ddabebcae3db92f260474164b801a5d",
+      "sha256": "b448b09021c339d356a24ac3e35b2efb6076da73507638379ab20d4552e68db9",
+      "bytes": 8547
+    },
+    {
+      "path": "hermes_cli/plugin_choices.py",
+      "gitBlob": "ec20b49ddd1d8cfb1e784d75b86903b1ea1f998a",
+      "sha256": "5804ecfde38eab4c46f31dc630b01e4460cf4a191c84fea632d1950f5811b4c8",
+      "bytes": 4164
+    },
+    {
+      "path": "hermes_cli/plugin_command_dispatch.py",
+      "gitBlob": "3356df21894c5eefdfc88e6aa9cc3cca73ea8a72",
+      "sha256": "4edddae7ee09357f99b1dd610d90fd3aeb737fe971e98283c5d465b05e3623cc",
+      "bytes": 1643
+    },
+    {
+      "path": "hermes_cli/plugin_compat.py",
+      "gitBlob": "18cba0a575a6409f8f1af4812b39552d6f5ef8d4",
+      "sha256": "2f566b9ad16481da7bdaea94181bafabc1ebcf290278f7d64c05cd7d54378a1c",
+      "bytes": 831
+    },
+    {
+      "path": "hermes_cli/plugin_dev.py",
+      "gitBlob": "bd656fc39698c1680421e372ba3fb022d73b5bc5",
+      "sha256": "2ab7a3bc783608424602e4568ed2fed1fa487649a3b14d073a1890a3e25d8a2e",
+      "bytes": 22390
+    },
+    {
+      "path": "hermes_cli/plugin_events.py",
+      "gitBlob": "f7d6f3c837cdaff9857c5aa6d50b1fc9f5f06f59",
+      "sha256": "43099e98acca17cc1e9acf77436a5726d05d9751a596134a8f9fa3fe9d3d18d1",
+      "bytes": 6679
+    },
+    {
+      "path": "hermes_cli/plugin_host.py",
+      "gitBlob": "e31793126f62065dd44bc3df7d56f360a451c994",
+      "sha256": "aa54423cefb1acb45ad1a9da1395389c8ebef6582887ce31bd066575b68299ca",
+      "bytes": 34648
+    },
+    {
+      "path": "hermes_cli/plugin_host_child.py",
+      "gitBlob": "27e953f9285afdb41a75ba10e7abfcf93c81d307",
+      "sha256": "2e66108d59d9d8a43143f30d56f78719c2506abc5725766300a6744e63f7fbd7",
+      "bytes": 31975
+    },
+    {
+      "path": "hermes_cli/plugin_host_http_auth.py",
+      "gitBlob": "4831bcfe38630b80c5b8b6aa52fcea75e09ddb36",
+      "sha256": "d9544c1079c02cb2b465f8cdd10c98cb82f01a3e2f04f6ec0aa06a214aa6b4a3",
+      "bytes": 852
+    },
+    {
+      "path": "hermes_cli/plugin_host_profiles.py",
+      "gitBlob": "5a8cb68b79554e204de73754f8334532178dc5ad",
+      "sha256": "265b3a035a149eebace5a855054966e56178cd70897de6f4e0f3983bcc7d096d",
+      "bytes": 8102
+    },
+    {
+      "path": "hermes_cli/plugin_host_wire.py",
+      "gitBlob": "6e7bbea3ac35af72f73da359b9e453beff5bca2c",
+      "sha256": "26e3ba4f1e09b1fd783b20f410b2c848c7ef207e11a1cbab1ecdf8b1fd83d38e",
+      "bytes": 19301
+    },
+    {
+      "path": "hermes_cli/plugin_install_phase.py",
+      "gitBlob": "5a76eb20b77743ea0ce3135d43bb7dbabd2bd9ec",
+      "sha256": "e4b98d59c50ed01e0daaa47fd2a13216349c7d2e963de1ad9aa5648a9b05bd81",
+      "bytes": 477
+    },
+    {
+      "path": "hermes_cli/plugin_isolation.py",
+      "gitBlob": "4d7c500d83640b0ab6a83335f22fcf33499103d0",
+      "sha256": "8ba0621872e9a0ada16c08345e678429a6102763924f46e66967826c33ae9b72",
+      "bytes": 10074
+    },
+    {
+      "path": "hermes_cli/plugin_isolation_audit.py",
+      "gitBlob": "4c5b049fe6f8c9e607ecaefce2e2c4901c11ebde",
+      "sha256": "1071c95b582b144c16ee52cb5e84a414fce5e9620a3353b1d43c1d1cd04b84d7",
+      "bytes": 11528
+    },
+    {
+      "path": "hermes_cli/plugin_messages.py",
+      "gitBlob": "b00e17adbf7696c5d45e4a8ffeacdc3824478212",
+      "sha256": "5ede7aec0060f998226a88ffcfd834deba83f92509e7b223f114bdeef8340dc2",
+      "bytes": 8651
+    },
+    {
+      "path": "hermes_cli/plugin_oauth.py",
+      "gitBlob": "56688593c8b468634f44daf36883df4edd43bf8f",
+      "sha256": "e5e7e4435cc67ded626dd2ed539c87a70da2c00c4b38b5c1e70b591c92dd8f24",
+      "bytes": 27315
+    },
+    {
+      "path": "hermes_cli/plugin_packs.py",
+      "gitBlob": "e7a3f1f3a33750c79c3d06a7c194805e79202305",
+      "sha256": "7a0a5c4fc80c0b3c6e3dcbe17282f0ae1f1e4a959fc3159783f185ddb464873e",
+      "bytes": 26490
+    },
+    {
+      "path": "hermes_cli/plugin_provider_requests.py",
+      "gitBlob": "46fbc65b9941d42cd6b84d4d53c14db775646c12",
+      "sha256": "60c537ec1d98e84c2bcf24cc2a8df20d1b1e96bba305d7f7e0970b002af15a9d",
+      "bytes": 9343
+    },
+    {
+      "path": "hermes_cli/plugin_rpc.py",
+      "gitBlob": "8e5b69df76b83ff2a3a15646abd55878eecfaa0c",
+      "sha256": "77ea843a34fb87d7236c8f913f01c19f219e42e7ed21e6243d2f556fbb5da570",
+      "bytes": 2381
+    },
+    {
+      "path": "hermes_cli/plugin_session.py",
+      "gitBlob": "0b9397fedc88c5a1c5b9ba460d302ac8df3dd048",
+      "sha256": "4311b653262e9bed2b73cebd23824b83d943c5df99e1aa0ee88d711f8d7efe74",
+      "bytes": 2840
+    },
+    {
+      "path": "hermes_cli/plugin_validate.py",
+      "gitBlob": "487efab1612e678d0b64f4169f143d4be5e22de8",
+      "sha256": "b6b85600f54685b68734db6e92098a160cb40c61670f0d2ed90cc4d4cfb4b12a",
+      "bytes": 29700
+    },
+    {
+      "path": "hermes_cli/plugin_validate_core_override.py",
+      "gitBlob": "3d26d9a8b24d804b99e4fe87c545d43f8cf2a6a8",
+      "sha256": "fbb17091d5818780a1bcc309c46528311680b78d55ea4ee5e9f6a359310eff95",
+      "bytes": 33111
+    },
+    {
+      "path": "hermes_cli/plugin_validate_desktop.py",
+      "gitBlob": "8bb880c6026e83739575dad9fd2490864b561fa9",
+      "sha256": "29c94e7b19d6e721dc7115a6c674653bfc8850acb8fc96b9d0bbc7ea2ebc6089",
+      "bytes": 10482
+    },
+    {
+      "path": "hermes_cli/plugin_validate_locales.py",
+      "gitBlob": "38584f77fc92f74c4fffb36cf9f6e9467f0ce1bd",
+      "sha256": "86088843a53249291674c05bfc0addfb560ea5c78527d82f0699e202961717bc",
+      "bytes": 5022
+    },
+    {
+      "path": "hermes_cli/plugin_validate_private_imports.py",
+      "gitBlob": "d4ef05c8fc948df94bf7c6b41ae4eca3020b6dad",
+      "sha256": "245a1fca6c469687ce44ed4f7321cc02d4855fcda2c15f8310e38f781604e21a",
+      "bytes": 10575
+    },
+    {
+      "path": "hermes_cli/plugins.py",
+      "gitBlob": "ca0e2623d033b739992b11f036e7565395c5a899",
+      "sha256": "b8612c67861f7da835ae767060c409588402f1428c83c509c18897b269e1dfd6",
+      "bytes": 77147
+    },
+    {
+      "path": "hermes_cli/plugins_activation.py",
+      "gitBlob": "b977badb1414cc14325d63a59a3e8bda5889218b",
+      "sha256": "e58bf3d18bf7dbc5bcad6347c54476efdfa714c7de14c9a04449cb585ff6b845",
+      "bytes": 20615
+    },
+    {
+      "path": "hermes_cli/plugins_activation_live.py",
+      "gitBlob": "804dd217ac8a0b9c929b4f080efd01a76378e3c0",
+      "sha256": "924b29b8044bf2961210cd89b0b3c6c0a310d8fb31824b182018dfbbc9152c9c",
+      "bytes": 7239
+    },
+    {
+      "path": "hermes_cli/plugins_admission.py",
+      "gitBlob": "6ba8f3c36171c552afc1e5bff076aab02c022e36",
+      "sha256": "a31daa6c326c5ba82ace6bcd3a2633db51e9a08768d610c5fce943292f370242",
+      "bytes": 3251
+    },
+    {
+      "path": "hermes_cli/plugins_auto_update.py",
+      "gitBlob": "c49da92eec6199ce681e5de6fa38465b0079a016",
+      "sha256": "821b8f6d2c5930de44d6b9d5062183fdbcd068b0d518a26f8f69584197cab577",
+      "bytes": 13898
+    },
+    {
+      "path": "hermes_cli/plugins_aux_tasks.py",
+      "gitBlob": "638d6c408ed13b4279d2fd2570b18e374e43837c",
+      "sha256": "e66bba098944da0c7114e575d9082d7b4788dbf5afe9cd2a011700ddec595207",
+      "bytes": 3607
+    },
+    {
+      "path": "hermes_cli/plugins_cadence.py",
+      "gitBlob": "c18f7893a69c6795ad0e8ad4169dbcff9df37fe8",
+      "sha256": "3cf15c5719c6ab1804652dc6e7d84de194b525482e33bb521cfa5bcd16e00ed1",
+      "bytes": 13322
+    },
+    {
+      "path": "hermes_cli/plugins_capability_ctx.py",
+      "gitBlob": "ecd1466d8e057cfe4a2055d3bccb448fb27876ad",
+      "sha256": "259df3f2c4cfa9b315242c3d90981e74e31f9fac78e985dc1be8fd26c6e6890f",
+      "bytes": 6050
+    },
+    {
+      "path": "hermes_cli/plugins_cmd.py",
+      "gitBlob": "6c53807a0363dfd367e897d10847455d80f8d304",
+      "sha256": "7228f85fbf1640c2dd688f80b4f3f3dcf89d963097cb0c713fa3fd91e119a030",
+      "bytes": 56232
+    },
+    {
+      "path": "hermes_cli/plugins_cmd_capabilities.py",
+      "gitBlob": "d1ea2eb57f19a28e1c86af14b3308f7f63f7de5c",
+      "sha256": "1322530460936f794e0b36cba11bafc87f592b7b0a9d713bb22bca9eb06d35f6",
+      "bytes": 7755
+    },
+    {
+      "path": "hermes_cli/plugins_cmd_catalog.py",
+      "gitBlob": "4d2c03f889442857207f90838e6288b7d1483927",
+      "sha256": "907ee43556510695abda150b033f696250891f9837fd115296266d7a657f946f",
+      "bytes": 51582
+    },
+    {
+      "path": "hermes_cli/plugins_cmd_git.py",
+      "gitBlob": "a96e81bc0174b64caf60e0433b1cca758ee115c3",
+      "sha256": "30c621282c28c562a173022397d28efffa9272d0844e20bf2ec83691740f46df",
+      "bytes": 19781
+    },
+    {
+      "path": "hermes_cli/plugins_cmd_inspect.py",
+      "gitBlob": "ed9ee2f0ca2f52b99e7d0a9c395f3d948ee49eb8",
+      "sha256": "f1ddeb84c0286258fc8a5db55fddc25d38911c43aa58d9bfd5df3952444a8c8e",
+      "bytes": 9732
+    },
+    {
+      "path": "hermes_cli/plugins_cmd_install.py",
+      "gitBlob": "f13627393e785592a18ade65a471bb5c686094c3",
+      "sha256": "256142670b7e2cc59d6b0e8402c8dedea6029e2f8ad3779e43963c4ff7aac24c",
+      "bytes": 50954
+    },
+    {
+      "path": "hermes_cli/plugins_cmd_listing.py",
+      "gitBlob": "ac7fa0d929285dbcafe8f231db2ef9a5126abb00",
+      "sha256": "9f8ab0eb85f73dcf1d8e6acc8b270a38592789d30ae125299698e82a8726e7fc",
+      "bytes": 7000
+    },
+    {
+      "path": "hermes_cli/plugins_cmd_remove.py",
+      "gitBlob": "e3b53a733f396c88f508136fd301ecb92951f1b2",
+      "sha256": "bdb5cbc176d53c24f95c22ae1e98926b9568eff0486e24ce2d2dae20c9b72c3b",
+      "bytes": 7166
+    },
+    {
+      "path": "hermes_cli/plugins_cmd_toggle.py",
+      "gitBlob": "945593c3e5494286431d2d5730ad5caa83678137",
+      "sha256": "0a05fc8b55e11c653d653f304f77c71dc3319837714225833e2e78089a89e78d",
+      "bytes": 16468
+    },
+    {
+      "path": "hermes_cli/plugins_cmd_update.py",
+      "gitBlob": "c0bab1c56dd4077146395fb2dca9dc737fa27bcd",
+      "sha256": "e30becec28d4c38f4a3dca37d13aef79d309beb6b30f6c36f2a54e6b81972e28",
+      "bytes": 20561
+    },
+    {
+      "path": "hermes_cli/plugins_cmd_update_all.py",
+      "gitBlob": "94f9c51faf361e280b6bc6dd2ebd7d56ad0318dd",
+      "sha256": "3b188938673aa39194d224be1f8d4144e51bbe03df5d7083829fb92c89324ca3",
+      "bytes": 7861
+    },
+    {
+      "path": "hermes_cli/plugins_content.py",
+      "gitBlob": "eee86d6ad0ee3c5e4a42cdf7bafeb06066a76520",
+      "sha256": "389db50fe4aad14c3e290898b00d61c60db7366cc920eec7dd8fe9ba6934f30d",
+      "bytes": 5278
+    },
+    {
+      "path": "hermes_cli/plugins_context.py",
+      "gitBlob": "6135b0b46c42263a32f18c27916434b434882540",
+      "sha256": "2984a4def458cb1ac4b6f6406861f4dd905a00e4bb11000f3383ffca9136c25f",
+      "bytes": 52898
+    },
+    {
+      "path": "hermes_cli/plugins_discovery.py",
+      "gitBlob": "24685d94a5ef160a16bced15a252b522e19aeae3",
+      "sha256": "08731e1f0f932edda7e74af4bae4c2f16870ade04b8fc31173380544bc42baf8",
+      "bytes": 17827
+    },
+    {
+      "path": "hermes_cli/plugins_dispatch.py",
+      "gitBlob": "ee0890db35955e0f4ad982ccb5a7493020aa0741",
+      "sha256": "33d01cbb167c1a08fcca9dba0d867f92062bc790b7a0b7957fa9f03dafcd091e",
+      "bytes": 39448
+    },
+    {
+      "path": "hermes_cli/plugins_idle_tasks.py",
+      "gitBlob": "a1fbfdd57f7171540063a9b8490c1f0fdf5258ac",
+      "sha256": "8cc511bcc59b2f339572eec93a08b383c410d1a6e8d03f8ce8e5c73b12def4c0",
+      "bytes": 18602
+    },
+    {
+      "path": "hermes_cli/plugins_injection.py",
+      "gitBlob": "ed6378f5020b03625c244a332e131a8468e43e4f",
+      "sha256": "f39c417f10ac7824b1e54459af0aae15123f105400d02394230fb044e36a1ab1",
+      "bytes": 3638
+    },
+    {
+      "path": "hermes_cli/plugins_ledger.py",
+      "gitBlob": "d508b586b5c15dccb85d843feee23f3ad93008c9",
+      "sha256": "b24757ee82a02c9609e3a0760d888276c9bb6b0ccaf9af823a32d291f405c879",
+      "bytes": 18327
+    },
+    {
+      "path": "hermes_cli/plugins_load_guard.py",
+      "gitBlob": "20c742e08f3b5802aa9c9111ad6790eb3b0f9ce0",
+      "sha256": "ce85a416bac8d2dbd96ce74911afe4429e9ad6782cf618ec45c26abc8f24bab0",
+      "bytes": 1940
+    },
+    {
+      "path": "hermes_cli/plugins_loader.py",
+      "gitBlob": "157b2f225ad5f0e6aef73e4d7ef73b1ab3d14f5e",
+      "sha256": "3400cc514c8a0f0749e02b309020cc48794eae530adc26c0ad3f2381ba6935fc",
+      "bytes": 46866
+    },
+    {
+      "path": "hermes_cli/plugins_manifest.py",
+      "gitBlob": "22ecbc213b62c869847f60d34f586204d2c98fdf",
+      "sha256": "89b30e679247a628c7dad93c573afa9f3f22529015b26397de24f5067ff7fc06",
+      "bytes": 28989
+    },
+    {
+      "path": "hermes_cli/plugins_provenance.py",
+      "gitBlob": "200ff0ebcc234418c6ee91b0372e4d6533a05936",
+      "sha256": "071fb1bd5764bc8ae1961540b0d4de871ad6497f5649b49103c1a5a023174947",
+      "bytes": 5045
+    },
+    {
+      "path": "hermes_cli/plugins_registrars.py",
+      "gitBlob": "5225356a2c8fd98e5ea87a5bd06bc0790f8e703b",
+      "sha256": "d8935626dc004c7e3acc565582ff64a20efb2161e20d9d58cf5ff42af143f40e",
+      "bytes": 10034
+    },
+    {
+      "path": "hermes_cli/plugins_session_env.py",
+      "gitBlob": "3a1808ab07a412f3a0aba0122ab4b149d183a697",
+      "sha256": "c2575864a9e9e2e6d6f1d1043e1c2ef11eb3e671a56728101c49c3d4351c21c5",
+      "bytes": 4630
+    },
+    {
+      "path": "hermes_cli/plugins_settings.py",
+      "gitBlob": "3230d30346858970c880a36ebeb9c2a7ddfb58e4",
+      "sha256": "5e5e254f9d524eddb0252fba68324d8bf769185b8ac8ab49060f76038a129674",
+      "bytes": 7309
+    },
+    {
+      "path": "hermes_cli/plugins_state.py",
+      "gitBlob": "05d9be0af035ef6747c623e96d4c219774e4f104",
+      "sha256": "e70d881fd72645b724b141836eab9b6ddfda229b6de034efb18f35eb345f25f7",
+      "bytes": 8805
+    },
+    {
+      "path": "hermes_cli/plugins_transaction.py",
+      "gitBlob": "9330558acc463cd40bef86346cdcbfbcf7909f56",
+      "sha256": "079e0bc19224420c065c61cb2c70ed346c2c2b1c1b77b084574ec3784b2fc3e4",
+      "bytes": 12517
+    },
+    {
+      "path": "hermes_cli/plugins_updates.py",
+      "gitBlob": "719f3efaf1c911a7443c0ad8f5839790012cd819",
+      "sha256": "d76ac7b822004054e8fb54bb7d6aef62a4bb9dde6969af24c555d49dca17d7b5",
+      "bytes": 18548
+    },
+    {
+      "path": "hermes_state.py",
+      "gitBlob": "0cbc7fc74a203f5e64df80bcc4b84e1b07ba94ce",
+      "sha256": "23e4fb8605fbd05d96694bd2a97027cd9232027280c79f395550e964ba42da15",
+      "bytes": 96225
+    },
+    {
+      "path": "hermes_state_api_content.py",
+      "gitBlob": "50cb6ed2369a0f51af808dcb6c9c6c7f14b6f17b",
+      "sha256": "af203af629716f9b9ec9744a6f76e15a68efd6ccbb14260ba9b1cb195461d250",
+      "bytes": 3715
+    },
+    {
+      "path": "hermes_state_messages.py",
+      "gitBlob": "f7ba486edd4ebb11e31051e0a31f225077afbb9d",
+      "sha256": "290e5845650be760331b4ff92f486532acaf68ccc4a77ac3e9a4938b2e9f93df",
+      "bytes": 132664
+    },
+    {
+      "path": "hermes_state_runtime.py",
+      "gitBlob": "17e57ab013d04d4a07efbf65d7ee29243996e7c7",
+      "sha256": "52a0bd8e4ff76cbfa2d281876f4778b37ae9789e50f5e64fe57c253c8aec3088",
+      "bytes": 60854
+    },
+    {
+      "path": "hermes_state_sessions.py",
+      "gitBlob": "476b3ef51d4304f3ef57d35576e2b98e73ca56fc",
+      "sha256": "96d90836a9c5237f5e4abe38960ece8726a0a57d4695dce5eaf34bc83c441565",
+      "bytes": 109530
+    },
+    {
+      "path": "hermes_state_stored_reads.py",
+      "gitBlob": "668796d570b0853220503b652acd7d35bd39f500",
+      "sha256": "39e0d43102e2dbc2c82cb572f23bc873b7bdd2b577af9e9bf26fe323e2e98287",
+      "bytes": 30399
+    },
+    {
+      "path": "plugins/AGENTS.md",
+      "gitBlob": "e527630ed9b66d5d0f58b1210373bf93456d50cd",
+      "sha256": "4e442ecb4882897465f9e3bc15fb5d2ff4bed85efb2d0497d7f339c0ddd5f58e",
+      "bytes": 16966
+    },
+    {
+      "path": "tools/hosted_tool_policy.py",
+      "gitBlob": "4e4d1e287db50f1a832caffb0d8b315e9fb2cf31",
+      "sha256": "16f42b9538e920800892b084e1a6d6499dca4a7a5e153cb76f5a2c2c59492fa9",
+      "bytes": 6530
+    },
+    {
+      "path": "tui_gateway/hosted_room_driver.py",
+      "gitBlob": "7c498f376e85c17e76d73e79bb74ed963d87c249",
+      "sha256": "5f24d8a7a49565d0f2fd32f6d8d6f38075cccb5e518adc20cdc96b7481bbd8a5",
+      "bytes": 71513
+    },
+    {
+      "path": "tui_gateway/hosted_room_lease_keeper.py",
+      "gitBlob": "dfc0663776a3c4ec83dce650f35b174c0edb41d7",
+      "sha256": "a3a50b255e83002c17e3d93c8e147b6104e3815d81e98431071467d50c726518",
+      "bytes": 2378
+    },
+    {
+      "path": "tui_gateway/hosted_room_member_activity.py",
+      "gitBlob": "f7e527abcafde5c5c85d7d6f9ebb3eba65fdb916",
+      "sha256": "40218e8a06ba1ba70284902c0e4a2fe8c8c8049262dd63632e07f730df8db68c",
+      "bytes": 9724
+    },
+    {
+      "path": "tui_gateway/hosted_room_peer_deadline.py",
+      "gitBlob": "694692b517ce9b2918d20c522ff59466c1677d1c",
+      "sha256": "6886fc91a7be61d74fade79dd6e54531318bf6f92a5dab5e034a0f01aba5b2b8",
+      "bytes": 5303
+    },
+    {
+      "path": "tui_gateway/hosted_room_peer_http.py",
+      "gitBlob": "5ed01a9aa3f4a0988fcfdc4789a747f3b7f5d7ab",
+      "sha256": "3b01aab3a5ff1e5cc21f50f2e7dbb02b6ad3e627f65fce069c24188d11266baf",
+      "bytes": 39280
+    },
+    {
+      "path": "tui_gateway/hosted_room_peer_transport.py",
+      "gitBlob": "bbe20d3040cb11c91f7281b02ff1a0a8fc09b55f",
+      "sha256": "1a940e8ae0129f186047948b19a517b70aa82325ce30d087e1052c26e9ef68fa",
+      "bytes": 13899
+    },
+    {
+      "path": "tui_gateway/hosted_room_prepare_stall.py",
+      "gitBlob": "aa18c939a8e54c7d695a1f2a218140c31700f625",
+      "sha256": "96bbfb05cd0d90f255d5ea001d7239c344731a3bb8c94cbd8bfebbf3a9ccfa25",
+      "bytes": 5156
+    },
+    {
+      "path": "tui_gateway/hosted_room_router_call.py",
+      "gitBlob": "5fd603dc8c8aba42f9e22d69bd8ed63bf4af08f1",
+      "sha256": "7cca8349f39e5a3f1addc584b65d7ea9c9dc97f73bdd8ba2ea4c79e352c00e8d",
+      "bytes": 8203
+    },
+    {
+      "path": "tui_gateway/hosted_room_server_rpc.py",
+      "gitBlob": "f062a04d201adf883534fb9ea0a61ba947d7e3cd",
+      "sha256": "c014e1a1bed14958fdafbc67f5e7e358fc72e54e793cd5f581c73d82239618a2",
+      "bytes": 8475
+    },
+    {
+      "path": "tui_gateway/hosted_room_service.py",
+      "gitBlob": "d74db472c45bec58f6fb1315333c7d7ecc1eef64",
+      "sha256": "32de7083b8173f83d269759037090915d75f4364fa86d562fcac53a7964fcd35",
+      "bytes": 75501
+    },
+    {
+      "path": "tui_gateway/transport.py",
+      "gitBlob": "691f1d799027b211a073c685fbd7ee5d65fae3a6",
+      "sha256": "4fee8994e514cbc6760a0c1912cb3fb906036048a7ce41e281e57532716384d3",
+      "bytes": 16753
+    },
+    {
+      "path": "tui_gateway/ws.py",
+      "gitBlob": "826354027747ea78de4709588ed1a928be033589",
+      "sha256": "02282ad57f1bc394dcfd1efbfd6ae50ec80838bd303de7b14defd17774ac8b67",
+      "bytes": 42015
+    },
+    {
+      "path": "website/docs/developer-guide/contributing.md",
+      "gitBlob": "f5d4ee14521d5cfa81e8a6a1fe2de4a74e739fc9",
+      "sha256": "3db584e6409ce3151613eff9f7f0be07e421400c89e1600ef2c381168e28dd8b",
+      "bytes": 28146
+    },
+    {
+      "path": "website/docs/developer-guide/gateway-internals.md",
+      "gitBlob": "b2e97d173195ae13a62f92db5bda0da4696c0be5",
+      "sha256": "96780d76f017b6457d34b48d8b8e434ab48906b30fddced31662ca1332e55d73",
+      "bytes": 70758
+    },
+    {
+      "path": "website/docs/developer-guide/plugins/application-declarations.md",
+      "gitBlob": "6d7907d741edb177f74a9eed0a1eaa227e4d117e",
+      "sha256": "e452c1e98180b260c172cdc1206277fd62d491156b58a482099caf51a943a8bc",
+      "bytes": 8743
+    },
+    {
+      "path": "website/docs/developer-guide/plugins/catalog-submission.md",
+      "gitBlob": "e42dd3c3352e420c694f4680034831c6b1520f97",
+      "sha256": "47396f2d8ed340b1c4dcda6d56048d71d8f58ffe91c465d46b448d9c2a80490f",
+      "bytes": 18938
+    },
+    {
+      "path": "website/docs/developer-guide/plugins/index.md",
+      "gitBlob": "21317108905f177b27600ac95892ac3b1a7616c5",
+      "sha256": "11ee54d56b773f90bd60392061c3e0e13d720ca657deeb08fea7e44854848341",
+      "bytes": 162150
+    },
+    {
+      "path": "website/docs/developer-guide/plugins/public-api.md",
+      "gitBlob": "57ce269c200efafd139f78f84b70a99fa07be58f",
+      "sha256": "f0f1b5869435371024ed585a61a7e388604e175fc0a7826132edacb83cb926cf",
+      "bytes": 13146
+    }
+  ],
+  "publishedImports": 116,
+  "publishedRoomStorageImports": [],
+  "groupsLogFields": [
+    "include_disbanded",
+    "limit",
+    "room_id",
+    "since_seq"
+  ],
+  "readEventsArguments": [
+    "db_path",
+    "room_id",
+    "since_seq",
+    "limit",
+    "include_disbanded"
+  ],
+  "positiveExistingExtensions": [
+    "register_rpc/emit_to_session",
+    "register_hook/register_middleware",
+    "on_room_member_activity",
+    "hermes_state.SessionDB.transcript_read_snapshot",
+    "platform_actions reactions/thread title"
+  ],
+  "scope": "Named canonical history route and published plugin API/ctx/observer/delegate contracts; not universal absence of all possible future/native APIs",
+  "nativeExecuted": false,
+  "runtimeDeploymentQualified": false
+}
