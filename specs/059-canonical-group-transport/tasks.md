@@ -7,6 +7,10 @@
       shapes, and historical-member authorization;
       then independently review this full transport/authority contract; resolve
       lifecycle, byte accounting, room snapshot and phone entitlement decisions.
+- [x] GT2-LEDGER: portable unactivated accounting model, exact identity handles,
+      prequeue absolute deadline, retained generations, single-thread confinement,
+      precision refusal and67 causal/positive cases. Model settlement is not native
+      cleanup, permission or transport completion; see OPERATION_LEDGER.md.
 - [ ] GT2: implement internal bounded owner/deadline/pending/publication lifecycle
       with synthetic transports only and no runtime route/capability activation.
 - [ ] GT3: implement reviewed explicit-endpoint ticket/socket/WebSocket adapter;
