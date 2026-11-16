@@ -201,7 +201,7 @@ def test_adapter_only_activates_after_successful_same_nonce_record(
     async def start(srv):
         # Own a real runner without opening a listening socket. Startup's current
         # guard and shutdown must see the same runner, not a forged bound address.
-        srv._runner = web.AppRunner(srv.app)
+        srv._runner = web.AppRunner(server.build_app(srv.ctx))
         await srv._runner.setup()
         srv.bound = ("127.0.0.1", 12345)
     async def activate(srv, record, nonce):
@@ -352,21 +352,36 @@ def test_actual_owning_module_replacement_restore_cannot_revive_generation(
         env.store.close()
 
 
+@pytest.mark.parametrize("debt_kind", ["operator", "presentation", "readiness"])
 def test_composed_disconnect_keeps_store_until_readiness_debt_joins(
-        adapter_module, tmp_path, monkeypatch):
+        adapter_module, tmp_path, monkeypatch, debt_kind):
     env = Env(tmp_path)
     adapter = adapter_module.HmpAdapter(_Config({"bind": "127.0.0.1", "port": 12345}))
     original_close = env.ctx.store.close
     async def scenario():
         release = asyncio.Event()
         closed = asyncio.Event()
+        readiness = SimpleNamespace(drained=False) if debt_kind == "readiness" else None
+        env.ctx.readiness_reads = readiness
         class Listener:
             ctx = env.ctx
-            operator_worker_debt = 1
+            operator_worker_debt = int(debt_kind == "operator")
+            presentation_worker_debt = int(debt_kind == "presentation")
+            readiness_worker_debt = int(debt_kind == "readiness")
+            _dependencies_closed = False
+            _dependencies_close_unknown = False
+            _dependency_close_task = None
             async def stop(self, **_kwargs):
                 return None
             async def wait_operator_drain(self):
+                if self.operator_worker_debt:
+                    await release.wait()
+            async def wait_presentation_drain(self):
+                if self.presentation_worker_debt:
+                    await release.wait()
+            async def wait_readiness_drain(self):
                 await release.wait()
+                readiness.drained = True
         adapter._server = Listener()
         monkeypatch.setattr(adapter, "_drop_record", lambda: None)
         monkeypatch.setattr(env.ctx.store, "close", closed.set)
