@@ -1,5 +1,11 @@
 # Native generated-image cache layout amendment
 
+See the [historic native image_cache amendment](HISTORIC_IMAGE_CACHE_AMENDMENT.md):
+the third exact same-profile root is source-implemented and independently reviewed;
+no resolver, fallback, grant or client change. Focused422 synthetic cases pass,
+while the separately reproduced inherited registry-witness failure and full
+native/private/Linux/physical/release qualification remain open.
+
 Status: independently source-reviewed runtime/witness amendment and bounded
 native cache-helper sample accepted. No live activation is claimed. See
 [the current evidence](../../docs/research/local-media-native-cache-layouts-2026-11-06.md).
