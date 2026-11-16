@@ -1,7 +1,7 @@
-name: Complete synthetic native presentation / Linux
+name: Current HMP complete synthetic native presentation / Linux
 "on":
   push:
-    branches: ['feat/native-f8-image-qualification-20261116']
+    branches: ['feat/current-hmp-native-qualification-20261116']
     paths:
       - '.github/workflows/native-presentation-linux.yml'
       - 'tools/compat/native_presentation_linux*'

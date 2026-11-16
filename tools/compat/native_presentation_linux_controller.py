@@ -28,7 +28,7 @@ _IMAGE = (
 )
 _ENTRY_SHA = "dccf1426bda9940f4af61b468a4f7e218d073d02990983ddb5dcc4fd17c33874"
 _FD_SHA = "692ae20b7bf86016dc7d7f27a678798cf3eb54dad1d601a4376e77b058554056"
-_MANIFEST_SHA = "83e56c4033458c739da1660902fd5d72ef91afdb83a696287be7348eec3500a6"
+_MANIFEST_SHA = "2520ec71e8adcde4fb124da2b99934d6b6b21835ea08a3807e7182a303e759e1"
 _LABEL = "app.hermesbot.native-presentation-fixture"
 
 
@@ -73,7 +73,7 @@ def verify_sources(source):
     count = 0
     for label, commit, size in (
         ("native", "f8acc26834bf1275c34d09ccc3e51250bcd1e26b", 14978),
-        ("hmp", "a4a157a5d04a20f23dddc6d614d462b758a947f4", 1021),
+        ("hmp", "d438d35ac1006d9eb04d0554825079a562a080bf", 1057),
     ):
         item = document["sources"][label]
         require(item["commit"] == commit and len(item["files"]) == size)
@@ -159,7 +159,10 @@ def environment(root):
 
 
 def create_arguments(name, root, source, prefix, venv, entry, mode, uid, gid):
-    require(mode in ("matrix", "mutation", "historic", "offline_xai") and type(uid) is int and uid > 0)
+    require(
+        mode in ("matrix", "mutation", "historic", "offline_xai")
+        and type(uid) is int and uid > 0
+    )
     require(
         type(gid) is int and gid >= 0 and re.fullmatch(r"hmp-native-[0-9a-f]{32}", name) is not None
     )
@@ -329,11 +332,18 @@ def report_acceptance(report, mode):
         require(report.get("nativeHistoricCacheTLSAndRegrantObserved") is True)
         require(report.get("historicCanonicalToolRowsAreSynthetic") is True)
         require(report.get("historicProviderGenerationQualified") is False)
-        require(report.get("historicCacheHelper") == "gateway.platforms.base.cache_image_from_bytes")
+        require(
+            report.get("historicCacheHelper") == "gateway.platforms.base.cache_image_from_bytes"
+        )
         historic = report.get("nativeHistoricCacheProfiles")
         require(type(historic) is list and len(historic) == 2)
         require({x.get("profileHomeName") for x in historic} == {"home", "beta"})
-        require(all(x.get("exactHistoricRoot") is True and x.get("bytesMatched") is True for x in historic))
+        require(
+            all(
+                x.get("exactHistoricRoot") is True and x.get("bytesMatched") is True
+                for x in historic
+            )
+        )
     require(
         [(x["profile"], x["status"]) for x in report["nativePresentationCases"]]
         == [("default", 200), ("beta", 200)]
