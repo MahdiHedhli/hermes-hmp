@@ -19,15 +19,15 @@
   },
   "hmp": {
     "repository": "MahdiHedhli/hermes-hmp",
-    "commit": "183a1189ae639843a256123c224e0301662c41d5",
+    "commit": "a4a157a5d04a20f23dddc6d614d462b758a947f4",
     "project": "server/pyproject.toml",
     "projectSHA256": "1de9ff9abf38fc242c50239893a98adab43b79b00bf46d6e7c3f0f0efc816b4c",
     "snapshot": "all regular Git files",
-    "snapshotFiles": 1016,
+    "snapshotFiles": 1021,
     "allSnapshotBytesMatchedGitBlobs": true
   },
   "sourceManifest": {
-    "sha256": "1686985c2270a0a6a270b52c81a35fb6aaf7fbce4e87c8a4c8b0d65ce91a6804",
+    "sha256": "28f13dcb4a90fce810bc0cf8aecb35b33584f5095e5e427a1887637135bcc702",
     "serialization": "json.dumps(sort_keys=True,indent=2), no trailing newline"
   },
   "resolution": {
@@ -51,9 +51,9 @@
     "hashes": 2113
   },
   "limits": [
-    "A raw installed-package list is not the complete native resolver policy; initial conflict omitted declared overrides.",
-    "Linux environment installation, interpreter binding and full original journey remain unexecuted.",
-    "No native core, provider setup, live host/device/permission or release changes.",
-    "Linux results will not qualify macOS deleted-WAL scanner ownership."
+    "Fresh three-scenario qualification is required; the earlier b86 two-scenario result does not qualify changed HMP code.",
+    "Historic scenario uses native cache_image_from_bytes with synthetic tool rows; no provider generation is claimed.",
+    "No live host/device/permission/provider/release changes.",
+    "Linux results do not qualify macOS deleted-WAL scanner ownership."
   ]
 }

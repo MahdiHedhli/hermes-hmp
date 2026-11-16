@@ -26,9 +26,9 @@ _IMAGE = (
     "docker.io/library/ubuntu@sha256:"
     "77eb101c607d6e3d4f5ad0c8a02c2136c689b98aba1f359e6502ba517e5c57ec"
 )
-_ENTRY_SHA = "ca598b2332cfb23f847a00a28ae9399b775cdbef7ad46d5c08f5ac1f3ad45863"
+_ENTRY_SHA = "6c2640470c3489f7e2cea7ae8c699e8e7204a80de74247e2f006952d04b12698"
 _FD_SHA = "692ae20b7bf86016dc7d7f27a678798cf3eb54dad1d601a4376e77b058554056"
-_MANIFEST_SHA = "1686985c2270a0a6a270b52c81a35fb6aaf7fbce4e87c8a4c8b0d65ce91a6804"
+_MANIFEST_SHA = "28f13dcb4a90fce810bc0cf8aecb35b33584f5095e5e427a1887637135bcc702"
 _LABEL = "app.hermesbot.native-presentation-fixture"
 
 
@@ -73,7 +73,7 @@ def verify_sources(source):
     count = 0
     for label, commit, size in (
         ("native", "ed1afb082eb3e46cf2edae9d8f68fb67b09ee4df", 12185),
-        ("hmp", "183a1189ae639843a256123c224e0301662c41d5", 1016),
+        ("hmp", "a4a157a5d04a20f23dddc6d614d462b758a947f4", 1021),
     ):
         item = document["sources"][label]
         require(item["commit"] == commit and len(item["files"]) == size)
@@ -159,7 +159,7 @@ def environment(root):
 
 
 def create_arguments(name, root, source, prefix, venv, entry, mode, uid, gid):
-    require(mode in ("matrix", "mutation") and type(uid) is int and uid > 0)
+    require(mode in ("matrix", "mutation", "historic") and type(uid) is int and uid > 0)
     require(
         type(gid) is int and gid >= 0 and re.fullmatch(r"hmp-native-[0-9a-f]{32}", name) is not None
     )
@@ -299,6 +299,15 @@ def report_acceptance(report, mode):
     require(report["presentationWorkerDebt"] is False and report["lifecycleCleanupErrors"] == [])
     require(report.get("cleanupErrors", []) == [] and report["observedNetworkInterfaces"] == ["lo"])
     require(report["nativeReapprovalCooldownElapsedSeconds"] >= 602)
+    if mode == "historic":
+        require(report.get("nativeHistoricCacheTLSAndRegrantObserved") is True)
+        require(report.get("historicCanonicalToolRowsAreSynthetic") is True)
+        require(report.get("historicProviderGenerationQualified") is False)
+        require(report.get("historicCacheHelper") == "gateway.platforms.base.cache_image_from_bytes")
+        historic = report.get("nativeHistoricCacheProfiles")
+        require(type(historic) is list and len(historic) == 2)
+        require({x.get("profileHomeName") for x in historic} == {"home", "beta"})
+        require(all(x.get("exactHistoricRoot") is True and x.get("bytesMatched") is True for x in historic))
     require(
         [(x["profile"], x["status"]) for x in report["nativePresentationCases"]]
         == [("default", 200), ("beta", 200)]
@@ -449,7 +458,7 @@ def run(root, source, prefix, venv, docker, runtime_manifest, runtime_sha256):
     row = None
     container = None
     try:
-        for mode in ("matrix", "mutation"):
+        for mode in ("matrix", "mutation", "historic"):
             container = None
             fixture = root / mode
             fixture.mkdir(mode=0o700)

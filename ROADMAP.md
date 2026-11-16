@@ -1,5 +1,10 @@
 ## Native group capability input — November16, 2026
 
+[Fresh historic-image Linux qualification](docs/research/NATIVE_IMAGE_CACHE_LINUX_2026-11-16.md) is source-reviewed/prepared:
+new HMP a4a157a5,13,206 source files and124 source/DATA checks. The original two
+full scenarios remain, with a third full native historic-cache scenario added.
+No new runtime result or deployment is claimed; older b86 proof is not transferred.
+
 The first internal GR1 source task is a bounded parser for native
 `groups.capabilities` advertisements. It preserves exact driver/persistent flags,
 known method/feature names and a bounded log count, drops owner/profile/peer
