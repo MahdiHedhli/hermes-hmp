@@ -156,3 +156,49 @@ the corrected arguments proceed to the deliberately absent interpreter refusal
 A command-contract test prevents reintroducing the conflicting flag pair. A fresh
 reviewed experiment may proceed after this known terminal setup outcome, never
 as replay of an uncertain actor or waiver of native/runtime requirements.
+
+## Fresh software permission preparation before native admission
+
+The third actual run815ed364 installed and checked all77 packages, then stopped
+at strict runtime_inventory's writable-bit guard before Docker/native startup.
+That report did not capture the exact offending leaf. Do not invent one or call
+this a production permission incident: the fresh root stayed0700 and no observed
+disclosure/native admission occurred.
+
+An independently recommended preparation correction now inventories only the
+exact fresh root/python-package/python and root/venv trees after the trusted
+installer children are joined and package metadata/provenance checks pass. It
+rejects wrong owners, special/set-id/sticky files, regular hardlinks and outside
+symlinks before any mode change. Symlinks are never chmodded/followed as mutable
+targets. Every offender's relative path, inode/device/type/UID, before/after mode
+and regular-file hash is durable before the first change. Under exclusive root
+custody each descriptor is rechecked, fchmod applies only oldmode & ~022, then
+identity/mode/size/hash are checked. No read/execute permission, bytes, ownership,
+link authority or live/user home changes are added.
+
+Any interruption, failed write, unknown result or changed inode/bytes quarantines
+the root and cannot replay/resume normalization or admit native work. Partial
+hardening is not rolled back or relabeled success. This prepares the expected
+strict state; the runtime writable-bit guard remains unchanged. Its software
+inventory now also binds file/directory modes and empty directories, schema2,
+so subsequent mode/directory changes are visible. No earlier complete schema1
+Linux runtime manifest was qualified. Private rejection context and the complete
+normalization receipt are encrypted with the existing evidence allowlist; raw
+paths/modes/diagnostics are not added to console output.
+
+109 focused cases currently pass, including actual owned filesystem operations,
+pre-change inventory completeness, hardlink/special/set-id/outside-link refusal,
+inode replacement, byte mutation and an effect with lost return. Removing only
+the post-fchmod byte check in a disposable copy makes the intended mutation
+case fail. This is source/fixture evidence, not actual Linux normalization or
+native runtime acceptance. Exact implementation review must precede the next
+fresh push-triggered experiment; all three earlier setup failures stay preserved.
+
+Independent review required checking persistence before claiming the complete
+pre-effect inventory durable. The receipt now flushes and fsyncs its temporary
+file, atomically replaces the destination, and checks fsync on the owned private
+parent descriptor before returning. Either sync failure prevents every fchmod
+and quarantines the root; a pending/old ledger is never a resumption grant. These
+are filesystem fsync semantics, not a guarantee against arbitrary hardware loss.
+Two causal synthetic file/parent-sync failures verify zero mode changes and no
+replay. Actual Linux normalization remains pending.

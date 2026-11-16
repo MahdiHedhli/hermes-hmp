@@ -18,6 +18,7 @@ from pathlib import Path
 
 _CERT_SHA = "9628b0c4697faf81d375974ae4fbebe01cc9ffa3794eba1824f4936ff744138e"
 _FILES = (
+    "permission-normalization.json",
     "preparation-receipt.json",
     "private-failure.json",
     "prepared.json",

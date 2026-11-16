@@ -309,8 +309,12 @@ def prepare(root, native_repository, hmp_repository):
         re.sub(r"[-_.]+", "-", name).lower(): version for name, version in observation["packages"]
     }
     require(len(observation["packages"]) == 77 and packages == expected)
+    permissions = module(
+        "_linux_fresh_software_permissions", "native_presentation_linux_permissions.py"
+    )
+    permissions.harden(root, prefix, venv)
     runtime = {
-        "schema": 1,
+        "schema": 2,
         "pythonVersion": observation["version"],
         "requirementsSHA256": _REQ_SHA,
         "prefix": str(prefix),

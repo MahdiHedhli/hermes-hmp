@@ -116,6 +116,7 @@ def run(workspace, temporary):
                         "stage": stage,
                         "errorType": type(exc).__name__,
                         "traceback": traceback.format_exc(),
+                        "fixtureContext": getattr(exc, "fixture_context", None),
                         "retryAllowed": False,
                     },
                     output,

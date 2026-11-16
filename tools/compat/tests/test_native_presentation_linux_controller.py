@@ -395,3 +395,44 @@ def test_outer_failure_reconciles_original_actor_and_never_advances(
         if boundary == "lost-start-response"
         else result.get("retainedInertNeverStarted") is True
     )
+
+
+def test_runtime_inventory_binds_modes_and_empty_directories(tmp_path):
+    prefix, venv = tmp_path / "prefix", tmp_path / "venv"
+    prefix.mkdir(mode=0o700)
+    venv.mkdir(mode=0o700)
+    path = venv / "synthetic"
+    path.write_bytes(b"synthetic")
+    path.chmod(0o644)
+    before = module.runtime_inventory(prefix, venv)
+    path.chmod(0o600)
+    after_mode = module.runtime_inventory(prefix, venv)
+    assert before != after_mode
+    (venv / "empty").mkdir(mode=0o700)
+    after_directory = module.runtime_inventory(prefix, venv)
+    assert after_mode != after_directory
+    assert after_directory["venv/empty"] == {"directory": True, "mode": 0o700}
+
+
+def test_manifest_format_binds_modes_and_refuses_legacy_schema(tmp_path):
+    # Pure trusted-preparer format contract; synthetic bytes do not qualify Python.
+    prefix, venv = tmp_path / "prefix", tmp_path / "venv"
+    prefix.mkdir(mode=0o700)
+    venv.mkdir(mode=0o700)
+    (prefix / "synthetic").write_bytes(b"synthetic-not-an-interpreter")
+    document = {
+        "schema": 2,
+        "pythonVersion": [3, 14, 9],
+        "requirementsSHA256": "9edcfc564b10ad1ffca7a3d7a02d1a855a5d203cb807d566b85ce5598eb9df94",
+        "prefix": str(prefix),
+        "venv": str(venv),
+        "files": module.runtime_inventory(prefix, venv),
+    }
+    manifest = tmp_path / "manifest.json"
+    module.save(manifest, document)
+    expected = module.digest(manifest)
+    assert module.verify_runtime(prefix, venv, manifest, expected) == expected
+    document["schema"] = 1
+    module.save(manifest, document)
+    with pytest.raises(module.LinuxJourneyError):
+        module.verify_runtime(prefix, venv, manifest, module.digest(manifest))

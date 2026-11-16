@@ -101,6 +101,7 @@ def runtime_inventory(prefix, venv):
     files = {}
     for label, base in (("prefix", prefix), ("venv", venv)):
         canonical(base, directory=True)
+        files[label + "/"] = {"directory": True, "mode": stat.S_IMODE(base.lstat().st_mode)}
         for path in sorted(base.rglob("*")):
             info = path.lstat()
             require(info.st_uid == os.geteuid())
@@ -114,10 +115,14 @@ def runtime_inventory(prefix, venv):
                 require(target.is_relative_to(prefix) or target.is_relative_to(venv))
                 files[name] = {"link": os.readlink(path)}
             elif stat.S_ISDIR(info.st_mode):
-                continue
+                files[name] = {"directory": True, "mode": stat.S_IMODE(info.st_mode)}
             else:
                 require(stat.S_ISREG(info.st_mode) and info.st_nlink == 1)
-                files[name] = {"sha256": digest(path), "bytes": info.st_size}
+                files[name] = {
+                    "sha256": digest(path),
+                    "bytes": info.st_size,
+                    "mode": stat.S_IMODE(info.st_mode),
+                }
     require(0 < len(files) <= 100000)
     return files
 
@@ -127,7 +132,7 @@ def verify_runtime(prefix, venv, manifest, expected):
     require(re.fullmatch(r"[0-9a-f]{64}", expected) is not None and digest(manifest) == expected)
     require(manifest.stat().st_size <= 32 * 1024**2)
     item = json.loads(manifest.read_text())
-    require(item["schema"] == 1 and item["pythonVersion"] == [3, 14, 9])
+    require(item["schema"] == 2 and item["pythonVersion"] == [3, 14, 9])
     require(
         item["requirementsSHA256"]
         == "9edcfc564b10ad1ffca7a3d7a02d1a855a5d203cb807d566b85ce5598eb9df94"
