@@ -968,7 +968,9 @@ def _push_store_counts(path: Path) -> tuple[int, int] | None:
                 "ON d.device_id = g.device_id WHERE d.state <> 'REVOKED') "
                 "FROM meta WHERE id = 1"
             ).fetchone()
-            if row is None or row[0] != 3:
+            # Schema4 adds independent media decisions; the queried push/device
+            # tables are unchanged from3. Unknown formats still refuse this read.
+            if row is None or type(row[0]) is not int or row[0] not in (3, 4):
                 return None
             return int(row[1]), int(row[2])
     except (sqlite3.Error, OSError, ValueError):

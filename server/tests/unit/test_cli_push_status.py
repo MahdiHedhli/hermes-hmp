@@ -61,13 +61,17 @@ def hashes(root):
     }
 
 
-def test_reads_live_wal_counts_without_migration_keys_authority_or_network(fixture, monkeypatch):
+@pytest.mark.parametrize("schema", [3, 4])
+def test_reads_live_wal_counts_without_migration_keys_authority_or_network(
+        fixture, monkeypatch, schema):
     root, store = fixture
     for name, state in (("active", "ACTIVE"), ("pending", "PENDING"), ("revoked", "REVOKED")):
         seed_device(store, name, state=state)
         seed_row(store, name, number=len(name), state="active" if name == "active" else "retired")
-    # Deliberately expire the stored active row: this is stored state, not eligibility.
+    # Metadata3/4 share these exact push/device tables; this does not emulate
+    # a full legacy installation or assert that stored state is eligibility.
     with store.transaction() as conn:
+        conn.execute("UPDATE meta SET schema_version = ?", (schema,))
         conn.execute("UPDATE push_registrations SET expires_at = 1")
     before = tuple(
         tuple(row) for row in store._require_conn().execute("SELECT * FROM push_registrations")
@@ -92,8 +96,11 @@ def test_reads_live_wal_counts_without_migration_keys_authority_or_network(fixtu
     assert not any(value in out for value in ("private", "active\n", "pending", "revoked\n"))
 
 
-def test_checkpointed_read_changes_no_files(fixture):
+@pytest.mark.parametrize("schema", [3, 4])
+def test_checkpointed_read_changes_no_files(fixture, schema):
     root, store = fixture
+    with store.transaction() as conn:
+        conn.execute("UPDATE meta SET schema_version = ?", (schema,))
     store.close()
     before = hashes(root)
     assert run(root, store)[0] == 0
@@ -146,7 +153,7 @@ def test_missing_store_is_not_created(tmp_path):
     assert not root.exists()
 
 
-@pytest.mark.parametrize("schema", [1, 2, 4])
+@pytest.mark.parametrize("schema", [1, 2, 5, 4.5, "unknown"])
 def test_unqualified_store_is_not_migrated(fixture, schema):
     root, store = fixture
     with store.transaction() as conn:
