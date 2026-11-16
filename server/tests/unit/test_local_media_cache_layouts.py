@@ -101,7 +101,6 @@ def test_generated_path_grammar_and_foreign_profile_remain_closed():
         home + "/cache/generated/images/" + "x" * 129,
         home + "-other/cache/generated/images/image.png",
         home + "/cache/documents/image.png",
-        home + "/image_cache/image.png",
     ):
         assert candidate.derive_cache_location(value, home) is None
 
@@ -251,3 +250,179 @@ def test_source_witness_cannot_strip_an_unreviewed_layout_change(name, old, new)
     mutant = text.replace(old, new, 1)
     with pytest.raises(AssertionError):
         reverse_cache_layout_additions(mutant, name)
+
+
+def test_historic_native_cache_result_is_not_discarded():
+    home = "/fixture/profile-alpha"
+    row = {
+        "id": 2,
+        "role": "tool",
+        "tool_name": "image_generate",
+        "tool_call_id": "fixture-call",
+        "content": json.dumps({"success": True, "image": home + "/image_cache/native.png"}),
+    }
+    assert candidate.raw_tool_candidate(row, home) is not None
+
+
+@pytest.mark.parametrize(
+    "suffix", ["", "nested/a.png", "../a.png", "a\\b.png", "a" * 129, "/a.png", "a\x00b.png"]
+)
+def test_historic_native_path_grammar_and_foreign_profile_stay_closed(suffix):
+    home = "/fixture/alpha"
+    assert candidate.derive_cache_location(home + "/image_cache/" + suffix, home) is None
+    assert candidate.derive_cache_location(home + "-other/image_cache/valid.png", home) is None
+    assert candidate.derive_cache_location(home + "/cache/image_cache/valid.png", home) is None
+
+
+def test_three_same_name_roots_are_isolated_without_any_fallback(tmp_path):
+    home = tmp_path / "alpha"
+    layouts = [
+        ("cache/images", files.CacheLayout.LEGACY, b"modern"),
+        ("cache/generated/images", files.CacheLayout.GENERATED, b"generated"),
+        ("image_cache", files.CacheLayout.HISTORIC_IMAGE_CACHE, b"historic"),
+    ]
+    for relative, _layout, payload in layouts:
+        folder = home / relative
+        folder.mkdir(parents=True, exist_ok=True, mode=0o700)
+        path = folder / "same.png"
+        path.write_bytes(payload)
+        path.chmod(0o600)
+    for relative, layout, payload in layouts:
+        result = files.read_profile_cache_image(home, "same.png", cache_layout=layout)
+        assert result.unvalidated_raster_bytes() == payload
+        path = home / relative / "same.png"
+        path.unlink()
+        missing = files.read_profile_cache_image(home, "same.png", cache_layout=layout)
+        assert missing.outcome is files.Outcome.UNAVAILABLE and missing.byte_count == 0
+        path.write_bytes(payload)
+        path.chmod(0o600)
+
+
+@pytest.mark.parametrize(
+    "attack",
+    ["ancestor_symlink", "file_symlink", "hardlink", "ancestor_replacement", "file_replacement"],
+)
+def test_historic_file_safety_and_cleanup(tmp_path, monkeypatch, attack):
+    import os
+
+    from .test_local_media_file_safety import FdTracker
+
+    home = tmp_path / "alpha"
+    folder = home / "image_cache"
+    folder.mkdir(parents=True, mode=0o700)
+    path = folder / "same.png"
+    path.write_bytes(b"synthetic-original")
+    path.chmod(0o600)
+
+    def read(**kw):
+        return files.read_profile_cache_image(
+            home, "same.png", cache_layout=files.CacheLayout.HISTORIC_IMAGE_CACHE, **kw
+        )
+
+    assert read().unvalidated_raster_bytes() == b"synthetic-original"
+    other = tmp_path / "other"
+    other.mkdir(mode=0o700)
+    other_file = other / "same.png"
+    other_file.write_bytes(b"synthetic-foreign")
+    other_file.chmod(0o600)
+    hook = None
+    if attack == "ancestor_symlink":
+        path.unlink()
+        folder.rmdir()
+        folder.symlink_to(other, target_is_directory=True)
+        expected = files.Outcome.ANCESTOR_REFUSED
+    elif attack == "file_symlink":
+        path.unlink()
+        path.symlink_to(other_file)
+        expected = files.Outcome.SYMLINK_REFUSED
+    elif attack == "hardlink":
+        path.unlink()
+        os.link(other_file, path)
+        expected = files.Outcome.HARDLINKED
+    elif attack == "ancestor_replacement":
+
+        def hook():
+            folder.rename(home / "old-image-cache")
+            folder.mkdir(mode=0o700)
+
+        expected = files.Outcome.BINDING_LOST
+    else:
+
+        def hook():
+            path.rename(folder / "old.png")
+            path.write_bytes(b"replacement")
+            path.chmod(0o600)
+
+        expected = files.Outcome.BINDING_LOST
+    tracker = FdTracker(monkeypatch)
+    try:
+        result = read(_hooks={"before_revalidate": hook} if hook else None)
+        assert result.outcome is expected and result.byte_count == 0
+        assert not tracker.leaked
+        with pytest.raises(ValueError):
+            result.unvalidated_raster_bytes()
+    finally:
+        tracker.cleanup()
+
+
+def test_authenticated_historic_image_fetch_and_namespace_change_refusal(tmp_path, monkeypatch):
+    import os
+
+    from .test_s5_media_fetch import VALID_PNG, VALID_PNG_B, Fx
+
+    fx = Fx(tmp_path, monkeypatch)
+    modern = fx.image_path(6)
+    historic = fx.native.home_path / "image_cache" / modern.name
+    historic.parent.mkdir(mode=0o700)
+    historic.write_bytes(VALID_PNG)
+    historic.chmod(0o600)
+    modern.write_bytes(VALID_PNG_B)
+    row = next(item for item in fx.native.db.messages[fx.rig.tip] if item["id"] == 6)
+    row["content"] = json.dumps({"success": True, "image": str(historic)})
+    opens = []
+    original = os.open
+
+    def observe(name, *args, **kwargs):
+        opens.append(name)
+        return original(name, *args, **kwargs)
+
+    async def scenario(client):
+        owner = await fx.rig.pair(client)
+        refs = await fx.mint(client, owner)
+        monkeypatch.setattr(os, "open", observe)
+        monkeypatch.setattr(os, "supports_dir_fd", os.supports_dir_fd | {observe})
+        assert await fx.served(client, refs[6], dev=owner) == VALID_PNG
+        assert opens
+        opens.clear()
+        row["content"] = json.dumps({"success": True, "image": str(modern)})
+        await fx.refused(client, refs[6], dev=owner)
+        assert opens == []
+
+    fx.run(scenario)
+
+
+@pytest.mark.parametrize(
+    "name,old,new",
+    [
+        (
+            "local_media_candidate.py",
+            'historic_prefix = home + "/image_cache/"',
+            'historic_prefix = home + "/cache/documents/"',
+        ),
+        (
+            "local_media_file_safety.py",
+            'HISTORIC_CACHE_COMPONENTS = ("image_cache",)',
+            'HISTORIC_CACHE_COMPONENTS = ("cache", "documents")',
+        ),
+    ],
+)
+def test_historic_inverse_never_strips_an_unreviewed_root(name, old, new):
+    from pathlib import Path
+
+    from .media_cache_layout_witness import reverse_cache_layout_additions
+
+    text = (Path(candidate.__file__).parent / name).read_text()
+    reverse_cache_layout_additions(text, name)
+    assert text.count(old) == 1
+    with pytest.raises(AssertionError):
+        reverse_cache_layout_additions(text.replace(old, new), name)

@@ -7,7 +7,7 @@ digest and id helpers, and the carrier module. It does no I/O of any kind.
 
 A candidate is **not authority**. This module answers one question per row: did this strict
 `image_generate` tool row pass the 64 KiB bound and the one accepted parser, and does its `image`
-lexically sit in one of the two closed same-profile native image-cache layouts? If so the row is a
+lexically sit in one of the three closed same-profile native image-cache layouts? If so the row is a
 `MediaCandidate` holding
 only the row id and the scanner's canonical tool digest. The image string, the flat name, the home
 and the raw content are used for that pass/fail test and dropped; none is carried or logged. A
@@ -59,7 +59,6 @@ def derive_flat_name(image: str, home: str) -> str | None:
     return name if classify_candidate(name) is None else None
 
 
-
 def derive_cache_location(image: str, home: str) -> tuple[CacheLayout, str] | None:
     """Select one literal native cache layout; never normalize or search a fallback."""
     legacy = derive_flat_name(image, home)
@@ -67,13 +66,21 @@ def derive_cache_location(image: str, home: str) -> tuple[CacheLayout, str] | No
         return CacheLayout.LEGACY, legacy
     if type(image) is not str or not _valid_home(home):
         return None
+    historic_prefix = home + "/image_cache/"
+    if image.startswith(historic_prefix):
+        historic_name = image[len(historic_prefix) :]
+        if classify_candidate(historic_name) is not None:
+            return None
+        return CacheLayout.HISTORIC_IMAGE_CACHE, historic_name
+    historic_prefix = None  # Release before allocating the generated-layout prefix.
     prefix = home + "/cache/generated/images/"
     if not image.startswith(prefix):
         return None
-    generated_name = image[len(prefix):]
+    generated_name = image[len(prefix) :]
     if classify_candidate(generated_name) is not None:
         return None
     return CacheLayout.GENERATED, generated_name
+
 
 def raw_tool_candidate(item: Mapping[object, object], home: str) -> MediaCandidate | None:
     """The candidate for one native row, or `None`. Total: it never raises and never logs."""

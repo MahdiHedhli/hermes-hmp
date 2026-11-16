@@ -1,5 +1,14 @@
 ## Native group capability input — November16, 2026
 
+## Host-local image compatibility source follow-up — November16
+
+The [historic image_cache layout amendment](specs/011-local-image-serving/HISTORIC_IMAGE_CACHE_AMENDMENT.md) supports a third exact native
+same-profile cache root using the existing authenticated image pipeline.422 focused
+synthetic cases and independent bounded source review pass; no fallback, resolver,
+new grant or phone change. The broader selection retains one independently
+reproduced pre-existing source-witness failure (912/913 pass). Native/Linux/private
+composition and physical/release qualification remain open; no deployment claim.
+
 The first internal GR1 source task is a bounded parser for native
 `groups.capabilities` advertisements. It preserves exact driver/persistent flags,
 known method/feature names and a bounded log count, drops owner/profile/peer

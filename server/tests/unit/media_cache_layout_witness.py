@@ -4,6 +4,9 @@ Historical byte/bridge witnesses still validate their original source after this
 closed inverse. Unknown or modified additions are never stripped. Test-only.
 """
 
+from .historic_image_cache_witness import reverse_historic_image_cache
+
+
 REVERSES = {
     'local_media_candidate.py': (
         (
@@ -407,6 +410,7 @@ REVERSES = {
 
 
 def reverse_cache_layout_additions(text: str, name: str) -> str:
+    text = reverse_historic_image_cache(text, name)
     for addition, historical in REVERSES.get(name, ()):
         assert text.count(addition) == 1, (name, "cache-layout amendment changed")
         text = text.replace(addition, historical, 1)
