@@ -1,7 +1,7 @@
-name: Current HMP complete synthetic native presentation / Linux
+name: Restored historic HMP complete synthetic native presentation / Linux
 "on":
   push:
-    branches: ['feat/current-hmp-native-qualification-20261116']
+    branches: ['feat/restored-historic-native-qualification-20261116']
     paths:
       - '.github/workflows/native-presentation-linux.yml'
       - 'tools/compat/native_presentation_linux*'

@@ -28,7 +28,7 @@ _IMAGE = (
 )
 _ENTRY_SHA = "dccf1426bda9940f4af61b468a4f7e218d073d02990983ddb5dcc4fd17c33874"
 _FD_SHA = "692ae20b7bf86016dc7d7f27a678798cf3eb54dad1d601a4376e77b058554056"
-_MANIFEST_SHA = "2520ec71e8adcde4fb124da2b99934d6b6b21835ea08a3807e7182a303e759e1"
+_MANIFEST_SHA = "53d56cf5e5592a8cb7116561ce257da5733a1088753f4cba9c9189d5c2d44566"
 _LABEL = "app.hermesbot.native-presentation-fixture"
 
 
@@ -73,7 +73,7 @@ def verify_sources(source):
     count = 0
     for label, commit, size in (
         ("native", "f8acc26834bf1275c34d09ccc3e51250bcd1e26b", 14978),
-        ("hmp", "d438d35ac1006d9eb04d0554825079a562a080bf", 1057),
+        ("hmp", "f1b0e6b67ea5e5d41a3cd03c6d69baa41773bef0", 1060),
     ):
         item = document["sources"][label]
         require(item["commit"] == commit and len(item["files"]) == size)
