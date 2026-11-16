@@ -32,8 +32,6 @@ jobs:
       PYTEST_DISABLE_PLUGIN_AUTOLOAD: '1'
       PYTHONDONTWRITEBYTECODE: '1'
       PYTHONPATH: ${{ github.workspace }}/server
-      HERMES_HOME: ${{ runner.temp }}/group-ticket-${{ matrix.python }}/home
-      HERMES_RUNTIME_DIR: ${{ runner.temp }}/group-ticket-${{ matrix.python }}/runtime
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -54,6 +52,9 @@ jobs:
           python tools/ci/check_group_ticket_socket_runtime.py before "${{ matrix.python }}"
           "$RUNNER_TEMP/group-ticket-${{ matrix.python }}"
       - name: Test synthetic components and actual private Unix peers only
+        env:
+          HERMES_HOME: ${{ runner.temp }}/group-ticket-${{ matrix.python }}/home
+          HERMES_RUNTIME_DIR: ${{ runner.temp }}/group-ticket-${{ matrix.python }}/runtime
         run: |
           umask 077
           uv run --no-sync --python "${{ matrix.python }}" --project server pytest \
