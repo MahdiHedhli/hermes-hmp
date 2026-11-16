@@ -4,5 +4,5 @@
 - [x] Verify unchanged parent lint findings without waiver.
 - [x] Run scan-omission and second-seal omission controls.
 - [x] Independent final review.
-- [ ] Focused draft publication.
+- [x] Focused draft publication: [PR184](https://github.com/MahdiHedhli/hermes-hmp/pull/184).
 - [ ] Full operator/cache runtime qualification; normal case still times out60s after change. Do not infer from microbenchmark.

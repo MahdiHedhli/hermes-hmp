@@ -14,3 +14,5 @@ Executable source:17694b2be31157aa349908ef0d2408818cfc0639; basef6b845eee893fa49
 The original normal cache-input scenario was rechecked on an exclusive17694b2b scratch composition with the reviewed962b38ca native readlink test observer and the original-code trace helper. It still times out at the unchanged60-second child deadline (one failure, no errors/skips; total60.158s). This optimization does NOT resolve that timeout. Other cache variants were not selected. The observer changes only that private scratch test file; it is not part of this production branch.
 
 Prior native Linux passes bind their original sources, not this new production change. Full operator/cache, native Linux/private composition, Darwin scanner, signed physical startup/image behavior, full attachments, groups and release qualification remain open. The original broad regression run remains separately owned; no replacement or kill was performed.
+
+Published as [draft PR184](https://github.com/MahdiHedhli/hermes-hmp/pull/184); no merge/deployment.
