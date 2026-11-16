@@ -1,0 +1,7 @@
+# Preserve test bootstrap while removing import shadowing
+
+Two F811 findings arise because test functions repeat a local `approval` import while the test module also imports that name before its production dependency imports. No top-level test function is overwritten. Preserve the module import at its original line/order under the explicit `gateway_approval` name, and preserve both local imports and all test bodies/assertions.
+
+This changes one test-module global binding name; it does not claim compiled/global-dictionary equivalence. Normalizing that one import alias yields the same AST. No production file, import order, guard, assertion, deadline, test count or lint rule is removed or relaxed. The explicit same-name import keeps the bootstrap module binding rather than deleting an apparently unused import.
+
+The exact baseline module passes104 cases in3.73seconds. The candidate passes the same104 test IDs in3.72seconds; all665 tracked server/tools inputs remain unchanged during the run. Pinned formatting passes. Full lint drops286→283 by resolving the two F811 reports and the original F401 report on the retained bootstrap import; other findings remain open. The first result-summary script expected284 and stopped on that incorrect count assumption; raw tests/lint and source bytes were unchanged, and the corrected read-only summary records283. Independent final review remains required before publication. Historical pure origin-DATA tests do not establish native entry/lineage or feature admission.

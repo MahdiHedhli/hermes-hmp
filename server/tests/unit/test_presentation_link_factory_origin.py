@@ -4,7 +4,7 @@ import sys
 
 import pytest
 
-from hmp_startup import gateway_approval as approval
+from hmp_startup import gateway_approval as gateway_approval
 
 from hmp_plugin import presentation_link_path_policy as policy
 from hmp_startup import link_factory_origin as origins
