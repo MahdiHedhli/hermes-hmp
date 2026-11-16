@@ -1,17 +1,41 @@
 """Late entry DATA drift on the real rooted link selector; no fake admission."""
+
 import pytest
 from . import test_presentation_entry_files as base
 from .test_presentation_gateway_approval import operator_composed_script
 
 
-@pytest.mark.parametrize('boundary', ('registration', 'checker', 'malformed_entry', 'live_code', 'live_keyword', 'live_export', 'parent_code', 'parent_keyword', 'reg_scope', 'reg_lineage', 'reg_entry_module', 'reg_getattribute'))
+@pytest.mark.parametrize(
+    "boundary",
+    (
+        "registration",
+        "checker",
+        "malformed_entry",
+        "live_code",
+        "live_keyword",
+        "live_export",
+        "parent_code",
+        "parent_keyword",
+        "reg_scope",
+        "reg_lineage",
+        "reg_entry_module",
+        "reg_getattribute",
+    ),
+)
 def test_original_selector_fences_late_entry_namespace(tmp_path, monkeypatch, boundary):
-    script, mutation = operator_composed_script('links')
-    script = script.replace('GatewayPackageOwner.verify_recipe(recipe)',
-                            'GatewayPackageOwner.verify_recipe_source_hashes(recipe,entry)')
-    marker = 'original_bytes=plugin._bytes_read'
+    script, mutation = operator_composed_script("links")
+    script = script.replace(
+        "GatewayPackageOwner.verify_recipe(recipe)",
+        "GatewayPackageOwner.verify_recipe_source_hashes(recipe,entry)",
+    )
+    marker = "original_bytes=plugin._bytes_read"
     assert script.count(marker) == 1
-    script = script[:script.index(marker)] + '\nboundary=' + repr(boundary) + '\n' + r'''
+    script = (
+        script[: script.index(marker)]
+        + "\nboundary="
+        + repr(boundary)
+        + "\n"
+        + r"""
 from hmp_startup import gateway_entry as em
 from hmp_startup import link_factory_origin as pa
 from hmp_plugin import presentation_native_link as nl
@@ -128,6 +152,7 @@ assert tuple(ledger.counts)==counts and len(ledger.attempts)==attempts
 assert ledger.inflight==[None]
 assert sys.getprofile() is None and sys.gettrace() is None
 print(json.dumps({'mutation':mutation,'runtime_admitted':False}))
-'''
-    monkeypatch.setattr(base, 'SCRIPT', script)
+"""
+    )
+    monkeypatch.setattr(base, "SCRIPT", script)
     base.test_actual_entry_and_wrapper_files(tmp_path, mutation)

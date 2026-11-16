@@ -1,4 +1,5 @@
 """Actor-return faults at actual typed read and metadata admission boundaries."""
+
 from __future__ import annotations
 
 import ast
@@ -6,17 +7,17 @@ import ast
 import pytest
 
 
-@pytest.mark.parametrize('boundary', ('read', 'probe'))
-@pytest.mark.parametrize('change', ('normal', 'registration', 'native_alias'))
+@pytest.mark.parametrize("boundary", ("read", "probe"))
+@pytest.mark.parametrize("change", ("normal", "registration", "native_alias"))
 def test_cache_actor_return_refuses_changed_originals(tmp_path, monkeypatch, boundary, change):
     from . import test_presentation_cache_probe as probe
     from . import test_presentation_cache_reader as reader
     from . import test_presentation_entry_files as runner
 
     actual_run = runner.test_actual_entry_and_wrapper_files
-    is_read = boundary == 'read'
-    marker = '\ntry:owner.read()\n' if is_read else '\ntry:owner.observe()\n'
-    injected = r'''
+    is_read = boundary == "read"
+    marker = "\ntry:owner.read()\n" if is_read else "\ntry:owner.observe()\n"
+    injected = r"""
 from hmp_plugin import presentation_startup_artifacts as artifacts
 from hmp_plugin import presentation_native_metadata as metadata
 producer=PRODUCER
@@ -58,16 +59,20 @@ if CHANGE!='normal':
     assert len(ledger.attempts)==attempts and ledger.failed==[True]
 print(json.dumps({'mutation':mutation,'runtime_admitted':False}))
 raise SystemExit(0)
-'''
+"""
     replacements = {
-        'PRODUCER': 'cm.DeclaredCacheReadOwner._read_native' if is_read else 'metadata._produce_directory_metadata',
-        'ADMISSION': 'artifacts._admit_native_read' if is_read else 'metadata._admit_directory_operation',
-        'OWNER_LOCAL': repr('self' if is_read else 'owner'),
-        'MODULE': 'cm' if is_read else 'pm',
-        'NATIVE': 'read' if is_read else 'stat',
-        'ACTION': 'read' if is_read else 'observe',
-        'ERROR': 'CacheReadError' if is_read else 'CacheProbeError',
-        'CHANGE': repr(change),
+        "PRODUCER": "cm.DeclaredCacheReadOwner._read_native"
+        if is_read
+        else "metadata._produce_directory_metadata",
+        "ADMISSION": "artifacts._admit_native_read"
+        if is_read
+        else "metadata._admit_directory_operation",
+        "OWNER_LOCAL": repr("self" if is_read else "owner"),
+        "MODULE": "cm" if is_read else "pm",
+        "NATIVE": "read" if is_read else "stat",
+        "ACTION": "read" if is_read else "observe",
+        "ERROR": "CacheReadError" if is_read else "CacheProbeError",
+        "CHANGE": repr(change),
     }
     for key, value in replacements.items():
         injected = injected.replace(key, value)
@@ -75,12 +80,12 @@ raise SystemExit(0)
 
     def injected_run(directory, mutation):
         assert runner.SCRIPT.count(marker) == 1
-        prefix = runner.SCRIPT[:runner.SCRIPT.index(marker)]
-        monkeypatch.setattr(runner, 'SCRIPT', prefix + injected)
+        prefix = runner.SCRIPT[: runner.SCRIPT.index(marker)]
+        monkeypatch.setattr(runner, "SCRIPT", prefix + injected)
         actual_run(directory, mutation)
 
-    monkeypatch.setattr(runner, 'test_actual_entry_and_wrapper_files', injected_run)
+    monkeypatch.setattr(runner, "test_actual_entry_and_wrapper_files", injected_run)
     if is_read:
-        reader.test_declared_cache_reader(tmp_path, monkeypatch, 'normal')
+        reader.test_declared_cache_reader(tmp_path, monkeypatch, "normal")
     else:
-        probe.test_fresh_cache_probe(tmp_path, monkeypatch, 'missing')
+        probe.test_fresh_cache_probe(tmp_path, monkeypatch, "missing")

@@ -1,4 +1,5 @@
 """Fixed runtime prewarming and transient capture custody; no runtime admission."""
+
 import json
 import subprocess
 import sys
@@ -7,7 +8,7 @@ from pathlib import Path
 import pytest
 
 SERVER = Path(__file__).resolve().parents[2]
-SCRIPT = r'''
+SCRIPT = r"""
 import gc,importlib,json,sys
 from pathlib import Path
 from types import ModuleType
@@ -68,34 +69,47 @@ assert cache._OWNER is cache._ROOT is cache._FACT is None
 assert not any(name in sys.modules for name in ('hermes_bootstrap','gateway.run',
                                              'hmp_plugin.adapter','hmp_plugin.server'))
 print(json.dumps({'refused':refused,'foreign_calls':0,'native_startup':False}))
-'''
+"""
 
 
 def run(tmp_path, first, fault):
-    result = subprocess.run([sys.executable, '-I', '-B', '-c', SCRIPT,
-                             str(SERVER), first, fault], cwd=tmp_path,
-                            env={'LANG': 'C', 'LC_ALL': 'C'}, capture_output=True,
-                            text=True, timeout=15, check=False)
+    result = subprocess.run(
+        [sys.executable, "-I", "-B", "-c", SCRIPT, str(SERVER), first, fault],
+        cwd=tmp_path,
+        env={"LANG": "C", "LC_ALL": "C"},
+        capture_output=True,
+        text=True,
+        timeout=15,
+        check=False,
+    )
     assert result.returncode == 0, result.stderr
     return json.loads(result.stdout)
 
 
-@pytest.mark.parametrize('first', ('gateway_entry', 'entry_files', 'cache_context'))
+@pytest.mark.parametrize("first", ("gateway_entry", "entry_files", "cache_context"))
 def test_fixed_runtime_modules_and_aliases_ready_before_helper_capture(tmp_path, first):
-    assert run(tmp_path, first, 'none') == {
-        'refused': False, 'foreign_calls': 0, 'native_startup': False,
+    assert run(tmp_path, first, "none") == {
+        "refused": False,
+        "foreign_calls": 0,
+        "native_startup": False,
     }
 
 
-@pytest.mark.parametrize('module', ('runtime_files', 'entry_files', 'cache_context', 'cache_candidates'))
-@pytest.mark.parametrize('kind', ('code', 'defaults', 'kwdefaults', 'class'))
+@pytest.mark.parametrize(
+    "module", ("runtime_files", "entry_files", "cache_context", "cache_candidates")
+)
+@pytest.mark.parametrize("kind", ("code", "defaults", "kwdefaults", "class"))
 def test_prepared_runtime_drift_during_later_capture_refuses_without_dispatch(
-        tmp_path, module, kind):
-    assert run(tmp_path, 'gateway_entry', module + ':' + kind) == {
-        'refused': True, 'foreign_calls': 0, 'native_startup': False,
+    tmp_path, module, kind
+):
+    assert run(tmp_path, "gateway_entry", module + ":" + kind) == {
+        "refused": True,
+        "foreign_calls": 0,
+        "native_startup": False,
     }
 
-ALIAS_SCRIPT = r'''
+
+ALIAS_SCRIPT = r"""
 import gc,importlib,json,sys
 from pathlib import Path
 from types import ModuleType
@@ -155,18 +169,27 @@ assert cleanup==[]
 assert not any(name in sys.modules for name in ('hermes_bootstrap','gateway.run',
                                              'hmp_plugin.adapter','hmp_plugin.server'))
 print(json.dumps({'refused':refused,'foreign_calls':0,'native_startup':False}))
-'''
+"""
 
 
-@pytest.mark.parametrize('first', ('entry_files', 'cache_context'))
-@pytest.mark.parametrize('case', ('foreign', 'none', 'same', 'initialized-missing',
-                                  'module-key', 'spec-key', 'class-key'))
+@pytest.mark.parametrize("first", ("entry_files", "cache_context"))
+@pytest.mark.parametrize(
+    "case",
+    ("foreign", "none", "same", "initialized-missing", "module-key", "spec-key", "class-key"),
+)
 def test_partial_aliases_never_repair_initialized_or_foreign_state(tmp_path, first, case):
-    result = subprocess.run([sys.executable, '-I', '-B', '-c', ALIAS_SCRIPT,
-                             str(SERVER), first, case], cwd=tmp_path,
-                            env={'LANG': 'C', 'LC_ALL': 'C'}, capture_output=True,
-                            text=True, timeout=15, check=False)
+    result = subprocess.run(
+        [sys.executable, "-I", "-B", "-c", ALIAS_SCRIPT, str(SERVER), first, case],
+        cwd=tmp_path,
+        env={"LANG": "C", "LC_ALL": "C"},
+        capture_output=True,
+        text=True,
+        timeout=15,
+        check=False,
+    )
     assert result.returncode == 0, result.stderr
     assert json.loads(result.stdout) == {
-        'refused': case != 'same', 'foreign_calls': 0, 'native_startup': False,
+        "refused": case != "same",
+        "foreign_calls": 0,
+        "native_startup": False,
     }

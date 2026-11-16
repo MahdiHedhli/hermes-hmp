@@ -1,4 +1,5 @@
 """Actual primitive and coherent layout-root drift at both publication seals."""
+
 import ast
 import json
 
@@ -8,28 +9,98 @@ from . import test_presentation_entry_files as base
 from .test_presentation_gateway_approval import operator_composed_script
 
 
-@pytest.mark.parametrize('publication', ('first', 'second'))
-@pytest.mark.parametrize('export', ('map', 'is_not', 'layout_graft', 'audit_graft', 'helper_graft', 'helper_layout_graft', 'helper_record_graft', 'helper_checker', 'helper_projection_schema', 'api_spec_dict_default', 'record_path_dispatch', 'record_receipt_dispatch', 'record_read_effect_dispatch', 'selection_approval_alias', 'selection_code', 'selection_error_code', 'activation_code', 'activation_error_code', 'artifact_error_code', 'artifact_error_new', 'artifact_error_getattribute', 'artifact_error_setattr', 'artifact_error_owner_property', 'artifact_owner_getattribute', 'artifact_owner_setattr', 'artifact_owner_dict_subclass', 'artifact_descriptor_code', 'artifact_allocation_code', 'artifact_expected_code', 'artifact_allocation_dispatch', 'execution_sum', 'execution_ord', 'entry_getattribute', 'entry_subclass_dict', 'artifact_graph_closed_file', 'artifact_graph_scope_file', 'artifact_graph_loaded_owner', 'artifact_graph_cache_context', 'artifact_graph_approval', 'artifact_graph_entry', 'artifact_graph_activation', 'artifact_graph_native_io', 'artifact_graph_interpreter', 'runtime_code_entry_lineage', 'runtime_code_cache_seal', 'runtime_code_plan', 'runtime_ctor_package', 'runtime_ctor_inputs', 'runtime_ctor_cache_data', 'runtime_ctor_cache_source', 'runtime_cm_complete', 'runtime_cm_cache_retain', 'execution_classmethod', 'runtime_ctor_cache_path', 'runtime_code_cache_path', 'runtime_alias_cache_path', 'runtime_generated_make', 'runtime_generated_replace', 'execution_map'))
+@pytest.mark.parametrize("publication", ("first", "second"))
+@pytest.mark.parametrize(
+    "export",
+    (
+        "map",
+        "is_not",
+        "layout_graft",
+        "audit_graft",
+        "helper_graft",
+        "helper_layout_graft",
+        "helper_record_graft",
+        "helper_checker",
+        "helper_projection_schema",
+        "api_spec_dict_default",
+        "record_path_dispatch",
+        "record_receipt_dispatch",
+        "record_read_effect_dispatch",
+        "selection_approval_alias",
+        "selection_code",
+        "selection_error_code",
+        "activation_code",
+        "activation_error_code",
+        "artifact_error_code",
+        "artifact_error_new",
+        "artifact_error_getattribute",
+        "artifact_error_setattr",
+        "artifact_error_owner_property",
+        "artifact_owner_getattribute",
+        "artifact_owner_setattr",
+        "artifact_owner_dict_subclass",
+        "artifact_descriptor_code",
+        "artifact_allocation_code",
+        "artifact_expected_code",
+        "artifact_allocation_dispatch",
+        "execution_sum",
+        "execution_ord",
+        "entry_getattribute",
+        "entry_subclass_dict",
+        "artifact_graph_closed_file",
+        "artifact_graph_scope_file",
+        "artifact_graph_loaded_owner",
+        "artifact_graph_cache_context",
+        "artifact_graph_approval",
+        "artifact_graph_entry",
+        "artifact_graph_activation",
+        "artifact_graph_native_io",
+        "artifact_graph_interpreter",
+        "runtime_code_entry_lineage",
+        "runtime_code_cache_seal",
+        "runtime_code_plan",
+        "runtime_ctor_package",
+        "runtime_ctor_inputs",
+        "runtime_ctor_cache_data",
+        "runtime_ctor_cache_source",
+        "runtime_cm_complete",
+        "runtime_cm_cache_retain",
+        "execution_classmethod",
+        "runtime_ctor_cache_path",
+        "runtime_code_cache_path",
+        "runtime_alias_cache_path",
+        "runtime_generated_make",
+        "runtime_generated_replace",
+        "execution_map",
+    ),
+)
 def test_scope_publication_rejects_changed_primitive_or_layout_root(
-        tmp_path, monkeypatch, request, publication, export):
-    tree = ast.parse((base.SERVER / 'hmp_plugin/presentation_startup_artifacts.py').read_text())
-    owner = next(n for n in tree.body if isinstance(n, ast.ClassDef)
-                 and n.name == 'StartupArtifactOwner')
-    retain = next(n for n in owner.body if isinstance(n, ast.FunctionDef) and n.name == '_retain')
-    calls = sorted(n.lineno for n in ast.walk(retain) if isinstance(n, ast.Call)
-                   and isinstance(n.func, ast.Name) and n.func.id == 'link_rejoin')
+    tmp_path, monkeypatch, request, publication, export
+):
+    tree = ast.parse((base.SERVER / "hmp_plugin/presentation_startup_artifacts.py").read_text())
+    owner = next(
+        n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == "StartupArtifactOwner"
+    )
+    retain = next(n for n in owner.body if isinstance(n, ast.FunctionDef) and n.name == "_retain")
+    calls = sorted(
+        n.lineno
+        for n in ast.walk(retain)
+        if isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id == "link_rejoin"
+    )
     assert len(calls) >= 3
     # Two post-publication rejoins follow the final pre-publication rejoin.
     # The real observed scope/slot state below must also match the target.
-    line = calls[-3] if publication == 'first' else calls[-1]
-    script, mutation = operator_composed_script('links')
-    script = script.replace('GatewayPackageOwner.verify_recipe(recipe)',
-                            'GatewayPackageOwner.verify_recipe_source_hashes(recipe,entry)')
-    marker = 'original_bytes=plugin._bytes_read'
+    line = calls[-3] if publication == "first" else calls[-1]
+    script, mutation = operator_composed_script("links")
+    script = script.replace(
+        "GatewayPackageOwner.verify_recipe(recipe)",
+        "GatewayPackageOwner.verify_recipe_source_hashes(recipe,entry)",
+    )
+    marker = "original_bytes=plugin._bytes_read"
     assert script.count(marker) == 1
-    script = script[:script.index(marker)]
-    script += '\npublication,export,target_line=' + repr((publication, export, line)) + '\n'
-    script += r'''
+    script = script[: script.index(marker)]
+    script += "\npublication,export,target_line=" + repr((publication, export, line)) + "\n"
+    script += r"""
 import builtins
 from hmp_startup.entry_files import EntryFilesError
 retained=EntryFileSnapshotOwner.retain_runtime_link_files(entry,recipe,plugin)
@@ -377,8 +448,8 @@ destination=base/'scope-native-primitive-refusal.json'
 destination.write_text(json.dumps(evidence,sort_keys=True));destination.chmod(0o600)
 assert sys.getprofile() is None and sys.gettrace() is None
 print(json.dumps({'mutation':mutation,'runtime_admitted':False}))
-'''
-    monkeypatch.setattr(base, 'SCRIPT', script)
+"""
+    monkeypatch.setattr(base, "SCRIPT", script)
     base.test_actual_entry_and_wrapper_files(tmp_path, mutation)
-    evidence = json.loads((tmp_path / 'scope-native-primitive-refusal.json').read_text())
-    request.node.user_properties.append(('scope_native_primitive_evidence', json.dumps(evidence)))
+    evidence = json.loads((tmp_path / "scope-native-primitive-refusal.json").read_text())
+    request.node.user_properties.append(("scope_native_primitive_evidence", json.dumps(evidence)))

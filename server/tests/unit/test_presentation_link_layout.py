@@ -1,4 +1,5 @@
 """Immutable layout correspondence; not effect authority or image delivery."""
+
 import pytest
 
 from hmp_plugin import presentation_native_link as link
@@ -18,8 +19,9 @@ def test_capture_retains_original_rows_and_columns_without_live_state_cache():
     assert link._engine_origin_tail(origin) is origin
 
 
-@pytest.mark.parametrize('slot', ('layout', 'modules', 'module_row', 'classes',
-                                  'class_row', 'keys', 'values', 'key'))
+@pytest.mark.parametrize(
+    "slot", ("layout", "modules", "module_row", "classes", "class_row", "keys", "values", "key")
+)
 def test_layout_fences_foreign_protocols_before_correspondence_use(slot):
     origin = link._capture_engine()[0]
     calls = []
@@ -30,21 +32,21 @@ def test_layout_fences_foreign_protocols_before_correspondence_use(slot):
     module, classes = modules[index]
     classes = list(classes)
     row, keys, values = classes[0]
-    if slot == 'layout':
+    if slot == "layout":
         changed = foreign
-    elif slot == 'modules':
+    elif slot == "modules":
         changed = (layout[0], foreign)
     else:
-        if slot == 'module_row':
+        if slot == "module_row":
             modules[index] = foreign
-        elif slot == 'classes':
+        elif slot == "classes":
             modules[index] = (module, foreign)
         else:
-            if slot == 'class_row':
+            if slot == "class_row":
                 classes[0] = foreign
-            elif slot == 'keys':
+            elif slot == "keys":
                 classes[0] = (row, foreign, values)
-            elif slot == 'values':
+            elif slot == "values":
                 classes[0] = (row, keys, foreign)
             else:
                 classes[0] = (row, (foreign, *keys[1:]), values)
@@ -55,29 +57,30 @@ def test_layout_fences_foreign_protocols_before_correspondence_use(slot):
     assert calls == []
 
 
-@pytest.mark.parametrize('fault', ('dependency_copy', 'module_copy', 'class_copy',
-                                   'missing_key', 'duplicate_key', 'value'))
+@pytest.mark.parametrize(
+    "fault",
+    ("dependency_copy", "module_copy", "class_copy", "missing_key", "duplicate_key", "value"),
+)
 def test_layout_rejects_copied_rows_and_noncorresponding_columns(fault):
     origin = link._capture_engine()[0]
     layout = origin[5]
     modules = list(layout[1])
-    index = next(i for i, row in enumerate(modules)
-                 if any(len(c[1]) >= 2 for c in row[1]))
+    index = next(i for i, row in enumerate(modules) if any(len(c[1]) >= 2 for c in row[1]))
     module, classes = modules[index]
     classes = list(classes)
     cindex = next(i for i, c in enumerate(classes) if len(c[1]) >= 2)
     row, keys, values = classes[cindex]
-    if fault == 'dependency_copy':
+    if fault == "dependency_copy":
         changed = (tuple(list(layout[0])), layout[1])
     else:
-        if fault == 'module_copy':
+        if fault == "module_copy":
             modules[index] = (tuple(list(module)), tuple(classes))
         else:
-            if fault == 'class_copy':
+            if fault == "class_copy":
                 classes[cindex] = (tuple(list(row)), keys, values)
-            elif fault == 'missing_key':
+            elif fault == "missing_key":
                 classes[cindex] = (row, keys[:-1], values)
-            elif fault == 'duplicate_key':
+            elif fault == "duplicate_key":
                 classes[cindex] = (row, (keys[0], keys[0], *keys[2:]), values)
             else:
                 classes[cindex] = (row, keys, (object(), *values[1:]))
@@ -87,44 +90,79 @@ def test_layout_rejects_copied_rows_and_noncorresponding_columns(fault):
         link._engine_origin_tail((*origin[:5], changed))
 
 
-@pytest.mark.parametrize('fault', ('value', 'renamed_none', 'extra', 'reordered'))
+@pytest.mark.parametrize("fault", ("value", "renamed_none", "extra", "reordered"))
 def test_live_class_columns_compare_keys_before_none_values(monkeypatch, fault):
     """A missing None-valued key must not masquerade as a successful get()."""
+    import ast
     import sys
     from pathlib import Path
 
     from hmp_plugin import presentation_metadata_custody as custody
 
     kind = custody._DirectoryPayload
-    name = '_synthetic_none_column'
+    name = "_synthetic_none_column"
     monkeypatch.setattr(kind, name, None, raising=False)
     original = link._capture_engine()[0]
     assert link._engine_origin_tail(original) is original
     calls = []
-    if fault == 'value':
+    if fault == "value":
         monkeypatch.setattr(kind, name, Foreign(calls))
-    elif fault == 'renamed_none':
+    elif fault == "renamed_none":
         monkeypatch.delattr(kind, name)
-        monkeypatch.setattr(kind, name + '_renamed', None, raising=False)
-    elif fault == 'extra':
-        monkeypatch.setattr(kind, name + '_extra', None, raising=False)
+        monkeypatch.setattr(kind, name + "_renamed", None, raising=False)
+    elif fault == "extra":
+        monkeypatch.setattr(kind, name + "_extra", None, raising=False)
     else:
         monkeypatch.delattr(kind, name)
         monkeypatch.setattr(kind, name, None, raising=False)
 
     code = link._engine_origin_tail.__code__
-    source = Path(code.co_filename).read_text().splitlines()
-    end = max(line for _, _, line in code.co_lines() if line is not None)
-    boundary = [i + 1 for i in range(code.co_firstlineno - 1, end)
-                if 'if ' in source[i] and '_map(_type, names)' in source[i]]
+    source = ast.parse(Path(code.co_filename).read_text())
+    functions = [
+        node
+        for node in source.body
+        if isinstance(node, ast.FunctionDef)
+        and node.name == code.co_name
+        and node.lineno == code.co_firstlineno
+    ]
+    assert len(functions) == 1
+    pending = list(functions[0].body)
+    boundary = []
+    while pending:
+        node = pending.pop()
+        if isinstance(
+            node,
+            (
+                ast.FunctionDef,
+                ast.AsyncFunctionDef,
+                ast.ClassDef,
+                ast.Lambda,
+                ast.ListComp,
+                ast.SetComp,
+                ast.DictComp,
+                ast.GeneratorExp,
+            ),
+        ):
+            continue
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "_map"
+            and len(node.args) == 2
+            and all(isinstance(arg, ast.Name) for arg in node.args)
+            and tuple(arg.id for arg in node.args) == ("_type", "names")
+            and not node.keywords
+        ):
+            boundary.append(node.lineno)
+        pending.extend(ast.iter_child_nodes(node))
     assert len(boundary) == 1
+    assert boundary[0] in {line for _, _, line in code.co_lines()}
     observed = []
 
     def trace(frame, event, value):
         if frame.f_code is not code:
             return None
-        if (event == 'line' and frame.f_lineno == boundary[0]
-                and frame.f_locals.get('kind') is kind):
+        if event == "line" and frame.f_lineno == boundary[0] and frame.f_locals.get("kind") is kind:
             observed.append(True)
         return trace
 
@@ -132,7 +170,7 @@ def test_live_class_columns_compare_keys_before_none_values(monkeypatch, fault):
     assert prior is None
     sys.settrace(trace)
     try:
-        if fault == 'reordered':
+        if fault == "reordered":
             assert link._engine_origin_tail(original) is original
         else:
             with pytest.raises(link.ArtifactObservationError):

@@ -1,4 +1,5 @@
 """Declared cache bytes only; no cache-miss fallback or payload execution."""
+
 from __future__ import annotations
 
 import pytest
@@ -7,31 +8,56 @@ from . import test_presentation_entry_files as base
 from .test_presentation_gateway_approval import operator_composed_script
 
 
-@pytest.mark.parametrize('case', ('normal', 'changed', 'wrong_thread', 'replay',
-                                 'read_error', 'fact_copy', 'late_buffer', 'release_foreign',
-                                 'late_effect', 'late_ledger', 'late_lifecycle',
-                                 'native_count_drift', 'foreign_read_claim', 'late_owner',
-                                 'consumer_wrong_thread', 'consumer_duplicate',
-                                 'consumer_feed_failure', 'consumer_eof_ack_failure',
-                                 'metadata_plan_copy',
-                                 *(f'interrupt_{prefix}{point}'
-                                   for prefix in ('', 'eof_')
-                                   for point in ('ack', 'raw', 'envelope', 'cursor',
-                                                 'progress', 'eof', 'phase', 'return'))))
+@pytest.mark.parametrize(
+    "case",
+    (
+        "normal",
+        "changed",
+        "wrong_thread",
+        "replay",
+        "read_error",
+        "fact_copy",
+        "late_buffer",
+        "release_foreign",
+        "late_effect",
+        "late_ledger",
+        "late_lifecycle",
+        "native_count_drift",
+        "foreign_read_claim",
+        "late_owner",
+        "consumer_wrong_thread",
+        "consumer_duplicate",
+        "consumer_feed_failure",
+        "consumer_eof_ack_failure",
+        "metadata_plan_copy",
+        *(
+            f"interrupt_{prefix}{point}"
+            for prefix in ("", "eof_")
+            for point in ("ack", "raw", "envelope", "cursor", "progress", "eof", "phase", "return")
+        ),
+    ),
+)
 def test_declared_cache_reader(tmp_path, monkeypatch, case):
-    script, mutation = operator_composed_script('links')
-    script = script.replace('GatewayPackageOwner.verify_recipe(recipe)',
-                            'GatewayPackageOwner.verify_recipe_source_hashes(recipe,entry)')
-    script = script.replace('import sample_dep\n', 'import sample_dep\n' + r'''
+    script, mutation = operator_composed_script("links")
+    script = script.replace(
+        "GatewayPackageOwner.verify_recipe(recipe)",
+        "GatewayPackageOwner.verify_recipe_source_hashes(recipe,entry)",
+    )
+    script = script.replace(
+        "import sample_dep\n",
+        "import sample_dep\n"
+        + r"""
 import importlib.util
 prepared_cache=Path(importlib.util.cache_from_source(str(dep_root/'__init__.py')))
 prepared_cache.parent.mkdir(mode=0o700)
 cache_payload=b'SYNTHETIC_NOT_EXECUTABLE_CACHE_ONLY' * 4096
 prepared_cache.write_bytes(cache_payload);prepared_cache.chmod(0o600)
-''', 1)
-    script = script[:script.rfind('print(json.dumps')]
-    script += '\ncase=' + repr(case) + '\n'
-    script += r'''
+""",
+        1,
+    )
+    script = script[: script.rfind("print(json.dumps")]
+    script += "\ncase=" + repr(case) + "\n"
+    script += r"""
 from hmp_startup.gateway_continuation import GatewayContinuationOwner
 from hmp_startup.cache_selection import selected_cache_input_attempts
 from hmp_startup import cache_reader as cm
@@ -252,6 +278,6 @@ if case.startswith('consumer_'):assert consumer_checks
 assert checked._fact_cell[2]._count_cell is old_count
 assert all(row.closed and row.close_attempted and not row.unknown for row in owner._origin.records)
 print(json.dumps({'mutation':mutation,'runtime_admitted':False}))
-'''
-    monkeypatch.setattr(base, 'SCRIPT', script)
+"""
+    monkeypatch.setattr(base, "SCRIPT", script)
     base.test_actual_entry_and_wrapper_files(tmp_path, mutation)

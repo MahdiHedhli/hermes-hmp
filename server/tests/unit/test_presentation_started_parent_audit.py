@@ -1,4 +1,5 @@
 """Strict rooted parent entrypoint, before production selector activation."""
+
 import pytest
 from hmp_startup import link_factory_origin as origins
 from . import test_presentation_entry_files as base
@@ -13,32 +14,46 @@ def test_started_parent_refuses_before_start_without_generic_fallback(monkeypatc
     # collection imports to prepare the original Entry and helper definitions.
     assert gateway_entry._OWNER is gateway_entry._CELL is gateway_entry._STARTED is None
     assert gateway_entry._START_ATTEMPTED is False
-    monkeypatch.setattr(origins, '_CAPTURE_STARTED', False)
+    monkeypatch.setattr(origins, "_CAPTURE_STARTED", False)
     packet = origins.capture()
     assert origins.current(packet) is packet
     calls = []
     generic_code = origins.current.__code__
 
     def observe(frame, event, value):
-        if event == 'call' and frame.f_code is generic_code:
+        if event == "call" and frame.f_code is generic_code:
             calls.append(True)
 
     assert sys.getprofile() is None
     sys.setprofile(observe)
     try:
-        with pytest.raises(RuntimeError, match='BI1_LINK_FACTORY_ORIGIN_REFUSED'):
+        with pytest.raises(RuntimeError, match="BI1_LINK_FACTORY_ORIGIN_REFUSED"):
             origins.current_started(packet)
     finally:
         sys.setprofile(None)
     assert calls == []
 
 
-@pytest.mark.parametrize('fault', ('normal', 'parent_copy', 'record_copy', 'owner_invocation',
-                                  'after_live_return', 'live_code', 'owner_class_after_return'))
+@pytest.mark.parametrize(
+    "fault",
+    (
+        "normal",
+        "parent_copy",
+        "record_copy",
+        "owner_invocation",
+        "after_live_return",
+        "live_code",
+        "owner_class_after_return",
+    ),
+)
 def test_actual_started_parent_original_roots(tmp_path, monkeypatch, fault):
-    marker = 'entry = GatewayEntryOwner.start()\n'
+    marker = "entry = GatewayEntryOwner.start()\n"
     assert base.SCRIPT.count(marker) == 1
-    extra = '\nstarted_fault=' + repr(fault) + '\n' + r'''
+    extra = (
+        "\nstarted_fault="
+        + repr(fault)
+        + "\n"
+        + r"""
 from hmp_startup import gateway_entry as original_entry
 from hmp_startup import link_factory_origin as parent_audit
 from hmp_plugin import presentation_native_link as native_link
@@ -108,15 +123,16 @@ assert foreign_calls==[]
 assert mutations==(['started_copy'] if started_fault=='after_live_return' else
                    ['owner_class'] if started_fault=='owner_class_after_return' else [])
 assert original_entry._ENTRY_ORIGIN is original and entry._scope is original_scope
-'''
+"""
+    )
     script = base.SCRIPT.replace(marker, marker + extra, 1)
-    monkeypatch.setattr(base, 'SCRIPT', script)
-    base.test_actual_entry_and_wrapper_files(tmp_path, 'normal')
+    monkeypatch.setattr(base, "SCRIPT", script)
+    base.test_actual_entry_and_wrapper_files(tmp_path, "normal")
 
 
 def test_root_first_owner_namespace_fence_precedes_descriptor_lookup(tmp_path, monkeypatch):
-    marker = 'entry = GatewayEntryOwner.start()\n'
-    extra = r'''
+    marker = "entry = GatewayEntryOwner.start()\n"
+    extra = r"""
 import gc
 from hmp_startup import gateway_entry as original_entry
 from hmp_startup import retained_binding_origin as selected_helpers
@@ -148,16 +164,31 @@ finally:
     raw.clear();raw.update(snapshot)
 assert type(error) is RuntimeError and error.args==('BI1_LINK_FACTORY_ORIGIN_REFUSED',)
 assert calls==[] and live==[],(calls,live)
-'''
-    monkeypatch.setattr(base, 'SCRIPT', base.SCRIPT.replace(marker, marker+extra, 1))
-    base.test_actual_entry_and_wrapper_files(tmp_path, 'normal')
+"""
+    monkeypatch.setattr(base, "SCRIPT", base.SCRIPT.replace(marker, marker + extra, 1))
+    base.test_actual_entry_and_wrapper_files(tmp_path, "normal")
 
 
-@pytest.mark.parametrize('fault', ('modules','classes','module_row','module_object',
-                                  'module_namespace','class_row','class_kind','entry_kind'))
+@pytest.mark.parametrize(
+    "fault",
+    (
+        "modules",
+        "classes",
+        "module_row",
+        "module_object",
+        "module_namespace",
+        "class_row",
+        "class_kind",
+        "entry_kind",
+    ),
+)
 def test_malformed_pre_live_root_data_refuses_without_protocols(tmp_path, monkeypatch, fault):
-    marker='entry = GatewayEntryOwner.start()\n'
-    extra='\nroot_fault='+repr(fault)+'\n'+r'''
+    marker = "entry = GatewayEntryOwner.start()\n"
+    extra = (
+        "\nroot_fault="
+        + repr(fault)
+        + "\n"
+        + r"""
 from hmp_startup import gateway_entry as original_entry
 from hmp_startup import retained_binding_origin as selected_helpers
 from hmp_startup import link_factory_origin as parent_audit
@@ -196,15 +227,22 @@ except RuntimeError as caught:error=caught
 finally:sys.setprofile(None)
 assert type(error) is RuntimeError and error.args==('BI1_LINK_FACTORY_ORIGIN_REFUSED',)
 assert calls==[] and live==[]
-'''
-    monkeypatch.setattr(base,'SCRIPT',base.SCRIPT.replace(marker,marker+extra,1))
-    base.test_actual_entry_and_wrapper_files(tmp_path,'normal')
+"""
+    )
+    monkeypatch.setattr(base, "SCRIPT", base.SCRIPT.replace(marker, marker + extra, 1))
+    base.test_actual_entry_and_wrapper_files(tmp_path, "normal")
 
 
-@pytest.mark.parametrize('fault', ('entry_copy','owner_invocation','live_export','live_code','live_default'))
+@pytest.mark.parametrize(
+    "fault", ("entry_copy", "owner_invocation", "live_export", "live_code", "live_default")
+)
 def test_original_roots_and_live_callee_rejoin_after_selected_return(tmp_path, monkeypatch, fault):
-    marker='entry = GatewayEntryOwner.start()\n'
-    extra='\nreturn_fault='+repr(fault)+'\n'+r'''
+    marker = "entry = GatewayEntryOwner.start()\n"
+    extra = (
+        "\nreturn_fault="
+        + repr(fault)
+        + "\n"
+        + r"""
 from hmp_startup import gateway_entry as original_entry
 from hmp_startup import retained_binding_origin as selected_helpers
 from hmp_startup import link_factory_origin as parent_audit
@@ -236,19 +274,28 @@ finally:
     held.__kwdefaults__.clear();held.__kwdefaults__.update(defaults)
 assert type(error) is RuntimeError and error.args==('BI1_LINK_FACTORY_ORIGIN_REFUSED',)
 assert reached==[True] and foreign_calls==engine_calls==[]
-'''
-    monkeypatch.setattr(base,'SCRIPT',base.SCRIPT.replace(marker,marker+extra,1))
-    base.test_actual_entry_and_wrapper_files(tmp_path,'normal')
+"""
+    )
+    monkeypatch.setattr(base, "SCRIPT", base.SCRIPT.replace(marker, marker + extra, 1))
+    base.test_actual_entry_and_wrapper_files(tmp_path, "normal")
 
 
-@pytest.mark.parametrize('component,owner,method', (
-    ('entry_files', 'EntryFileSnapshotOwner', 'complete'),
-    ('cache_context', 'CacheContextOwner', 'retain'),
-))
+@pytest.mark.parametrize(
+    "component,owner,method",
+    (
+        ("entry_files", "EntryFileSnapshotOwner", "complete"),
+        ("cache_context", "CacheContextOwner", "retain"),
+    ),
+)
 def test_method_code_drift_after_selected_return_refuses_without_effects(
-        tmp_path, monkeypatch, component, owner, method):
-    marker = 'entry = GatewayEntryOwner.start()\n'
-    extra = '\nmethod_role=' + repr((component, owner, method)) + '\n' + r'''
+    tmp_path, monkeypatch, component, owner, method
+):
+    marker = "entry = GatewayEntryOwner.start()\n"
+    extra = (
+        "\nmethod_role="
+        + repr((component, owner, method))
+        + "\n"
+        + r"""
 from hmp_startup import gateway_entry as original_entry
 from hmp_startup import retained_binding_origin as selected_helpers
 from hmp_startup import link_factory_origin as parent_audit
@@ -292,6 +339,7 @@ assert reached==[True] and not returned and foreign_calls==[]
 assert len(engine_calls)==1 and all(engine_calls[0]),engine_calls
 assert (tuple(ledger.counts),len(ledger.attempts),len(ledger.scopes))==before
 assert vars(kind)[name] is raw and function.__code__ is original_code
-'''
-    monkeypatch.setattr(base, 'SCRIPT', base.SCRIPT.replace(marker, marker + extra, 1))
-    base.test_actual_entry_and_wrapper_files(tmp_path, 'normal')
+"""
+    )
+    monkeypatch.setattr(base, "SCRIPT", base.SCRIPT.replace(marker, marker + extra, 1))
+    base.test_actual_entry_and_wrapper_files(tmp_path, "normal")

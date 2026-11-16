@@ -1,17 +1,18 @@
 """Fresh-probe provenance with zero payload reads and original cleanup custody."""
+
 from __future__ import annotations
 
 import pytest
 
 
-@pytest.mark.parametrize('change', ('normal', 'copied', 'missing', 'tail', 'actor', 'stat'))
+@pytest.mark.parametrize("change", ("normal", "copied", "missing", "tail", "actor", "stat"))
 def test_fresh_probe_holds_registration_before_actor_and_stat(tmp_path, monkeypatch, change):
     from . import test_presentation_cache_probe as probe
     from . import test_presentation_entry_files as runner
 
     actual_run = runner.test_actual_entry_and_wrapper_files
-    marker = 'owner=RuntimeCacheProbeOwner.retain(continuation,index)'
-    injected = r'''
+    marker = "owner=RuntimeCacheProbeOwner.retain(continuation,index)"
+    injected = r"""
 from hmp_plugin import presentation_native_metadata as metadata
 from hmp_startup import probe_native as engine
 record=owner._origin.native_registration_slot[0]
@@ -100,25 +101,25 @@ assert all(row.closed for row in owner._origin.records)
 assert checked._fact_cell[2]._count_cell is old_count
 print(json.dumps({'mutation':mutation,'runtime_admitted':False}))
 raise SystemExit(0)
-'''.replace('CHANGE', repr(change))
+""".replace("CHANGE", repr(change))
 
     def injected_run(directory, mutation):
         assert runner.SCRIPT.count(marker) == 1
-        monkeypatch.setattr(runner, 'SCRIPT', runner.SCRIPT.replace(marker, marker + injected))
+        monkeypatch.setattr(runner, "SCRIPT", runner.SCRIPT.replace(marker, marker + injected))
         actual_run(directory, mutation)
 
-    monkeypatch.setattr(runner, 'test_actual_entry_and_wrapper_files', injected_run)
-    probe.test_fresh_cache_probe(tmp_path, monkeypatch, 'missing')
+    monkeypatch.setattr(runner, "test_actual_entry_and_wrapper_files", injected_run)
+    probe.test_fresh_cache_probe(tmp_path, monkeypatch, "missing")
 
 
-@pytest.mark.parametrize('change', ('normal', 'registration', 'fact'))
+@pytest.mark.parametrize("change", ("normal", "registration", "fact"))
 def test_fresh_probe_query_keeps_originals(tmp_path, monkeypatch, change):
     from . import test_presentation_cache_probe as probe
     from . import test_presentation_entry_files as runner
 
     actual_run = runner.test_actual_entry_and_wrapper_files
-    marker = 'owner=RuntimeCacheProbeOwner.retain(continuation,index)'
-    injected = r'''
+    marker = "owner=RuntimeCacheProbeOwner.retain(continuation,index)"
+    injected = r"""
 owner.observe()
 record=owner._origin.native_registration_slot[0];fact=owner._fact
 count=owner._count_cell;records=tuple(owner._origin.records)
@@ -149,25 +150,25 @@ assert all(current is original and original.closed
            for current,original in zip(owner._origin.records,records,strict=True))
 print(json.dumps({'mutation':mutation,'runtime_admitted':False}))
 raise SystemExit(0)
-'''.replace('CHANGE', repr(change))
+""".replace("CHANGE", repr(change))
 
     def injected_run(directory, mutation):
         assert runner.SCRIPT.count(marker) == 1
-        monkeypatch.setattr(runner, 'SCRIPT', runner.SCRIPT.replace(marker, marker + injected))
+        monkeypatch.setattr(runner, "SCRIPT", runner.SCRIPT.replace(marker, marker + injected))
         actual_run(directory, mutation)
 
-    monkeypatch.setattr(runner, 'test_actual_entry_and_wrapper_files', injected_run)
-    probe.test_fresh_cache_probe(tmp_path, monkeypatch, 'missing')
+    monkeypatch.setattr(runner, "test_actual_entry_and_wrapper_files", injected_run)
+    probe.test_fresh_cache_probe(tmp_path, monkeypatch, "missing")
 
 
-@pytest.mark.parametrize('kind', ('directory', 'declared'))
+@pytest.mark.parametrize("kind", ("directory", "declared"))
 def test_present_probe_leaf_rechecks_keep_original_registration(tmp_path, monkeypatch, kind):
     from . import test_presentation_cache_probe as probe
     from . import test_presentation_entry_files as runner
 
     actual_run = runner.test_actual_entry_and_wrapper_files
-    marker = 'owner=RuntimeCacheProbeOwner.retain(continuation,index)'
-    injected = r'''
+    marker = "owner=RuntimeCacheProbeOwner.retain(continuation,index)"
+    injected = r"""
 record=owner._origin.native_registration_slot[0]
 from hmp_plugin import presentation_native_metadata as metadata
 calls=[]
@@ -183,12 +184,12 @@ assert calls.count(leaf)==2
 assert owner._bytes_read==0 and all(row.closed for row in owner._origin.records)
 print(json.dumps({'mutation':mutation,'runtime_admitted':False}))
 raise SystemExit(0)
-'''.replace('EXPECTED', repr('directory' if kind == 'directory' else 'declared_regular'))
+""".replace("EXPECTED", repr("directory" if kind == "directory" else "declared_regular"))
 
     def injected_run(directory, mutation):
         assert runner.SCRIPT.count(marker) == 1
-        monkeypatch.setattr(runner, 'SCRIPT', runner.SCRIPT.replace(marker, marker + injected))
+        monkeypatch.setattr(runner, "SCRIPT", runner.SCRIPT.replace(marker, marker + injected))
         actual_run(directory, mutation)
 
-    monkeypatch.setattr(runner, 'test_actual_entry_and_wrapper_files', injected_run)
+    monkeypatch.setattr(runner, "test_actual_entry_and_wrapper_files", injected_run)
     probe.test_fresh_cache_probe(tmp_path, monkeypatch, kind)

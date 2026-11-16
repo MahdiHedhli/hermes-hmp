@@ -1,22 +1,35 @@
 """Fixed work boundaries hold entry-captured native functions before callbacks."""
+
 from __future__ import annotations
 
 import pytest
 
 
-@pytest.mark.parametrize('method', ('_open', '_read', '_stat', '_fstat', '_readlink'))
-@pytest.mark.parametrize('change', ('normal', 'copy_origin', 'pre_os', 'late_os',
-                                    'late_posix', 'late_flags', 'late_result_type',
-                                    'late_os_error_base', 'late_posix_error_base',
-                                    'pre_entry_module', 'actor_return_os',
-                                    'actor_return_registration'))
+@pytest.mark.parametrize("method", ("_open", "_read", "_stat", "_fstat", "_readlink"))
+@pytest.mark.parametrize(
+    "change",
+    (
+        "normal",
+        "copy_origin",
+        "pre_os",
+        "late_os",
+        "late_posix",
+        "late_flags",
+        "late_result_type",
+        "late_os_error_base",
+        "late_posix_error_base",
+        "pre_entry_module",
+        "actor_return_os",
+        "actor_return_registration",
+    ),
+)
 def test_fixed_work_calls_hold_original_native_origin(tmp_path, monkeypatch, method, change):
     from . import test_presentation_cache_observation as cache
     from . import test_presentation_entry_files as runner
 
     actual_run = runner.test_actual_entry_and_wrapper_files
-    marker = 'plugin = GatewayPackageOwner.verify_recipe(recipe)'
-    injected = r'''
+    marker = "plugin = GatewayPackageOwner.verify_recipe(recipe)"
+    injected = r"""
 actual_method=getattr(a.StartupArtifactOwner,METHOD)
 actual_capture=a._capture_native_work_origin;actual_tail=a._native_work_origin_tail
 wanted=a.StartupArtifactOwner if METHOD=='_readlink' else GatewayPackageOwner
@@ -111,29 +124,27 @@ if CHANGE!='normal':
                for target in targets for row in target._origin.records)
 print(json.dumps({'mutation':mutation,'runtime_admitted':False}))
 raise SystemExit(0)
-'''
-    injected = injected.replace('METHOD', repr(method)).replace('CHANGE', repr(change))
+"""
+    injected = injected.replace("METHOD", repr(method)).replace("CHANGE", repr(change))
 
     def injected_run(directory, mutation):
         assert runner.SCRIPT.count(marker) == 1
-        monkeypatch.setattr(runner, 'SCRIPT', runner.SCRIPT.replace(marker, injected))
+        monkeypatch.setattr(runner, "SCRIPT", runner.SCRIPT.replace(marker, injected))
         actual_run(directory, mutation)
 
-    monkeypatch.setattr(runner, 'test_actual_entry_and_wrapper_files', injected_run)
-    cache.test_original_cache_absence_io(tmp_path, monkeypatch, 'missing_leaf')
+    monkeypatch.setattr(runner, "test_actual_entry_and_wrapper_files", injected_run)
+    cache.test_original_cache_absence_io(tmp_path, monkeypatch, "missing_leaf")
 
 
-@pytest.mark.parametrize('position', (0, 1))
-@pytest.mark.parametrize('change', ('normal', 'foreign'))
-def test_fresh_probe_stat_arguments_before_native_coercion(
-    tmp_path, monkeypatch, position, change
-):
+@pytest.mark.parametrize("position", (0, 1))
+@pytest.mark.parametrize("change", ("normal", "foreign"))
+def test_fresh_probe_stat_arguments_before_native_coercion(tmp_path, monkeypatch, position, change):
     from . import test_presentation_cache_probe as probe
     from . import test_presentation_entry_files as runner
 
     actual_run = runner.test_actual_entry_and_wrapper_files
-    marker = '\ntry:owner.observe()\n'
-    injected = r'''
+    marker = "\ntry:owner.observe()\n"
+    injected = r"""
 from hmp_startup import probe_native as engine
 from hmp_plugin import presentation_native_metadata as metadata
 native_calls=[];foreign_calls=[];calls=[];refusals=[];violations=[]
@@ -175,29 +186,35 @@ if CHANGE=='foreign':assert not native_calls and owner._bytes_read==0
 assert all(row.close_attempted and row.closed for row in owner._origin.records)
 print(json.dumps({'mutation':mutation,'runtime_admitted':False}))
 raise SystemExit(0)
-'''.replace('CHANGE', repr(change)).replace('POSITION', str(position))
+""".replace("CHANGE", repr(change)).replace("POSITION", str(position))
 
     def injected_run(directory, mutation):
         assert runner.SCRIPT.count(marker) == 1
-        prefix = runner.SCRIPT[:runner.SCRIPT.index(marker)]
-        monkeypatch.setattr(runner, 'SCRIPT', prefix + injected)
+        prefix = runner.SCRIPT[: runner.SCRIPT.index(marker)]
+        monkeypatch.setattr(runner, "SCRIPT", prefix + injected)
         actual_run(directory, mutation)
 
-    monkeypatch.setattr(runner, 'test_actual_entry_and_wrapper_files', injected_run)
-    probe.test_fresh_cache_probe(tmp_path, monkeypatch, 'missing')
+    monkeypatch.setattr(runner, "test_actual_entry_and_wrapper_files", injected_run)
+    probe.test_fresh_cache_probe(tmp_path, monkeypatch, "missing")
 
 
-@pytest.mark.parametrize('change', ('normal', 'foreign_lineage', 'copied_registration',
-                                    'paired_foreign_lineage', 'paired_foreign_native'))
-def test_origin_capture_never_adopts_matching_foreign_module_types(
-    tmp_path, monkeypatch, change
-):
+@pytest.mark.parametrize(
+    "change",
+    (
+        "normal",
+        "foreign_lineage",
+        "copied_registration",
+        "paired_foreign_lineage",
+        "paired_foreign_native",
+    ),
+)
+def test_origin_capture_never_adopts_matching_foreign_module_types(tmp_path, monkeypatch, change):
     from . import test_presentation_cache_observation as cache
     from . import test_presentation_entry_files as runner
 
     actual_run = runner.test_actual_entry_and_wrapper_files
-    marker = 'plugin = GatewayPackageOwner.verify_recipe(recipe)'
-    injected = r'''
+    marker = "plugin = GatewayPackageOwner.verify_recipe(recipe)"
+    injected = r"""
 actual_stat=a.StartupArtifactOwner._stat
 calls=[];refusals=[];native_calls=[];foreign_calls=[];violations=[];old_modules=[]
 class ForeignLineage:
@@ -245,12 +262,12 @@ assert foreign_calls==[] and violations==[]
 if CHANGE!='normal':assert not native_calls
 print(json.dumps({'mutation':mutation,'runtime_admitted':False}))
 raise SystemExit(0)
-'''.replace('CHANGE', repr(change))
+""".replace("CHANGE", repr(change))
 
     def injected_run(directory, mutation):
         assert runner.SCRIPT.count(marker) == 1
-        monkeypatch.setattr(runner, 'SCRIPT', runner.SCRIPT.replace(marker, injected))
+        monkeypatch.setattr(runner, "SCRIPT", runner.SCRIPT.replace(marker, injected))
         actual_run(directory, mutation)
 
-    monkeypatch.setattr(runner, 'test_actual_entry_and_wrapper_files', injected_run)
-    cache.test_original_cache_absence_io(tmp_path, monkeypatch, 'missing_leaf')
+    monkeypatch.setattr(runner, "test_actual_entry_and_wrapper_files", injected_run)
+    cache.test_original_cache_absence_io(tmp_path, monkeypatch, "missing_leaf")

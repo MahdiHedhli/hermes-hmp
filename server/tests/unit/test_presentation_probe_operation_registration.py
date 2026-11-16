@@ -1,18 +1,21 @@
 """Operation and resource registrations must agree before any nested access."""
+
 import pytest
 
 from . import test_presentation_entry_files as base
 from .test_presentation_gateway_approval import operator_composed_script
 
 
-@pytest.mark.parametrize('helper', ('lifetime', 'policy'))
+@pytest.mark.parametrize("helper", ("lifetime", "policy"))
 def test_probe_foreign_operation_registration_refuses(tmp_path, monkeypatch, helper):
-    script, mutation = operator_composed_script('links')
-    script = script.replace('GatewayPackageOwner.verify_recipe(recipe)',
-                            'GatewayPackageOwner.verify_recipe_source_hashes(recipe,entry)')
-    script = script[:script.rfind('print(json.dumps')]
-    script += '\nhelper_case=' + repr(helper) + '\n'
-    script += r'''
+    script, mutation = operator_composed_script("links")
+    script = script.replace(
+        "GatewayPackageOwner.verify_recipe(recipe)",
+        "GatewayPackageOwner.verify_recipe_source_hashes(recipe,entry)",
+    )
+    script = script[: script.rfind("print(json.dumps")]
+    script += "\nhelper_case=" + repr(helper) + "\n"
+    script += r"""
 import os
 from hmp_plugin import presentation_native_metadata as metadata
 from hmp_plugin import presentation_startup_artifacts as artifacts
@@ -46,6 +49,6 @@ assert refused and hooks==[]
 assert before==(tuple(reg.native_ledger.counts),len(reg.native_ledger.attempts))
 assert owner._probe_execution is None and owner._origin.records==[] and not owner._failed
 print(json.dumps({'mutation':mutation,'runtime_admitted':False}))
-'''
-    monkeypatch.setattr(base, 'SCRIPT', script)
+"""
+    monkeypatch.setattr(base, "SCRIPT", script)
     base.test_actual_entry_and_wrapper_files(tmp_path, mutation)

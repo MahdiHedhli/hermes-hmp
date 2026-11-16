@@ -1,22 +1,38 @@
 """Probe root DATA uses shared intent allocation without native admission."""
+
 import pytest
 
 from . import test_presentation_entry_files as base
 from .test_presentation_gateway_approval import operator_composed_script
 
 
-@pytest.mark.parametrize('case', ('normal', 'copied_registration', 'copied_plan',
-                                 'wrong_arguments', 'foreign_resource', 'other_site',
-                                 'foreign_ordinal', 'fake_module_fake_type',
-                                 'fake_module_actual_type', 'helper_export', 'helper_code',
-                                 'shared_foreign_registration', 'rejoin_foreign_scope'))
+@pytest.mark.parametrize(
+    "case",
+    (
+        "normal",
+        "copied_registration",
+        "copied_plan",
+        "wrong_arguments",
+        "foreign_resource",
+        "other_site",
+        "foreign_ordinal",
+        "fake_module_fake_type",
+        "fake_module_actual_type",
+        "helper_export",
+        "helper_code",
+        "shared_foreign_registration",
+        "rejoin_foreign_scope",
+    ),
+)
 def test_fresh_probe_shared_intent(tmp_path, monkeypatch, case):
-    script, mutation = operator_composed_script('links')
-    script = script.replace('GatewayPackageOwner.verify_recipe(recipe)',
-                            'GatewayPackageOwner.verify_recipe_source_hashes(recipe,entry)')
-    script = script[:script.rfind('print(json.dumps')]
-    script += '\nresource_case=' + repr(case) + '\n'
-    script += r'''
+    script, mutation = operator_composed_script("links")
+    script = script.replace(
+        "GatewayPackageOwner.verify_recipe(recipe)",
+        "GatewayPackageOwner.verify_recipe_source_hashes(recipe,entry)",
+    )
+    script = script[: script.rfind("print(json.dumps")]
+    script += "\nresource_case=" + repr(case) + "\n"
+    script += r"""
 import gc,os,weakref
 from hmp_startup.gateway_continuation import GatewayContinuationOwner
 from hmp_startup.cache_selection import selected_cache_input_attempts
@@ -157,6 +173,6 @@ else:raise AssertionError('injected prefix boundary must stop legacy observation
 assert seen==[True] and facts.get('boundary_complete') is True and owner._failed and not owner._ready
 assert owner._bytes_read==0 and owner._origin.records==[]
 print(json.dumps({'mutation':mutation,'runtime_admitted':False}))
-'''
-    monkeypatch.setattr(base, 'SCRIPT', script)
+"""
+    monkeypatch.setattr(base, "SCRIPT", script)
     base.test_actual_entry_and_wrapper_files(tmp_path, mutation)
