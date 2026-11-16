@@ -36,6 +36,7 @@ are never renumbered; always refer to a spec by its full directory name.
 | `013-minimum-version-compatibility` | Minimum supported Hermes version policy |
 | `015-approval-notification-inputs` | In-process insertion, settlement and visibility inputs; source accepted, push unwired |
 | `034-approval-minimum-version-admission` | Approvals and Phone chat under the minimum-version policy |
+| `047-canonical-group-capability-input` | Internal bounded native group advertisement DATA; not a group route, grant or complete mobile feature |
 
 Per-bot send, per-device controls, and approval availability are separate: a controls grant never
 opens an approval route (see `docs/architecture/contracts/HMP_V1.md` §7b). Spec 034 replaces the exact-build
