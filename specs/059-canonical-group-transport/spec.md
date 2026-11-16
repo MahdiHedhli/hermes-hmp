@@ -10,7 +10,7 @@ and phone authorization remain unimplemented. Installeded1 is not this source.
 
 ## Exact source findings
 
-The six-file source-pins.json binds the inspected files. The canonical client
+The source-pins.json manifest binds the inspected files. The canonical client
 accepts an explicit discovered endpoint without starting a gateway; its default
 path can start one. Its explicit branch does not forward restart-wait refusal.
 Its ticket query runs in asyncio.to_thread; cancelling that await does not prove
@@ -168,3 +168,12 @@ boundary. Do not post-filter an already acquired unauthorized transcript, expose
 foreign actor metadata, or claim that rechecking the current roster closes every
 historical-member or native mutation race. The native single-owner design is not
 an HMP multi-device entitlement system and is not classified as a deployed defect.
+
+
+The attachment serialization follow-up in SHAPE_ACCOUNTING.md now establishes
+that the generic8MiB client/frame or illustrative retained-byte budget cannot
+cover every supported operation: a native15,000,000-byte attachment produces
+20,000,000 base64 characters before metadata/RPC. Keep GT1 open for complete
+method-aware transport/decoder/copy accounting or a genuinely equivalent viewer
+streaming contract. The recipient-member range read is not such a viewer API.
+No file limit or feature is reduced to make these provisional budgets pass.

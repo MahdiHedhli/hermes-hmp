@@ -50,6 +50,26 @@
       "path": "tui_gateway/ws.py",
       "sha256": "02282ad57f1bc394dcfd1efbfd6ae50ec80838bd303de7b14defd17774ac8b67",
       "bytes": 42015
+    },
+    {
+      "path": "tui_gateway/transport.py",
+      "sha256": "4fee8994e514cbc6760a0c1912cb3fb906036048a7ce41e281e57532716384d3",
+      "bytes": 16753
+    },
+    {
+      "path": "gateway/hosted_room_context.py",
+      "sha256": "ee2eb8c84358eb1f3885da621e5ff797fd088160c0d9be8922d7ddd858c05aff",
+      "bytes": 10030
+    },
+    {
+      "path": "gateway/session_hosted_attachments.py",
+      "sha256": "789a7019b1ea28f5c7d5daa3f63a05864ffb16068552321bbacceb4d872b28eb",
+      "bytes": 12130
+    },
+    {
+      "path": "gateway/hosted_room_attachments.py",
+      "sha256": "d3924c52c8399a5520a918af875eb0439dd426ddea4cda4293e9a4161bc483a1",
+      "bytes": 56152
     }
   ],
   "scope": "Pinned source-only contract census; no module imported, ticket minted, socket opened, host queried or rights changed"

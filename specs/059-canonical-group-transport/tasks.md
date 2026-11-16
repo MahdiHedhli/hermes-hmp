@@ -4,7 +4,8 @@
 - [ ] GT1: incorporate independent review (prequeue deadline, shared retained
       byte/debt accounting, out-of-band retirement, provisional shape budgets),
             validate actual native2MiB log pages plus RPC envelope and other method
-      shapes, and historical-member authorization;
+      shapes including20,000,000-character native attachment data BEFORE envelope,
+      equivalent viewer authority and historical-member authorization;
       then independently review this full transport/authority contract; resolve
       lifecycle, byte accounting, room snapshot and phone entitlement decisions.
 - [x] GT2-LEDGER: portable unactivated accounting model, exact identity handles,
