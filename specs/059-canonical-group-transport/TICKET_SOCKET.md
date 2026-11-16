@@ -110,11 +110,14 @@ Windows equivalent, native integration, physical-device or release pass is claim
 
 ## Verified synthetic Linux socket checkpoint — November 16, 2026
 
-[Run43845881095](https://github.com/MahdiHedhli/hermes-hmp/actions/runs/43845881095),
-exact source `2f3bb17345b318e1a9a4f39aea187be76d4834ca`, passed on actual Linux
-x86_64 with CPython3.11.17 and3.14.9. Each matrix entry passed205 distinct cases:
-67 ledger,85 codec and53 socket, with no failures/errors/skips and an actual
-SO_PEERCRED peer check. Artifact archive digests, JUnit digests and all six source
+[Run43847938372](https://github.com/MahdiHedhli/hermes-hmp/actions/runs/43847938372),
+exact source `de2703593f64e164010a1ccf2e3e495c2302e04e`, passed on actual Linux
+x86_64 with CPython3.11.17 and3.14.9. Each matrix entry passed221 distinct cases:
+67 ledger,85 codec and69 socket, with no failures/errors/skips, actual
+SO_PEERCRED and real same-UID/different-process acceptance/refusal checks.
+The expected PID is checked before sending, but does not prove original native
+listener generation or defeat PID reuse. Earlier205-case run43845881095 remains
+valid evidence for its older source; it does not qualify the PID follow-up. Artifact archive digests, JUnit digests and all six source
 hashes were independently read back locally; before/after source hashes agree.
 This qualifies synthetic components only. The native group adapter, original
 native-process binding, phone group permissions, mobile group UI and physical/
@@ -142,7 +145,7 @@ the caller's own PID causes both child cases to fail. The first mutation attempt
 selected original code through repository conftest and is expressly not mutation
 proof; isolated package/test copies produce the stated failures. Exact positive
 source hashes agree before/after. The Linux helper now requires both child cases
-as well as the original kernel case. Linux221 results remain pending.
+as well as the original kernel case. Linux221 cases now pass in the exact-source run above.
 
 PID equality does not defeat PID reuse, prove listener generation, or authenticate
 the provenance of the expected value. Original native binding and HMP phone/room
