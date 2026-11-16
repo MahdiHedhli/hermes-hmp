@@ -17,8 +17,12 @@ def synthetic_line(code,fragment):
     assert len(matches)==1,(code.co_name,fragment,matches)
     return matches[0]
 def synthetic_trace(frame,event,arg):
-    route=_synthetic_trace_routes.get(frame.f_code)
-    if route is None:return None
+    # Code hashing traverses constants on every event, even for an unrelated
+    # large native frame. Match the registered literal code without hashing it.
+    # Keep the route dictionary API used by interruption/cleanup fixtures.
+    for code,route in _synthetic_trace_routes.items():
+        if frame.f_code is code:break
+    else:return None
     if event=='line':
         callback=route.get(frame.f_lineno)
         if callback is not None:callback(frame)
