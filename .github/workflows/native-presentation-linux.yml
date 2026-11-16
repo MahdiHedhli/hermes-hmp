@@ -1,0 +1,54 @@
+name: Complete synthetic native presentation / Linux
+"on":
+  push:
+    branches: ['feat/native-linux-preparation-20261116']
+    paths:
+      - '.github/workflows/native-presentation-linux.yml'
+      - 'tools/compat/native_presentation_linux*'
+      - 'tools/compat/native_presentation_journey_entry.py'
+      - 'tools/compat/native_sender_audit_fixture.py'
+      - 'tools/fixtures/native_fd_scope.py'
+
+permissions:
+  contents: read
+
+jobs:
+  complete-native-journey:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          path: hmp
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: NousResearch/hermes-agent
+          ref: ed1afb082eb3e46cf2edae9d8f68fb67b09ee4df
+          path: native-reference
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Prepare exact pinned software and run both isolated synthetic scenarios
+        id: journey
+        shell: bash
+        run: >-
+          python3 -I -B hmp/tools/compat/native_presentation_linux_ci.py
+          --workspace "$GITHUB_WORKSPACE" --temporary "$RUNNER_TEMP"
+      - name: Encrypt allowlisted synthetic diagnostics for coordinator-only readback
+        id: encrypt
+        if: ${{ always() && steps.journey.outputs.evidence_root != '' }}
+        env:
+          HMP_FIXTURE_EVIDENCE_ROOT: ${{ steps.journey.outputs.evidence_root }}
+        shell: bash
+        run: >-
+          python3 -I -B hmp/tools/compat/native_presentation_linux_evidence.py
+          --root "$HMP_FIXTURE_EVIDENCE_ROOT"
+      - name: Retain encrypted diagnostics only
+        if: ${{ always() && steps.encrypt.outcome == 'success' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: synthetic-native-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ steps.encrypt.outputs.ciphertext }}
+          retention-days: 2
+          if-no-files-found: error

@@ -104,11 +104,13 @@ def _save(path, value):
     os.replace(temporary, path)
 
 
-def _owned(command, directory, role, receipt, *, stdout_limit=_LIMIT):
+def _owned(command, directory, role, receipt, *, stdout_limit=_LIMIT, wait_timeout=12):
     _require(type(stdout_limit) is int and _LIMIT <= stdout_limit <= 8 * 1024 * 1024)
+    _require(type(wait_timeout) is int and 12 <= wait_timeout <= 600)
     state = {"process": _POPEN.__new__(_POPEN), "command": tuple(command), "wait_known": False}
     _RETAINED.append(state)  # includes partial Popen construction, before effects
-    record = {"role": role, "command": list(command), "wait_known": False}
+    record = {"role": role, "command": list(command), "wait_known": False,
+              "wait_timeout_seconds": wait_timeout}
     receipt["commands"].append(record)
     _save(directory / "receipt.json", receipt)
     stdout, stderr = directory / (role + ".stdout"), directory / (role + ".stderr")
@@ -123,7 +125,7 @@ def _owned(command, directory, role, receipt, *, stdout_limit=_LIMIT):
             record["process_pid"] = state["process"].pid
             # Timeout refuses the experiment permanently. Finalization retains
             # and observes this same helper; it cannot leave a nested child behind.
-            code = state["process"].wait(timeout=12)
+            code = state["process"].wait(timeout=wait_timeout)
             state["wait_known"] = record["wait_known"] = True
             record["returncode"] = code
         finally:

@@ -318,7 +318,7 @@ class DockerOwner:
         self.cli.mkdir(mode=0o700)
         self.receipt = {"commands": []}
         path = Path(__file__).with_name("native_sender_audit_fixture.py")
-        require(digest(path) == "b97a22257842e47a1520e8594609aa59e4085306377ed48de51bfe2b74efbba7")
+        require(digest(path) == "e6ce104449c277bdd3a9dafe83a609dd9a8bc45f22e618b863022059704253a1")
         spec = importlib.util.spec_from_file_location("_native_linux_owned_cli", path)
         self.commands = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(self.commands)
