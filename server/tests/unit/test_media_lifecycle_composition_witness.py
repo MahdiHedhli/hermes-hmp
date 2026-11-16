@@ -47,14 +47,21 @@ def _stages():
         sources[name] = witness._reverse_exact_edits(source, edits)
 
 
-@pytest.mark.parametrize("name, edits, source, index, accepted", list(_stages()))
+CASES = list(_stages())
+
+@pytest.mark.parametrize(
+    "name, edits, source, index, accepted", CASES,
+    ids=[f"{name}-stage{stage}-hunk{index}" for stage, (name, _, _, index, _) in enumerate(CASES)],
+)
 @pytest.mark.parametrize("damage", ["changed", "duplicate"])
 def test_each_exact_stage_refuses_changed_or_duplicate_blocks(
     name, edits, source, index, accepted, damage
 ):
     del name, index
     if damage == "changed":
-        mutated = source.replace(accepted, accepted.replace("\n", " # changed\n", 1), 1)
+        at = next(i for i, character in enumerate(accepted) if not character.isspace())
+        changed = accepted[:at] + ("!" if accepted[at] != "!" else "?") + accepted[at + 1:]
+        mutated = source.replace(accepted, changed, 1)
     else:
         mutated = source + accepted
     assert mutated != source
@@ -62,7 +69,10 @@ def test_each_exact_stage_refuses_changed_or_duplicate_blocks(
         witness._reverse_exact_edits(mutated, edits)
 
 
-@pytest.mark.parametrize("name, edits, source, index, accepted", list(_stages()))
+@pytest.mark.parametrize(
+    "name, edits, source, index, accepted", CASES,
+    ids=[f"{name}-stage{stage}-hunk{index}" for stage, (name, _, _, index, _) in enumerate(CASES)],
+)
 def test_relocated_blocks_cannot_recover_pinned_parent(name, edits, source, index, accepted):
     del name, index
     expected = {

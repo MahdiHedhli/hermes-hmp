@@ -54,3 +54,12 @@ not final immutable-source qualification. Evidence is retained, not overwritten.
 The corrected inverse includes the missing 30ded and 9ab deltas; a new run must
 cover current media-readiness and self-Controls source directly. No source guard
 or original baseline was relaxed to make this pass.
+
+The first corrected-chronology run reports 361 cases: 360 pass and one newly
+added negative control fails because it prepended text before a leading newline,
+leaving the original block substring intact. The control now changes a real
+non-whitespace character inside the block. Two static privacy findings caused by
+escaped-newline/decorator adjacency in literal formatting are resolved by splitting
+adjacent literals, with identical parsed helper AST and unchanged accepted bytes;
+scan_private is clean. The failed run is retained; final checks must be rerun on
+the corrected immutable source rather than inherit its partial pass.

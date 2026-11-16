@@ -456,7 +456,9 @@ ADAPTER_7C528066 = (
             'op_record()\n        self._mark_disconnected()\n        if srv.ope'
             'rator_worker_debt or srv.presentation_worker_debt:\n            s'
             'elf._defer_dependency_close(srv)\n        else:\n            self.'
-            '_close_dependencies(srv)\n\n    @staticmethod\n    def _close_gener'
+            '_close_dependencies(srv)\n\n    '
+            '@'
+            'staticmethod\n    def _close_gener'
             'ation(ctx: server.ServerContext) -> None:\n'
         ),
         (
@@ -469,7 +471,9 @@ ADAPTER_7C528066 = (
             'rd()\n        self._mark_disconnected()\n\n    async def _close_aft'
             'er_operator_drain(self, srv: server.HmpServer) -> None:\n        '
             'await srv.wait_operator_drain()\n        self._close_generation(s'
-            'rv.ctx)\n        srv.ctx.store.close()\n\n    @staticmethod\n    def'
+            'rv.ctx)\n        srv.ctx.store.close()\n\n    '
+            '@'
+            'staticmethod\n    def'
             ' _close_generation(ctx: server.ServerContext) -> None:\n'
         ),
     ),
@@ -533,7 +537,9 @@ SERVER_30DEDF99 = (
     ),
     (
         (
-            '\n@web.middleware\nasync def compat_middleware(request: web.Reques'
+            '\n'
+            '@'
+            'web.middleware\nasync def compat_middleware(request: web.Reques'
             't, handler: Handler) -> web.StreamResponse:\n    """ERR-2a: retai'
             'n existing exceptions plus the exact authenticated self-read GET'
             '."""\n    ctx = context(request)\n    self_controls_read = (\n     '
@@ -546,7 +552,9 @@ SERVER_30DEDF99 = (
             'expected; fail closed on the build-unsupported refusal\n'
         ),
         (
-            '\n@web.middleware\nasync def compat_middleware(request: web.Reques'
+            '\n'
+            '@'
+            'web.middleware\nasync def compat_middleware(request: web.Reques'
             't, handler: Handler) -> web.StreamResponse:\n    """ERR-2a: readi'
             'ness capabilities is the one authenticated additive exception (A'
             'R1)."""\n    ctx = context(request)\n    if not ctx.compat.support'
