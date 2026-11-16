@@ -39,6 +39,10 @@ _FILES = (
     "run/historic/settlement.json",
     "run/historic/unresolved-teardown.json",
     "run/historic/progress.json",
+    "run/offline_xai/report.json",
+    "run/offline_xai/settlement.json",
+    "run/offline_xai/unresolved-teardown.json",
+    "run/offline_xai/progress.json",
 )
 _DIRECTORIES = ("sources", "preparation-commands", "image-commands", "run/docker-cli")
 

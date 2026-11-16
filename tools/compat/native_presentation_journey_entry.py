@@ -35,7 +35,7 @@ native = sample / "native"
 hmp = sample / "hmp"
 assert len(sys.argv) == 5
 scenario = sys.argv[4]
-assert scenario in ("matrix", "mutation", "historic")
+assert scenario in ("matrix", "mutation", "historic", "offline_xai")
 port = int(sys.argv[3])
 assert 1 <= port <= 65535
 assert sys.flags.isolated and sys.dont_write_bytecode
@@ -63,6 +63,10 @@ fd_spec.loader.exec_module(fd_scope)
     "      platform: hmp\n      profile: beta\n      guild_id: beta\n"
     "platforms:\n  hmp:\n    enabled: true\n    extra:\n      bind: 127.0.0.1\n"
     f"      port: {port}\n      local_media:\n        enabled: true\n"
+    + (
+        "image_gen:\n  xai:\n    storage:\n      enabled: false\n"
+        if scenario == "offline_xai" else ""
+    )
 )
 os.chdir(root)
 allowed = [root, native, hmp, Path(sys.prefix).resolve(), Path(sys.base_prefix).resolve()]
@@ -467,6 +471,10 @@ try:
             beta_config = read_user_config_raw(beta_home / "config.yaml")
             beta_config.setdefault("gateway", {})["multiplex_profiles"] = True
             beta_config.setdefault("sessions", {})["cjk_fts"] = False
+            if scenario == "offline_xai":
+                beta_config.setdefault("image_gen", {}).setdefault("xai", {})["storage"] = {
+                    "enabled": False
+                }
             atomic_config_write(beta_home / "config.yaml", beta_config)
             report["nativeProfileCreated"] = True
             native_runner = GatewayRunner()
@@ -782,8 +790,124 @@ try:
                      "bytesMatched": True}
                 )
                 return produced
+            def offline_xai_image(profile_home, payload):
+                # Actual native provider/JSON formatter, with in-process fake HTTP
+                # and synthetic credential resolution only. No provider is contacted.
+                from unittest.mock import patch
+
+                import requests
+                from plugins.image_gen import xai
+                from tools.image_generation_tool import _provider_result
+
+                assert inside(profile_home.resolve(), root)
+                assert (
+                    Path(
+                        xai.XAIImageGenProvider.generate.__code__.co_filename
+                    ).resolve()
+                    == (native / "plugins/image_gen/xai/__init__.py").resolve()
+                )
+                assert (
+                    Path(_provider_result.__code__.co_filename).resolve()
+                    == (native / "tools/image_generation_tool.py").resolve()
+                )
+                assert (
+                    xai.read_xai_imagine_storage_config("image_gen")["enabled"] is False
+                )
+                original_request = requests.sessions.Session.request
+                original_credentials = xai.resolve_xai_http_credentials
+                calls = []
+                prompt = "SYNTHETIC_OFFLINE_XAI_IMAGE_ONLY"
+
+                def synthetic_credentials(**_kwargs):
+                    return {
+                        "api_key": "SYNTHETIC_OFFLINE_NO_AUTHORITY",
+                        "provider": "xai",
+                        "base_url": "https://api.x.ai/v1",
+                    }
+
+                def offline_request(_session, method, url, **kwargs):
+                    method = method.upper()
+                    assert kwargs["headers"]["Authorization"] == (
+                        "Bearer SYNTHETIC_OFFLINE_NO_AUTHORITY"
+                    )
+                    if (
+                        method == "GET"
+                        and url == "https://api.x.ai/v1/image-generation-models"
+                    ):
+                        body = {
+                            "models": [
+                                {
+                                    "id": "grok-imagine-image",
+                                    "input_modalities": ["text"],
+                                }
+                            ]
+                        }
+                        calls.append("catalog")
+                    elif (
+                        method == "POST"
+                        and url == "https://api.x.ai/v1/images/generations"
+                    ):
+                        submitted = kwargs["json"]
+                        assert submitted["prompt"] == prompt
+                        assert submitted["model"] == "grok-imagine-image"
+                        assert "storage_options" not in submitted
+                        body = {
+                            "data": [
+                                {"b64_json": base64.b64encode(payload).decode("ascii")}
+                            ]
+                        }
+                        calls.append("generation")
+                    else:
+                        raise AssertionError("offline_xai_unexpected_transport_request")
+                    response = requests.Response()
+                    response.status_code = 200
+                    response.url = url
+                    response.headers["Content-Type"] = "application/json"
+                    response._content = json.dumps(body).encode("utf-8")
+                    return response
+
+                with (
+                    patch.object(
+                        xai, "resolve_xai_http_credentials", synthetic_credentials
+                    ),
+                    patch.object(requests.sessions.Session, "request", offline_request),
+                ):
+                    result = xai.XAIImageGenProvider().generate(
+                        prompt, aspect_ratio="landscape"
+                    )
+                    wire_result = _provider_result(
+                        result, "offline_xai_contract_refused"
+                    )
+                assert requests.sessions.Session.request is original_request
+                assert xai.resolve_xai_http_credentials is original_credentials
+                assert calls.count("generation") == 1 and calls.count("catalog") <= 1
+                assert result["success"] is True and result["storage_enabled"] is False
+                assert (
+                    result["provider"] == "xai"
+                    and result["model"] == "grok-imagine-image"
+                )
+                assert json.loads(wire_result) == result
+                produced = Path(result["image"])
+                assert produced.parent == profile_home / "cache/generated/images"
+                assert not produced.is_symlink() and inside(produced.resolve(), root)
+                assert produced.read_bytes() == payload
+                report.setdefault("offlineXaiProfiles", []).append(
+                    {
+                        "profileHomeName": profile_home.name,
+                        "nativeProviderResult": True,
+                        "storageDisabled": True,
+                        "fakeGenerationRequests": 1,
+                        "fakeCatalogRequests": calls.count("catalog"),
+                        "bytesMatched": True,
+                        "transportAndCredentialResolverRestored": True,
+                    }
+                )
+                return produced, wire_result
+
             with _profile_runtime_scope(root / "home"):
-                if scenario == "historic":
+                if scenario == "offline_xai":
+                    image_path, offline_result = offline_xai_image(root / "home", image)
+                elif scenario == "historic":
                     image_path = historic_native_image(root / "home", image)
                 else:
                     image_path = save_b64_image(
@@ -820,7 +944,7 @@ try:
                     "tool",
                     tool_name="image_generate",
                     tool_call_id="synthetic-image-call",
-                    content=json.dumps(result),
+                    content=(offline_result if scenario == "offline_xai" else json.dumps(result)),
                 )
             finally:
                 db.close()
@@ -832,7 +956,9 @@ try:
                 + png_chunk(b"IEND", b"")
             )
             with _profile_runtime_scope(beta_home):
-                if scenario == "historic":
+                if scenario == "offline_xai":
+                    beta_image_path, beta_offline_result = offline_xai_image(beta_home, blue)
+                elif scenario == "historic":
                     beta_image_path = historic_native_image(beta_home, blue)
                 else:
                     beta_image_path = save_b64_image(
@@ -868,7 +994,8 @@ try:
                         "tool",
                         tool_name="image_generate",
                         tool_call_id="synthetic-beta-image",
-                        content=json.dumps(beta_result),
+                        content=(beta_offline_result if scenario == "offline_xai"
+                                 else json.dumps(beta_result)),
                     )
                 finally:
                     beta_db.close()
@@ -1281,6 +1408,14 @@ try:
             await exact_image("default", ref2, access2, image)
             await exact_image("beta", beta_ref2, access2, blue)
             report["nativeMediaRegrantOldRefRefusedNewRefWorks"] = True
+            if scenario == "offline_xai":
+                assert len(report["offlineXaiProfiles"]) == 2
+                assert sum(x["fakeCatalogRequests"] for x in report["offlineXaiProfiles"]) == 1
+                report["offlineXaiTLSAndRegrantObserved"] = True
+                report["offlineXaiTransport"] = "in_process_fake_http"
+                report["offlineXaiLiveProviderQualified"] = False
+                report["offlineXaiFullAgentDispatchQualified"] = False
+                report["offlineXaiCanonicalRowsManuallyCommitted"] = True
             if scenario == "historic":
                 assert len(report["nativeHistoricCacheProfiles"]) == 2
                 report["nativeHistoricCacheTLSAndRegrantObserved"] = True

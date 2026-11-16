@@ -547,11 +547,32 @@ def _complete_report(mode):
                 for n in ("home", "beta")
             ],
         )
+    if mode == "offline_xai":
+        report.update(
+            offlineXaiTLSAndRegrantObserved=True,
+            offlineXaiTransport="in_process_fake_http",
+            offlineXaiLiveProviderQualified=False,
+            offlineXaiFullAgentDispatchQualified=False,
+            offlineXaiCanonicalRowsManuallyCommitted=True,
+            offlineXaiProfiles=[
+                {
+                    "profileHomeName": n,
+                    "nativeProviderResult": True,
+                    "storageDisabled": True,
+                    "fakeGenerationRequests": 1,
+                    "fakeCatalogRequests": count,
+                    "bytesMatched": True,
+                    "transportAndCredentialResolverRestored": True,
+                }
+                for n, count in (("home", 1), ("beta", 0))
+            ],
+        )
+
     return report
 
 
-@pytest.mark.parametrize("mode", ["matrix", "mutation", "historic"])
-def test_all_three_report_shapes_retain_original_full_acceptance(mode):
+@pytest.mark.parametrize("mode", ["matrix", "mutation", "historic", "offline_xai"])
+def test_all_four_report_shapes_retain_original_full_acceptance(mode):
     # DATA checks only; none is a native/runtime success observation.
     module.report_acceptance(_complete_report(mode), mode)
 
@@ -590,3 +611,100 @@ def test_actual_actor_bytes_remain_bound_before_any_container_start():
 
     actor = Path(__file__).parents[1] / "native_presentation_journey_entry.py"
     assert hashlib.sha256(actor.read_bytes()).hexdigest() == module._ENTRY_SHA
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        "offlineXaiTLSAndRegrantObserved",
+        "offlineXaiTransport",
+        "offlineXaiLiveProviderQualified",
+        "offlineXaiFullAgentDispatchQualified",
+        "offlineXaiCanonicalRowsManuallyCommitted",
+        "offlineXaiProfiles",
+    ],
+)
+def test_offline_xai_report_requires_its_distinct_evidence(field):
+    report = _complete_report("offline_xai")
+    del report[field]
+    with pytest.raises(module.LinuxJourneyError):
+        module.report_acceptance(report, "offline_xai")
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        "nativeProviderResult",
+        "storageDisabled",
+        "bytesMatched",
+        "transportAndCredentialResolverRestored",
+        "fakeGenerationRequests",
+        "fakeCatalogRequests",
+    ],
+)
+def test_offline_xai_profiles_cannot_omit_a_required_result(field):
+    report = _complete_report("offline_xai")
+    del report["offlineXaiProfiles"][0][field]
+    with pytest.raises(module.LinuxJourneyError):
+        module.report_acceptance(report, "offline_xai")
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        "offlineXaiLiveProviderQualified",
+        "offlineXaiFullAgentDispatchQualified",
+    ],
+)
+def test_offline_xai_report_cannot_claim_a_real_provider_or_full_agent_dispatch(field):
+    report = _complete_report("offline_xai")
+    report[field] = True
+    with pytest.raises(module.LinuxJourneyError):
+        module.report_acceptance(report, "offline_xai")
+
+
+@pytest.mark.parametrize("bad", [None, {}, [None, None], [], [{}, {}]])
+def test_offline_xai_profiles_refuse_malformed_or_incomplete_evidence(bad):
+    report = _complete_report("offline_xai")
+    report["offlineXaiProfiles"] = bad
+    with pytest.raises(module.LinuxJourneyError):
+        module.report_acceptance(report, "offline_xai")
+
+
+def test_offline_xai_profiles_require_both_original_profile_roots():
+    report = _complete_report("offline_xai")
+    report["offlineXaiProfiles"][1]["profileHomeName"] = "home"
+    with pytest.raises(module.LinuxJourneyError):
+        module.report_acceptance(report, "offline_xai")
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("fakeGenerationRequests", True),
+        ("fakeGenerationRequests", 0),
+        ("fakeGenerationRequests", 2),
+        ("fakeCatalogRequests", True),
+        ("fakeCatalogRequests", -1),
+        ("fakeCatalogRequests", 2),
+    ],
+)
+def test_offline_xai_transport_counts_are_exact_integers_within_scope(field, value):
+    report = _complete_report("offline_xai")
+    report["offlineXaiProfiles"][0][field] = value
+    with pytest.raises(module.LinuxJourneyError):
+        module.report_acceptance(report, "offline_xai")
+
+
+def test_unknown_report_mode_does_not_reuse_mutation_acceptance():
+    report = _complete_report("mutation")
+    report["scenario"] = "unknown"
+    with pytest.raises(module.LinuxJourneyError):
+        module.report_acceptance(report, "unknown")
+
+
+def test_offline_xai_catalog_path_must_be_observed_once():
+    report = _complete_report("offline_xai")
+    report["offlineXaiProfiles"][0]["fakeCatalogRequests"] = 0
+    with pytest.raises(module.LinuxJourneyError):
+        module.report_acceptance(report, "offline_xai")
