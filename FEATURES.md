@@ -1,3 +1,23 @@
+## Native group transport foundations — November16, 2026
+
+[Spec059](specs/059-canonical-group-transport/spec.md) pins fourteen native files
+and preserves full room/history/attachment functionality. A supported15MB native
+attachment produces20,000,000 base64 characters before metadata/RPC; generic8MiB
+limits are not accepted as a complete transport budget. Viewer and recipient
+range authority must not be interchanged.
+
+The unactivated [operation ledger](specs/059-canonical-group-transport/OPERATION_LEDGER.md)
+passes67 focused cases and causal deadline/count/generation-debt checks. The
+[pure control-ticket codec](specs/059-canonical-group-transport/TICKET_CODEC.md)
+passes85 cases and causal ID/profile/duplicate/frame/restart-policy checks. Neither
+has a production caller, actual native ticket mint, group route or phone grant.
+Model accounting and decoded DATA do not prove native cleanup or authority.
+
+Actual socket/WebSocket custody, room/history snapshots, explicit phone group
+authority, complete RPC/decoder/copy shapes, UI/native/platform and physical/release
+qualification remain open. Existing Controls/approval-owner rights do not
+implicitly become group or host/operator permission. See [tasks](specs/059-canonical-group-transport/tasks.md).
+
 ## Native group capability input — November16, 2026
 
 The first internal GR1 source task is a bounded parser for native

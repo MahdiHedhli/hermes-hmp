@@ -14,6 +14,9 @@
       cleanup, permission or transport completion; see OPERATION_LEDGER.md.
 - [ ] GT2: implement internal bounded owner/deadline/pending/publication lifecycle
       with synthetic transports only and no runtime route/capability activation.
+- [x] GT3-CODEC: fixed profile-scoped control-ticket request/reply codec,
+      synthetic85-case boundary suite and causal1/1/2/1/1 guard failures.
+      No native call, peer authentication, grant, retry or transport activation.
 - [ ] GT3: implement reviewed explicit-endpoint ticket/socket/WebSocket adapter;
       prove real credential/reader/writer/thread ownership and exact cleanup.
 - [ ] GT4: qualify native per-room/member snapshot fencing and define explicit
