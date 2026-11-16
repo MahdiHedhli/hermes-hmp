@@ -26,7 +26,7 @@ _IMAGE = (
     "docker.io/library/ubuntu@sha256:"
     "77eb101c607d6e3d4f5ad0c8a02c2136c689b98aba1f359e6502ba517e5c57ec"
 )
-_ENTRY_SHA = "5abafa57c0cbd902e2976786ebcaabf2d2f22f9630ce8329b7ebc13b28106d79"
+_ENTRY_SHA = "ca598b2332cfb23f847a00a28ae9399b775cdbef7ad46d5c08f5ac1f3ad45863"
 _FD_SHA = "692ae20b7bf86016dc7d7f27a678798cf3eb54dad1d601a4376e77b058554056"
 _MANIFEST_SHA = "1686985c2270a0a6a270b52c81a35fb6aaf7fbce4e87c8a4c8b0d65ce91a6804"
 _LABEL = "app.hermesbot.native-presentation-fixture"
@@ -101,6 +101,7 @@ def runtime_inventory(prefix, venv):
     files = {}
     for label, base in (("prefix", prefix), ("venv", venv)):
         canonical(base, directory=True)
+        files[label + "/"] = {"directory": True, "mode": stat.S_IMODE(base.lstat().st_mode)}
         for path in sorted(base.rglob("*")):
             info = path.lstat()
             require(info.st_uid == os.geteuid())
@@ -114,10 +115,14 @@ def runtime_inventory(prefix, venv):
                 require(target.is_relative_to(prefix) or target.is_relative_to(venv))
                 files[name] = {"link": os.readlink(path)}
             elif stat.S_ISDIR(info.st_mode):
-                continue
+                files[name] = {"directory": True, "mode": stat.S_IMODE(info.st_mode)}
             else:
                 require(stat.S_ISREG(info.st_mode) and info.st_nlink == 1)
-                files[name] = {"sha256": digest(path), "bytes": info.st_size}
+                files[name] = {
+                    "sha256": digest(path),
+                    "bytes": info.st_size,
+                    "mode": stat.S_IMODE(info.st_mode),
+                }
     require(0 < len(files) <= 100000)
     return files
 
@@ -127,7 +132,7 @@ def verify_runtime(prefix, venv, manifest, expected):
     require(re.fullmatch(r"[0-9a-f]{64}", expected) is not None and digest(manifest) == expected)
     require(manifest.stat().st_size <= 32 * 1024**2)
     item = json.loads(manifest.read_text())
-    require(item["schema"] == 1 and item["pythonVersion"] == [3, 14, 9])
+    require(item["schema"] == 2 and item["pythonVersion"] == [3, 14, 9])
     require(
         item["requirementsSHA256"]
         == "9edcfc564b10ad1ffca7a3d7a02d1a855a5d203cb807d566b85ce5598eb9df94"
@@ -209,6 +214,8 @@ def create_arguments(name, root, source, prefix, venv, entry, mode, uid, gid):
         "max-size=1m",
         "--log-opt",
         "max-file=1",
+        "--log-opt",
+        "compress=false",
         "--workdir",
         str(root),
         "--entrypoint",
@@ -250,7 +257,10 @@ def verify_container(item, name, root, venv, entry, mode, uid, gid, mounts):
         not host.get("PortBindings") and not host.get("PublishAllPorts") and not host.get("Links")
     )
     require(host["RestartPolicy"]["Name"] == "no" and not host.get("AutoRemove"))
-    require(host["LogConfig"] == {"Type": "local", "Config": {"max-size": "1m", "max-file": "1"}})
+    require(
+        host["LogConfig"]
+        == {"Type": "local", "Config": {"max-size": "1m", "max-file": "1", "compress": "false"}}
+    )
     require(host["PidsLimit"] == 128 and host["Memory"] == 2 * 1024**3)
     require(host["MemorySwap"] == 2 * 1024**3 and host["NanoCpus"] == 2_000_000_000)
     require(host["ShmSize"] == 1024**2 and not host.get("Binds") and not host.get("Tmpfs"))
@@ -318,7 +328,7 @@ class DockerOwner:
         self.cli.mkdir(mode=0o700)
         self.receipt = {"commands": []}
         path = Path(__file__).with_name("native_sender_audit_fixture.py")
-        require(digest(path) == "b97a22257842e47a1520e8594609aa59e4085306377ed48de51bfe2b74efbba7")
+        require(digest(path) == "e6ce104449c277bdd3a9dafe83a609dd9a8bc45f22e618b863022059704253a1")
         spec = importlib.util.spec_from_file_location("_native_linux_owned_cli", path)
         self.commands = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(self.commands)
@@ -344,6 +354,14 @@ class DockerOwner:
         document = json.loads(self.call(["container", "inspect", identity]))
         require(type(document) is list and len(document) == 1)
         return document[0]
+
+
+def public_progress(receipt, payload):
+    """Best-effort fixed metadata; console failure never releases an actor."""
+    try:
+        print(json.dumps(payload), flush=True)
+    except BaseException:
+        receipt["publicOutputFailed"] = True
 
 
 def checkpoint(root, receipt):
@@ -465,6 +483,7 @@ def run(root, source, prefix, venv, docker, runtime_manifest, runtime_sha256):
             )
             started = time.monotonic()
             overdue = False
+            public_state = None
             while True:
                 item = owner.inspect(container)
                 require(
@@ -474,6 +493,12 @@ def run(root, source, prefix, venv, docker, runtime_manifest, runtime_sha256):
                     == container
                 )
                 state = item["State"]
+                if state["Status"] in ("running", "exited") and state["Status"] != public_state:
+                    public_state = state["Status"]
+                    public_progress(
+                        receipt,
+                        {"stage": "native-container", "scenario": mode, "state": public_state},
+                    )
                 row.update(
                     stage="observing-same-container", state=state["Status"], pid=state["Pid"]
                 )
@@ -501,6 +526,7 @@ def run(root, source, prefix, venv, docker, runtime_manifest, runtime_sha256):
             row.update(accepted=True, reportSHA256=digest(fixture / "report.json"))
             save(root / "receipt.json", receipt)
     except BaseException as exc:
+        public_progress(receipt, {"stage": "native-refused-or-unresolved", "retryAllowed": False})
         receipt.update(
             stage="refused-or-unresolved",
             failureType=type(exc).__name__,
