@@ -81,6 +81,20 @@ class Native:
         return True
 
 
+async def _wait_for_native_entry(native, running):
+    """Own the witness waiter, but retain the original supervisor's outcome."""
+    entered = asyncio.create_task(native.entered.wait(), name="presentation-native-witness")
+    try:
+        await asyncio.wait((entered, running), return_when=asyncio.FIRST_COMPLETED)
+        if running.done():
+            running.result()  # Surface the original failure/cancellation, if any.
+            pytest.fail("supervisor finished before the required blocked native stage")
+        assert entered.done() and entered.result() is True
+    finally:
+        entered.cancel()
+        await asyncio.gather(entered, return_exceptions=True)
+
+
 @pytest.fixture
 def context():
     with tempfile.TemporaryDirectory(
@@ -160,7 +174,7 @@ async def test_cancelled_native_await_cannot_resume_normal_work(
             sink=lambda *row: results.append(row),
         )
     )
-    await native.entered.wait()
+    await _wait_for_native_entry(native, running)
     started = time.monotonic()
     running.cancel()
     with pytest.raises(asyncio.CancelledError):
@@ -301,7 +315,7 @@ async def test_cleanup_budget_exhaustion_after_signal_prevents_close_and_probe(
             sink=lambda *_: pytest.fail("late emission"),
         )
     )
-    await native.entered.wait()
+    await _wait_for_native_entry(native, running)
     running.cancel()
     with pytest.raises(asyncio.CancelledError):
         await running
@@ -335,7 +349,7 @@ async def test_second_run_cannot_create_competing_cleanup(context):
             source_sha="b" * 64, fallback="Hermes", observed_at=100, sink=lambda *_: None
         )
     )
-    await native.entered.wait()
+    await _wait_for_native_entry(native, running)
     with pytest.raises(AuthorityRefusalError):
         await supervisor.run(
             source_sha="b" * 64, fallback="Hermes", observed_at=100, sink=lambda *_: None
@@ -468,7 +482,7 @@ async def test_startup_parser_rebinding_during_native_await_never_launches(conte
             sink=lambda *row: pytest.fail("emitted"),
         )
     )
-    await native.entered.wait()
+    await _wait_for_native_entry(native, running)
     # None is a valid default configuration, but is not the captured startup binding.
     supervisor._parser_package = None
     native.release.set()

@@ -1,0 +1,7 @@
+- [x] Bind live original broad evidence and unchanged supervisor test source.
+- [x] Implement owned witness/original-owner race at all four existing waits.
+- [x] Add six deterministic ownership cases.
+- [x] Complete both test files without skipped/removed original cases.
+- [ ] Causal omission controls and exact production/assertion preservation proof.
+- [ ] Independent terminal review and focused draft publication.
+- [ ] Diagnose the original broad process; this test change alone does not establish its owner state or resolve its hang.
