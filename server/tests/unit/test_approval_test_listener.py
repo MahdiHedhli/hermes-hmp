@@ -9,6 +9,7 @@ from types import SimpleNamespace
 from typing import ClassVar
 
 import pytest
+from aiohttp import web
 
 from hmp_plugin import approval_test_host_transport, approval_test_routes, server
 
@@ -198,6 +199,10 @@ def test_adapter_only_activates_after_successful_same_nonce_record(
     monkeypatch.setattr(adapter_module, "open_components", lambda _adapter: env.ctx)
     observed = []
     async def start(srv):
+        # Own a real runner without opening a listening socket. Startup's current
+        # guard and shutdown must see the same runner, not a forged bound address.
+        srv._runner = web.AppRunner(srv.app)
+        await srv._runner.setup()
         srv.bound = ("127.0.0.1", 12345)
     async def activate(srv, record, nonce):
         assert observed == ["record"]
@@ -232,6 +237,9 @@ def test_adapter_disconnect_retains_record_store_and_pointer_until_real_join(
         class Listener:
             ctx = env.ctx
             operator_worker_debt = 0
+            presentation_worker_debt = 0
+            _dependencies_closed = False
+            _dependencies_close_unknown = False
             async def stop(self, **_kwargs):
                 events.append("fence")
                 entered.set()
@@ -284,6 +292,7 @@ def test_listener_store_destruction_waits_for_actual_service_producer_join():
         producer.close_and_join = owned_join
         r.ctx.push_hints = SimpleNamespace(clear=lambda: events.append("dependencies_live"))
         r.ctx.direct_send_deps = None
+        r.ctx.readiness_reads = None
         srv = server.HmpServer(r.ctx, server.ListenerSettings("127.0.0.1", 12345))
         srv._at1_live = True
         srv._at1_service = r.service
@@ -291,7 +300,9 @@ def test_listener_store_destruction_waits_for_actual_service_producer_join():
         srv._on_closed = lambda: events.append("store_destroyed")
         observer = asyncio.create_task(srv.stop())
         try:
-            await joined_entered.wait()
+            # This bounds only the test's observation, not the producer join.
+            # Early shutdown failure must reach finally instead of hanging here.
+            await asyncio.wait_for(joined_entered.wait(), timeout=5)
             assert not srv.closed.is_set() and "store_destroyed" not in events
             observer.cancel()
             with pytest.raises(asyncio.CancelledError):
