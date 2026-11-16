@@ -23,7 +23,7 @@ permission-generation removal, grant, fetch, provider or host/device operation.
 - [x] Reproduce the original isolated frozen-registry failure with JUnit.
 - [x] Bind exact committed before/after bytes and recover the parent with three hunks.
 - [x] Keep old hash/assertions, add projection causals and outside-byte controls.
-- [ ] Complete active-batch, registry and current permission store/runtime suites.
+- [x] Complete active-batch, registry and current permission store/runtime suites.
 - [ ] Independent review, focused publication and current-status synchronization.
 
 ## Limits
@@ -33,3 +33,21 @@ permission tests, especially deny/regrant and late worker results, remain
 necessary. No whole-suite, Linux/native/private/device/release qualification
 transfers from these synthetic Darwin tests. The original broad run remains
 untouched on its retained immutable source and process handle.
+
+## Observed results
+
+Exact executable source e157bb68 produces 263 passes, zero failures/errors/skips
+on Darwin/Python 3.14.4 in the complete five-file selection. Original isolated
+frozen-registry code fails; its expected hash is unchanged. Independent source
+review verifies all three literal deltas and exact current/committed byte binding.
+The original active-batch AST matches after removing only the explicit new
+projection call/import. Exact Ruff 0.16.9, private-value and plugin-surface checks
+pass; the log scanner has no captured runtime corpus.
+
+The first run had 248 passes and 15 setup errors: its long synthetic TMPDIR made
+the operator fixture socket path exceed the unchanged 104-byte bound. The final
+run supplies a fresh caller-owned physical 0700 short parent via the fixture's
+supported HOST_OPERATOR_TEST_PARENT input. No test or production source was
+changed to bypass that refusal. Both reports remain retained. The supported
+unversioned legacy restoration compatibility limit remains explicit in its
+existing runtime test; generation-safe revocation requires persistent media denial.
