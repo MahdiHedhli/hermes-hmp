@@ -1,0 +1,36 @@
+{
+  "nativeCommit": "4162ecf11f611400fa6e5c42d2f360188ce50b39",
+  "files": [
+    {
+      "path": "hermes_cli/gateway_client.py",
+      "sha256": "65c2d4e221a8eb5c1bc39f50d30d02ff859b651b3c4a7662afc153c82ae6262b",
+      "bytes": 20458
+    },
+    {
+      "path": "gateway/control_socket.py",
+      "sha256": "274f716b75b9abfaee0965af62ab9491fc36a219823b629acdf42fadfe69e261",
+      "bytes": 32258
+    },
+    {
+      "path": "hermes_cli/gateway_runtime_discovery.py",
+      "sha256": "c8e3d10f25f3f2ffcf7ba1fc249f2decc3bc69340c29cbcec5036dff9cf18256",
+      "bytes": 11475
+    },
+    {
+      "path": "hermes_cli/gateway_runtime_tickets.py",
+      "sha256": "7d49793080df8e8e0b4db2ae54abf4664d3c8c087a19556641482147d60378d3",
+      "bytes": 9143
+    },
+    {
+      "path": "gateway/session_identity.py",
+      "sha256": "fe64439fa93674d11650ebbdfd7720376a45d7bb1e065d9a2d74b6e877e15660",
+      "bytes": 17465
+    },
+    {
+      "path": "gateway/runtime_bootstrap.py",
+      "sha256": "1c1b50581275266133df687d625c066a7095fcbbb78b878eb7b770866dd58308",
+      "bytes": 4386
+    }
+  ],
+  "scope": "Pinned source-only contract census; no module imported, ticket minted, socket opened, host queried or rights changed"
+}

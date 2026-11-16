@@ -1,0 +1,23 @@
+# Tasks — same GR1 scope
+
+- [x] GT0: pin six exact native source files and independently review source census.
+- [ ] GT1: incorporate independent review (prequeue deadline, shared retained
+      byte/debt accounting, out-of-band retirement, provisional shape budgets),
+      then independently review this full transport/authority contract; resolve
+      lifecycle, byte accounting, room snapshot and phone entitlement decisions.
+- [ ] GT2: implement internal bounded owner/deadline/pending/publication lifecycle
+      with synthetic transports only and no runtime route/capability activation.
+- [ ] GT3: implement reviewed explicit-endpoint ticket/socket/WebSocket adapter;
+      prove real credential/reader/writer/thread ownership and exact cleanup.
+- [ ] GT4: qualify native per-room/member snapshot fencing and define explicit
+      phone group grants; no borrowing of Controls or approval-owner authority.
+- [ ] GT5: complete GR1-CONTRACT03 UI/wire convergence and full native group
+      integration, preserving native durable IDs and ambiguous-result semantics.
+- [ ] GT6: focused causal/privacy/isolation/compatibility tests, independent review,
+      native current/minimum-platform and signed physical qualification.
+- [ ] GT7: update all authoritative feature/roadmap/docs/Nous gist with actual
+      implemented versus installed versus runtime evidence before release claims.
+
+No live group call, ticket mint, permission change, provider call or phone launch
+is part of GT0/GT1. Existing native Linux presentation run retains its owner and
+handle; group source work does not supersede its acceptance gates.
