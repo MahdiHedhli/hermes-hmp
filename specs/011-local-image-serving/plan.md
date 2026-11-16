@@ -1,5 +1,11 @@
 # Plan
 
+See the [historic native image_cache amendment](HISTORIC_IMAGE_CACHE_AMENDMENT.md):
+the third exact same-profile root is source-implemented and independently reviewed;
+no resolver, fallback, grant or client change. Focused422 synthetic cases pass,
+and the composed selection now passes1,065 cases after exact registry-witness
+reconciliation. Repository lint and native/private/Linux/physical/release remain open.
+
 Amended 2026-10-02 for the minimum-version policy; the earlier exact-build qualification design is historical.
 
 Authority: [`spec.md`](spec.md), [HMP v1 §7e](../../docs/architecture/contracts/HMP_V1.md) and [`ROOT_DECISIONS.md`](ROOT_DECISIONS.md). This plan is documents only; no code is authorized by it. Implementation starts only after the contract revision is merged and reviewed.

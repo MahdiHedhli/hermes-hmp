@@ -1,5 +1,15 @@
 # Tasks
 
+## Historic native image_cache compatibility follow-up
+
+- [x] LM-HIST01: pin native ed1 resolver/cache getter and confirm exact public/private input parity.
+- [x] LM-HIST02: implement third exact internal layout; retain all original file and authority guards.
+- [x] LM-HIST03: independent source/inverse review;422 focused passes and causal1/2 safety failures.
+- [x] LM-HIST04: exact e1d registry-delta reconciliation retains original hash;1,065 composed cases pass.
+- [ ] LM-HIST05: exact-source native/Linux fixture and private-union composition, then physical/release acceptance.
+
+[Contract, evidence and limits](HISTORIC_IMAGE_CACHE_AMENDMENT.md). No live activation.
+
 > **Amended 2026-10-02.** The owner's minimum-version policy replaces the exact-build manifest, fingerprints,
 > process anchor and preload qualification (S6/S6a/S6b). Their records below are **historical evidence about the
 > retired design**, not current policy and not runtime behavior. See
