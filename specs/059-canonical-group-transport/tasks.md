@@ -3,6 +3,8 @@
 - [x] GT0: pin six exact native source files and independently review source census.
 - [ ] GT1: incorporate independent review (prequeue deadline, shared retained
       byte/debt accounting, out-of-band retirement, provisional shape budgets),
+            validate actual native2MiB log pages plus RPC envelope and other method
+      shapes, and historical-member authorization;
       then independently review this full transport/authority contract; resolve
       lifecycle, byte accounting, room snapshot and phone entitlement decisions.
 - [ ] GT2: implement internal bounded owner/deadline/pending/publication lifecycle

@@ -78,8 +78,11 @@ reduce functionality merely to satisfy this initial budget.
 
 At most one active connection attempt per exact authority binding, one reader per
 connection,16 pending requests and64 waiting operation descriptors per owner.
-Descriptors carry no credentials or raw result. Bound encoded request/frame to
-1MiB, decoded event/result aggregate to8MiB and queued events to256; charge before
+Descriptors carry no credentials or raw result. The encoded-request proposal is
+1MiB; a universal1MiB receive-frame ceiling is rejected by the actual native2MiB
+log-page contract before its RPC envelope. Receive-frame, library decode and
+method/page ceilings remain unresolved until complete serialized shapes are
+measured. Proposed decoded event/result aggregate is8MiB and queued events256; charge before
 retention/conversion and include simultaneous copies. These are application-owned
 logical-byte limits, not RSS claims. Full group logs/attachments require bounded
 pagination or their separate media transport; never silently truncate results.
@@ -137,3 +140,31 @@ reconnect/Store shutdown; unchanged caller data; no implicit retry or unrelated
 writes. Run native TLS/current/minimum-platform integration only after synthetic
 causal tests and independent security review. Signed Android/iOS physical,
 accessibility/storage/provider/security-release qualification stays separate.
+
+## Exact shape/snapshot follow-up
+
+Additional pinned native files in source-pins.json establish128 members,
+128KiB members JSON,256KiB event JSON,500 log rows,2MiB serialized log page and
+500 room-list rows. These constants do not by themselves bound every RPC frame,
+room-list aggregate, state/context/attachment reply or decoded object graph.
+GT1 must close those shapes before production transport budgets are frozen.
+Pagination may cover the complete history without silently dropping an event;
+current generic client default8MiB is not automatically an accepted HMP bound.
+
+At this exact source, read_events reads log rows and room authority in one native
+transaction, then returns events/cursor/latest_seq/has_more/authority. It does not
+return member metadata or the room revision used by a separate room_state call.
+That is a concrete gap in the composed state-then-log strategy, not a declaration
+that no safe native-owned HMP integration can exist. Trace a supported narrow
+native snapshot/read fence before using private DB access or declaring an upstream
+primitive missing. Room-owner authorization can itself use a native writer; do
+not label every native group read side-effect-free merely because the HMP request
+is GET.
+
+Current membership alone cannot be presumed sufficient authorization for all
+historical events or attachment provenance. The full contract must define the
+native/history member set and phone rights at the actual snapshot/publication
+boundary. Do not post-filter an already acquired unauthorized transcript, expose
+foreign actor metadata, or claim that rechecking the current roster closes every
+historical-member or native mutation race. The native single-owner design is not
+an HMP multi-device entitlement system and is not classified as a deployed defect.

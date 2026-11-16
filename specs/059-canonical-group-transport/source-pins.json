@@ -30,6 +30,26 @@
       "path": "gateway/runtime_bootstrap.py",
       "sha256": "1c1b50581275266133df687d625c066a7095fcbbb78b878eb7b770866dd58308",
       "bytes": 4386
+    },
+    {
+      "path": "gateway/session_group_controls.py",
+      "sha256": "828ba909260d5aa44aa9d631794308421573ebf33b72d7743b35643fa27e0114",
+      "bytes": 34706
+    },
+    {
+      "path": "gateway/session_hosted_service.py",
+      "sha256": "7586a142f91cf28e3624f0979f790122ac7ed3e5d2469b3c698b737ac1be7be8",
+      "bytes": 22462
+    },
+    {
+      "path": "gateway/hosted_rooms.py",
+      "sha256": "63d05323569900c32c0ba5e85ea8c99c7ae077f422a8642d272b8247332ed281",
+      "bytes": 79959
+    },
+    {
+      "path": "tui_gateway/ws.py",
+      "sha256": "02282ad57f1bc394dcfd1efbfd6ae50ec80838bd303de7b14defd17774ac8b67",
+      "bytes": 42015
     }
   ],
   "scope": "Pinned source-only contract census; no module imported, ticket minted, socket opened, host queried or rights changed"
