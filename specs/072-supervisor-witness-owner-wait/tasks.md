@@ -4,5 +4,5 @@
 - [x] Complete both test files without skipped/removed original cases.
 - [x] Causal omission controls and exact production/assertion preservation proof.
 - [x] Independent source and terminal review.
-- [ ] Focused draft publication.
+- [x] Focused draft publication: [PR185](https://github.com/MahdiHedhli/hermes-hmp/pull/185).
 - [ ] Diagnose the original broad process; this test change alone does not establish its owner state or resolve its hang.

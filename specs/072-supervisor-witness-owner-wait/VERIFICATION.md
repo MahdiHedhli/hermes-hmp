@@ -15,3 +15,5 @@ Changed/new test Ruff checks are clean; the original file's parent check is also
 Both-pending owner/witness still wait; no generic timeout was introduced. The original broad run remains live at its existing handle90824 with its immutable source and last recorded PRE_GO-1-False wait. The original operation's current in-process state was not observed, so this does not prove the cause or resolution of that run. No original broad run was killed/restarted, and no whole-suite pass is claimed.
 
 The selected native presentation service is separate from the preserved legacy startup/broker path. Public f1/nativef8 Linux acceptance retains its original source binding; private composition/runtime, actual Mac scanner, phone startup/characters/images, full attachments/groups and release qualification remain separate. Docker currently returns HTTP503/“Docker Desktop is unable to start”; this harness change does not repair Docker.
+
+Published as [draft PR185](https://github.com/MahdiHedhli/hermes-hmp/pull/185); no merge/deployment.
