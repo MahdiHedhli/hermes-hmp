@@ -104,3 +104,36 @@ workflow permissions/inputs/outputs. Then observe the actual job handle, retriev
 only ciphertext, verify and privately inspect both complete scenario reports or
 the precise failure. Preserve macOS scanner, Desktop/phone visual parity, installed
 build, physical and release qualifications separately. Keep the full goal active.
+
+## First actual Linux setup observation
+
+Run43815553064 / job133126660836 at exactfc46881f completed with a setup failure.
+The native source materializer completed all nine Git children (config absence
+checks intentionally return1); its golden13,201-file manifest matches. Both
+software downloads matched their pinned hashes. No environment setup command,
+Docker command or native scenario started. Encrypted-only artifact14201613741
+was downloaded, its GitHub archive SHA256 checked, and privately decrypted.
+
+The pinned unstripped Python bundle has4571 entries/252,123,422 uncompressed bytes.
+Its normal shared library python/lib/libpython3.14.so.1.0 is136,993,528bytes,
+slightly above the harness's128MiB single-file setup cap. Locally downloaded
+metadata inspection reverified the native-lock archive digest without extracting
+or executing it. The correction admits only this exact name/size under that
+exact archive digest; all other128MiB,1GiB total, type/link/data-filter guards
+remain. This is a trusted-software harness correction, not a native feature,
+request deadline, authorization or production security guard bypass. Boundary
+tests reject a different hash/name/size or any other oversized member.
+
+The first failed setup evidence remains immutable. A new reviewed code revision
+may start a fresh owned experiment only after this terminal outcome is checked;
+never treat this result as either complete Linux scenario acceptance.
+
+The approved local extraction-only check refused later on this Mac's
+case-insensitive filesystem: the archive's uppercase terminfo alias points to a
+distinct lowercase regular file on Linux, but aliases itself on this volume.
+Exact archive-name symlink graph inspection found no cycle or missing target.
+Do not disable data_filter or rename/drop software files to force a Mac pass;
+the partial private root is quarantined and no Linux binary ran. The preparer
+now observes actual fresh-root case-sensitive name/inode behavior before source
+or software effects. Linux extraction remains to be observed on the target
+filesystem, separate from this expected local filesystem limitation.

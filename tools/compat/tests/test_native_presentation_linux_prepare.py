@@ -162,3 +162,31 @@ def test_bad_setup_wait_refuses_before_child_or_receipt(tmp_path, value):
             ["/usr/bin/true"], owner.cli, "synthetic", owner.receipt, wait_timeout=value
         )
     assert owner.receipt["commands"] == [] and not any(owner.cli.iterdir())
+
+
+def test_measured_python_library_exception_is_exact_and_hash_bound():
+    name = "python/lib/libpython3.14.so.1.0"
+    pin = module._PINS["python"]["sha256"]
+    assert module.member_size_allowed(name, 136993528, pin) is True
+    assert module.member_size_allowed(name, 136993528, "a" * 64) is False
+    assert module.member_size_allowed("python/other.so", 136993528, pin) is False
+    assert module.member_size_allowed(name, 136993529, pin) is False
+    assert module.member_size_allowed(name, 136993527, pin) is False
+    assert module.member_size_allowed("uv/file", 128 * 1024**2 + 1, pin) is False
+    assert module.member_size_allowed("uv/file", 128 * 1024**2, pin) is True
+    assert module.member_size_allowed("uv/file", -1, pin) is False
+    assert module.member_size_allowed("uv/file", True, pin) is False
+
+
+def test_actual_filesystem_case_behavior_is_checked_and_own_probe_is_cleaned(tmp_path):
+    lower = tmp_path / "case-observer"
+    lower.write_bytes(b"observer")
+    insensitive = (tmp_path / "CASE-OBSERVER").exists()
+    root = tmp_path / "fresh"
+    root.mkdir(mode=0o700)
+    if insensitive:
+        with pytest.raises(module.LinuxPreparationError):
+            module.require_case_sensitive(root)
+    else:
+        assert module.require_case_sensitive(root) is True
+    assert list(root.iterdir()) == []

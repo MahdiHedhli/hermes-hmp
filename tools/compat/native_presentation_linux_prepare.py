@@ -92,6 +92,13 @@ def download(pin, target):
     return total
 
 
+def member_size_allowed(name, size, archive_sha256):
+    # Measured official native-lock artifact, not a general raised extraction cap.
+    if archive_sha256 == _PINS["python"]["sha256"] and name == "python/lib/libpython3.14.so.1.0":
+        return type(size) is int and size == 136993528
+    return type(size) is int and 0 <= size <= 128 * 1024**2
+
+
 def extract_software(archive, destination, top, expected):
     """Extract an already hash-pinned upstream software archive with data_filter.
 
@@ -113,7 +120,7 @@ def extract_software(archive, destination, top, expected):
             require("\\" not in item.name and len(item.name) <= 1024 and item.name not in seen)
             seen.add(item.name)
             require((item.isfile() or item.isdir() or item.issym()) and not item.issparse())
-            require(0 <= item.size <= 128 * 1024**2)
+            require(member_size_allowed(item.name, item.size, expected))
             total += item.size
             require(total <= 1024**3)
             tarfile.data_filter(item, destination)
@@ -138,6 +145,28 @@ def expected_packages(requirements):
     return result
 
 
+def require_case_sensitive(root):
+    """Observe actual fresh-root name/inode behavior for this Linux software bundle."""
+    require(not any(root.iterdir()))
+    owned = []
+    try:
+        for name, payload in ((".hmp-case-probe-a", b"a"), (".HMP-CASE-PROBE-A", b"b")):
+            path = root / name
+            try:
+                fd = os.open(path, os.O_RDWR | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+            except FileExistsError:
+                raise LinuxPreparationError("native_linux_preparation_refused") from None
+            owned.append((path, fd))
+            os.write(fd, payload)
+        require(os.fstat(owned[0][1]).st_ino != os.fstat(owned[1][1]).st_ino)
+        require(os.pread(owned[0][1], 1, 0) == b"a" and os.pread(owned[1][1], 1, 0) == b"b")
+    finally:
+        for path, fd in owned:
+            os.close(fd)
+            path.unlink()  # Only our exact fresh O_EXCL files under exclusive root custody.
+    return True
+
+
 def prepare(root, native_repository, hmp_repository):
     require(sys.platform == "linux" and os.uname().machine == "x86_64")
     require(sys.flags.isolated == 1 and sys.dont_write_bytecode and sys.flags.optimize == 0)
@@ -145,6 +174,7 @@ def prepare(root, native_repository, hmp_repository):
     require(stat.S_IMODE(root.stat().st_mode) == 0o700 and root.stat().st_uid == os.geteuid())
     require(not any(root.iterdir()))
     os.umask(0o077)
+    require_case_sensitive(root)
     controller = module("_linux_preparation_controller", "native_presentation_linux_controller.py")
     stage = module("_linux_preparation_sources", "native_presentation_source_stage.py")
     sources = root / "sources"
@@ -159,6 +189,7 @@ def prepare(root, native_repository, hmp_repository):
         "stage": "sources-verified",
         "artifacts": _PINS,
         "nativeExecuted": False,
+        "filesystemCaseSensitiveObserved": True,
         "providerSetupPerformed": False,
         "sharedToolsModified": False,
     }
