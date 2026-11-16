@@ -56,6 +56,7 @@ import pytest
 from hmp_plugin import request_ctx as real_request_ctx
 
 from .approved_at1_adapter_witness import reverse_approved_at1_adapter
+from .approved_media_lifecycle_composition_witness import reverse_lifecycle_composition
 from .approved_push_bridge_witness import reverse_approved_push_diagnostics
 from .approved_readiness_composition_witness import reverse_readiness_adapter
 from .media_binding_world import LEGACY_ANCHOR, MEDIA_STEMS, PACKAGE, World
@@ -990,7 +991,9 @@ def test_every_route_answers_identically_with_the_flag_and_availability_off_and_
     # S4: the server's media references are the emission module; S5 adds only the fetch route, its
     # orchestrator module and that module's per-app service. It names no carrier, twin, registry or
     # `local_media_*` module itself.
-    server_src = READ_SRC["server.py"].lower().replace("immediately", "")
+    server_src = reverse_lifecycle_composition(
+        READ_SRC["server.py"], "server.py"
+    ).lower().replace("immediately", "")
     assert "local_media" not in server_src and "_with_media" not in server_src
     # one import and the five call sites of the four read handlers (SES-2 has two branches)
     assert server_src.count("media_emission") == 6
@@ -1326,7 +1329,11 @@ def test_adapter_bridge_and_reads_use_no_dynamic_module_lookup(name: str) -> Non
     if name == "bridge.py":
         source = reverse_approved_push_diagnostics(source)
     elif name == "adapter.py":
-        source = reverse_approved_at1_adapter(reverse_readiness_adapter(source))
+        source = reverse_approved_at1_adapter(
+            reverse_readiness_adapter(
+                reverse_lifecycle_composition(source, "adapter.py")
+            )
+        )
     assert _dynamic_media_lookups(source) == []
 
 
@@ -1529,7 +1536,11 @@ def test_exact_adapter_inverse_recovers_pinned_pre_at1_source():
 
     from .approved_at1_adapter_witness import APPROVED_PRE_AT1_ADAPTER_SHA256
 
-    restored = reverse_approved_at1_adapter(reverse_readiness_adapter(READ_SRC["adapter.py"]))
+    restored = reverse_approved_at1_adapter(
+        reverse_readiness_adapter(
+            reverse_lifecycle_composition(READ_SRC["adapter.py"], "adapter.py")
+        )
+    )
     assert hashlib.sha256(restored.encode()).hexdigest() == APPROVED_PRE_AT1_ADAPTER_SHA256
     assert _dynamic_media_lookups(restored) == []
 
@@ -1553,7 +1564,11 @@ def test_exact_adapter_inverse_refuses_changed_ownership_capture(damage):
         mutant = original.replace(EDIT_1_ACCEPTED, "    return ctx\n\n\n", 1) + EDIT_1_ACCEPTED
     assert mutant != original
     with pytest.raises(AssertionError):
-        reverse_approved_at1_adapter(reverse_readiness_adapter(mutant))
+        reverse_approved_at1_adapter(
+            reverse_readiness_adapter(
+                reverse_lifecycle_composition(mutant, "adapter.py")
+            )
+        )
 
 
 @pytest.mark.parametrize("injection", [
@@ -1564,7 +1579,9 @@ def test_exact_adapter_inverse_refuses_changed_ownership_capture(damage):
 def test_adapter_inverse_keeps_every_new_lookup_outside_approved_sites(injection):
     mutant = (READ_SRC["adapter.py"] + "\n\ndef outside_approved_at1():\n"
               + injection + "    return 1\n")
-    restored = reverse_approved_at1_adapter(reverse_readiness_adapter(mutant))
+    restored = reverse_approved_at1_adapter(
+        reverse_readiness_adapter(reverse_lifecycle_composition(mutant, "adapter.py"))
+    )
     assert _dynamic_media_lookups(restored)
 
 
@@ -1577,5 +1594,7 @@ def test_adapter_inverse_does_not_mask_an_ordinary_method_mutation():
     line = "    def _hooks(self) -> prompts.AdapterHooks | None:\n"
     assert original.count(line) == 1
     mutant = original.replace(line, line + "        raise RuntimeError('causal mutation')\n", 1)
-    restored = reverse_approved_at1_adapter(reverse_readiness_adapter(mutant))
+    restored = reverse_approved_at1_adapter(
+        reverse_readiness_adapter(reverse_lifecycle_composition(mutant, "adapter.py"))
+    )
     assert hashlib.sha256(restored.encode()).hexdigest() != APPROVED_PRE_AT1_ADAPTER_SHA256
