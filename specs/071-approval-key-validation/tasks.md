@@ -1,0 +1,7 @@
+- [x] Identify concrete repeated validation work; retain diagnostic-only limits.
+- [x] Preserve three scan positions and all revalidation calls.
+- [x] Add hostile-key and between-seals controls; focused tests pass.
+- [x] Verify unchanged parent lint findings without waiver.
+- [ ] Run scan-omission and second-seal omission controls.
+- [ ] Independent final review and focused draft publication.
+- [ ] Full operator/cache runtime qualification; do not infer from microbenchmark.

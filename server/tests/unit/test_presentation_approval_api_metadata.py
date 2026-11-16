@@ -177,3 +177,88 @@ def test_native_metadata_rejects_substitute_descriptor_without_access(source, ki
     with pytest.raises(approval.GatewayApprovalError):
         approval._api_state(source, _spec_dict=descriptor)
     assert calls == []
+
+
+@pytest.mark.parametrize("where", ("registry", "module", "spec"))
+def test_native_metadata_str_subclass_keys_refuse_without_hooks(source, where):
+    namespace, lookup = (
+        (sys.modules, "hermes_constants")
+        if where == "registry"
+        else (source.namespace, "get_default_hermes_root")
+        if where == "module"
+        else (vars(source.spec), "origin")
+    )
+    original = namespace.pop(lookup)
+    calls = []
+    armed = [False]
+    target_hash = hash(lookup)
+
+    class Foreign(str):
+        def __hash__(self):
+            if armed[0]:
+                calls.append("hash")
+                raise AssertionError("foreign key hash")
+            return target_hash
+
+        def __eq__(self, other):
+            if armed[0]:
+                calls.append("eq")
+                raise AssertionError("foreign key comparison")
+            return False
+
+    key = Foreign("SYNTHETIC_FOREIGN_KEY")
+    namespace[key] = None
+    armed[0] = True
+    try:
+        with pytest.raises(approval.GatewayApprovalError):
+            approval._api_state(source)
+    finally:
+        armed[0] = False
+        namespace.pop(key)
+        namespace[lookup] = original
+    assert calls == []
+
+
+@pytest.mark.parametrize("where", ("registry", "module", "spec"))
+def test_operator_rechecks_keys_between_retained_and_closed_custody_seals(
+    tmp_path, monkeypatch, where
+):
+    from . import test_presentation_gateway_approval as base
+
+    injection = r'''
+original_binding=GatewayApprovalOwner._retained_binding(loaded)
+source=loaded._origin.parent
+namespace,lookup=(
+    (sys.modules,'hermes_constants') if DIAGNOSTIC_WHERE=='registry' else
+    (source.namespace,'get_default_hermes_root') if DIAGNOSTIC_WHERE=='module' else
+    (vars(source.spec),'origin'))
+original=namespace[lookup];calls=[];mutations=[];armed=[False]
+target_hash=hash(lookup)
+class ForeignKey(str):
+    def __hash__(self):
+        if armed[0]:calls.append('hash');raise AssertionError('foreign key hash')
+        return target_hash
+    def __eq__(self,other):
+        if armed[0]:calls.append('eq');raise AssertionError('foreign key equality')
+        return False
+key=ForeignKey('SYNTHETIC_LATE_FOREIGN_KEY')
+def mutate_between_seals(frame):
+    assert frame.f_locals['self'] is loaded and mutations==[]
+    namespace.pop(lookup);namespace[key]=original;mutations.append(True);armed[0]=True
+trace_synthetic_boundary(GatewayApprovalOwner._closed_custody.__code__,
+                         's = GatewayApprovalOwner._seal(self)',mutate_between_seals)
+try:
+    try:GatewayApprovalOwner._retained_binding(loaded)
+    except GatewayApprovalError:pass
+    else:raise AssertionError('late foreign key accepted')
+finally:
+    sys.settrace(None);_synthetic_trace_routes.clear();armed[0]=False
+    if mutations:namespace.pop(key);namespace[lookup]=original
+assert mutations==[True] and calls==[]
+after=GatewayApprovalOwner._retained_binding(loaded)
+assert all(old is new for old,new in zip(original_binding,after,strict=True))
+'''.replace("DIAGNOSTIC_WHERE", repr(where))
+    marker = "print(json.dumps({'case':case,'runtimeQualified':False,'hostChanged':False}))"
+    assert base.BODY.count(marker) == 1
+    monkeypatch.setattr(base, "BODY", base.BODY.replace(marker, injection + marker))
+    base.test_fixed_operator_approval(tmp_path, "normal")
