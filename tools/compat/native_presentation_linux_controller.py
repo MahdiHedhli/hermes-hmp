@@ -159,7 +159,10 @@ def environment(root):
 
 
 def create_arguments(name, root, source, prefix, venv, entry, mode, uid, gid):
-    require(mode in ("matrix", "mutation", "historic", "offline_xai") and type(uid) is int and uid > 0)
+    require(
+        mode in ("matrix", "mutation", "historic", "offline_xai")
+        and type(uid) is int and uid > 0
+    )
     require(
         type(gid) is int and gid >= 0 and re.fullmatch(r"hmp-native-[0-9a-f]{32}", name) is not None
     )
