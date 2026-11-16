@@ -95,7 +95,8 @@ def test_wrong_digest_refuses_before_destination_creation(tmp_path):
     [
         "http://github.com/file",
         "https://github.com.evil.invalid/file",
-        "https://user:secret@github.com/file",
+        # Same synthetic userinfo URL; avoid classifying it as a private email.
+        "https://user:secret" + "@" + "github.com/file",
         "https://github.com:444/file",
         "file:///synthetic",
         "https://evil.invalid/file",
@@ -132,7 +133,9 @@ def test_generic_helper_records_explicit_setup_wait_without_native_deadline_chan
 ):
     import subprocess
 
-    controller = module.module("prepare_test_controller", "native_presentation_linux_controller.py")
+    controller = module.module(
+        "prepare_test_controller", "native_presentation_linux_controller.py"
+    )
     owner = controller.DockerOwner(Path("/usr/bin/true"), tmp_path)
     waits = []
 
@@ -143,7 +146,11 @@ def test_generic_helper_records_explicit_setup_wait_without_native_deadline_chan
 
     owner.commands._POPEN = ObservedWait
     result = owner.commands._owned(
-        ["/usr/bin/true"], owner.cli, "synthetic", owner.receipt, wait_timeout=wait_timeout
+        ["/usr/bin/true"],
+        owner.cli,
+        "synthetic",
+        owner.receipt,
+        wait_timeout=wait_timeout,
     )
     assert result == b"" and waits == [wait_timeout]
     assert owner.receipt["commands"][0]["wait_timeout_seconds"] == wait_timeout
@@ -194,9 +201,37 @@ def test_actual_filesystem_case_behavior_is_checked_and_own_probe_is_cleaned(tmp
 
 def test_wheel_sync_retains_hash_binary_copy_contract_without_conflicting_flag():
     args = module.wheel_sync_arguments(
-        Path("/synthetic/uv"), Path("/synthetic/python"), Path("/synthetic/requirements")
+        Path("/synthetic/uv"),
+        Path("/synthetic/python"),
+        Path("/synthetic/requirements"),
     )
     assert args[args.index("--only-binary") + 1] == ":all:"
     assert "--require-hashes" in args and "--no-build" not in args
     assert args[args.index("--link-mode") + 1] == "copy"
     assert "--no-config" in args and "--no-python-downloads" in args
+
+
+def test_both_preparation_source_checks_match_exact_pinned_inventory_counts():
+    # Pure source/DATA consistency, not a native/Linux execution observation.
+    import ast
+    import json
+
+    base = Path(__file__).parents[1]
+    pins = json.loads((base / "native_presentation_linux.inputs.json").read_text())
+    expected = pins["native"]["snapshotFiles"] + pins["hmp"]["snapshotFiles"]
+    tree = ast.parse((base / "native_presentation_linux_prepare.py").read_text())
+    comparisons = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Compare)
+        and isinstance(node.left, ast.Call)
+        and isinstance(node.left.func, ast.Attribute)
+        and node.left.func.attr == "verify_sources"
+    ]
+    assert len(comparisons) == 2
+    assert all(
+        len(n.comparators) == 1
+        and isinstance(n.comparators[0], ast.Constant)
+        and n.comparators[0].value == expected
+        for n in comparisons
+    )

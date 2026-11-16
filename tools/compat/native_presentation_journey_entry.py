@@ -35,7 +35,7 @@ native = sample / "native"
 hmp = sample / "hmp"
 assert len(sys.argv) == 5
 scenario = sys.argv[4]
-assert scenario in ("matrix", "mutation")
+assert scenario in ("matrix", "mutation", "historic")
 port = int(sys.argv[3])
 assert 1 <= port <= 65535
 assert sys.flags.isolated and sys.dont_write_bytecode
@@ -753,10 +753,42 @@ try:
             from hermes_constants import get_hermes_home_override
 
             original_home_context = get_hermes_home_override()
-            with _profile_runtime_scope(root / "home"):
-                image_path = save_b64_image(
-                    base64.b64encode(image).decode("ascii"), prefix="xai_grok-imagine-image"
+
+            def historic_native_image(profile_home, payload):
+                # Only this fresh synthetic profile is touched. Seed before native
+                # resolution so the real legacy-layout rule is actually exercised.
+                from gateway.platforms import base as native_cache
+
+                assert inside(profile_home.resolve(), root)
+                assert native_cache.IMAGE_CACHE_DIR == native_cache._CACHE_DIR_IMPORT_DEFAULTS[
+                    "IMAGE_CACHE_DIR"
+                ], "native_cache_constant_override_not_permitted"
+                helper = native_cache.cache_image_from_bytes
+                assert Path(helper.__code__.co_filename).resolve() == (
+                    native / "gateway/platforms/base.py"
+                ).resolve()
+                historic = profile_home / "image_cache"
+                historic.mkdir(mode=0o700, exist_ok=True)
+                assert not historic.is_symlink() and stat.S_IMODE(historic.stat().st_mode) == 0o700
+                seed = historic / "synthetic-seed.png"
+                seed_fd = os.open(seed, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+                with os.fdopen(seed_fd, "wb") as seed_writer:
+                    seed_writer.write(payload)
+                produced = Path(helper(payload, ext=".png"))
+                assert produced.parent == historic and not produced.is_symlink()
+                assert inside(produced.resolve(), root) and produced.read_bytes() == payload
+                report.setdefault("nativeHistoricCacheProfiles", []).append(
+                    {"profileHomeName": profile_home.name, "exactHistoricRoot": True,
+                     "bytesMatched": True}
                 )
+                return produced
+            with _profile_runtime_scope(root / "home"):
+                if scenario == "historic":
+                    image_path = historic_native_image(root / "home", image)
+                else:
+                    image_path = save_b64_image(
+                        base64.b64encode(image).decode("ascii"), prefix="xai_grok-imagine-image"
+                    )
             assert get_hermes_home_override() == original_home_context
             report["nativeProducerScopeRestored"] = True
             assert image_path.read_bytes() == image and inside(image_path.resolve(), root)
@@ -800,9 +832,12 @@ try:
                 + png_chunk(b"IEND", b"")
             )
             with _profile_runtime_scope(beta_home):
-                beta_image_path = save_b64_image(
-                    base64.b64encode(blue).decode("ascii"), prefix="xai_grok-imagine-image"
-                )
+                if scenario == "historic":
+                    beta_image_path = historic_native_image(beta_home, blue)
+                else:
+                    beta_image_path = save_b64_image(
+                        base64.b64encode(blue).decode("ascii"), prefix="xai_grok-imagine-image"
+                    )
                 beta_db = SessionDB(beta_home / "state.db")
                 try:
                     beta_sid = "synthetic-native-beta-chat"
@@ -1246,6 +1281,12 @@ try:
             await exact_image("default", ref2, access2, image)
             await exact_image("beta", beta_ref2, access2, blue)
             report["nativeMediaRegrantOldRefRefusedNewRefWorks"] = True
+            if scenario == "historic":
+                assert len(report["nativeHistoricCacheProfiles"]) == 2
+                report["nativeHistoricCacheTLSAndRegrantObserved"] = True
+                report["historicCacheHelper"] = "gateway.platforms.base.cache_image_from_bytes"
+                report["historicCanonicalToolRowsAreSynthetic"] = True
+                report["historicProviderGenerationQualified"] = False
             if scenario == "matrix":
                 assert native_runner.pairing_store.revoke("hmp", user_id)
                 assert context.bridge.authz_state(user_id, "default") is authz.PENDING_OPERATOR

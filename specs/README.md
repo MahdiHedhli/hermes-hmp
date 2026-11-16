@@ -1,5 +1,10 @@
 # Feature specs
 
+[Fresh historic-image Linux qualification](../docs/research/NATIVE_IMAGE_CACHE_LINUX_2026-11-16.md) is source-reviewed/prepared:
+new HMP a4a157a5,13,206 source files and124 source/DATA checks. The original two
+full scenarios remain, with a third full native historic-cache scenario added.
+No new runtime result or deployment is claimed; older b86 proof is not transferred.
+
 HMP uses [GitHub Spec Kit](https://github.com/github/spec-kit) conventions for collaborative changes. Each feature lives in `specs/<number>-<short-name>/` with:
 
 | File | Review question |

@@ -1,7 +1,7 @@
 name: Complete synthetic native presentation / Linux
 "on":
   push:
-    branches: ['feat/native-linux-preparation-20261116']
+    branches: ['feat/native-image-cache-linux-20261116']
     paths:
       - '.github/workflows/native-presentation-linux.yml'
       - 'tools/compat/native_presentation_linux*'
@@ -15,7 +15,7 @@ permissions:
 jobs:
   complete-native-journey:
     runs-on: ubuntu-24.04
-    timeout-minutes: 50
+    timeout-minutes: 75
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -29,7 +29,7 @@ jobs:
           path: native-reference
           fetch-depth: 1
           persist-credentials: false
-      - name: Prepare exact pinned software and run both isolated synthetic scenarios
+      - name: Prepare exact pinned software and run all three isolated synthetic scenarios
         id: journey
         shell: bash
         run: >-

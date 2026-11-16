@@ -9,7 +9,8 @@ from pathlib import Path
 import pytest
 
 _SPEC = importlib.util.spec_from_file_location(
-    "native_linux_controller", Path(__file__).parents[1] / "native_presentation_linux_controller.py"
+    "native_linux_controller",
+    Path(__file__).parents[1] / "native_presentation_linux_controller.py",
 )
 module = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(module)
@@ -18,7 +19,8 @@ _SPEC.loader.exec_module(module)
 @pytest.fixture
 def setup():
     root, source, prefix, venv, entry = map(
-        Path, ("/test/root", "/test/source", "/test/python", "/test/venv", "/test/entry.py")
+        Path,
+        ("/test/root", "/test/source", "/test/python", "/test/venv", "/test/entry.py"),
     )
     name = "hmp-native-" + "a" * 32
     arguments, mounts = module.create_arguments(
@@ -70,7 +72,9 @@ def setup():
 
 def check(setup, item):
     name, root, venv, entry, mounts, _, _ = setup
-    return module.verify_container(item, name, root, venv, entry, "matrix", 1001, 1001, mounts)
+    return module.verify_container(
+        item, name, root, venv, entry, "matrix", 1001, 1001, mounts
+    )
 
 
 def test_restricted_plan_and_exact_inspection_contract(setup, monkeypatch):
@@ -80,7 +84,9 @@ def test_restricted_plan_and_exact_inspection_contract(setup, monkeypatch):
     assert check(setup, item) == "b" * 64
     assert "--pull" in arguments and arguments[arguments.index("--pull") + 1] == "never"
     assert "--rm" not in arguments and "--privileged" not in arguments
-    assert not any("synthetic-poison" in x or "synthetic.invalid" in x for x in arguments)
+    assert not any(
+        "synthetic-poison" in x or "synthetic.invalid" in x for x in arguments
+    )
     assert [x["RW"] for x in item["Mounts"]] == [False] * 5 + [True]
 
 
@@ -151,12 +157,22 @@ def test_scope_and_identity_mutations_refuse(setup, fault):
         check(setup, item)
 
 
-@pytest.mark.parametrize("mode,uid", [("other", 1001), ("matrix", 0), ("mutation", True)])
+@pytest.mark.parametrize(
+    "mode,uid", [("other", 1001), ("matrix", 0), ("mutation", True)]
+)
 def test_root_or_unknown_scenario_is_not_admitted(setup, mode, uid):
     name, root, venv, entry, _, _, _ = setup
     with pytest.raises(module.LinuxJourneyError):
         module.create_arguments(
-            name, root, Path("/test/source"), Path("/test/python"), venv, entry, mode, uid, 1001
+            name,
+            root,
+            Path("/test/source"),
+            Path("/test/python"),
+            venv,
+            entry,
+            mode,
+            uid,
+            1001,
         )
 
 
@@ -221,8 +237,12 @@ def test_partial_cli_constructor_return_is_owned_and_joined(tmp_path, monkeypatc
     assert record["wait_known"] is True and record["settlement_only_used"] is True
 
 
-@pytest.mark.parametrize("fault", ["inspect-error", "foreign-observation", "receipt-error"])
-def test_failure_reconciliation_retains_same_actor_until_terminal(tmp_path, monkeypatch, fault):
+@pytest.mark.parametrize(
+    "fault", ["inspect-error", "foreign-observation", "receipt-error"]
+)
+def test_failure_reconciliation_retains_same_actor_until_terminal(
+    tmp_path, monkeypatch, fault
+):
     name, identity = "hmp-native-" + "a" * 32, "b" * 64
     seen = []
     receipt, row = {}, {"startAttempted": True}
@@ -270,7 +290,9 @@ def test_failure_reconciliation_retains_same_actor_until_terminal(tmp_path, monk
         assert receipt["diagnosticWriteFailed"] is True
 
 
-def test_uncertain_create_reconciles_name_without_replaying_create(tmp_path, monkeypatch):
+def test_uncertain_create_reconciles_name_without_replaying_create(
+    tmp_path, monkeypatch
+):
     name, identity = "hmp-native-" + "a" * 32, "b" * 64
     observed = []
 
@@ -297,14 +319,17 @@ def test_uncertain_create_reconciles_name_without_replaying_create(tmp_path, mon
 
 
 @pytest.mark.parametrize(
-    "boundary", ["receipt-before-start", "lost-start-response", "lost-start-broken-output"]
+    "boundary",
+    ["receipt-before-start", "lost-start-response", "lost-start-broken-output"],
 )
 def test_outer_failure_reconciles_original_actor_and_never_advances(
     tmp_path, monkeypatch, boundary
 ):
     from types import SimpleNamespace
 
-    root, source, prefix, venv = [tmp_path / name for name in ("out", "source", "prefix", "venv")]
+    root, source, prefix, venv = [
+        tmp_path / name for name in ("out", "source", "prefix", "venv")
+    ]
     for path in (root, source, prefix, venv):
         path.mkdir(mode=0o700)
     (prefix / "python").write_bytes(b"synthetic-not-executable")
@@ -323,7 +348,9 @@ def test_outer_failure_reconciles_original_actor_and_never_advances(
         ),
     )
     monkeypatch.setattr(module, "verify_sources", lambda _: 13201)
-    monkeypatch.setattr(module, "verify_runtime", lambda *args: "synthetic-prepared-input")
+    monkeypatch.setattr(
+        module, "verify_runtime", lambda *args: "synthetic-prepared-input"
+    )
     monkeypatch.setattr(module, "verify_container", lambda *args: identity)
     monkeypatch.setattr(module.time, "sleep", lambda _: None)
 
@@ -399,7 +426,9 @@ def test_outer_failure_reconciles_original_actor_and_never_advances(
     assert len(inspections) == (3 if boundary.startswith("lost-start") else 2)
     assert set(inspections) == {identity}
     receipt = json.loads((root / "receipt.json").read_text())
-    assert len(receipt["scenarios"]) == 1 and receipt["stage"] == "refused-or-unresolved"
+    assert (
+        len(receipt["scenarios"]) == 1 and receipt["stage"] == "refused-or-unresolved"
+    )
     result = receipt["scenarios"][0]
     assert result["reconciliationActive"] is False
     assert (
@@ -464,3 +493,100 @@ def test_one_file_local_log_requires_explicit_disabled_compression(setup, compre
         check(setup, item)
     arguments = setup[-2]
     assert "compress=false" in arguments and "max-file=1" in arguments
+
+
+def _complete_report(mode):
+    flags = [
+        "nativePresentationServiceBound",
+        "nativePresentationMetadataObserved",
+        "nativePresentationForeignRevisionRefused",
+        "nativePresentationAvatarRevisionChangeRefusedThenReadBack",
+        "nativePresentationCharacterNameParityObserved",
+        "earlyNativePresentationRevocationAndRestorationObserved",
+        "presentationDrained",
+        "dependenciesClosedByAdapter",
+        "nativeMediaRegrantOldRefRefusedNewRefWorks",
+        "nativeStoredForeignInstanceTokenRefused",
+        "nativeRunnerResourcesReleased",
+        "nativeLoaderWorkersSettled",
+        "storeClosed",
+        "unloadResult",
+        "registrationsCleared",
+        "nativeBotRevocationIsProfileScoped",
+        "nativeChangedFileRefusedOtherProfileUnaffected",
+        "nativePresentationAvatarBotRevocationIsProfileScoped",
+    ]
+    report = {name: True for name in flags}
+    report.update(
+        phase="complete",
+        scenario=mode,
+        presentationWorkerDebt=False,
+        lifecycleCleanupErrors=[],
+        cleanupErrors=[],
+        observedNetworkInterfaces=["lo"],
+        nativeReapprovalCooldownElapsedSeconds=602,
+        nativePresentationCases=[
+            {"profile": "default", "status": 200},
+            {"profile": "beta", "status": 200},
+        ],
+        nativePresentationAvatarCases=[
+            {"status": 200, "peerPinnedBeforeRequest": True} for _ in range(4)
+        ],
+        earlyNativePresentationRevocationCases=[{} for _ in range(4)],
+        nativeIsolationPositiveCells=[{} for _ in range(4)],
+        nativeIsolationCases=[{} for _ in range(12)],
+    )
+    if mode == "historic":
+        report.update(
+            nativeHistoricCacheTLSAndRegrantObserved=True,
+            historicCanonicalToolRowsAreSynthetic=True,
+            historicProviderGenerationQualified=False,
+            historicCacheHelper="gateway.platforms.base.cache_image_from_bytes",
+            nativeHistoricCacheProfiles=[
+                {"profileHomeName": n, "exactHistoricRoot": True, "bytesMatched": True}
+                for n in ("home", "beta")
+            ],
+        )
+    return report
+
+
+@pytest.mark.parametrize("mode", ["matrix", "mutation", "historic"])
+def test_all_three_report_shapes_retain_original_full_acceptance(mode):
+    # DATA checks only; none is a native/runtime success observation.
+    module.report_acceptance(_complete_report(mode), mode)
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        "nativeHistoricCacheTLSAndRegrantObserved",
+        "historicCanonicalToolRowsAreSynthetic",
+        "historicProviderGenerationQualified",
+        "historicCacheHelper",
+        "nativeHistoricCacheProfiles",
+    ],
+)
+def test_historic_report_requires_its_own_additional_evidence(field):
+    report = _complete_report("historic")
+    del report[field]
+    with pytest.raises(module.LinuxJourneyError):
+        module.report_acceptance(report, "historic")
+
+
+def test_historic_report_does_not_claim_provider_generation_or_one_profile_only():
+    for change in (True, None):
+        report = _complete_report("historic")
+        report["historicProviderGenerationQualified"] = change
+        with pytest.raises(module.LinuxJourneyError):
+            module.report_acceptance(report, "historic")
+    report = _complete_report("historic")
+    report["nativeHistoricCacheProfiles"][1]["profileHomeName"] = "home"
+    with pytest.raises(module.LinuxJourneyError):
+        module.report_acceptance(report, "historic")
+
+
+def test_actual_actor_bytes_remain_bound_before_any_container_start():
+    import hashlib
+
+    actor = Path(__file__).parents[1] / "native_presentation_journey_entry.py"
+    assert hashlib.sha256(actor.read_bytes()).hexdigest() == module._ENTRY_SHA

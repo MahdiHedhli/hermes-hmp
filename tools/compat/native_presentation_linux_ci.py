@@ -79,7 +79,7 @@ def run(workspace, temporary):
             receipt,
             wait_timeout=300,
         )
-        stage = "full-native-matrix-and-mutation"
+        stage = "full-native-matrix-mutation-and-historic"
         result = controller.run(
             Path(inputs["root"]),
             Path(inputs["source"]),
