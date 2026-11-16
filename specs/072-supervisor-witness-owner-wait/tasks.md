@@ -1,0 +1,8 @@
+- [x] Bind live original broad evidence and unchanged supervisor test source.
+- [x] Implement owned witness/original-owner race at all four existing waits.
+- [x] Add six deterministic ownership cases.
+- [x] Complete both test files without skipped/removed original cases.
+- [x] Causal omission controls and exact production/assertion preservation proof.
+- [x] Independent source and terminal review.
+- [x] Focused draft publication: [PR185](https://github.com/MahdiHedhli/hermes-hmp/pull/185).
+- [ ] Diagnose the original broad process; this test change alone does not establish its owner state or resolve its hang.
