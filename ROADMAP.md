@@ -1457,3 +1457,13 @@ HMP follows the [feature list](FEATURES.md), [unified gateway research](HermesUn
 5. Add a versioned canonical-gateway adapter only after those checks pass, with a rollback for qualified older builds.
 
 Behavior changes belong in focused Spec Kit feature specs and must update the wire contract when applicable.
+
+## Restore reviewed historic native image cache support — November 16, 2026
+
+Current-source native run43926962041 passes matrix/mutation but fails the historic
+case before descriptor mint; offline-XAI was not attempted. The candidate branch
+omits the previously reviewed exact `image_cache` layout amendment0590f453.
+Restore that exact same-profile flat-name layout, no-follow leaf and strict
+historical witnesses; do not broaden arbitrary paths or search/fallback.
+Targeted current tests and a new complete four-case qualification remain required.
+No host, provider, grant or device changes are included in source restoration.

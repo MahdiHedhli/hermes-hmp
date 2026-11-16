@@ -46,3 +46,13 @@ are never renumbered; always refer to a spec by its full directory name.
 Per-bot send, per-device controls, and approval availability are separate: a controls grant never
 opens an approval route (see `docs/architecture/contracts/HMP_V1.md` §7b). Spec 034 replaces the exact-build
 approval gate described by specs 003-005 (approval line).
+
+## Restore reviewed historic native image cache support — November 16, 2026
+
+Current-source native run43926962041 passes matrix/mutation but fails the historic
+case before descriptor mint; offline-XAI was not attempted. The candidate branch
+omits the previously reviewed exact `image_cache` layout amendment0590f453.
+Restore that exact same-profile flat-name layout, no-follow leaf and strict
+historical witnesses; do not broaden arbitrary paths or search/fallback.
+Targeted current tests and a new complete four-case qualification remain required.
+No host, provider, grant or device changes are included in source restoration.

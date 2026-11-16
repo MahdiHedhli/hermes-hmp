@@ -11,11 +11,12 @@ Trust model:
 - `profile_home` is the caller's already-selected, already-resolved profile home. The caller
   owns resolving and pinning it; this leaf opens it with O_NOFOLLOW on the final component and
   never resolves it. Ancestors of the home are trusted as the caller supplied them.
-- `candidate` is untrusted. Root decision: **flat only**. The two supported roots are
-  `cache/images` and `cache/generated/images`; selection is an exact internal enum, not a path, so
-  the candidate must be exactly one component. Nesting, absolute strings, `.`/`..`, empty,
+- `candidate` is untrusted. Root decision: **flat only**. The three supported roots are
+  `cache/images`, `cache/generated/images` and `image_cache`; selection is an exact internal enum,
+  not a path, so the candidate must be exactly one component. Nesting, absolute strings,
+  `.`/`..`, empty,
   control/format characters, backslashes and over-long names are refused. Nested names would need a
-  separate reviewed amendment; no other root (legacy `image_cache`, `cache/documents`,
+  separate reviewed amendment; no other root (`cache/documents`,
   another profile) is ever consulted or used as a fallback.
 
 Method: open home and each selected literal cache directory with
@@ -50,11 +51,15 @@ MAX_NAME_BYTES = 128
 READ_CHUNK = 64 * 1024
 CACHE_COMPONENTS = ("cache", "images")
 GENERATED_CACHE_COMPONENTS = ("cache", "generated", "images")
+HISTORIC_CACHE_COMPONENTS = ("image_cache",)
 
 
 class CacheLayout(enum.Enum):
     LEGACY = "legacy_images"
     GENERATED = "generated_images"
+    HISTORIC_IMAGE_CACHE = "historic_image_cache"
+
+
 BYTES_LABEL = "unvalidated_raster_bytes"
 
 HOOK_NAMES = frozenset(
@@ -252,6 +257,8 @@ def read_profile_cache_image(
         components = CACHE_COMPONENTS
     elif cache_layout is CacheLayout.GENERATED:
         components = GENERATED_CACHE_COMPONENTS
+    elif cache_layout is CacheLayout.HISTORIC_IMAGE_CACHE:
+        components = HISTORIC_CACHE_COMPONENTS
     else:
         return _refuse(Outcome.CACHE_LAYOUT_INVALID)
     hooks = dict(_hooks or {})

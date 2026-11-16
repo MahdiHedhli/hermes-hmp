@@ -1,5 +1,10 @@
 # Root decisions
 
+The [historic image_cache amendment](HISTORIC_IMAGE_CACHE_AMENDMENT.md) proposes a
+third exact native layout with independent bounded source acceptance. It supersedes
+only the older C1 image_cache exclusion; runtime/private/device qualification is
+tracked separately. Other C1/path restrictions retain their original scope.
+
 Public record of the architecture decisions this feature was frozen on. Where another document here differs, this file wins. It records design decisions; the task evidence separately identifies reviewed components. No serving process, device or release is qualified.
 
 > **Superseding section (2026-10-02).** The exact-build gate described below (process-qualified

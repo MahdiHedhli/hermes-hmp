@@ -4825,3 +4825,13 @@ The binding matrix also passed nine actual Python3.11.15 child cases with
 source hashes unchanged. Three direct malformed-proof cases passed again after
 import/line-format cleanup. These are bounded checks, not full-plugin or device
 qualification.
+
+## Restore reviewed historic native image cache support — November 16, 2026
+
+Current-source native run43926962041 passes matrix/mutation but fails the historic
+case before descriptor mint; offline-XAI was not attempted. The candidate branch
+omits the previously reviewed exact `image_cache` layout amendment0590f453.
+Restore that exact same-profile flat-name layout, no-follow leaf and strict
+historical witnesses; do not broaden arbitrary paths or search/fallback.
+Targeted current tests and a new complete four-case qualification remain required.
+No host, provider, grant or device changes are included in source restoration.
