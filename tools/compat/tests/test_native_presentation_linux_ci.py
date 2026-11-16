@@ -75,7 +75,7 @@ def test_workflow_limits_trigger_permissions_and_exports_ciphertext_only():
     workflow = yaml.safe_load(path.read_text())
     assert workflow["permissions"] == {"contents": "read"}
     assert set(workflow["on"]) == {"push"}
-    assert workflow["on"]["push"]["branches"] == ["feat/native-offline-xai-images-20261116"]
+    assert workflow["on"]["push"]["branches"] == ["feat/native-f8-image-qualification-20261116"]
     job = workflow["jobs"]["complete-native-journey"]
     assert job["runs-on"] == "ubuntu-24.04" and job["timeout-minutes"] == 75
     steps = job["steps"]
@@ -85,7 +85,7 @@ def test_workflow_limits_trigger_permissions_and_exports_ciphertext_only():
         for step in steps[:2]
     )
     assert all(step["with"]["persist-credentials"] is False for step in steps[:2])
-    assert steps[1]["with"]["ref"] == "ed1afb082eb3e46cf2edae9d8f68fb67b09ee4df"
+    assert steps[1]["with"]["ref"] == "f8acc26834bf1275c34d09ccc3e51250bcd1e26b"
     artifact = steps[-1]
     assert artifact["uses"] == "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02"
     assert artifact["with"]["path"] == "${{ steps.encrypt.outputs.ciphertext }}"

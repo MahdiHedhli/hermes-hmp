@@ -139,3 +139,9 @@ def test_foreign_repository_object_refuses_before_hooks_or_setup_writes(tmp_path
     with pytest.raises(module.PresentationSourceStageError):
         module.stage_sources(tmp_path.resolve(), Foreign(), tmp_path.resolve())
     assert calls == [] and list(tmp_path.iterdir()) == []
+
+
+def test_complete_new_native_snapshot_size_exception_is_exact_commit_scoped():
+    assert module.snapshot_byte_limit("f8acc26834bf1275c34d09ccc3e51250bcd1e26b") == 149236948
+    assert module.snapshot_byte_limit("ed1afb082eb3e46cf2edae9d8f68fb67b09ee4df") == 128 * 1024**2
+    assert module.snapshot_byte_limit(COMMIT) == 128 * 1024**2

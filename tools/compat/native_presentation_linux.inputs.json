@@ -3,9 +3,9 @@
   "purpose": "Isolated Linux native presentation/media fixture inputs only; not product runtime gates",
   "native": {
     "repository": "NousResearch/hermes-agent",
-    "commit": "ed1afb082eb3e46cf2edae9d8f68fb67b09ee4df",
+    "commit": "f8acc26834bf1275c34d09ccc3e51250bcd1e26b",
     "project": "pyproject.toml",
-    "projectSHA256": "b1531ab4807bc64441a3fe3f56d6c166dcf0074e3510e061a1377c4d05d3ca24",
+    "projectSHA256": "6cb17aeeb63c8ecd78b748990598d05a8fe87e74f89fb2013a344d378a55bf1a",
     "sourceExtensions": [
       ".py",
       ".json",
@@ -13,8 +13,8 @@
       ".yaml",
       ".yml"
     ],
-    "snapshotFiles": 12185,
-    "gitRegularFiles": 22315,
+    "snapshotFiles": 14978,
+    "gitRegularFiles": 26162,
     "allSnapshotBytesMatchedGitBlobs": true
   },
   "hmp": {
@@ -27,7 +27,7 @@
     "allSnapshotBytesMatchedGitBlobs": true
   },
   "sourceManifest": {
-    "sha256": "28f13dcb4a90fce810bc0cf8aecb35b33584f5095e5e427a1887637135bcc702",
+    "sha256": "83e56c4033458c739da1660902fd5d72ef91afdb83a696287be7348eec3500a6",
     "serialization": "json.dumps(sort_keys=True,indent=2), no trailing newline"
   },
   "resolution": {
@@ -51,9 +51,33 @@
     "hashes": 2113
   },
   "limits": [
-    "Fresh three-scenario qualification is required; the earlier b86 two-scenario result does not qualify changed HMP code.",
+    "Fresh full four-scenario qualification is required for f8acc268; prior ed1afb08 runtime does not qualify this changed native source.",
     "Historic scenario uses native cache_image_from_bytes with synthetic tool rows; no provider generation is claimed.",
     "No live host/device/permission/provider/release changes.",
     "Linux results do not qualify macOS deleted-WAL scanner ownership."
-  ]
+  ],
+  "nativeComparison": {
+    "oldNative": "ed1afb082eb3e46cf2edae9d8f68fb67b09ee4df",
+    "newNative": "f8acc26834bf1275c34d09ccc3e51250bcd1e26b",
+    "directRuntimeAdded": [],
+    "directRuntimeRemoved": [
+      "tenacity==9.2.1; python_version >= '3.14'"
+    ],
+    "pythonAndUvLockEntriesByteSemanticallyEqual": true,
+    "changedSoftwarePackages": [
+      "chromium",
+      "git",
+      "just",
+      "llamacpp-cpu",
+      "llamacpp-cuda",
+      "llamacpp-hip",
+      "llamacpp-metal",
+      "llamacpp-vulkan",
+      "npm",
+      "pnpm",
+      "whispercpp-cpu"
+    ],
+    "requirementsUnchangedSHA256": "9edcfc564b10ad1ffca7a3d7a02d1a855a5d203cb807d566b85ce5598eb9df94",
+    "qualification": "Existing synthetic fixture dependency environment only; not full native PM runtime or live upgrade qualification."
+  }
 }

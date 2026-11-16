@@ -28,7 +28,7 @@ _IMAGE = (
 )
 _ENTRY_SHA = "dccf1426bda9940f4af61b468a4f7e218d073d02990983ddb5dcc4fd17c33874"
 _FD_SHA = "692ae20b7bf86016dc7d7f27a678798cf3eb54dad1d601a4376e77b058554056"
-_MANIFEST_SHA = "28f13dcb4a90fce810bc0cf8aecb35b33584f5095e5e427a1887637135bcc702"
+_MANIFEST_SHA = "83e56c4033458c739da1660902fd5d72ef91afdb83a696287be7348eec3500a6"
 _LABEL = "app.hermesbot.native-presentation-fixture"
 
 
@@ -72,7 +72,7 @@ def verify_sources(source):
     document = json.loads((source / "source-manifest.json").read_text())
     count = 0
     for label, commit, size in (
-        ("native", "ed1afb082eb3e46cf2edae9d8f68fb67b09ee4df", 12185),
+        ("native", "f8acc26834bf1275c34d09ccc3e51250bcd1e26b", 14978),
         ("hmp", "a4a157a5d04a20f23dddc6d614d462b758a947f4", 1021),
     ):
         item = document["sources"][label]

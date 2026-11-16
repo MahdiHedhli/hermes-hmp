@@ -20,10 +20,15 @@ from contextlib import contextmanager
 from pathlib import Path, PurePosixPath
 
 _EXTENSIONS = frozenset((".py", ".json", ".toml", ".yaml", ".yml"))
-_NATIVE = "ed1afb082eb3e46cf2edae9d8f68fb67b09ee4df"
+_NATIVE = "f8acc26834bf1275c34d09ccc3e51250bcd1e26b"
 _HMP = "a4a157a5d04a20f23dddc6d614d462b758a947f4"
-_MANIFEST = "28f13dcb4a90fce810bc0cf8aecb35b33584f5095e5e427a1887637135bcc702"
+_MANIFEST = "83e56c4033458c739da1660902fd5d72ef91afdb83a696287be7348eec3500a6"
 _DRIVER = None
+
+
+def snapshot_byte_limit(commit):
+    # Measured complete public f8 snapshot; other commits retain the existing cap.
+    return 149236948 if commit == "f8acc26834bf1275c34d09ccc3e51250bcd1e26b" else 128 * 1024**2
 
 
 class PresentationSourceStageError(RuntimeError):
@@ -138,7 +143,7 @@ def extract_snapshot(archive, destination, commit, literal):
                 _require(member.mode == (0o700 if mode == "100755" else 0o600))
                 _require(0 <= member.size <= 4 * 1024 * 1024)
                 total += member.size
-                _require(total <= 128 * 1024 * 1024)
+                _require(total <= snapshot_byte_limit(commit))
                 payload = stream.extractfile(member)
                 _require(payload is not None)
                 with payload:
@@ -180,7 +185,7 @@ def stage_sources(root, native_repository, hmp_repository):
     _require(match is not None and tuple(map(int, match.groups())) >= (2, 54, 0))
     sources = {}
     for label, repository, commit, extensions, count in (
-        ("native", native_repository, _NATIVE, _EXTENSIONS, 12185),
+        ("native", native_repository, _NATIVE, _EXTENSIONS, 14978),
         ("hmp", hmp_repository, _HMP, None, 1021),
     ):
         _require(

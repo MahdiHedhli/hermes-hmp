@@ -237,3 +237,37 @@ it now records publicOutputFailed privately and continues the original actor
 reconciliation. A closed-console/lost-start-response synthetic case verifies
 same-ID observation through terminal with no create/start replay. This does not
 turn a canceled/unknown older actor into a released or accepted one.
+
+## Newer native f8 qualification — November 16 (pending runtime)
+
+The focused `feat/native-f8-image-qualification-20261116` candidate replaces only
+native fixture source ed1afb08 with immutable
+`f8acc26834bf1275c34d09ccc3e51250bcd1e26b`, canonical tree
+`3d77c418ac8f348899abf916b1ed4d6114ec5bcb`. Public HMP remains exact a4a157a5;
+the actor, complete matrix/mutation/historic/offline_xai journeys and natural
+602-second waits are retained byte-for-byte. No private plugin source is uploaded.
+
+Independent Git blob measurement yields 14,978 selected native files, 1,021 HMP
+files and 15,999 total, with golden manifest
+`83e56c4033458c739da1660902fd5d72ef91afdb83a696287be7348eec3500a6`.
+Actual archive extraction and complete controller verification match that separate
+measurement. Native selected bytes total 149,236,948, exceeding the old 128 MiB
+source aggregate. Only this exact native commit receives that measured limit;
+other inputs retain the original limit. Member/path/blob/type/mode checks and the
+160 MiB archive bound remain. The initial failed root is quarantined and retained;
+the corrected stage used a separate fresh root. This is trusted fixed-source
+preparation, not an arbitrary upload extractor or a hard process-RSS claim.
+
+The full Python/uv PM entries are unchanged. The 77-pin hashed synthetic fixture
+environment is retained: native adds no direct base runtime dependency and removes
+one tenacity direct pin. Other native software lock changes are inventoried in
+`native_presentation_linux.inputs.json`; this fixture does not install those tools
+or qualify the full PM application environment, browser/audio/local-model features,
+a live host upgrade or native plugin SDK support. Source checks are not runtime.
+
+Preparation/controller tests pass 155 cases. Initial invocations lacking pytest
+and the repository's configured import mode are retained as setup errors, not
+runtime failures or product passes. Independent review and the complete four-case
+Linux execution remain required. Public-source success cannot qualify the private
+13-production-file-different integration, Darwin WAL scanner ownership, phone
+rendering/startup, actual providers, full attachment/group functionality or release.

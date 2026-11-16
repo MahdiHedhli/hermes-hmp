@@ -202,7 +202,7 @@ def prepare(root, native_repository, hmp_repository):
     sources = root / "sources"
     sources.mkdir(mode=0o700)
     stage.stage_sources(sources, native_repository, hmp_repository)
-    require(controller.verify_sources(sources) == 13206)
+    require(controller.verify_sources(sources) == 15999)
     lock = json.loads((sources / "native/pm/lock.json").read_text())["packages"]
     for name, pin in _PINS.items():
         require(lock[name]["version"] == pin["version"])
@@ -325,7 +325,7 @@ def prepare(root, native_repository, hmp_repository):
     controller.save(manifest, runtime)
     expected_hash = digest(manifest)
     controller.verify_runtime(prefix, venv, manifest, expected_hash)
-    require(controller.verify_sources(sources) == 13206)
+    require(controller.verify_sources(sources) == 15999)
     output = root / "run"
     output.mkdir(mode=0o700)
     result = {
