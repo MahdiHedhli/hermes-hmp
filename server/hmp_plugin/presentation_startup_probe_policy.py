@@ -149,11 +149,9 @@ def _cursor_tail(cursor):
             and cursor.missing is None
         )
         _need(
-            (
-                cursor.expected is None
-                if cursor.action == "component_stat"
-                else cursor.expected is not None
-            )
+            cursor.expected is None
+            if cursor.action == "component_stat"
+            else cursor.expected is not None
         )
     else:
         _need(

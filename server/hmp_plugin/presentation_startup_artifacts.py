@@ -7667,10 +7667,8 @@ class StartupArtifactOwner:
                         or (link_raw_type(link_pin_row[1]) is not link_raw_module)
                         or (link_raw_type(link_pin_row[2]) is not link_raw_dict)
                         or link_raw_any(
-                            (
-                                link_raw_type(link_pin_k) is not link_raw_str
-                                for link_pin_k in link_pin_row[2]
-                            )
+                            link_raw_type(link_pin_k) is not link_raw_str
+                            for link_pin_k in link_pin_row[2]
                         )
                         or (link_pin_environment[2].get(link_pin_name) is not link_pin_row[1])
                         or (link_raw_vars(link_pin_row[1]) is not link_pin_row[2])
@@ -7741,21 +7739,17 @@ class StartupArtifactOwner:
                         elif (
                             link_raw_type(link_pin_kw) is not link_raw_dict
                             or link_raw_any(
-                                (
-                                    link_raw_type(link_pin_k) is not link_raw_str
-                                    for link_pin_k in link_pin_kw
-                                )
+                                link_raw_type(link_pin_k) is not link_raw_str
+                                for link_pin_k in link_pin_kw
                             )
                             or link_raw_len(link_pin_kw) != link_raw_len(link_pin_row[6])
                             or link_raw_any(
-                                (
-                                    link_raw_type(link_pin_pair) is not link_raw_tuple
-                                    or link_raw_len(link_pin_pair) != 2
-                                    or link_raw_type(link_pin_pair[0]) is not link_raw_str
-                                    or (link_pin_pair[0] not in link_pin_kw)
-                                    or (link_pin_kw[link_pin_pair[0]] is not link_pin_pair[1])
-                                    for link_pin_pair in link_pin_row[6]
-                                )
+                                link_raw_type(link_pin_pair) is not link_raw_tuple
+                                or link_raw_len(link_pin_pair) != 2
+                                or link_raw_type(link_pin_pair[0]) is not link_raw_str
+                                or (link_pin_pair[0] not in link_pin_kw)
+                                or (link_pin_kw[link_pin_pair[0]] is not link_pin_pair[1])
+                                for link_pin_pair in link_pin_row[6]
                             )
                         ):
                             raise refusal from None
@@ -7903,11 +7897,9 @@ class StartupArtifactOwner:
                     if (
                         link_raw_type(link_g_registry) is not link_raw_dict
                         or link_raw_any(
-                            (link_raw_type(k) is not link_raw_str for k in link_g_registry)
+                            link_raw_type(k) is not link_raw_str for k in link_g_registry
                         )
-                        or link_raw_any(
-                            (link_raw_type(k) is not link_raw_str for k in link_g_names)
-                        )
+                        or link_raw_any(link_raw_type(k) is not link_raw_str for k in link_g_names)
                         or (link_raw_type(link_pin_generated_rows) is not link_raw_tuple)
                         or (link_raw_len(link_pin_generated_rows) != 7)
                     ):
@@ -8015,7 +8007,7 @@ class StartupArtifactOwner:
                             link_raw_type(link_g_closure) is not link_raw_tuple
                             or link_raw_len(link_g_closure) != link_raw_len(link_g_cells)
                             or link_raw_any(
-                                (link_raw_type(c) is not link_raw_cell for c in link_g_closure)
+                                link_raw_type(c) is not link_raw_cell for c in link_g_closure
                             )
                         ):
                             raise refusal from None
@@ -8045,7 +8037,7 @@ class StartupArtifactOwner:
                             if (
                                 link_raw_type(link_g_freevars) is not link_raw_tuple
                                 or link_raw_any(
-                                    (link_raw_type(n) is not link_raw_str for n in link_g_freevars)
+                                    link_raw_type(n) is not link_raw_str for n in link_g_freevars
                                 )
                                 or link_g_freevars != link_g_expected_freevars
                                 or (
@@ -8272,14 +8264,12 @@ class StartupArtifactOwner:
                     link_seal_helper_primitive_pairs,
                 ) = link_helper_origin[5]
                 if (
-                    link_raw_any(
-                        (link_raw_type(k) is not link_raw_str for k in link_helper_registry)
-                    )
+                    link_raw_any(link_raw_type(k) is not link_raw_str for k in link_helper_registry)
                     or link_helper_registry.get("hmp_startup.retained_binding_origin")
                     is not link_seal_helper_module
                     or link_raw_vars(link_seal_helper_module) is not link_seal_helper_namespace
                     or link_raw_any(
-                        (link_raw_type(k) is not link_raw_str for k in link_seal_helper_namespace)
+                        link_raw_type(k) is not link_raw_str for k in link_seal_helper_namespace
                     )
                     or (
                         link_raw_len(link_seal_helper_namespace)
@@ -8294,10 +8284,8 @@ class StartupArtifactOwner:
                         is not link_seal_helper_builtin_namespace
                     )
                     or link_raw_any(
-                        (
-                            link_raw_type(k) is not link_raw_str
-                            for k in link_seal_helper_builtin_namespace
-                        )
+                        link_raw_type(k) is not link_raw_str
+                        for k in link_seal_helper_builtin_namespace
                     )
                     or (
                         link_seal_helper_namespace.get("__builtins__")
@@ -8462,7 +8450,7 @@ class StartupArtifactOwner:
                 link_seal_helper_error_names = link_raw_vars(link_seal_helper_error_kind)
                 if (
                     link_raw_any(
-                        (link_raw_type(k) is not link_raw_str for k in link_seal_helper_error_names)
+                        link_raw_type(k) is not link_raw_str for k in link_seal_helper_error_names
                     )
                     or link_raw_len(link_seal_helper_error_names)
                     != link_raw_len(link_seal_helper_error_pairs)
@@ -8520,17 +8508,13 @@ class StartupArtifactOwner:
                     and link_raw_type(link_hdata_system_names) is link_raw_dict
                     and (link_raw_vars(link_hdata_system) is link_hdata_system_names)
                     and link_helper_all(
-                        (
-                            link_raw_type(link_hdata_key) is link_raw_str
-                            for link_hdata_key in link_hdata_system_names
-                        )
+                        link_raw_type(link_hdata_key) is link_raw_str
+                        for link_hdata_key in link_hdata_system_names
                     )
                     and (link_raw_type(link_hdata_registry) is link_raw_dict)
                     and link_helper_all(
-                        (
-                            link_raw_type(link_hdata_key) is link_raw_str
-                            for link_hdata_key in link_hdata_registry
-                        )
+                        link_raw_type(link_hdata_key) is link_raw_str
+                        for link_hdata_key in link_hdata_registry
                     )
                     and (link_hdata_system_names.get("modules") is link_hdata_registry)
                     and (link_raw_type(link_hdata_modules) is link_raw_tuple)
@@ -8548,10 +8532,8 @@ class StartupArtifactOwner:
                 if (
                     link_raw_type(link_hdata_builtin_namespace) is link_raw_dict
                     and link_helper_all(
-                        (
-                            link_raw_type(link_hdata_key) is link_raw_str
-                            for link_hdata_key in link_hdata_builtin_namespace
-                        )
+                        link_raw_type(link_hdata_key) is link_raw_str
+                        for link_hdata_key in link_hdata_builtin_namespace
                     )
                 ) is not True:
                     raise refusal from None
@@ -8573,16 +8555,12 @@ class StartupArtifactOwner:
                         link_raw_type(link_hdata_module) is link_raw_module
                         and link_raw_type(link_hdata_namespace) is link_raw_dict
                         and link_helper_all(
-                            (
-                                link_raw_type(link_hdata_key) is link_raw_str
-                                for link_hdata_key in link_hdata_registry
-                            )
+                            link_raw_type(link_hdata_key) is link_raw_str
+                            for link_hdata_key in link_hdata_registry
                         )
                         and link_helper_all(
-                            (
-                                link_raw_type(link_hdata_key) is link_raw_str
-                                for link_hdata_key in link_hdata_namespace
-                            )
+                            link_raw_type(link_hdata_key) is link_raw_str
+                            for link_hdata_key in link_hdata_namespace
                         )
                         and (link_hdata_registry.get(link_hdata_name) is link_hdata_module)
                         and (link_raw_vars(link_hdata_module) is link_hdata_namespace)
@@ -8636,10 +8614,8 @@ class StartupArtifactOwner:
                     if (
                         link_raw_type(link_hdata_kind) is link_raw_type
                         and link_helper_all(
-                            (
-                                link_raw_type(link_hdata_key) is link_raw_str
-                                for link_hdata_key in link_hdata_modules[link_hdata_index][1]
-                            )
+                            link_raw_type(link_hdata_key) is link_raw_str
+                            for link_hdata_key in link_hdata_modules[link_hdata_index][1]
                         )
                         and (
                             link_hdata_modules[link_hdata_index][1].get(link_hdata_name)
@@ -8651,10 +8627,8 @@ class StartupArtifactOwner:
                     link_hdata_names = link_raw_vars(link_hdata_kind)
                     if (
                         link_helper_all(
-                            (
-                                link_raw_type(link_hdata_key) is link_raw_str
-                                for link_hdata_key in link_hdata_names
-                            )
+                            link_raw_type(link_hdata_key) is link_raw_str
+                            for link_hdata_key in link_hdata_names
                         )
                         and link_raw_len(link_hdata_names) == link_raw_len(link_hdata_keys)
                     ) is not True:
@@ -8800,10 +8774,8 @@ class StartupArtifactOwner:
                             raise refusal from None
                 if (
                     link_helper_all(
-                        (
-                            link_raw_type(link_hdata_key) is link_raw_str
-                            for link_hdata_key in link_hdata_modules[0][1]
-                        )
+                        link_raw_type(link_hdata_key) is link_raw_str
+                        for link_hdata_key in link_hdata_modules[0][1]
                     )
                     and link_hdata_modules[0][1].get("GatewayRecipeOwner")
                     is link_hdata_classes[2][0]
@@ -8815,16 +8787,12 @@ class StartupArtifactOwner:
                     raise refusal from None
                 if (
                     link_helper_all(
-                        (
-                            link_raw_type(link_hdata_key) is link_raw_str
-                            for link_hdata_key in link_hdata_modules[0][1]
-                        )
+                        link_raw_type(link_hdata_key) is link_raw_str
+                        for link_hdata_key in link_hdata_modules[0][1]
                     )
                     and link_helper_all(
-                        (
-                            link_raw_type(link_hdata_key) is link_raw_str
-                            for link_hdata_key in link_hdata_modules[1][1]
-                        )
+                        link_raw_type(link_hdata_key) is link_raw_str
+                        for link_hdata_key in link_hdata_modules[1][1]
                     )
                     and (
                         link_hdata_modules[0][1].get("StartupSelectionOwner")
@@ -8852,28 +8820,20 @@ class StartupArtifactOwner:
                     raise refusal from None
                 if (
                     link_helper_all(
-                        (
-                            link_raw_type(link_hdata_key) is link_raw_str
-                            for link_hdata_key in link_hdata_modules[0][1]
-                        )
+                        link_raw_type(link_hdata_key) is link_raw_str
+                        for link_hdata_key in link_hdata_modules[0][1]
                     )
                     and link_helper_all(
-                        (
-                            link_raw_type(link_hdata_key) is link_raw_str
-                            for link_hdata_key in link_hdata_modules[1][1]
-                        )
+                        link_raw_type(link_hdata_key) is link_raw_str
+                        for link_hdata_key in link_hdata_modules[1][1]
                     )
                     and link_helper_all(
-                        (
-                            link_raw_type(link_hdata_key) is link_raw_str
-                            for link_hdata_key in link_hdata_modules[2][1]
-                        )
+                        link_raw_type(link_hdata_key) is link_raw_str
+                        for link_hdata_key in link_hdata_modules[2][1]
                     )
                     and link_helper_all(
-                        (
-                            link_raw_type(link_hdata_key) is link_raw_str
-                            for link_hdata_key in link_hdata_modules[3][1]
-                        )
+                        link_raw_type(link_hdata_key) is link_raw_str
+                        for link_hdata_key in link_hdata_modules[3][1]
                     )
                     and (
                         link_hdata_modules[0][1].get("GatewayActivationOwner")
@@ -8895,10 +8855,8 @@ class StartupArtifactOwner:
                     raise refusal from None
                 if (
                     link_helper_all(
-                        (
-                            link_raw_type(link_hdata_key) is link_raw_str
-                            for link_hdata_key in link_hdata_modules[4][1]
-                        )
+                        link_raw_type(link_hdata_key) is link_raw_str
+                        for link_hdata_key in link_hdata_modules[4][1]
                     )
                     and link_hdata_modules[4][1].get("_Scope") is link_hdata_classes[4][0]
                     and (
@@ -8911,10 +8869,8 @@ class StartupArtifactOwner:
                     link_hdata_namespace = link_hdata_modules[link_hdata_index][1]
                     if (
                         link_helper_all(
-                            (
-                                link_raw_type(link_hdata_key) is link_raw_str
-                                for link_hdata_key in link_hdata_namespace
-                            )
+                            link_raw_type(link_hdata_key) is link_raw_str
+                            for link_hdata_key in link_hdata_namespace
                         )
                         and link_hdata_namespace.get("ExpectedArtifact")
                         is link_hdata_classes[13][0]
@@ -8927,10 +8883,8 @@ class StartupArtifactOwner:
                         raise refusal from None
                 if (
                     link_helper_all(
-                        (
-                            link_raw_type(link_hdata_key) is link_raw_str
-                            for link_hdata_key in link_hdata_modules[5][1]
-                        )
+                        link_raw_type(link_hdata_key) is link_raw_str
+                        for link_hdata_key in link_hdata_modules[5][1]
                     )
                     and link_hdata_modules[2][1].get("_APPROVAL_OWNER_TYPE")
                     is link_hdata_classes[23][0]
@@ -8964,10 +8918,8 @@ class StartupArtifactOwner:
                     raise refusal from None
                 if (
                     link_helper_all(
-                        (
-                            link_raw_type(link_hdata_key) is link_raw_str
-                            for link_hdata_key in link_hdata_modules[6][1]
-                        )
+                        link_raw_type(link_hdata_key) is link_raw_str
+                        for link_hdata_key in link_hdata_modules[6][1]
                     )
                     and link_hdata_modules[5][1].get("GatewayEntryOwner")
                     is link_hdata_classes[27][0]
@@ -9095,13 +9047,8 @@ class StartupArtifactOwner:
                     or (not 1 <= link_raw_len(link_pin_encoding) <= 64)
                     or (not 1 <= link_raw_len(link_pin_errors) <= 64)
                     or link_raw_any(
-                        (
-                            not (
-                                link_pin_c.isascii()
-                                and (link_pin_c.isalnum() or link_pin_c in "._-")
-                            )
-                            for link_pin_c in link_pin_encoding + link_pin_errors
-                        )
+                        not (link_pin_c.isascii() and (link_pin_c.isalnum() or link_pin_c in "._-"))
+                        for link_pin_c in link_pin_encoding + link_pin_errors
                     )
                 ):
                     raise refusal from None
@@ -9134,10 +9081,8 @@ class StartupArtifactOwner:
                         is not link_engine_dependencies[1]
                     )
                     or link_raw_any(
-                        (
-                            link_raw_type(link_engine_k) is not link_raw_str
-                            for link_engine_k in link_engine_dependencies[1]
-                        )
+                        link_raw_type(link_engine_k) is not link_raw_str
+                        for link_engine_k in link_engine_dependencies[1]
                     )
                     or (link_raw_type(link_engine_dependencies[2]) is not link_raw_dict)
                     or (
@@ -9145,10 +9090,8 @@ class StartupArtifactOwner:
                         is not link_engine_dependencies[2]
                     )
                     or link_raw_any(
-                        (
-                            link_raw_type(link_engine_k) is not link_raw_str
-                            for link_engine_k in link_engine_dependencies[2]
-                        )
+                        link_raw_type(link_engine_k) is not link_raw_str
+                        for link_engine_k in link_engine_dependencies[2]
                     )
                     or (link_raw_type(link_engine_dependencies[3]) is not link_raw_tuple)
                     or (link_raw_len(link_engine_dependencies[3]) != 5)
@@ -9226,10 +9169,8 @@ class StartupArtifactOwner:
                         or (link_raw_type(link_engine_row[1]) is not link_raw_module)
                         or (link_raw_type(link_engine_row[2]) is not link_raw_dict)
                         or link_raw_any(
-                            (
-                                link_raw_type(link_engine_k) is not link_raw_str
-                                for link_engine_k in link_engine_row[2]
-                            )
+                            link_raw_type(link_engine_k) is not link_raw_str
+                            for link_engine_k in link_engine_row[2]
                         )
                         or (
                             link_engine_dependencies[2].get(link_engine_expected_name)
@@ -9239,17 +9180,12 @@ class StartupArtifactOwner:
                         or (link_raw_type(link_engine_row[3]) is not link_raw_tuple)
                         or (link_raw_len(link_engine_row[2]) != link_raw_len(link_engine_row[3]))
                         or link_raw_any(
-                            (
-                                link_raw_type(link_engine_pair) is not link_raw_tuple
-                                or link_raw_len(link_engine_pair) != 2
-                                or link_raw_type(link_engine_pair[0]) is not link_raw_str
-                                or (link_engine_pair[0] not in link_engine_row[2])
-                                or (
-                                    link_engine_row[2][link_engine_pair[0]]
-                                    is not link_engine_pair[1]
-                                )
-                                for link_engine_pair in link_engine_row[3]
-                            )
+                            link_raw_type(link_engine_pair) is not link_raw_tuple
+                            or link_raw_len(link_engine_pair) != 2
+                            or link_raw_type(link_engine_pair[0]) is not link_raw_str
+                            or (link_engine_pair[0] not in link_engine_row[2])
+                            or (link_engine_row[2][link_engine_pair[0]] is not link_engine_pair[1])
+                            for link_engine_pair in link_engine_row[3]
                         )
                         or (link_raw_type(link_engine_row[4]) is not link_raw_tuple)
                         or (link_raw_type(link_engine_row[5]) is not link_raw_tuple)
@@ -9273,25 +9209,21 @@ class StartupArtifactOwner:
                         link_engine_names = link_raw_vars(link_engine_kind)
                         if (
                             link_raw_any(
-                                (
-                                    link_raw_type(link_engine_k) is not link_raw_str
-                                    for link_engine_k in link_engine_names
-                                )
+                                link_raw_type(link_engine_k) is not link_raw_str
+                                for link_engine_k in link_engine_names
                             )
                             or link_raw_type(link_engine_members) is not link_raw_tuple
                             or link_raw_len(link_engine_names) != link_raw_len(link_engine_members)
                             or link_raw_any(
-                                (
-                                    link_raw_type(link_engine_pair) is not link_raw_tuple
-                                    or link_raw_len(link_engine_pair) != 2
-                                    or link_raw_type(link_engine_pair[0]) is not link_raw_str
-                                    or (link_engine_pair[0] not in link_engine_names)
-                                    or (
-                                        link_engine_names[link_engine_pair[0]]
-                                        is not link_engine_pair[1]
-                                    )
-                                    for link_engine_pair in link_engine_members
+                                link_raw_type(link_engine_pair) is not link_raw_tuple
+                                or link_raw_len(link_engine_pair) != 2
+                                or link_raw_type(link_engine_pair[0]) is not link_raw_str
+                                or (link_engine_pair[0] not in link_engine_names)
+                                or (
+                                    link_engine_names[link_engine_pair[0]]
+                                    is not link_engine_pair[1]
                                 )
+                                for link_engine_pair in link_engine_members
                             )
                         ):
                             raise refusal from None
@@ -9324,16 +9256,12 @@ class StartupArtifactOwner:
                         ):
                             raise refusal from None
                         if not link_raw_any(
-                            (
-                                link_engine_namespace is link_engine_prior
-                                for link_engine_prior in link_engine_checked_namespaces
-                            )
+                            link_engine_namespace is link_engine_prior
+                            for link_engine_prior in link_engine_checked_namespaces
                         ):
                             if link_raw_any(
-                                (
-                                    link_raw_type(link_engine_k) is not link_raw_str
-                                    for link_engine_k in link_engine_namespace
-                                )
+                                link_raw_type(link_engine_k) is not link_raw_str
+                                for link_engine_k in link_engine_namespace
                             ):
                                 raise refusal from None
                             link_engine_checked_namespaces.append(link_engine_namespace)
@@ -9343,24 +9271,17 @@ class StartupArtifactOwner:
                         elif (
                             link_raw_type(link_engine_kw) is not link_raw_dict
                             or link_raw_any(
-                                (
-                                    link_raw_type(link_engine_k) is not link_raw_str
-                                    for link_engine_k in link_engine_kw
-                                )
+                                link_raw_type(link_engine_k) is not link_raw_str
+                                for link_engine_k in link_engine_kw
                             )
                             or link_raw_len(link_engine_kw) != link_raw_len(link_engine_pairs)
                             or link_raw_any(
-                                (
-                                    link_raw_type(link_engine_pair) is not link_raw_tuple
-                                    or link_raw_len(link_engine_pair) != 2
-                                    or link_raw_type(link_engine_pair[0]) is not link_raw_str
-                                    or (link_engine_pair[0] not in link_engine_kw)
-                                    or (
-                                        link_engine_kw[link_engine_pair[0]]
-                                        is not link_engine_pair[1]
-                                    )
-                                    for link_engine_pair in link_engine_pairs
-                                )
+                                link_raw_type(link_engine_pair) is not link_raw_tuple
+                                or link_raw_len(link_engine_pair) != 2
+                                or link_raw_type(link_engine_pair[0]) is not link_raw_str
+                                or (link_engine_pair[0] not in link_engine_kw)
+                                or (link_engine_kw[link_engine_pair[0]] is not link_engine_pair[1])
+                                for link_engine_pair in link_engine_pairs
                             )
                         ):
                             raise refusal from None
@@ -9382,14 +9303,12 @@ class StartupArtifactOwner:
                         ):
                             raise refusal from None
                 link_primitive_audit_rows = link_raw_tuple(
-                    (
-                        row
-                        for row in link_engine_origin[2]
-                        if link_raw_type(row) is link_raw_tuple
-                        and link_raw_len(row) == 7
-                        and (link_raw_type(row[0]) is link_raw_str)
-                        and (row[0] == "_engine_origin_tail")
-                    )
+                    row
+                    for row in link_engine_origin[2]
+                    if link_raw_type(row) is link_raw_tuple
+                    and link_raw_len(row) == 7
+                    and (link_raw_type(row[0]) is link_raw_str)
+                    and (row[0] == "_engine_origin_tail")
                 )
                 if (
                     link_raw_len(link_primitive_audit_rows) != 1
@@ -9405,7 +9324,7 @@ class StartupArtifactOwner:
                     or link_raw_type(link_primitive_audit_kw) is not link_raw_dict
                     or link_primitive_audit_checker.__kwdefaults__ is not link_primitive_audit_kw
                     or link_raw_any(
-                        (link_raw_type(k) is not link_raw_str for k in link_primitive_audit_kw)
+                        link_raw_type(k) is not link_raw_str for k in link_primitive_audit_kw
                     )
                 ):
                     raise refusal from None
@@ -9451,10 +9370,7 @@ class StartupArtifactOwner:
                 link_primitive_audit_builtins = link_raw_vars(link_primitive_audit_id.__self__)
                 if (
                     link_raw_any(
-                        (
-                            link_raw_type(k) is not link_raw_str
-                            for k in link_primitive_audit_builtins
-                        )
+                        link_raw_type(k) is not link_raw_str for k in link_primitive_audit_builtins
                     )
                     or link_primitive_audit_checker.__builtins__
                     is not link_primitive_audit_builtins
@@ -9483,7 +9399,7 @@ class StartupArtifactOwner:
                     raise refusal from None
                 link_primitive_audit_map_names = link_raw_vars(link_primitive_audit_map)
                 if link_raw_any(
-                    (link_raw_type(k) is not link_raw_str for k in link_primitive_audit_map_names)
+                    link_raw_type(k) is not link_raw_str for k in link_primitive_audit_map_names
                 ):
                     raise refusal from None
                 link_primitive_audit_new = link_primitive_audit_map_names.get("__new__")
@@ -9505,10 +9421,7 @@ class StartupArtifactOwner:
                 link_primitive_audit_operator = link_raw_vars(link_primitive_audit_not.__self__)
                 if (
                     link_raw_any(
-                        (
-                            link_raw_type(k) is not link_raw_str
-                            for k in link_primitive_audit_operator
-                        )
+                        link_raw_type(k) is not link_raw_str for k in link_primitive_audit_operator
                     )
                     or link_primitive_audit_operator.get("is_not") is not link_primitive_audit_not
                 ):
@@ -9766,10 +9679,8 @@ class StartupArtifactOwner:
                         or (link_raw_type(link_pin_row[1]) is not link_raw_module)
                         or (link_raw_type(link_pin_row[2]) is not link_raw_dict)
                         or link_raw_any(
-                            (
-                                link_raw_type(link_pin_k) is not link_raw_str
-                                for link_pin_k in link_pin_row[2]
-                            )
+                            link_raw_type(link_pin_k) is not link_raw_str
+                            for link_pin_k in link_pin_row[2]
                         )
                         or (link_pin_environment[2].get(link_pin_name) is not link_pin_row[1])
                         or (link_raw_vars(link_pin_row[1]) is not link_pin_row[2])
@@ -9840,21 +9751,17 @@ class StartupArtifactOwner:
                         elif (
                             link_raw_type(link_pin_kw) is not link_raw_dict
                             or link_raw_any(
-                                (
-                                    link_raw_type(link_pin_k) is not link_raw_str
-                                    for link_pin_k in link_pin_kw
-                                )
+                                link_raw_type(link_pin_k) is not link_raw_str
+                                for link_pin_k in link_pin_kw
                             )
                             or link_raw_len(link_pin_kw) != link_raw_len(link_pin_row[6])
                             or link_raw_any(
-                                (
-                                    link_raw_type(link_pin_pair) is not link_raw_tuple
-                                    or link_raw_len(link_pin_pair) != 2
-                                    or link_raw_type(link_pin_pair[0]) is not link_raw_str
-                                    or (link_pin_pair[0] not in link_pin_kw)
-                                    or (link_pin_kw[link_pin_pair[0]] is not link_pin_pair[1])
-                                    for link_pin_pair in link_pin_row[6]
-                                )
+                                link_raw_type(link_pin_pair) is not link_raw_tuple
+                                or link_raw_len(link_pin_pair) != 2
+                                or link_raw_type(link_pin_pair[0]) is not link_raw_str
+                                or (link_pin_pair[0] not in link_pin_kw)
+                                or (link_pin_kw[link_pin_pair[0]] is not link_pin_pair[1])
+                                for link_pin_pair in link_pin_row[6]
                             )
                         ):
                             raise refusal from None
@@ -10002,11 +9909,9 @@ class StartupArtifactOwner:
                     if (
                         link_raw_type(link_g_registry) is not link_raw_dict
                         or link_raw_any(
-                            (link_raw_type(k) is not link_raw_str for k in link_g_registry)
+                            link_raw_type(k) is not link_raw_str for k in link_g_registry
                         )
-                        or link_raw_any(
-                            (link_raw_type(k) is not link_raw_str for k in link_g_names)
-                        )
+                        or link_raw_any(link_raw_type(k) is not link_raw_str for k in link_g_names)
                         or (link_raw_type(link_pin_generated_rows) is not link_raw_tuple)
                         or (link_raw_len(link_pin_generated_rows) != 7)
                     ):
@@ -10114,7 +10019,7 @@ class StartupArtifactOwner:
                             link_raw_type(link_g_closure) is not link_raw_tuple
                             or link_raw_len(link_g_closure) != link_raw_len(link_g_cells)
                             or link_raw_any(
-                                (link_raw_type(c) is not link_raw_cell for c in link_g_closure)
+                                link_raw_type(c) is not link_raw_cell for c in link_g_closure
                             )
                         ):
                             raise refusal from None
@@ -10144,7 +10049,7 @@ class StartupArtifactOwner:
                             if (
                                 link_raw_type(link_g_freevars) is not link_raw_tuple
                                 or link_raw_any(
-                                    (link_raw_type(n) is not link_raw_str for n in link_g_freevars)
+                                    link_raw_type(n) is not link_raw_str for n in link_g_freevars
                                 )
                                 or link_g_freevars != link_g_expected_freevars
                                 or (
@@ -10371,14 +10276,12 @@ class StartupArtifactOwner:
                     link_seal_helper_primitive_pairs,
                 ) = link_helper_origin[5]
                 if (
-                    link_raw_any(
-                        (link_raw_type(k) is not link_raw_str for k in link_helper_registry)
-                    )
+                    link_raw_any(link_raw_type(k) is not link_raw_str for k in link_helper_registry)
                     or link_helper_registry.get("hmp_startup.retained_binding_origin")
                     is not link_seal_helper_module
                     or link_raw_vars(link_seal_helper_module) is not link_seal_helper_namespace
                     or link_raw_any(
-                        (link_raw_type(k) is not link_raw_str for k in link_seal_helper_namespace)
+                        link_raw_type(k) is not link_raw_str for k in link_seal_helper_namespace
                     )
                     or (
                         link_raw_len(link_seal_helper_namespace)
@@ -10393,10 +10296,8 @@ class StartupArtifactOwner:
                         is not link_seal_helper_builtin_namespace
                     )
                     or link_raw_any(
-                        (
-                            link_raw_type(k) is not link_raw_str
-                            for k in link_seal_helper_builtin_namespace
-                        )
+                        link_raw_type(k) is not link_raw_str
+                        for k in link_seal_helper_builtin_namespace
                     )
                     or (
                         link_seal_helper_namespace.get("__builtins__")
@@ -10561,7 +10462,7 @@ class StartupArtifactOwner:
                 link_seal_helper_error_names = link_raw_vars(link_seal_helper_error_kind)
                 if (
                     link_raw_any(
-                        (link_raw_type(k) is not link_raw_str for k in link_seal_helper_error_names)
+                        link_raw_type(k) is not link_raw_str for k in link_seal_helper_error_names
                     )
                     or link_raw_len(link_seal_helper_error_names)
                     != link_raw_len(link_seal_helper_error_pairs)
@@ -10619,17 +10520,13 @@ class StartupArtifactOwner:
                     and link_raw_type(link_hdata_system_names) is link_raw_dict
                     and (link_raw_vars(link_hdata_system) is link_hdata_system_names)
                     and link_helper_all(
-                        (
-                            link_raw_type(link_hdata_key) is link_raw_str
-                            for link_hdata_key in link_hdata_system_names
-                        )
+                        link_raw_type(link_hdata_key) is link_raw_str
+                        for link_hdata_key in link_hdata_system_names
                     )
                     and (link_raw_type(link_hdata_registry) is link_raw_dict)
                     and link_helper_all(
-                        (
-                            link_raw_type(link_hdata_key) is link_raw_str
-                            for link_hdata_key in link_hdata_registry
-                        )
+                        link_raw_type(link_hdata_key) is link_raw_str
+                        for link_hdata_key in link_hdata_registry
                     )
                     and (link_hdata_system_names.get("modules") is link_hdata_registry)
                     and (link_raw_type(link_hdata_modules) is link_raw_tuple)
@@ -10647,10 +10544,8 @@ class StartupArtifactOwner:
                 if (
                     link_raw_type(link_hdata_builtin_namespace) is link_raw_dict
                     and link_helper_all(
-                        (
-                            link_raw_type(link_hdata_key) is link_raw_str
-                            for link_hdata_key in link_hdata_builtin_namespace
-                        )
+                        link_raw_type(link_hdata_key) is link_raw_str
+                        for link_hdata_key in link_hdata_builtin_namespace
                     )
                 ) is not True:
                     raise refusal from None
@@ -10672,16 +10567,12 @@ class StartupArtifactOwner:
                         link_raw_type(link_hdata_module) is link_raw_module
                         and link_raw_type(link_hdata_namespace) is link_raw_dict
                         and link_helper_all(
-                            (
-                                link_raw_type(link_hdata_key) is link_raw_str
-                                for link_hdata_key in link_hdata_registry
-                            )
+                            link_raw_type(link_hdata_key) is link_raw_str
+                            for link_hdata_key in link_hdata_registry
                         )
                         and link_helper_all(
-                            (
-                                link_raw_type(link_hdata_key) is link_raw_str
-                                for link_hdata_key in link_hdata_namespace
-                            )
+                            link_raw_type(link_hdata_key) is link_raw_str
+                            for link_hdata_key in link_hdata_namespace
                         )
                         and (link_hdata_registry.get(link_hdata_name) is link_hdata_module)
                         and (link_raw_vars(link_hdata_module) is link_hdata_namespace)
@@ -10735,10 +10626,8 @@ class StartupArtifactOwner:
                     if (
                         link_raw_type(link_hdata_kind) is link_raw_type
                         and link_helper_all(
-                            (
-                                link_raw_type(link_hdata_key) is link_raw_str
-                                for link_hdata_key in link_hdata_modules[link_hdata_index][1]
-                            )
+                            link_raw_type(link_hdata_key) is link_raw_str
+                            for link_hdata_key in link_hdata_modules[link_hdata_index][1]
                         )
                         and (
                             link_hdata_modules[link_hdata_index][1].get(link_hdata_name)
@@ -10750,10 +10639,8 @@ class StartupArtifactOwner:
                     link_hdata_names = link_raw_vars(link_hdata_kind)
                     if (
                         link_helper_all(
-                            (
-                                link_raw_type(link_hdata_key) is link_raw_str
-                                for link_hdata_key in link_hdata_names
-                            )
+                            link_raw_type(link_hdata_key) is link_raw_str
+                            for link_hdata_key in link_hdata_names
                         )
                         and link_raw_len(link_hdata_names) == link_raw_len(link_hdata_keys)
                     ) is not True:
@@ -10899,10 +10786,8 @@ class StartupArtifactOwner:
                             raise refusal from None
                 if (
                     link_helper_all(
-                        (
-                            link_raw_type(link_hdata_key) is link_raw_str
-                            for link_hdata_key in link_hdata_modules[0][1]
-                        )
+                        link_raw_type(link_hdata_key) is link_raw_str
+                        for link_hdata_key in link_hdata_modules[0][1]
                     )
                     and link_hdata_modules[0][1].get("GatewayRecipeOwner")
                     is link_hdata_classes[2][0]
@@ -10914,16 +10799,12 @@ class StartupArtifactOwner:
                     raise refusal from None
                 if (
                     link_helper_all(
-                        (
-                            link_raw_type(link_hdata_key) is link_raw_str
-                            for link_hdata_key in link_hdata_modules[0][1]
-                        )
+                        link_raw_type(link_hdata_key) is link_raw_str
+                        for link_hdata_key in link_hdata_modules[0][1]
                     )
                     and link_helper_all(
-                        (
-                            link_raw_type(link_hdata_key) is link_raw_str
-                            for link_hdata_key in link_hdata_modules[1][1]
-                        )
+                        link_raw_type(link_hdata_key) is link_raw_str
+                        for link_hdata_key in link_hdata_modules[1][1]
                     )
                     and (
                         link_hdata_modules[0][1].get("StartupSelectionOwner")
@@ -10951,28 +10832,20 @@ class StartupArtifactOwner:
                     raise refusal from None
                 if (
                     link_helper_all(
-                        (
-                            link_raw_type(link_hdata_key) is link_raw_str
-                            for link_hdata_key in link_hdata_modules[0][1]
-                        )
+                        link_raw_type(link_hdata_key) is link_raw_str
+                        for link_hdata_key in link_hdata_modules[0][1]
                     )
                     and link_helper_all(
-                        (
-                            link_raw_type(link_hdata_key) is link_raw_str
-                            for link_hdata_key in link_hdata_modules[1][1]
-                        )
+                        link_raw_type(link_hdata_key) is link_raw_str
+                        for link_hdata_key in link_hdata_modules[1][1]
                     )
                     and link_helper_all(
-                        (
-                            link_raw_type(link_hdata_key) is link_raw_str
-                            for link_hdata_key in link_hdata_modules[2][1]
-                        )
+                        link_raw_type(link_hdata_key) is link_raw_str
+                        for link_hdata_key in link_hdata_modules[2][1]
                     )
                     and link_helper_all(
-                        (
-                            link_raw_type(link_hdata_key) is link_raw_str
-                            for link_hdata_key in link_hdata_modules[3][1]
-                        )
+                        link_raw_type(link_hdata_key) is link_raw_str
+                        for link_hdata_key in link_hdata_modules[3][1]
                     )
                     and (
                         link_hdata_modules[0][1].get("GatewayActivationOwner")
@@ -10994,10 +10867,8 @@ class StartupArtifactOwner:
                     raise refusal from None
                 if (
                     link_helper_all(
-                        (
-                            link_raw_type(link_hdata_key) is link_raw_str
-                            for link_hdata_key in link_hdata_modules[4][1]
-                        )
+                        link_raw_type(link_hdata_key) is link_raw_str
+                        for link_hdata_key in link_hdata_modules[4][1]
                     )
                     and link_hdata_modules[4][1].get("_Scope") is link_hdata_classes[4][0]
                     and (
@@ -11010,10 +10881,8 @@ class StartupArtifactOwner:
                     link_hdata_namespace = link_hdata_modules[link_hdata_index][1]
                     if (
                         link_helper_all(
-                            (
-                                link_raw_type(link_hdata_key) is link_raw_str
-                                for link_hdata_key in link_hdata_namespace
-                            )
+                            link_raw_type(link_hdata_key) is link_raw_str
+                            for link_hdata_key in link_hdata_namespace
                         )
                         and link_hdata_namespace.get("ExpectedArtifact")
                         is link_hdata_classes[13][0]
@@ -11026,10 +10895,8 @@ class StartupArtifactOwner:
                         raise refusal from None
                 if (
                     link_helper_all(
-                        (
-                            link_raw_type(link_hdata_key) is link_raw_str
-                            for link_hdata_key in link_hdata_modules[5][1]
-                        )
+                        link_raw_type(link_hdata_key) is link_raw_str
+                        for link_hdata_key in link_hdata_modules[5][1]
                     )
                     and link_hdata_modules[2][1].get("_APPROVAL_OWNER_TYPE")
                     is link_hdata_classes[23][0]
@@ -11063,10 +10930,8 @@ class StartupArtifactOwner:
                     raise refusal from None
                 if (
                     link_helper_all(
-                        (
-                            link_raw_type(link_hdata_key) is link_raw_str
-                            for link_hdata_key in link_hdata_modules[6][1]
-                        )
+                        link_raw_type(link_hdata_key) is link_raw_str
+                        for link_hdata_key in link_hdata_modules[6][1]
                     )
                     and link_hdata_modules[5][1].get("GatewayEntryOwner")
                     is link_hdata_classes[27][0]
@@ -11194,13 +11059,8 @@ class StartupArtifactOwner:
                     or (not 1 <= link_raw_len(link_pin_encoding) <= 64)
                     or (not 1 <= link_raw_len(link_pin_errors) <= 64)
                     or link_raw_any(
-                        (
-                            not (
-                                link_pin_c.isascii()
-                                and (link_pin_c.isalnum() or link_pin_c in "._-")
-                            )
-                            for link_pin_c in link_pin_encoding + link_pin_errors
-                        )
+                        not (link_pin_c.isascii() and (link_pin_c.isalnum() or link_pin_c in "._-"))
+                        for link_pin_c in link_pin_encoding + link_pin_errors
                     )
                 ):
                     raise refusal from None
@@ -11233,10 +11093,8 @@ class StartupArtifactOwner:
                         is not link_engine_dependencies[1]
                     )
                     or link_raw_any(
-                        (
-                            link_raw_type(link_engine_k) is not link_raw_str
-                            for link_engine_k in link_engine_dependencies[1]
-                        )
+                        link_raw_type(link_engine_k) is not link_raw_str
+                        for link_engine_k in link_engine_dependencies[1]
                     )
                     or (link_raw_type(link_engine_dependencies[2]) is not link_raw_dict)
                     or (
@@ -11244,10 +11102,8 @@ class StartupArtifactOwner:
                         is not link_engine_dependencies[2]
                     )
                     or link_raw_any(
-                        (
-                            link_raw_type(link_engine_k) is not link_raw_str
-                            for link_engine_k in link_engine_dependencies[2]
-                        )
+                        link_raw_type(link_engine_k) is not link_raw_str
+                        for link_engine_k in link_engine_dependencies[2]
                     )
                     or (link_raw_type(link_engine_dependencies[3]) is not link_raw_tuple)
                     or (link_raw_len(link_engine_dependencies[3]) != 5)
@@ -11325,10 +11181,8 @@ class StartupArtifactOwner:
                         or (link_raw_type(link_engine_row[1]) is not link_raw_module)
                         or (link_raw_type(link_engine_row[2]) is not link_raw_dict)
                         or link_raw_any(
-                            (
-                                link_raw_type(link_engine_k) is not link_raw_str
-                                for link_engine_k in link_engine_row[2]
-                            )
+                            link_raw_type(link_engine_k) is not link_raw_str
+                            for link_engine_k in link_engine_row[2]
                         )
                         or (
                             link_engine_dependencies[2].get(link_engine_expected_name)
@@ -11338,17 +11192,12 @@ class StartupArtifactOwner:
                         or (link_raw_type(link_engine_row[3]) is not link_raw_tuple)
                         or (link_raw_len(link_engine_row[2]) != link_raw_len(link_engine_row[3]))
                         or link_raw_any(
-                            (
-                                link_raw_type(link_engine_pair) is not link_raw_tuple
-                                or link_raw_len(link_engine_pair) != 2
-                                or link_raw_type(link_engine_pair[0]) is not link_raw_str
-                                or (link_engine_pair[0] not in link_engine_row[2])
-                                or (
-                                    link_engine_row[2][link_engine_pair[0]]
-                                    is not link_engine_pair[1]
-                                )
-                                for link_engine_pair in link_engine_row[3]
-                            )
+                            link_raw_type(link_engine_pair) is not link_raw_tuple
+                            or link_raw_len(link_engine_pair) != 2
+                            or link_raw_type(link_engine_pair[0]) is not link_raw_str
+                            or (link_engine_pair[0] not in link_engine_row[2])
+                            or (link_engine_row[2][link_engine_pair[0]] is not link_engine_pair[1])
+                            for link_engine_pair in link_engine_row[3]
                         )
                         or (link_raw_type(link_engine_row[4]) is not link_raw_tuple)
                         or (link_raw_type(link_engine_row[5]) is not link_raw_tuple)
@@ -11372,25 +11221,21 @@ class StartupArtifactOwner:
                         link_engine_names = link_raw_vars(link_engine_kind)
                         if (
                             link_raw_any(
-                                (
-                                    link_raw_type(link_engine_k) is not link_raw_str
-                                    for link_engine_k in link_engine_names
-                                )
+                                link_raw_type(link_engine_k) is not link_raw_str
+                                for link_engine_k in link_engine_names
                             )
                             or link_raw_type(link_engine_members) is not link_raw_tuple
                             or link_raw_len(link_engine_names) != link_raw_len(link_engine_members)
                             or link_raw_any(
-                                (
-                                    link_raw_type(link_engine_pair) is not link_raw_tuple
-                                    or link_raw_len(link_engine_pair) != 2
-                                    or link_raw_type(link_engine_pair[0]) is not link_raw_str
-                                    or (link_engine_pair[0] not in link_engine_names)
-                                    or (
-                                        link_engine_names[link_engine_pair[0]]
-                                        is not link_engine_pair[1]
-                                    )
-                                    for link_engine_pair in link_engine_members
+                                link_raw_type(link_engine_pair) is not link_raw_tuple
+                                or link_raw_len(link_engine_pair) != 2
+                                or link_raw_type(link_engine_pair[0]) is not link_raw_str
+                                or (link_engine_pair[0] not in link_engine_names)
+                                or (
+                                    link_engine_names[link_engine_pair[0]]
+                                    is not link_engine_pair[1]
                                 )
+                                for link_engine_pair in link_engine_members
                             )
                         ):
                             raise refusal from None
@@ -11423,16 +11268,12 @@ class StartupArtifactOwner:
                         ):
                             raise refusal from None
                         if not link_raw_any(
-                            (
-                                link_engine_namespace is link_engine_prior
-                                for link_engine_prior in link_engine_checked_namespaces
-                            )
+                            link_engine_namespace is link_engine_prior
+                            for link_engine_prior in link_engine_checked_namespaces
                         ):
                             if link_raw_any(
-                                (
-                                    link_raw_type(link_engine_k) is not link_raw_str
-                                    for link_engine_k in link_engine_namespace
-                                )
+                                link_raw_type(link_engine_k) is not link_raw_str
+                                for link_engine_k in link_engine_namespace
                             ):
                                 raise refusal from None
                             link_engine_checked_namespaces.append(link_engine_namespace)
@@ -11442,24 +11283,17 @@ class StartupArtifactOwner:
                         elif (
                             link_raw_type(link_engine_kw) is not link_raw_dict
                             or link_raw_any(
-                                (
-                                    link_raw_type(link_engine_k) is not link_raw_str
-                                    for link_engine_k in link_engine_kw
-                                )
+                                link_raw_type(link_engine_k) is not link_raw_str
+                                for link_engine_k in link_engine_kw
                             )
                             or link_raw_len(link_engine_kw) != link_raw_len(link_engine_pairs)
                             or link_raw_any(
-                                (
-                                    link_raw_type(link_engine_pair) is not link_raw_tuple
-                                    or link_raw_len(link_engine_pair) != 2
-                                    or link_raw_type(link_engine_pair[0]) is not link_raw_str
-                                    or (link_engine_pair[0] not in link_engine_kw)
-                                    or (
-                                        link_engine_kw[link_engine_pair[0]]
-                                        is not link_engine_pair[1]
-                                    )
-                                    for link_engine_pair in link_engine_pairs
-                                )
+                                link_raw_type(link_engine_pair) is not link_raw_tuple
+                                or link_raw_len(link_engine_pair) != 2
+                                or link_raw_type(link_engine_pair[0]) is not link_raw_str
+                                or (link_engine_pair[0] not in link_engine_kw)
+                                or (link_engine_kw[link_engine_pair[0]] is not link_engine_pair[1])
+                                for link_engine_pair in link_engine_pairs
                             )
                         ):
                             raise refusal from None
@@ -11481,14 +11315,12 @@ class StartupArtifactOwner:
                         ):
                             raise refusal from None
                 link_primitive_audit_rows = link_raw_tuple(
-                    (
-                        row
-                        for row in link_engine_origin[2]
-                        if link_raw_type(row) is link_raw_tuple
-                        and link_raw_len(row) == 7
-                        and (link_raw_type(row[0]) is link_raw_str)
-                        and (row[0] == "_engine_origin_tail")
-                    )
+                    row
+                    for row in link_engine_origin[2]
+                    if link_raw_type(row) is link_raw_tuple
+                    and link_raw_len(row) == 7
+                    and (link_raw_type(row[0]) is link_raw_str)
+                    and (row[0] == "_engine_origin_tail")
                 )
                 if (
                     link_raw_len(link_primitive_audit_rows) != 1
@@ -11504,7 +11336,7 @@ class StartupArtifactOwner:
                     or link_raw_type(link_primitive_audit_kw) is not link_raw_dict
                     or link_primitive_audit_checker.__kwdefaults__ is not link_primitive_audit_kw
                     or link_raw_any(
-                        (link_raw_type(k) is not link_raw_str for k in link_primitive_audit_kw)
+                        link_raw_type(k) is not link_raw_str for k in link_primitive_audit_kw
                     )
                 ):
                     raise refusal from None
@@ -11550,10 +11382,7 @@ class StartupArtifactOwner:
                 link_primitive_audit_builtins = link_raw_vars(link_primitive_audit_id.__self__)
                 if (
                     link_raw_any(
-                        (
-                            link_raw_type(k) is not link_raw_str
-                            for k in link_primitive_audit_builtins
-                        )
+                        link_raw_type(k) is not link_raw_str for k in link_primitive_audit_builtins
                     )
                     or link_primitive_audit_checker.__builtins__
                     is not link_primitive_audit_builtins
@@ -11582,7 +11411,7 @@ class StartupArtifactOwner:
                     raise refusal from None
                 link_primitive_audit_map_names = link_raw_vars(link_primitive_audit_map)
                 if link_raw_any(
-                    (link_raw_type(k) is not link_raw_str for k in link_primitive_audit_map_names)
+                    link_raw_type(k) is not link_raw_str for k in link_primitive_audit_map_names
                 ):
                     raise refusal from None
                 link_primitive_audit_new = link_primitive_audit_map_names.get("__new__")
@@ -11604,10 +11433,7 @@ class StartupArtifactOwner:
                 link_primitive_audit_operator = link_raw_vars(link_primitive_audit_not.__self__)
                 if (
                     link_raw_any(
-                        (
-                            link_raw_type(k) is not link_raw_str
-                            for k in link_primitive_audit_operator
-                        )
+                        link_raw_type(k) is not link_raw_str for k in link_primitive_audit_operator
                     )
                     or link_primitive_audit_operator.get("is_not") is not link_primitive_audit_not
                 ):

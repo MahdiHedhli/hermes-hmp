@@ -239,7 +239,7 @@ def _pin_type(
             g_freevars = g_function.__code__.co_freevars
             if (
                 _type(g_freevars) is not _tuple
-                or _any((_type(n) is not _str for n in g_freevars))
+                or _any(_type(n) is not _str for n in g_freevars)
                 or g_freevars != g_expected_freevars
                 or (_len(g_cells) != _len(g_expected_freevars))
             ):
@@ -631,8 +631,8 @@ def current(
         g_names = _vars(kind)
         if (
             _type(g_registry) is not _dict
-            or _any((_type(k) is not _str for k in g_registry))
-            or _any((_type(k) is not _str for k in g_names))
+            or _any(_type(k) is not _str for k in g_registry)
+            or _any(_type(k) is not _str for k in g_names)
             or (_type(generated_rows) is not _tuple)
             or (_len(generated_rows) != 7)
         ):
@@ -726,7 +726,7 @@ def current(
             elif (
                 _type(g_closure) is not _tuple
                 or _len(g_closure) != _len(g_cells)
-                or _any((_type(c) is not _cell for c in g_closure))
+                or _any(_type(c) is not _cell for c in g_closure)
             ):
                 raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
             else:
@@ -752,7 +752,7 @@ def current(
                 g_freevars = g_function.__code__.co_freevars
                 if (
                     _type(g_freevars) is not _tuple
-                    or _any((_type(n) is not _str for n in g_freevars))
+                    or _any(_type(n) is not _str for n in g_freevars)
                     or g_freevars != g_expected_freevars
                     or (_len(g_cells) != _len(g_expected_freevars))
                 ):
@@ -1625,11 +1625,9 @@ def current(
         _type(helper_final_system) is _module
         and _type(helper_final_system_names) is _dict
         and (_vars(helper_final_system) is helper_final_system_names)
-        and _all(
-            (_type(helper_final_key) is _str for helper_final_key in helper_final_system_names)
-        )
+        and _all(_type(helper_final_key) is _str for helper_final_key in helper_final_system_names)
         and (_type(helper_final_registry) is _dict)
-        and _all((_type(helper_final_key) is _str for helper_final_key in helper_final_registry))
+        and _all(_type(helper_final_key) is _str for helper_final_key in helper_final_registry)
         and (helper_final_system_names.get("modules") is helper_final_registry)
         and (_type(helper_final_modules) is _tuple)
         and (_len(helper_final_modules) == _len(helper_data_modules))
@@ -1646,7 +1644,7 @@ def current(
     if (
         _type(helper_final_builtin_namespace) is _dict
         and _all(
-            (_type(helper_final_key) is _str for helper_final_key in helper_final_builtin_namespace)
+            _type(helper_final_key) is _str for helper_final_key in helper_final_builtin_namespace
         )
     ) is not True:
         raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
@@ -1659,12 +1657,8 @@ def current(
         if (
             _type(helper_final_module) is _module
             and _type(helper_final_namespace) is _dict
-            and _all(
-                (_type(helper_final_key) is _str for helper_final_key in helper_final_registry)
-            )
-            and _all(
-                (_type(helper_final_key) is _str for helper_final_key in helper_final_namespace)
-            )
+            and _all(_type(helper_final_key) is _str for helper_final_key in helper_final_registry)
+            and _all(_type(helper_final_key) is _str for helper_final_key in helper_final_namespace)
             and (helper_final_registry.get(helper_final_name) is helper_final_module)
             and (_vars(helper_final_module) is helper_final_namespace)
             and (_type(helper_final_namespace.get("__name__")) is _str)
@@ -1727,10 +1721,8 @@ def current(
         if (
             _type(helper_final_kind) is _type
             and _all(
-                (
-                    _type(helper_final_key) is _str
-                    for helper_final_key in helper_final_modules[helper_final_index][1]
-                )
+                _type(helper_final_key) is _str
+                for helper_final_key in helper_final_modules[helper_final_index][1]
             )
             and (
                 helper_final_modules[helper_final_index][1].get(helper_final_name)
@@ -1742,7 +1734,7 @@ def current(
             raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
         helper_final_names = _vars(helper_final_kind)
         if (
-            _all((_type(helper_final_key) is _str for helper_final_key in helper_final_names))
+            _all(_type(helper_final_key) is _str for helper_final_key in helper_final_names)
             and _len(helper_final_names) == _len(helper_final_pairs)
         ) is not True:
             raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
@@ -1897,16 +1889,14 @@ def current(
             except _value_error:
                 raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
     if (
-        _all((_type(helper_final_key) is _str for helper_final_key in helper_final_modules[0][1]))
+        _all(_type(helper_final_key) is _str for helper_final_key in helper_final_modules[0][1])
         and helper_final_modules[0][1].get("GatewayRecipeOwner") is helper_final_classes[2][0]
         and (helper_final_modules[0][1].get("_same_recipe_binding") is helper_final_functions[4][0])
     ) is not True:
         raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
     if (
-        _all((_type(helper_final_key) is _str for helper_final_key in helper_final_modules[0][1]))
-        and _all(
-            (_type(helper_final_key) is _str for helper_final_key in helper_final_modules[1][1])
-        )
+        _all(_type(helper_final_key) is _str for helper_final_key in helper_final_modules[0][1])
+        and _all(_type(helper_final_key) is _str for helper_final_key in helper_final_modules[1][1])
         and (helper_final_modules[0][1].get("StartupSelectionOwner") is helper_final_classes[3][0])
         and (helper_final_modules[1][1].get("StartupSelectionOwner") is helper_final_classes[3][0])
         and (
@@ -1921,16 +1911,10 @@ def current(
     ) is not True:
         raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
     if (
-        _all((_type(helper_final_key) is _str for helper_final_key in helper_final_modules[0][1]))
-        and _all(
-            (_type(helper_final_key) is _str for helper_final_key in helper_final_modules[1][1])
-        )
-        and _all(
-            (_type(helper_final_key) is _str for helper_final_key in helper_final_modules[2][1])
-        )
-        and _all(
-            (_type(helper_final_key) is _str for helper_final_key in helper_final_modules[3][1])
-        )
+        _all(_type(helper_final_key) is _str for helper_final_key in helper_final_modules[0][1])
+        and _all(_type(helper_final_key) is _str for helper_final_key in helper_final_modules[1][1])
+        and _all(_type(helper_final_key) is _str for helper_final_key in helper_final_modules[2][1])
+        and _all(_type(helper_final_key) is _str for helper_final_key in helper_final_modules[3][1])
         and (
             helper_final_modules[0][1].get("GatewayActivationOwner") is helper_final_classes[10][0]
         )
@@ -1947,7 +1931,7 @@ def current(
     ) is not True:
         raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
     if (
-        _all((_type(helper_final_key) is _str for helper_final_key in helper_final_modules[4][1]))
+        _all(_type(helper_final_key) is _str for helper_final_key in helper_final_modules[4][1])
         and helper_final_modules[4][1].get("_Scope") is helper_final_classes[4][0]
         and (
             helper_final_modules[4][1].get("GatewayActivationOwner") is helper_final_classes[10][0]
@@ -1957,7 +1941,7 @@ def current(
     for helper_final_index in (0, 1, 2):
         helper_final_namespace = helper_final_modules[helper_final_index][1]
         if (
-            _all((_type(helper_final_key) is _str for helper_final_key in helper_final_namespace))
+            _all(_type(helper_final_key) is _str for helper_final_key in helper_final_namespace)
             and helper_final_namespace.get("ExpectedArtifact") is helper_final_classes[13][0]
             and (
                 helper_final_namespace.get("_descriptor_closed_in_scope")
@@ -1967,7 +1951,7 @@ def current(
         ) is not True:
             raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
     if (
-        _all((_type(helper_final_key) is _str for helper_final_key in helper_final_modules[5][1]))
+        _all(_type(helper_final_key) is _str for helper_final_key in helper_final_modules[5][1])
         and helper_final_modules[2][1].get("_APPROVAL_OWNER_TYPE") is helper_final_classes[23][0]
         and (
             helper_final_modules[5][1].get("GatewayActivationOwner") is helper_final_classes[10][0]
@@ -1988,7 +1972,7 @@ def current(
     ) is not True:
         raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
     if (
-        _all((_type(helper_final_key) is _str for helper_final_key in helper_final_modules[6][1]))
+        _all(_type(helper_final_key) is _str for helper_final_key in helper_final_modules[6][1])
         and helper_final_modules[5][1].get("GatewayEntryOwner") is helper_final_classes[27][0]
         and (
             helper_final_modules[6][1].get("GatewayActivationOwner") is helper_final_classes[10][0]
@@ -2217,8 +2201,8 @@ def current(
         g_names = _vars(kind)
         if (
             _type(g_registry) is not _dict
-            or _any((_type(k) is not _str for k in g_registry))
-            or _any((_type(k) is not _str for k in g_names))
+            or _any(_type(k) is not _str for k in g_registry)
+            or _any(_type(k) is not _str for k in g_names)
             or (_type(generated_rows) is not _tuple)
             or (_len(generated_rows) != 7)
         ):
@@ -2312,7 +2296,7 @@ def current(
             elif (
                 _type(g_closure) is not _tuple
                 or _len(g_closure) != _len(g_cells)
-                or _any((_type(c) is not _cell for c in g_closure))
+                or _any(_type(c) is not _cell for c in g_closure)
             ):
                 raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
             else:
@@ -2338,7 +2322,7 @@ def current(
                 g_freevars = g_function.__code__.co_freevars
                 if (
                     _type(g_freevars) is not _tuple
-                    or _any((_type(n) is not _str for n in g_freevars))
+                    or _any(_type(n) is not _str for n in g_freevars)
                     or g_freevars != g_expected_freevars
                     or (_len(g_cells) != _len(g_expected_freevars))
                 ):
@@ -2745,8 +2729,8 @@ def current_started(
         g_names = _vars(kind)
         if (
             _type(g_registry) is not _dict
-            or _any((_type(k) is not _str for k in g_registry))
-            or _any((_type(k) is not _str for k in g_names))
+            or _any(_type(k) is not _str for k in g_registry)
+            or _any(_type(k) is not _str for k in g_names)
             or (_type(generated_rows) is not _tuple)
             or (_len(generated_rows) != 7)
         ):
@@ -2840,7 +2824,7 @@ def current_started(
             elif (
                 _type(g_closure) is not _tuple
                 or _len(g_closure) != _len(g_cells)
-                or _any((_type(c) is not _cell for c in g_closure))
+                or _any(_type(c) is not _cell for c in g_closure)
             ):
                 raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
             else:
@@ -2866,7 +2850,7 @@ def current_started(
                 g_freevars = g_function.__code__.co_freevars
                 if (
                     _type(g_freevars) is not _tuple
-                    or _any((_type(n) is not _str for n in g_freevars))
+                    or _any(_type(n) is not _str for n in g_freevars)
                     or g_freevars != g_expected_freevars
                     or (_len(g_cells) != _len(g_expected_freevars))
                 ):
@@ -4020,11 +4004,9 @@ def current_started(
         _type(helper_final_system) is _module
         and _type(helper_final_system_names) is _dict
         and (_vars(helper_final_system) is helper_final_system_names)
-        and _all(
-            (_type(helper_final_key) is _str for helper_final_key in helper_final_system_names)
-        )
+        and _all(_type(helper_final_key) is _str for helper_final_key in helper_final_system_names)
         and (_type(helper_final_registry) is _dict)
-        and _all((_type(helper_final_key) is _str for helper_final_key in helper_final_registry))
+        and _all(_type(helper_final_key) is _str for helper_final_key in helper_final_registry)
         and (helper_final_system_names.get("modules") is helper_final_registry)
         and (_type(helper_final_modules) is _tuple)
         and (_len(helper_final_modules) == _len(helper_data_modules))
@@ -4041,7 +4023,7 @@ def current_started(
     if (
         _type(helper_final_builtin_namespace) is _dict
         and _all(
-            (_type(helper_final_key) is _str for helper_final_key in helper_final_builtin_namespace)
+            _type(helper_final_key) is _str for helper_final_key in helper_final_builtin_namespace
         )
     ) is not True:
         raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
@@ -4057,12 +4039,8 @@ def current_started(
         if (
             _type(helper_final_module) is _module
             and _type(helper_final_namespace) is _dict
-            and _all(
-                (_type(helper_final_key) is _str for helper_final_key in helper_final_registry)
-            )
-            and _all(
-                (_type(helper_final_key) is _str for helper_final_key in helper_final_namespace)
-            )
+            and _all(_type(helper_final_key) is _str for helper_final_key in helper_final_registry)
+            and _all(_type(helper_final_key) is _str for helper_final_key in helper_final_namespace)
             and (helper_final_registry.get(helper_final_name) is helper_final_module)
             and (_vars(helper_final_module) is helper_final_namespace)
             and (_type(helper_final_namespace.get("__name__")) is _str)
@@ -4111,10 +4089,8 @@ def current_started(
         if (
             _type(helper_final_kind) is _type
             and _all(
-                (
-                    _type(helper_final_key) is _str
-                    for helper_final_key in helper_final_modules[helper_final_index][1]
-                )
+                _type(helper_final_key) is _str
+                for helper_final_key in helper_final_modules[helper_final_index][1]
             )
             and (
                 helper_final_modules[helper_final_index][1].get(helper_final_name)
@@ -4125,7 +4101,7 @@ def current_started(
             raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
         helper_final_names = _vars(helper_final_kind)
         if (
-            _all((_type(helper_final_key) is _str for helper_final_key in helper_final_names))
+            _all(_type(helper_final_key) is _str for helper_final_key in helper_final_names)
             and _len(helper_final_names) == _len(helper_final_keys)
         ) is not True:
             raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
@@ -4258,16 +4234,14 @@ def current_started(
             except _value_error:
                 raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
     if (
-        _all((_type(helper_final_key) is _str for helper_final_key in helper_final_modules[0][1]))
+        _all(_type(helper_final_key) is _str for helper_final_key in helper_final_modules[0][1])
         and helper_final_modules[0][1].get("GatewayRecipeOwner") is helper_final_classes[2][0]
         and (helper_final_modules[0][1].get("_same_recipe_binding") is helper_final_functions[4][0])
     ) is not True:
         raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
     if (
-        _all((_type(helper_final_key) is _str for helper_final_key in helper_final_modules[0][1]))
-        and _all(
-            (_type(helper_final_key) is _str for helper_final_key in helper_final_modules[1][1])
-        )
+        _all(_type(helper_final_key) is _str for helper_final_key in helper_final_modules[0][1])
+        and _all(_type(helper_final_key) is _str for helper_final_key in helper_final_modules[1][1])
         and (helper_final_modules[0][1].get("StartupSelectionOwner") is helper_final_classes[3][0])
         and (helper_final_modules[1][1].get("StartupSelectionOwner") is helper_final_classes[3][0])
         and (
@@ -4282,16 +4256,10 @@ def current_started(
     ) is not True:
         raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
     if (
-        _all((_type(helper_final_key) is _str for helper_final_key in helper_final_modules[0][1]))
-        and _all(
-            (_type(helper_final_key) is _str for helper_final_key in helper_final_modules[1][1])
-        )
-        and _all(
-            (_type(helper_final_key) is _str for helper_final_key in helper_final_modules[2][1])
-        )
-        and _all(
-            (_type(helper_final_key) is _str for helper_final_key in helper_final_modules[3][1])
-        )
+        _all(_type(helper_final_key) is _str for helper_final_key in helper_final_modules[0][1])
+        and _all(_type(helper_final_key) is _str for helper_final_key in helper_final_modules[1][1])
+        and _all(_type(helper_final_key) is _str for helper_final_key in helper_final_modules[2][1])
+        and _all(_type(helper_final_key) is _str for helper_final_key in helper_final_modules[3][1])
         and (
             helper_final_modules[0][1].get("GatewayActivationOwner") is helper_final_classes[10][0]
         )
@@ -4308,7 +4276,7 @@ def current_started(
     ) is not True:
         raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
     if (
-        _all((_type(helper_final_key) is _str for helper_final_key in helper_final_modules[4][1]))
+        _all(_type(helper_final_key) is _str for helper_final_key in helper_final_modules[4][1])
         and helper_final_modules[4][1].get("_Scope") is helper_final_classes[4][0]
         and (
             helper_final_modules[4][1].get("GatewayActivationOwner") is helper_final_classes[10][0]
@@ -4318,7 +4286,7 @@ def current_started(
     for helper_final_index in (0, 1, 2):
         helper_final_namespace = helper_final_modules[helper_final_index][1]
         if (
-            _all((_type(helper_final_key) is _str for helper_final_key in helper_final_namespace))
+            _all(_type(helper_final_key) is _str for helper_final_key in helper_final_namespace)
             and helper_final_namespace.get("ExpectedArtifact") is helper_final_classes[13][0]
             and (
                 helper_final_namespace.get("_descriptor_closed_in_scope")
@@ -4328,7 +4296,7 @@ def current_started(
         ) is not True:
             raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
     if (
-        _all((_type(helper_final_key) is _str for helper_final_key in helper_final_modules[5][1]))
+        _all(_type(helper_final_key) is _str for helper_final_key in helper_final_modules[5][1])
         and helper_final_modules[2][1].get("_APPROVAL_OWNER_TYPE") is helper_final_classes[23][0]
         and (
             helper_final_modules[5][1].get("GatewayActivationOwner") is helper_final_classes[10][0]
@@ -4349,7 +4317,7 @@ def current_started(
     ) is not True:
         raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
     if (
-        _all((_type(helper_final_key) is _str for helper_final_key in helper_final_modules[6][1]))
+        _all(_type(helper_final_key) is _str for helper_final_key in helper_final_modules[6][1])
         and helper_final_modules[5][1].get("GatewayEntryOwner") is helper_final_classes[27][0]
         and (
             helper_final_modules[6][1].get("GatewayActivationOwner") is helper_final_classes[10][0]
@@ -4603,8 +4571,8 @@ def current_started(
         g_names = _vars(kind)
         if (
             _type(g_registry) is not _dict
-            or _any((_type(k) is not _str for k in g_registry))
-            or _any((_type(k) is not _str for k in g_names))
+            or _any(_type(k) is not _str for k in g_registry)
+            or _any(_type(k) is not _str for k in g_names)
             or (_type(generated_rows) is not _tuple)
             or (_len(generated_rows) != 7)
         ):
@@ -4698,7 +4666,7 @@ def current_started(
             elif (
                 _type(g_closure) is not _tuple
                 or _len(g_closure) != _len(g_cells)
-                or _any((_type(c) is not _cell for c in g_closure))
+                or _any(_type(c) is not _cell for c in g_closure)
             ):
                 raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
             else:
@@ -4724,7 +4692,7 @@ def current_started(
                 g_freevars = g_function.__code__.co_freevars
                 if (
                     _type(g_freevars) is not _tuple
-                    or _any((_type(n) is not _str for n in g_freevars))
+                    or _any(_type(n) is not _str for n in g_freevars)
                     or g_freevars != g_expected_freevars
                     or (_len(g_cells) != _len(g_expected_freevars))
                 ):
@@ -4896,16 +4864,16 @@ def capture(
     if _type(_sys) is not _module:
         raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
     sys_namespace = _vars(_sys)
-    if _any((_type(k) is not _str for k in sys_namespace)):
+    if _any(_type(k) is not _str for k in sys_namespace):
         raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
     registry = sys_namespace.get("modules")
-    if _type(registry) is not _dict or _any((_type(k) is not _str for k in registry)):
+    if _type(registry) is not _dict or _any(_type(k) is not _str for k in registry):
         raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
     own = registry.get("hmp_startup.link_factory_origin")
     if _type(own) is not _module:
         raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
     namespace = _vars(own)
-    if _any((_type(k) is not _str for k in namespace)):
+    if _any(_type(k) is not _str for k in namespace):
         raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
     pin_function, pin_type, check = (_pin_function, _pin_type, current)
     own_names = (
@@ -4918,9 +4886,7 @@ def capture(
         "encode_basename",
         "current_started",
     )
-    own_functions = _tuple(
-        (pin_function(name, namespace.get(name), namespace) for name in own_names)
-    )
+    own_functions = _tuple(pin_function(name, namespace.get(name), namespace) for name in own_names)
     from hmp_plugin import presentation_link_path_policy as policy
     from hmp_plugin import presentation_native_link as engine
     from hmp_plugin import presentation_startup_artifacts as artifacts
@@ -4930,8 +4896,8 @@ def capture(
         _type(_sys) is not _module
         or _type(own) is not _module
         or _vars(own) is not namespace
-        or _any((_type(k) is not _str for k in namespace))
-        or _any((_type(k) is not _str for k in _vars(_sys)))
+        or _any(_type(k) is not _str for k in namespace)
+        or _any(_type(k) is not _str for k in _vars(_sys))
         or _vars(_sys).get("modules") is not registry
     ):
         raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
@@ -4946,7 +4912,7 @@ def capture(
                 kw is not None
                 and (
                     _type(kw) is not _dict
-                    or _any((_type(k) is not _str for k in kw))
+                    or _any(_type(k) is not _str for k in kw)
                     or _len(kw) != _len(pairs)
                     or _any((k not in kw or kw[k] is not value for k, value in pairs))
                 )
@@ -5661,7 +5627,7 @@ def capture(
         "_new_scope_blueprint",
     )
     functions = _tuple(
-        (pin_function(name, policy_namespace.get(name), policy_namespace) for name in policy_names)
+        pin_function(name, policy_namespace.get(name), policy_namespace) for name in policy_names
     )
     kinds = _tuple(
         (
@@ -5729,10 +5695,10 @@ def capture(
         ):
             raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
         if (
-            _any((_type(k) is not _str for k in namespace))
-            or _any((_any((_type(k) is not _str for k in row[2])) for row in modules))
+            _any(_type(k) is not _str for k in namespace)
+            or _any(_any(_type(k) is not _str for k in row[2]) for row in modules)
             or _vars(_sys) is not sys_namespace
-            or _any((_type(k) is not _str for k in sys_namespace))
+            or _any(_type(k) is not _str for k in sys_namespace)
             or sys_namespace.get("modules") is not registry
             or sys_namespace.get("getfilesystemencoding") is not get_encoding
             or sys_namespace.get("getfilesystemencodeerrors") is not get_errors
@@ -5749,7 +5715,7 @@ def capture(
                 or (
                     kw is not None
                     and (
-                        _any((_type(k) is not _str for k in kw))
+                        _any(_type(k) is not _str for k in kw)
                         or _len(kw) != _len(pairs)
                         or _any((k not in kw or kw[k] is not value for k, value in pairs))
                     )
@@ -5860,8 +5826,8 @@ def capture(
             g_names = _vars(kind)
             if (
                 _type(g_registry) is not _dict
-                or _any((_type(k) is not _str for k in g_registry))
-                or _any((_type(k) is not _str for k in g_names))
+                or _any(_type(k) is not _str for k in g_registry)
+                or _any(_type(k) is not _str for k in g_names)
                 or (_type(generated_rows) is not _tuple)
                 or (_len(generated_rows) != 7)
             ):
@@ -5958,7 +5924,7 @@ def capture(
                 elif (
                     _type(g_closure) is not _tuple
                     or _len(g_closure) != _len(g_cells)
-                    or _any((_type(c) is not _cell for c in g_closure))
+                    or _any(_type(c) is not _cell for c in g_closure)
                 ):
                     raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
                 else:
@@ -5984,7 +5950,7 @@ def capture(
                     g_freevars = g_function.__code__.co_freevars
                     if (
                         _type(g_freevars) is not _tuple
-                        or _any((_type(n) is not _str for n in g_freevars))
+                        or _any(_type(n) is not _str for n in g_freevars)
                         or g_freevars != g_expected_freevars
                         or (_len(g_cells) != _len(g_expected_freevars))
                     ):
@@ -6139,7 +6105,7 @@ def capture(
         or _type(errors) is not _str
         or not 1 <= _len(encoding) <= 64
         or not 1 <= _len(errors) <= 64
-        or _any((not (c.isascii() and (c.isalnum() or c in "._-")) for c in encoding + errors))
+        or _any(not (c.isascii() and (c.isalnum() or c in "._-")) for c in encoding + errors)
     ):
         raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
     values = (_sys, sys_namespace, get_encoding, get_errors, encode, encoding, errors)
@@ -6159,10 +6125,10 @@ def capture(
     ):
         raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
     if (
-        _any((_type(k) is not _str for k in namespace))
-        or _any((_any((_type(k) is not _str for k in row[2])) for row in modules))
+        _any(_type(k) is not _str for k in namespace)
+        or _any(_any(_type(k) is not _str for k in row[2]) for row in modules)
         or _vars(_sys) is not sys_namespace
-        or _any((_type(k) is not _str for k in sys_namespace))
+        or _any(_type(k) is not _str for k in sys_namespace)
         or (sys_namespace.get("modules") is not registry)
         or (sys_namespace.get("getfilesystemencoding") is not get_encoding)
         or (sys_namespace.get("getfilesystemencodeerrors") is not get_errors)
@@ -6179,7 +6145,7 @@ def capture(
             or (
                 kw is not None
                 and (
-                    _any((_type(k) is not _str for k in kw))
+                    _any(_type(k) is not _str for k in kw)
                     or _len(kw) != _len(pairs)
                     or _any((k not in kw or kw[k] is not value for k, value in pairs))
                 )
@@ -6290,8 +6256,8 @@ def capture(
         g_names = _vars(kind)
         if (
             _type(g_registry) is not _dict
-            or _any((_type(k) is not _str for k in g_registry))
-            or _any((_type(k) is not _str for k in g_names))
+            or _any(_type(k) is not _str for k in g_registry)
+            or _any(_type(k) is not _str for k in g_names)
             or (_type(generated_rows) is not _tuple)
             or (_len(generated_rows) != 7)
         ):
@@ -6385,7 +6351,7 @@ def capture(
             elif (
                 _type(g_closure) is not _tuple
                 or _len(g_closure) != _len(g_cells)
-                or _any((_type(c) is not _cell for c in g_closure))
+                or _any(_type(c) is not _cell for c in g_closure)
             ):
                 raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
             else:
@@ -6411,7 +6377,7 @@ def capture(
                 g_freevars = g_function.__code__.co_freevars
                 if (
                     _type(g_freevars) is not _tuple
-                    or _any((_type(n) is not _str for n in g_freevars))
+                    or _any(_type(n) is not _str for n in g_freevars)
                     or g_freevars != g_expected_freevars
                     or (_len(g_cells) != _len(g_expected_freevars))
                 ):
@@ -6581,10 +6547,10 @@ def capture(
     ):
         raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
     if (
-        _any((_type(k) is not _str for k in namespace))
-        or _any((_any((_type(k) is not _str for k in row[2])) for row in modules))
+        _any(_type(k) is not _str for k in namespace)
+        or _any(_any(_type(k) is not _str for k in row[2]) for row in modules)
         or _vars(_sys) is not sys_namespace
-        or _any((_type(k) is not _str for k in sys_namespace))
+        or _any(_type(k) is not _str for k in sys_namespace)
         or (sys_namespace.get("modules") is not registry)
         or (sys_namespace.get("getfilesystemencoding") is not get_encoding)
         or (sys_namespace.get("getfilesystemencodeerrors") is not get_errors)
@@ -6601,7 +6567,7 @@ def capture(
             or (
                 kw is not None
                 and (
-                    _any((_type(k) is not _str for k in kw))
+                    _any(_type(k) is not _str for k in kw)
                     or _len(kw) != _len(pairs)
                     or _any((k not in kw or kw[k] is not value for k, value in pairs))
                 )
@@ -6712,8 +6678,8 @@ def capture(
         g_names = _vars(kind)
         if (
             _type(g_registry) is not _dict
-            or _any((_type(k) is not _str for k in g_registry))
-            or _any((_type(k) is not _str for k in g_names))
+            or _any(_type(k) is not _str for k in g_registry)
+            or _any(_type(k) is not _str for k in g_names)
             or (_type(generated_rows) is not _tuple)
             or (_len(generated_rows) != 7)
         ):
@@ -6807,7 +6773,7 @@ def capture(
             elif (
                 _type(g_closure) is not _tuple
                 or _len(g_closure) != _len(g_cells)
-                or _any((_type(c) is not _cell for c in g_closure))
+                or _any(_type(c) is not _cell for c in g_closure)
             ):
                 raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
             else:
@@ -6833,7 +6799,7 @@ def capture(
                 g_freevars = g_function.__code__.co_freevars
                 if (
                     _type(g_freevars) is not _tuple
-                    or _any((_type(n) is not _str for n in g_freevars))
+                    or _any(_type(n) is not _str for n in g_freevars)
                     or g_freevars != g_expected_freevars
                     or (_len(g_cells) != _len(g_expected_freevars))
                 ):
@@ -7109,7 +7075,7 @@ def encode_basename(
             or row[0] != "current"
             or _type(row[1]) is not _function
             or _type(row[3]) is not _dict
-            or _any((_type(k) is not _str for k in row[3]))
+            or _any(_type(k) is not _str for k in row[3])
             or row[3].get("current") is not row[1]
             or row[1].__code__ is not row[2]
             or row[1].__globals__ is not row[3]
@@ -7117,17 +7083,15 @@ def encode_basename(
             or row[1].__kwdefaults__ is not row[5]
             or _type(row[5]) is not _dict
             or _type(row[6]) is not _tuple
-            or _any((_type(k) is not _str for k in row[5]))
+            or _any(_type(k) is not _str for k in row[5])
             or _len(row[5]) != _len(row[6])
             or _any(
-                (
-                    _type(pair) is not _tuple
-                    or _len(pair) != 2
-                    or _type(pair[0]) is not _str
-                    or (pair[0] not in row[5])
-                    or (row[5][pair[0]] is not pair[1])
-                    for pair in row[6]
-                )
+                _type(pair) is not _tuple
+                or _len(pair) != 2
+                or _type(pair[0]) is not _str
+                or (pair[0] not in row[5])
+                or (row[5][pair[0]] is not pair[1])
+                for pair in row[6]
             )
         ):
             raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
@@ -7140,7 +7104,7 @@ def encode_basename(
         or not 1 <= _len(name) <= 4096
         or name in (".", "..")
         or "/" in name
-        or _any((_ord(c) < 32 or _ord(c) == 127 or 55296 <= _ord(c) <= 57343 for c in name))
+        or _any(_ord(c) < 32 or _ord(c) == 127 or 55296 <= _ord(c) <= 57343 for c in name)
     ):
         raise _error("BI1_LINK_BASENAME_REFUSED") from None
     encoding_origin = _tuple.__getitem__(_tuple.__getitem__(origin, 0), 3)
@@ -7266,8 +7230,8 @@ def encode_basename(
     g_names = _vars(kind)
     if (
         _type(g_registry) is not _dict
-        or _any((_type(k) is not _str for k in g_registry))
-        or _any((_type(k) is not _str for k in g_names))
+        or _any(_type(k) is not _str for k in g_registry)
+        or _any(_type(k) is not _str for k in g_names)
         or (_type(generated_rows) is not _tuple)
         or (_len(generated_rows) != 7)
     ):
@@ -7361,7 +7325,7 @@ def encode_basename(
         elif (
             _type(g_closure) is not _tuple
             or _len(g_closure) != _len(g_cells)
-            or _any((_type(c) is not _cell for c in g_closure))
+            or _any(_type(c) is not _cell for c in g_closure)
         ):
             raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
         else:
@@ -7387,7 +7351,7 @@ def encode_basename(
             g_freevars = g_function.__code__.co_freevars
             if (
                 _type(g_freevars) is not _tuple
-                or _any((_type(n) is not _str for n in g_freevars))
+                or _any(_type(n) is not _str for n in g_freevars)
                 or g_freevars != g_expected_freevars
                 or (_len(g_cells) != _len(g_expected_freevars))
             ):
@@ -7600,8 +7564,8 @@ def encode_basename(
     g_names = _vars(kind)
     if (
         _type(g_registry) is not _dict
-        or _any((_type(k) is not _str for k in g_registry))
-        or _any((_type(k) is not _str for k in g_names))
+        or _any(_type(k) is not _str for k in g_registry)
+        or _any(_type(k) is not _str for k in g_names)
         or (_type(generated_rows) is not _tuple)
         or (_len(generated_rows) != 7)
     ):
@@ -7695,7 +7659,7 @@ def encode_basename(
         elif (
             _type(g_closure) is not _tuple
             or _len(g_closure) != _len(g_cells)
-            or _any((_type(c) is not _cell for c in g_closure))
+            or _any(_type(c) is not _cell for c in g_closure)
         ):
             raise _error("BI1_LINK_FACTORY_ORIGIN_REFUSED") from None
         else:
@@ -7721,7 +7685,7 @@ def encode_basename(
             g_freevars = g_function.__code__.co_freevars
             if (
                 _type(g_freevars) is not _tuple
-                or _any((_type(n) is not _str for n in g_freevars))
+                or _any(_type(n) is not _str for n in g_freevars)
                 or g_freevars != g_expected_freevars
                 or (_len(g_cells) != _len(g_expected_freevars))
             ):

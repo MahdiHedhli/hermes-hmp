@@ -3350,11 +3350,9 @@ def _directory_commit_cohort_tail(owner, consumer, actual, commit):
         and consumer.commit[0] is commit
     )
     _require(
-        (
-            commit.mtime is None
-            if _fixed_metadata_role(consumer.resource) in ("directory", "directory_after_hash")
-            else type(commit.mtime) in (int, float) and commit.mtime is actual.snapshot.mtime
-        )
+        commit.mtime is None
+        if _fixed_metadata_role(consumer.resource) in ("directory", "directory_after_hash")
+        else type(commit.mtime) in (int, float) and commit.mtime is actual.snapshot.mtime
     )
     return commit
 
