@@ -34,7 +34,7 @@ No production source, host permissions, device software or release change.
 - [x] Verify each of 37 literal inverse hunks recovers its exact Git parent.
 - [x] Retain original baseline hashes and all original assertions.
 - [x] Add changed/duplicate/relocated block controls and outside-byte preservation.
-- [ ] Complete binding, inverse controls and owning lifecycle test selections.
+- [x] Complete binding, inverse controls and owning lifecycle test selections.
 - [ ] Independent final review, focused publication and current-status sync.
 
 ## Limits
@@ -63,3 +63,20 @@ escaped-newline/decorator adjacency in literal formatting are resolved by splitt
 adjacent literals, with identical parsed helper AST and unchanged accepted bytes;
 scan_private is clean. The failed run is retained; final checks must be rerun on
 the corrected immutable source rather than inherit its partial pass.
+
+## Final observed result
+
+Exact executable source affd2993aec761b6a90dee878a652b0a4a884a48 produces
+normal JUnit: all 361 cases pass, zero failures/errors/skips, 63.142 seconds on
+Darwin/Python 3.14.4. Breakdown: binding 117, composition controls 115,
+presentation lifecycle 30, readiness lifecycle 6, readiness worker 13,
+media-readiness 51, own-device Controls readiness 29. The checkout stayed clean
+through the final run. Exact Ruff 0.16.9, plugin surface and private-value scanner
+pass. The log scanner had no captured runtime corpus.
+
+Independent source review accepts all 37 exact Git-parent inverse blocks and
+unchanged original binding assertions (normalized AST proof). Current source APIs
+are exercised in the separate owning tests above; the historical lexical
+projection is not their qualification by itself. Full broad regression and
+native/private/device/release gates remain open; the frozen registry expectation
+has not been changed.
