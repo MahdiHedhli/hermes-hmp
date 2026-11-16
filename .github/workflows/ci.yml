@@ -52,3 +52,22 @@ jobs:
         run: >-
           /usr/bin/time -v uv run --frozen --python "${{ matrix.python }}" --project server --extra dev
           python tools/ci/check_bi1_supported_python.py
+
+  native-fixture-fd-scope:
+    name: Native fixture descriptor scope / Linux
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+        with:
+          python-version: '3.11'
+      - name: Verify real Linux descriptor scope in synthetic temporary files
+        run: >-
+          uv run --frozen --project server --extra dev python -I -B -m pytest
+          -c server/pyproject.toml --import-mode=importlib -q
+          tools/fixtures/tests/test_native_fd_scope.py
