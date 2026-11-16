@@ -139,3 +139,16 @@ def test_partial_progress_and_unresolved_snapshot_are_private_allowlisted_files(
     files = module.selected(root)
     assert len(files) == 3
     assert matrix / "progress.json" in files and matrix / "unresolved-teardown.json" in files
+
+
+def test_offline_xai_evidence_adds_only_four_fixed_report_paths():
+    names = {x for x in module._FILES if "/offline_xai/" in x}
+    assert names == {
+        "run/offline_xai/" + n
+        for n in (
+            "report.json",
+            "settlement.json",
+            "unresolved-teardown.json",
+            "progress.json",
+        )
+    }

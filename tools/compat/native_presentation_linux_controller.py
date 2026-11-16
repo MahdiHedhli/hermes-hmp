@@ -26,7 +26,7 @@ _IMAGE = (
     "docker.io/library/ubuntu@sha256:"
     "77eb101c607d6e3d4f5ad0c8a02c2136c689b98aba1f359e6502ba517e5c57ec"
 )
-_ENTRY_SHA = "6c2640470c3489f7e2cea7ae8c699e8e7204a80de74247e2f006952d04b12698"
+_ENTRY_SHA = "dccf1426bda9940f4af61b468a4f7e218d073d02990983ddb5dcc4fd17c33874"
 _FD_SHA = "692ae20b7bf86016dc7d7f27a678798cf3eb54dad1d601a4376e77b058554056"
 _MANIFEST_SHA = "28f13dcb4a90fce810bc0cf8aecb35b33584f5095e5e427a1887637135bcc702"
 _LABEL = "app.hermesbot.native-presentation-fixture"
@@ -159,7 +159,7 @@ def environment(root):
 
 
 def create_arguments(name, root, source, prefix, venv, entry, mode, uid, gid):
-    require(mode in ("matrix", "mutation", "historic") and type(uid) is int and uid > 0)
+    require(mode in ("matrix", "mutation", "historic", "offline_xai") and type(uid) is int and uid > 0)
     require(
         type(gid) is int and gid >= 0 and re.fullmatch(r"hmp-native-[0-9a-f]{32}", name) is not None
     )
@@ -272,6 +272,7 @@ def verify_container(item, name, root, venv, entry, mode, uid, gid, mounts):
 
 
 def report_acceptance(report, mode):
+    require(mode in ("matrix", "mutation", "historic", "offline_xai"))
     require(report["phase"] == "complete" and report["scenario"] == mode)
     keys = [
         "nativePresentationServiceBound",
@@ -299,6 +300,31 @@ def report_acceptance(report, mode):
     require(report["presentationWorkerDebt"] is False and report["lifecycleCleanupErrors"] == [])
     require(report.get("cleanupErrors", []) == [] and report["observedNetworkInterfaces"] == ["lo"])
     require(report["nativeReapprovalCooldownElapsedSeconds"] >= 602)
+    if mode == "offline_xai":
+        require(report.get("offlineXaiTLSAndRegrantObserved") is True)
+        require(report.get("offlineXaiTransport") == "in_process_fake_http")
+        require(report.get("offlineXaiLiveProviderQualified") is False)
+        require(report.get("offlineXaiFullAgentDispatchQualified") is False)
+        require(report.get("offlineXaiCanonicalRowsManuallyCommitted") is True)
+        profiles = report.get("offlineXaiProfiles")
+        require(type(profiles) is list and len(profiles) == 2)
+        require(all(type(x) is dict for x in profiles))
+        require({x.get("profileHomeName") for x in profiles} == {"home", "beta"})
+        require(
+            all(
+                x.get("nativeProviderResult") is True
+                and x.get("storageDisabled") is True
+                and x.get("bytesMatched") is True
+                and x.get("transportAndCredentialResolverRestored") is True
+                and type(x.get("fakeGenerationRequests")) is int
+                and x["fakeGenerationRequests"] == 1
+                and type(x.get("fakeCatalogRequests")) is int
+                and 0 <= x["fakeCatalogRequests"] <= 1
+                for x in profiles
+            )
+        )
+
+        require(sum(x["fakeCatalogRequests"] for x in profiles) == 1)
     if mode == "historic":
         require(report.get("nativeHistoricCacheTLSAndRegrantObserved") is True)
         require(report.get("historicCanonicalToolRowsAreSynthetic") is True)
@@ -458,7 +484,7 @@ def run(root, source, prefix, venv, docker, runtime_manifest, runtime_sha256):
     row = None
     container = None
     try:
-        for mode in ("matrix", "mutation", "historic"):
+        for mode in ("matrix", "mutation", "historic", "offline_xai"):
             container = None
             fixture = root / mode
             fixture.mkdir(mode=0o700)
