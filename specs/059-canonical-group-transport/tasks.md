@@ -21,8 +21,9 @@
       actual Darwin private synthetic peers,53 socket cases/205 combined and
       causal1/1/1/1/2 guards. Deadline renewal found/fixed before publication;
       no native endpoint/real ticket/phone authority is qualified.
-- [ ] GT3-SOCKET-LINUX: observe the first exact-source CPython3.11/3.14 Linux
-      matrix; verify platform/source/case metadata and actual kernel-peer case.
+- [x] GT3-SOCKET-LINUX: exact-source run43845881095 passed on actual Linux
+      CPython3.11.17/3.14.9,205 cases each, verified archive/JUnit/source hashes
+      and actual kernel-peer case. Synthetic component scope only.
 - [ ] GT3: implement reviewed explicit-endpoint ticket/socket/WebSocket adapter;
       prove real credential/reader/writer/thread ownership and exact cleanup.
 - [ ] GT4: qualify native per-room/member snapshot fencing and define explicit

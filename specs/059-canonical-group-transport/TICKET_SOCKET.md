@@ -1,6 +1,7 @@
 # GT3-SOCKET contract — proposed unactivated POSIX exchange
 
-Root implementation; independent review accepts direction, not runtime results.
+Root implementation; independent source review accepted the scoped component.
+The synthetic Linux results below do not qualify native integration.
 No production caller, live native ticket, gateway start, phone grant or remote
 endpoint is authorized by this component. Only synthetic private Unix peers are
 used during development. This does not complete GT1 or full GT3.
@@ -100,9 +101,23 @@ source readback and exact67/85/53 distinct unskipped passing cases including the
 actual kernel-positive case. Duplicate JUnit identities, skips and missing kernel
 cases are refused by pure DATA checks; helper startup itself refuses Darwin.
 Only fixed before/after metadata and synthetic JUnit XML are uploaded for2days.
-Linux results and exact versions remain pending until an actual run is observed.
+The dated preparation above is superseded by the verified run below.
 
 The actual future adapter must retain the registry across listener replacement;
 this component does not enforce another Python caller's lifetime. Its endpoint
 DATA/kernel UID is not native PID/generation or HMP authorization. No full GT1/GT3,
 Windows equivalent, native integration, physical-device or release pass is claimed.
+
+## Verified synthetic Linux socket checkpoint — November 16, 2026
+
+[Run43845881095](https://github.com/MahdiHedhli/hermes-hmp/actions/runs/43845881095),
+exact source `2f3bb17345b318e1a9a4f39aea187be76d4834ca`, passed on actual Linux
+x86_64 with CPython3.11.17 and3.14.9. Each matrix entry passed205 distinct cases:
+67 ledger,85 codec and53 socket, with no failures/errors/skips and an actual
+SO_PEERCRED peer check. Artifact archive digests, JUnit digests and all six source
+hashes were independently read back locally; before/after source hashes agree.
+This qualifies synthetic components only. The native group adapter, original
+native-process binding, phone group permissions, mobile group UI and physical/
+release acceptance remain unfinished. No real ticket, host restart or grant was used.
+The earlier run43845005376 failed workflow validation before any job started;
+its job-level runner-context error was corrected without changing component source.
