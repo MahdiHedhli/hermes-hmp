@@ -24,7 +24,7 @@ permission-generation removal, grant, fetch, provider or host/device operation.
 - [x] Bind exact committed before/after bytes and recover the parent with three hunks.
 - [x] Keep old hash/assertions, add projection causals and outside-byte controls.
 - [x] Complete active-batch, registry and current permission store/runtime suites.
-- [ ] Independent review, focused publication and current-status synchronization.
+- [x] Independent review and focused publication; current-status sync recorded separately.
 
 ## Limits
 
@@ -51,3 +51,6 @@ supported HOST_OPERATOR_TEST_PARENT input. No test or production source was
 changed to bypass that refusal. Both reports remain retained. The supported
 unversioned legacy restoration compatibility limit remains explicit in its
 existing runtime test; generation-safe revocation requires persistent media denial.
+
+Published as [Draft PR179](https://github.com/MahdiHedhli/hermes-hmp/pull/179),
+stacked on PR178; publication does not deploy the source or alter live rights.
