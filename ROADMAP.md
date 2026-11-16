@@ -1460,10 +1460,19 @@ Behavior changes belong in focused Spec Kit feature specs and must update the wi
 
 ## Restore reviewed historic native image cache support — November 16, 2026
 
-Current-source native run43926962041 passes matrix/mutation but fails the historic
-case before descriptor mint; offline-XAI was not attempted. The candidate branch
-omits the previously reviewed exact `image_cache` layout amendment0590f453.
-Restore that exact same-profile flat-name layout, no-follow leaf and strict
-historical witnesses; do not broaden arbitrary paths or search/fallback.
-Targeted current tests and a new complete four-case qualification remain required.
-No host, provider, grant or device changes are included in source restoration.
+Run43926962041 remains failed on d438: matrix/mutation accepted, historic failed
+before descriptor mint and offline-XAI unattempted. The restored source keeps the
+exact reviewed0590 same-profile flat-name image_cache layout and no-follow safety
+without arbitrary-path search/fallback. All973 complete related tests pass.
+
+Fresh run43940129806/job133555130458 independently qualifies published payload
+f1b0e6b6/nativef8 in ALL four complete synthetic Linux scenarios, including historic
+and offline-xAI. Every actor exits0/PID0/noOOM after a natural602+second cooldown;
+1224 command captures and1212 isolation observations revalidate. All16038 source
+files match golden53d56cf5; artifact14266205079 SHA256
+0091157cdcee70d7747b646aa552bb3cad3ee44cf29e0e4bfab0146254e57425
+was identity/size/digest verified before private decryption and independent review.
+
+This is not full Agent dispatch/live-provider, full PM/update, private composition,
+Darwin scanner, physical phone/startup, Photos AND Files/PDF/groups or release
+qualification. No actual host/provider/grant/model/job/device changes occurred.
