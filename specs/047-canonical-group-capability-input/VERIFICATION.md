@@ -18,7 +18,7 @@ test SHA256 `ffefc61c34c10340397e15cb594454436d49738bdef4f3605926a845e41c529b`.
   `gateway/session_group_controls.py`, SHA256
   `828ba909260d5aa44aa9d631794308421573ebf33b72d7743b35643fa27e0114`.
   This pin is sample attribution, never a runtime admission gate.
-- Pinned ruff0.16.9 lint/format, closed plugin surface, private-data scan and diff
+- Pinned ruff0.16.9 focused new-file lint/format, closed plugin surface, private-data scan and diff
   checks pass. The log scanner reports no captured acceptance logs in this tree;
   that is not runtime logging coverage.
 - Independent pre-code and final source/security reviews accept this bounded task.
@@ -30,3 +30,18 @@ parse and separately bound the frame/decoder. No concurrent-input, native transp
 credential, grant, room lifecycle, Linux, physical, cross-platform or release
 qualification is claimed. No runtime caller/importer, registration, dependency,
 Store/schema/config or host/device state changes. Full group tasks remain open.
+
+## Hosted gate on exact source7f8df1fe
+
+CI run43779286787 tests PR merge670ad81f, whose Git tree equals source7f8df1fe.
+The BI1 presentation matrix completed successfully on Python3.12/3.13/3.14.
+That is not group/parser or physical/native coverage. The main plugin job's
+lint step failed with1,241 findings; unit tests and subsequent gates were skipped.
+Local full lint reproduces exactly those counts by rule. All79 finding paths
+and the lint configuration are byte-identical to parent30dedf99; neither new
+group file is named. These inherited findings still block the full gate. No
+suppression, unsafe auto-fix, account change or rerun waiver was applied.
+
+The scoped source/parser acceptance above does not certify the repository-wide
+CI gate or release readiness. Parent lint remediation must remain a separate
+reviewed task rather than rewriting79 files in this feature change.
