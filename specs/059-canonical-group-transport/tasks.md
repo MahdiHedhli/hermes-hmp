@@ -17,6 +17,12 @@
 - [x] GT3-CODEC: fixed profile-scoped control-ticket request/reply codec,
       synthetic85-case boundary suite and causal1/1/2/1/1 guard failures.
       No native call, peer authentication, grant, retry or transport activation.
+- [x] GT3-SOCKET-SOURCE: retained one-shot POSIX socket/registry implementation;
+      actual Darwin private synthetic peers,53 socket cases/205 combined and
+      causal1/1/1/1/2 guards. Deadline renewal found/fixed before publication;
+      no native endpoint/real ticket/phone authority is qualified.
+- [ ] GT3-SOCKET-LINUX: observe the first exact-source CPython3.11/3.14 Linux
+      matrix; verify platform/source/case metadata and actual kernel-peer case.
 - [ ] GT3: implement reviewed explicit-endpoint ticket/socket/WebSocket adapter;
       prove real credential/reader/writer/thread ownership and exact cleanup.
 - [ ] GT4: qualify native per-room/member snapshot fencing and define explicit

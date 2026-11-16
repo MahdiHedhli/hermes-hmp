@@ -13,7 +13,13 @@ passes85 cases and causal ID/profile/duplicate/frame/restart-policy checks. Neit
 has a production caller, actual native ticket mint, group route or phone grant.
 Model accounting and decoded DATA do not prove native cleanup or authority.
 
-Actual socket/WebSocket custody, room/history snapshots, explicit phone group
+A retained one-shot POSIX socket registry is now implemented and independently
+reviewed with205 combined Darwin/CPython3.11.15 cases (53socket), including real
+private Unix I/O and causal ownership/deadline guards. The exact-source Linux
+3.11/3.14 component matrix is prepared but not yet observed; no native control
+endpoint or real ticket was used. See [socket evidence](specs/059-canonical-group-transport/TICKET_SOCKET.md).
+
+Original-native endpoint/authority and WebSocket custody, room/history snapshots, explicit phone group
 authority, complete RPC/decoder/copy shapes, UI/native/platform and physical/release
 qualification remain open. Existing Controls/approval-owner rights do not
 implicitly become group or host/operator permission. See [tasks](specs/059-canonical-group-transport/tasks.md).

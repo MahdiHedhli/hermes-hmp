@@ -1,0 +1,81 @@
+name: Group ticket POSIX component
+on:
+  push:
+    branches: [feat/group-native-transport-contract-20261116]
+    paths:
+      - '.github/workflows/group-ticket-posix.yml'
+      - 'tools/ci/check_group_ticket_socket_runtime.py'
+      - 'server/pyproject.toml'
+      - 'server/uv.lock'
+      - 'server/hmp_plugin/__init__.py'
+      - 'server/tests/conftest.py'
+      - 'server/tests/unit/conftest.py'
+      - 'server/hmp_plugin/group_operation_ledger.py'
+      - 'server/hmp_plugin/group_ticket_codec.py'
+      - 'server/hmp_plugin/group_ticket_socket.py'
+      - 'server/tests/unit/test_group_operation_ledger.py'
+      - 'server/tests/unit/test_group_ticket_codec.py'
+      - 'server/tests/unit/test_group_ticket_socket.py'
+permissions:
+  contents: read
+jobs:
+  posix:
+    name: Synthetic Unix / CPython ${{ matrix.python }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        python: ['3.11', '3.14']
+    env:
+      PYTEST_DISABLE_PLUGIN_AUTOLOAD: '1'
+      PYTHONDONTWRITEBYTECODE: '1'
+      PYTHONPATH: ${{ github.workspace }}/server
+      HERMES_HOME: ${{ runner.temp }}/group-ticket-${{ matrix.python }}/home
+      HERMES_RUNTIME_DIR: ${{ runner.temp }}/group-ticket-${{ matrix.python }}/runtime
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+        with:
+          python-version: ${{ matrix.python }}
+          version: '0.13.5'
+          enable-cache: false
+      - name: Prepare locked test dependencies without installing project or source builds
+        run: >-
+          uv sync --frozen --no-install-project --no-build --python "${{ matrix.python }}"
+          --project server --extra dev
+      - name: Bind actual Linux interpreter and source evidence
+        id: before
+        run: >-
+          uv run --no-sync --python "${{ matrix.python }}" --project server
+          python tools/ci/check_group_ticket_socket_runtime.py before "${{ matrix.python }}"
+          "$RUNNER_TEMP/group-ticket-${{ matrix.python }}"
+      - name: Test synthetic components and actual private Unix peers only
+        run: |
+          umask 077
+          uv run --no-sync --python "${{ matrix.python }}" --project server pytest \
+            server/tests/unit/test_group_operation_ledger.py \
+            server/tests/unit/test_group_ticket_codec.py \
+            server/tests/unit/test_group_ticket_socket.py \
+            -q --import-mode=importlib \
+            --junitxml="$RUNNER_TEMP/group-ticket-${{ matrix.python }}/result.xml"
+      - name: Verify exact case coverage and unchanged source
+        if: always() && steps.before.outcome == 'success'
+        run: >-
+          uv run --no-sync --python "${{ matrix.python }}" --project server
+          python tools/ci/check_group_ticket_socket_runtime.py after "${{ matrix.python }}"
+          "$RUNNER_TEMP/group-ticket-${{ matrix.python }}"
+      - name: Retain allowlisted synthetic evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: group-ticket-posix-${{ github.run_id }}-${{ matrix.python }}
+          retention-days: 2
+          if-no-files-found: warn
+          path: |
+            ${{ runner.temp }}/group-ticket-${{ matrix.python }}/before.json
+            ${{ runner.temp }}/group-ticket-${{ matrix.python }}/after.json
+            ${{ runner.temp }}/group-ticket-${{ matrix.python }}/result.xml
