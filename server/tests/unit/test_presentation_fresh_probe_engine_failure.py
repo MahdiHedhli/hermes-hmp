@@ -1,19 +1,23 @@
 """Causal controls for the unqualified whole-engine failure contract."""
+
 import pytest
 
 from . import test_presentation_entry_files as base
 from .test_presentation_gateway_approval import operator_composed_script
 
 
-@pytest.mark.parametrize('case', ('retire_before_stat', 'lost_native_return', 'wrong_actor',
-                                 'stage_code_drift'))
+@pytest.mark.parametrize(
+    "case", ("retire_before_stat", "lost_native_return", "wrong_actor", "stage_code_drift")
+)
 def test_probe_engine_failure_contract(tmp_path, monkeypatch, case):
-    script, mutation = operator_composed_script('links')
-    script = script.replace('GatewayPackageOwner.verify_recipe(recipe)',
-                            'GatewayPackageOwner.verify_recipe_source_hashes(recipe,entry)')
-    script = script[:script.rfind('print(json.dumps')]
-    script += '\nfailure_case=' + repr(case) + '\n'
-    script += r'''
+    script, mutation = operator_composed_script("links")
+    script = script.replace(
+        "GatewayPackageOwner.verify_recipe(recipe)",
+        "GatewayPackageOwner.verify_recipe_source_hashes(recipe,entry)",
+    )
+    script = script[: script.rfind("print(json.dumps")]
+    script += "\nfailure_case=" + repr(case) + "\n"
+    script += r"""
 import gc,os,threading
 from hmp_startup.gateway_continuation import GatewayContinuationOwner
 from hmp_startup.cache_selection import selected_cache_input_attempts
@@ -104,6 +108,6 @@ finally:
     if old_gc:gc.enable()
 assert owner._bytes_read==0 and owner._count_cell is count and not owner._ready
 print(json.dumps({'mutation':mutation,'runtime_admitted':False}))
-'''
-    monkeypatch.setattr(base, 'SCRIPT', script)
+"""
+    monkeypatch.setattr(base, "SCRIPT", script)
     base.test_actual_entry_and_wrapper_files(tmp_path, mutation)

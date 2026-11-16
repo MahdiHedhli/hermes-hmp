@@ -1,4 +1,5 @@
 """Actual isolated module initialization; no bootstrap, operator files or keys."""
+
 import json
 from pathlib import Path
 import subprocess
@@ -8,7 +9,7 @@ import pytest
 
 
 SERVER = Path(__file__).resolve().parents[2]
-SCRIPT = r'''
+SCRIPT = r"""
 import json,sys
 from pathlib import Path
 from types import ModuleType
@@ -66,20 +67,30 @@ assert not any(name in sys.modules for name in ('hermes_bootstrap','gateway.run'
 assert sys.getprofile() is None and sys.gettrace() is None
 print(json.dumps(dict(order=order,definitions_ready=True,alias_bound_before_helpers=True,
     operator_loaded=False,bootstrap_started=False)))
-'''
+"""
 
 
-@pytest.mark.parametrize('order', ('entry', 'approval', 'selection'))
+@pytest.mark.parametrize("order", ("entry", "approval", "selection"))
 def test_approval_definitions_and_entry_alias_exist_before_original_helper_capture(tmp_path, order):
-    result = subprocess.run([sys.executable, '-I', '-B', '-c', SCRIPT, str(SERVER), order],
-                            cwd=tmp_path, env={'LANG': 'C', 'LC_ALL': 'C'},
-                            capture_output=True, text=True, timeout=15)
+    result = subprocess.run(
+        [sys.executable, "-I", "-B", "-c", SCRIPT, str(SERVER), order],
+        cwd=tmp_path,
+        env={"LANG": "C", "LC_ALL": "C"},
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
     assert result.returncode == 0, result.stderr
-    assert json.loads(result.stdout) == dict(order=order, definitions_ready=True,
-        alias_bound_before_helpers=True, operator_loaded=False, bootstrap_started=False)
+    assert json.loads(result.stdout) == dict(
+        order=order,
+        definitions_ready=True,
+        alias_bound_before_helpers=True,
+        operator_loaded=False,
+        bootstrap_started=False,
+    )
 
 
-FAULT_SCRIPT = r'''
+FAULT_SCRIPT = r"""
 import sys
 from pathlib import Path
 from types import ModuleType
@@ -161,22 +172,41 @@ finally:
 assert not hooks,hooks
 assert case=='initialized-missing' or injected
 print('REFUSED_WITHOUT_FOREIGN_HOOKS' if case!='same-alias' else 'SAME_ALIAS_ACCEPTED')
-'''
+"""
 
 
-@pytest.mark.parametrize('case', ('foreign-spec-key', 'foreign-key', 'foreign-name', 'foreign-class-module', 'none-alias',
-    'foreign-alias', 'incomplete', 'initialized-missing', 'late-alias', 'same-alias'))
+@pytest.mark.parametrize(
+    "case",
+    (
+        "foreign-spec-key",
+        "foreign-key",
+        "foreign-name",
+        "foreign-class-module",
+        "none-alias",
+        "foreign-alias",
+        "incomplete",
+        "initialized-missing",
+        "late-alias",
+        "same-alias",
+    ),
+)
 def test_approval_initialization_refuses_invalid_metadata_without_foreign_hooks(tmp_path, case):
     script = FAULT_SCRIPT
-    result = subprocess.run([sys.executable, '-I', '-B', '-c', script, str(SERVER), case],
-                            cwd=tmp_path, env={'LANG': 'C', 'LC_ALL': 'C'},
-                            capture_output=True, text=True, timeout=15)
+    result = subprocess.run(
+        [sys.executable, "-I", "-B", "-c", script, str(SERVER), case],
+        cwd=tmp_path,
+        env={"LANG": "C", "LC_ALL": "C"},
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
     assert result.returncode == 0, result.stderr
-    assert result.stdout.strip() == ('SAME_ALIAS_ACCEPTED' if case == 'same-alias'
-                                    else 'REFUSED_WITHOUT_FOREIGN_HOOKS')
+    assert result.stdout.strip() == (
+        "SAME_ALIAS_ACCEPTED" if case == "same-alias" else "REFUSED_WITHOUT_FOREIGN_HOOKS"
+    )
 
 
-SELECTION_RECAPTURE = r'''
+SELECTION_RECAPTURE = r"""
 import sys
 from pathlib import Path
 from types import ModuleType
@@ -197,20 +227,24 @@ else:assert vars(selection)['_APPROVAL_OWNER_TYPE'] is replacement
 assert entry._OWNER is None and entry._STARTED is None
 assert 'hermes_bootstrap' not in sys.modules
 print('NO_ALIAS_REPAIR')
-'''
+"""
 
 
-@pytest.mark.parametrize('case', ('none', 'foreign', 'missing', 'forged-root'))
+@pytest.mark.parametrize("case", ("none", "foreign", "missing", "forged-root"))
 def test_initialized_selection_alias_is_not_repaired(tmp_path, case):
-    result = subprocess.run([sys.executable, '-I', '-B', '-c', SELECTION_RECAPTURE,
-                             str(SERVER), case], cwd=tmp_path,
-                            env={'LANG': 'C', 'LC_ALL': 'C'}, capture_output=True,
-                            text=True, timeout=15)
+    result = subprocess.run(
+        [sys.executable, "-I", "-B", "-c", SELECTION_RECAPTURE, str(SERVER), case],
+        cwd=tmp_path,
+        env={"LANG": "C", "LC_ALL": "C"},
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
     assert result.returncode == 0, result.stderr
-    assert result.stdout.strip() == 'NO_ALIAS_REPAIR'
+    assert result.stdout.strip() == "NO_ALIAS_REPAIR"
 
 
-SELECTION_IMPORT_FAULT = r'''
+SELECTION_IMPORT_FAULT = r"""
 import sys
 from pathlib import Path
 from types import ModuleType
@@ -240,14 +274,18 @@ finally:sys.settrace(None)
 assert mutated==[case] and foreign_calls==[],(mutated,foreign_calls)
 assert 'hermes_bootstrap' not in sys.modules
 print('PREPARED_DEFINITIONS_REFUSED')
-'''
+"""
 
 
-@pytest.mark.parametrize('case', ('code', 'getter', 'closure', 'kwdefaults', 'own-require'))
+@pytest.mark.parametrize("case", ("code", "getter", "closure", "kwdefaults", "own-require"))
 def test_selection_import_cannot_renominate_prepared_definitions(tmp_path, case):
-    result = subprocess.run([sys.executable, '-I', '-B', '-c', SELECTION_IMPORT_FAULT,
-                             str(SERVER), case], cwd=tmp_path,
-                            env={'LANG': 'C', 'LC_ALL': 'C'}, capture_output=True,
-                            text=True, timeout=15)
+    result = subprocess.run(
+        [sys.executable, "-I", "-B", "-c", SELECTION_IMPORT_FAULT, str(SERVER), case],
+        cwd=tmp_path,
+        env={"LANG": "C", "LC_ALL": "C"},
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
     assert result.returncode == 0, result.stderr
-    assert result.stdout.strip() == 'PREPARED_DEFINITIONS_REFUSED'
+    assert result.stdout.strip() == "PREPARED_DEFINITIONS_REFUSED"

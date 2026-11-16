@@ -1,18 +1,19 @@
 """Entry-bound file reads use original declaration objects before file effects."""
+
 from __future__ import annotations
 
 import pytest
 
 
-@pytest.mark.parametrize('kind', ('package', 'artifact'))
-@pytest.mark.parametrize('change', ('normal', 'copied', 'unlisted', 'foreign'))
+@pytest.mark.parametrize("kind", ("package", "artifact"))
+@pytest.mark.parametrize("change", ("normal", "copied", "unlisted", "foreign"))
 def test_declared_file_identity_before_open(tmp_path, monkeypatch, kind, change):
     from . import test_presentation_cache_observation as cache
     from . import test_presentation_entry_files as runner
 
     actual_run = runner.test_actual_entry_and_wrapper_files
-    marker = 'plugin = GatewayPackageOwner.verify_recipe(recipe)'
-    injected = r'''
+    marker = "plugin = GatewayPackageOwner.verify_recipe(recipe)"
+    injected = r"""
 actual_file=a.StartupArtifactOwner._file
 calls=[];foreign_calls=[];rejected=[];violations=[];mutations=[];confirmed=[]
 from hmp_plugin.presentation_gateway_package import PackageInventoryError
@@ -77,8 +78,8 @@ if local_monitor:
     monitor.set_local_events(5,file_code,
         monitor.events.PY_START|monitor.events.PY_RETURN)
 else:sys.settrace(traced)
-'''.replace('KIND', repr(kind)).replace('CHANGE', repr(change))
-    after = r'''
+""".replace("KIND", repr(kind)).replace("CHANGE", repr(change))
+    after = r"""
 try:
     plugin = GatewayPackageOwner.verify_recipe_source_hashes(recipe,entry)
     held_entry=EntryFileSnapshotOwner.retain_runtime_link_files(entry,recipe,plugin)
@@ -104,12 +105,12 @@ assert foreign_calls==[] and violations==[]
 assert CHANGE=='normal' or (rejected and mutations and len(confirmed)==len(mutations))
 print(json.dumps({'mutation':mutation,'runtime_admitted':False}))
 raise SystemExit(0)
-'''.replace('CHANGE', repr(change)).replace('KIND', repr(kind))
+""".replace("CHANGE", repr(change)).replace("KIND", repr(kind))
 
     def injected_run(directory, mutation):
         assert runner.SCRIPT.count(marker) == 1
-        monkeypatch.setattr(runner, 'SCRIPT', runner.SCRIPT.replace(marker, injected + after))
+        monkeypatch.setattr(runner, "SCRIPT", runner.SCRIPT.replace(marker, injected + after))
         actual_run(directory, mutation)
 
-    monkeypatch.setattr(runner, 'test_actual_entry_and_wrapper_files', injected_run)
-    cache.test_original_cache_absence_io(tmp_path, monkeypatch, 'missing_leaf')
+    monkeypatch.setattr(runner, "test_actual_entry_and_wrapper_files", injected_run)
+    cache.test_original_cache_absence_io(tmp_path, monkeypatch, "missing_leaf")

@@ -1,23 +1,49 @@
 """Real isolated entry-to-Scope blueprint publication; not native link admission."""
+
 import pytest
 
 from . import test_presentation_entry_files as base
 from .test_presentation_gateway_approval import operator_composed_script
 
 
-@pytest.mark.parametrize('fault', ('normal', 'owner', 'activation', 'io_slot', 'count', 'scope_dispatch',
-                                    'scope_dispatch_early', 'policy_code', 'blueprint_dispatch',
-                                    'register_helper', 'need_helper', 'source_helper',
-                                    'scope_blueprint_copy', 'lost_blueprint_return'))
+@pytest.mark.parametrize(
+    "fault",
+    (
+        "normal",
+        "owner",
+        "activation",
+        "io_slot",
+        "count",
+        "scope_dispatch",
+        "scope_dispatch_early",
+        "policy_code",
+        "blueprint_dispatch",
+        "register_helper",
+        "need_helper",
+        "source_helper",
+        "scope_blueprint_copy",
+        "lost_blueprint_return",
+    ),
+)
 def test_actual_link_scope_last_origin_return_seals_publication(tmp_path, monkeypatch, fault):
-    script, mutation = operator_composed_script('links')
-    script = script.replace('GatewayPackageOwner.verify_recipe(recipe)',
-                            'GatewayPackageOwner.verify_recipe_source_hashes(recipe,entry)')
-    marker = 'original_bytes=plugin._bytes_read'
+    script, mutation = operator_composed_script("links")
+    script = script.replace(
+        "GatewayPackageOwner.verify_recipe(recipe)",
+        "GatewayPackageOwner.verify_recipe_source_hashes(recipe,entry)",
+    )
+    marker = "original_bytes=plugin._bytes_read"
     assert script.count(marker) == 1
-    script = script.replace('entry = GatewayEntryOwner.start()',
-        "import os,time\nstage_fd=os.open(base/'link-scope-stage.jsonl',os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)\nstage_start=time.monotonic()\ndef stage(label):\n    os.write(stage_fd,(json.dumps({'stage':label,'elapsed':time.monotonic()-stage_start})+'\\n').encode())\nstage('before_entry')\nentry = GatewayEntryOwner.start()\nstage('after_entry')",1)
-    script = script[:script.index(marker)] + '\nfault=' + repr(fault) + '\n' + r'''
+    script = script.replace(
+        "entry = GatewayEntryOwner.start()",
+        "import os,time\nstage_fd=os.open(base/'link-scope-stage.jsonl',os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)\nstage_start=time.monotonic()\ndef stage(label):\n    os.write(stage_fd,(json.dumps({'stage':label,'elapsed':time.monotonic()-stage_start})+'\\n').encode())\nstage('before_entry')\nentry = GatewayEntryOwner.start()\nstage('after_entry')",
+        1,
+    )
+    script = (
+        script[: script.index(marker)]
+        + "\nfault="
+        + repr(fault)
+        + "\n"
+        + r"""
 from hmp_startup import link_factory_origin as actual_origins
 from hmp_plugin import presentation_link_path_policy as policy
 stage('before_link_retention')
@@ -155,18 +181,23 @@ else:
 stage('assertions_complete')
 os.close(stage_fd)
 print(json.dumps({'mutation':mutation,'runtime_admitted':False}))
-'''
-    monkeypatch.setattr(base, 'SCRIPT', script)
+"""
+    )
+    monkeypatch.setattr(base, "SCRIPT", script)
     base.test_actual_entry_and_wrapper_files(tmp_path, mutation)
 
 
 def test_actual_link_scope_unobserved_normal(tmp_path, monkeypatch):
-    script, mutation = operator_composed_script('links')
-    script = script.replace('GatewayPackageOwner.verify_recipe(recipe)',
-                            'GatewayPackageOwner.verify_recipe_source_hashes(recipe,entry)')
-    marker = 'original_bytes=plugin._bytes_read'
+    script, mutation = operator_composed_script("links")
+    script = script.replace(
+        "GatewayPackageOwner.verify_recipe(recipe)",
+        "GatewayPackageOwner.verify_recipe_source_hashes(recipe,entry)",
+    )
+    marker = "original_bytes=plugin._bytes_read"
     assert script.count(marker) == 1
-    script = script[:script.index(marker)] + r'''
+    script = (
+        script[: script.index(marker)]
+        + r"""
 from hmp_plugin import presentation_link_path_policy as policy
 retained=EntryFileSnapshotOwner.retain_runtime_link_files(entry,recipe,plugin)
 checked=EntryFileSnapshotOwner.complete(retained)
@@ -178,6 +209,7 @@ assert blueprint.origin is tuple.__getitem__(entry._scope.native_files,4)
 assert len(blueprint.rows)==3*(len(scope.runtime.link.hops)+1)
 assert policy._scope_blueprint_tail(blueprint) is blueprint
 print(json.dumps({'mutation':mutation,'runtime_admitted':False}))
-'''
-    monkeypatch.setattr(base, 'SCRIPT', script)
+"""
+    )
+    monkeypatch.setattr(base, "SCRIPT", script)
     base.test_actual_entry_and_wrapper_files(tmp_path, mutation)

@@ -1,28 +1,31 @@
 """Real full probe engine prototype; no image publication or live host traffic."""
+
 import pytest
 
 from . import test_presentation_entry_files as base
 from .test_presentation_gateway_approval import operator_composed_script
 
 
-@pytest.mark.parametrize('case', ('missing', 'directory', 'declared'))
+@pytest.mark.parametrize("case", ("missing", "directory", "declared"))
 def test_complete_fresh_probe_engine(tmp_path, monkeypatch, case):
-    script, mutation = operator_composed_script('links')
-    script = script.replace('GatewayPackageOwner.verify_recipe(recipe)',
-                            'GatewayPackageOwner.verify_recipe_source_hashes(recipe,entry)')
-    if case in ('directory', 'declared'):
-        setup = r'''
+    script, mutation = operator_composed_script("links")
+    script = script.replace(
+        "GatewayPackageOwner.verify_recipe(recipe)",
+        "GatewayPackageOwner.verify_recipe_source_hashes(recipe,entry)",
+    )
+    if case in ("directory", "declared"):
+        setup = r"""
 import importlib.util
 prepared_cache=Path(importlib.util.cache_from_source(str(dep_root/'__init__.py')))
 prepared_cache.parent.mkdir(mode=0o700)
 if ENGINE_CASE=='directory':prepared_cache.mkdir(mode=0o700)
 else:prepared_cache.write_bytes(b'SYNTHETIC_DECLARED_CACHE_NOT_READ')
 prepared_cache.chmod(0o700 if ENGINE_CASE=='directory' else 0o600)
-'''.replace('ENGINE_CASE', repr(case))
-        script = script.replace('import sample_dep\n', 'import sample_dep\n' + setup, 1)
-    script = script[:script.rfind('print(json.dumps')]
-    script += '\nengine_case=' + repr(case) + '\n'
-    script += r'''
+""".replace("ENGINE_CASE", repr(case))
+        script = script.replace("import sample_dep\n", "import sample_dep\n" + setup, 1)
+    script = script[: script.rfind("print(json.dumps")]
+    script += "\nengine_case=" + repr(case) + "\n"
+    script += r"""
 import gc,os
 from hmp_startup.gateway_continuation import GatewayContinuationOwner
 from hmp_startup.cache_selection import selected_cache_input_attempts
@@ -84,6 +87,6 @@ else:raise AssertionError('prototype boundary must not publish legacy completion
 assert seen==[True] and facts.get('boundary_complete') is True
 assert owner._failed and not owner._ready and owner._bytes_read==0
 print(json.dumps({'mutation':mutation,'runtime_admitted':False}))
-'''
-    monkeypatch.setattr(base, 'SCRIPT', script)
+"""
+    monkeypatch.setattr(base, "SCRIPT", script)
     base.test_actual_entry_and_wrapper_files(tmp_path, mutation)

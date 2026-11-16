@@ -1,18 +1,26 @@
 """Copied native runtime plans must refuse before actual Scope publication."""
+
 import pytest
 
 from . import test_presentation_entry_files as base
 from .test_presentation_gateway_approval import operator_composed_script
 
 
-@pytest.mark.parametrize('fault', ('plan_copy', 'coherent_link_copy'))
+@pytest.mark.parametrize("fault", ("plan_copy", "coherent_link_copy"))
 def test_original_input_plan_is_required_before_scope_publication(tmp_path, monkeypatch, fault):
-    script, mutation = operator_composed_script('links')
-    script = script.replace('GatewayPackageOwner.verify_recipe(recipe)',
-                            'GatewayPackageOwner.verify_recipe_source_hashes(recipe,entry)')
-    marker = 'original_bytes=plugin._bytes_read'
+    script, mutation = operator_composed_script("links")
+    script = script.replace(
+        "GatewayPackageOwner.verify_recipe(recipe)",
+        "GatewayPackageOwner.verify_recipe_source_hashes(recipe,entry)",
+    )
+    marker = "original_bytes=plugin._bytes_read"
     assert script.count(marker) == 1
-    script = script[:script.index(marker)] + '\nfault=' + repr(fault) + '\n' + r'''
+    script = (
+        script[: script.index(marker)]
+        + "\nfault="
+        + repr(fault)
+        + "\n"
+        + r"""
 retained=EntryFileSnapshotOwner.retain_runtime_link_files(entry,recipe,plugin)
 source_ctor=a._RuntimeSource.__new__.__code__;scope_ctor=a._Scope.__new__.__code__
 source_builder=a._runtime_source.__code__;retain_code=a.StartupArtifactOwner._retain.__func__.__code__
@@ -67,6 +75,7 @@ except EntryFilesError:pass
 else:raise AssertionError('copied-plan refusal replayed')
 assert baseline[0]==(tuple(ledger.counts),len(ledger.attempts),len(ledger.scopes))
 print(json.dumps({'mutation':mutation,'runtime_admitted':False}))
-'''
-    monkeypatch.setattr(base, 'SCRIPT', script)
+"""
+    )
+    monkeypatch.setattr(base, "SCRIPT", script)
     base.test_actual_entry_and_wrapper_files(tmp_path, mutation)

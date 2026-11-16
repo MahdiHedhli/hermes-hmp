@@ -3,6 +3,7 @@
 No mock returns an authority verdict. The original guard/runtime audit must
 reject changed retained state before a selected metadata/readlink C call.
 """
+
 import pytest
 import json
 
@@ -10,24 +11,28 @@ from . import test_presentation_entry_files as base
 from .test_presentation_gateway_approval import operator_composed_script
 
 
-CASES = [(site, 'before_guard', fault)
-         for site in ('resource', 'lifetime')
-         for fault in ('nested_parent', 'package_history', 'copied_plan', 'entry_root', 'retired')]
-CASES += [(site, 'actor_return', 'copied_plan')
-          for site in ('resource', 'lifetime')]
+CASES = [
+    (site, "before_guard", fault)
+    for site in ("resource", "lifetime")
+    for fault in ("nested_parent", "package_history", "copied_plan", "entry_root", "retired")
+]
+CASES += [(site, "actor_return", "copied_plan") for site in ("resource", "lifetime")]
 
 
-@pytest.mark.parametrize('site,boundary,fault', CASES)
+@pytest.mark.parametrize("site,boundary,fault", CASES)
 def test_original_link_guard_rejects_changed_runtime_before_native_work(
-        tmp_path, monkeypatch, request, site, boundary, fault):
-    script, mutation = operator_composed_script('links')
-    script = script.replace('GatewayPackageOwner.verify_recipe(recipe)',
-                            'GatewayPackageOwner.verify_recipe_source_hashes(recipe,entry)')
-    marker = 'original_bytes=plugin._bytes_read'
+    tmp_path, monkeypatch, request, site, boundary, fault
+):
+    script, mutation = operator_composed_script("links")
+    script = script.replace(
+        "GatewayPackageOwner.verify_recipe(recipe)",
+        "GatewayPackageOwner.verify_recipe_source_hashes(recipe,entry)",
+    )
+    marker = "original_bytes=plugin._bytes_read"
     assert script.count(marker) == 1
-    script = script[:script.index(marker)]
-    script += '\nsite,boundary,fault=' + repr((site, boundary, fault)) + '\n'
-    script += r'''
+    script = script[: script.index(marker)]
+    script += "\nsite,boundary,fault=" + repr((site, boundary, fault)) + "\n"
+    script += r"""
 from hmp_plugin import presentation_native_link as native_link
 from hmp_startup.entry_files import EntryFilesError
 retained=EntryFileSnapshotOwner.retain_runtime_link_files(entry,recipe,plugin)
@@ -160,8 +165,8 @@ destination=base/'link-runtime-guard-refusal.json'
 destination.write_text(json.dumps(evidence,sort_keys=True));destination.chmod(0o600)
 assert sys.getprofile() is None and sys.gettrace() is None
 print(json.dumps({'mutation':mutation,'runtime_admitted':False}))
-'''
-    monkeypatch.setattr(base, 'SCRIPT', script)
+"""
+    monkeypatch.setattr(base, "SCRIPT", script)
     base.test_actual_entry_and_wrapper_files(tmp_path, mutation)
-    evidence = json.loads((tmp_path / 'link-runtime-guard-refusal.json').read_text())
-    request.node.user_properties.append(('link_runtime_guard_evidence', json.dumps(evidence)))
+    evidence = json.loads((tmp_path / "link-runtime-guard-refusal.json").read_text())
+    request.node.user_properties.append(("link_runtime_guard_evidence", json.dumps(evidence)))

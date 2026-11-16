@@ -1,19 +1,30 @@
 """Malformed origin/name DATA must refuse without executing foreign hooks."""
+
 import pytest
 
 from . import test_presentation_entry_files as base
 from .test_presentation_gateway_approval import operator_composed_script
 
 
-@pytest.mark.parametrize('case', ('removed_export', 'foreign_policy_name', 'shared_helper_replaced',
-                                  'shared_stage_selector', 'namespace_rejoin'))
+@pytest.mark.parametrize(
+    "case",
+    (
+        "removed_export",
+        "foreign_policy_name",
+        "shared_helper_replaced",
+        "shared_stage_selector",
+        "namespace_rejoin",
+    ),
+)
 def test_probe_shared_origin_refusal(tmp_path, monkeypatch, case):
-    script, mutation = operator_composed_script('links')
-    script = script.replace('GatewayPackageOwner.verify_recipe(recipe)',
-                            'GatewayPackageOwner.verify_recipe_source_hashes(recipe,entry)')
-    script = script[:script.rfind('print(json.dumps')]
-    script += '\norigin_case=' + repr(case) + '\n'
-    script += r'''
+    script, mutation = operator_composed_script("links")
+    script = script.replace(
+        "GatewayPackageOwner.verify_recipe(recipe)",
+        "GatewayPackageOwner.verify_recipe_source_hashes(recipe,entry)",
+    )
+    script = script[: script.rfind("print(json.dumps")]
+    script += "\norigin_case=" + repr(case) + "\n"
+    script += r"""
 import os
 from hmp_startup.gateway_continuation import GatewayContinuationOwner
 from hmp_startup.cache_selection import selected_cache_input_attempts
@@ -97,6 +108,6 @@ else:
     assert owner._probe_execution is None
 assert owner._bytes_read==0 and owner._count_cell is count
 print(json.dumps({'mutation':mutation,'runtime_admitted':False}))
-'''
-    monkeypatch.setattr(base, 'SCRIPT', script)
+"""
+    monkeypatch.setattr(base, "SCRIPT", script)
     base.test_actual_entry_and_wrapper_files(tmp_path, mutation)

@@ -1,4 +1,5 @@
 """Actual retained-audit count/cost evidence, never permission or speed acceptance."""
+
 import json
 
 from . import test_presentation_entry_files as base
@@ -6,13 +7,15 @@ from .test_presentation_gateway_approval import operator_composed_script
 
 
 def test_actual_original_nested_audit_and_cost_without_new_work(tmp_path, monkeypatch, request):
-    script, mutation = operator_composed_script('links')
-    script = script.replace('GatewayPackageOwner.verify_recipe(recipe)',
-                            'GatewayPackageOwner.verify_recipe_source_hashes(recipe,entry)')
-    marker = 'original_bytes=plugin._bytes_read'
+    script, mutation = operator_composed_script("links")
+    script = script.replace(
+        "GatewayPackageOwner.verify_recipe(recipe)",
+        "GatewayPackageOwner.verify_recipe_source_hashes(recipe,entry)",
+    )
+    marker = "original_bytes=plugin._bytes_read"
     assert script.count(marker) == 1
-    script = script[:script.index(marker)]
-    script += r'''
+    script = script[: script.index(marker)]
+    script += r"""
 import time,statistics
 parent=entry._scope.native_files.link_policy
 assert parent is entry._started_cell[5].link_policy
@@ -67,16 +70,18 @@ destination=base/'retained-audit-cost.json'
 destination.write_text(json.dumps(evidence,sort_keys=True));destination.chmod(0o600)
 assert sys.getprofile() is None and sys.gettrace() is None
 print(json.dumps({'mutation':mutation,'runtime_admitted':False}))
-'''
-    monkeypatch.setattr(base, 'SCRIPT', script)
+"""
+    monkeypatch.setattr(base, "SCRIPT", script)
     base.test_actual_entry_and_wrapper_files(tmp_path, mutation)
-    evidence = json.loads((tmp_path / 'retained-audit-cost.json').read_text())
-    assert evidence['nested_original_recipe_calls'] == 1
-    assert evidence['direct_original_recipe_calls'] == 1
-    assert evidence['no_new_work_or_bytes'] is True
+    evidence = json.loads((tmp_path / "retained-audit-cost.json").read_text())
+    assert evidence["nested_original_recipe_calls"] == 1
+    assert evidence["direct_original_recipe_calls"] == 1
+    assert evidence["no_new_work_or_bytes"] is True
     # Preserve timing observations, not a pass threshold or a native speed claim.
-    destination = tmp_path / 'retained-audit-cost-summary.json'
+    destination = tmp_path / "retained-audit-cost-summary.json"
     destination.write_text(json.dumps(evidence, sort_keys=True))
     destination.chmod(0o600)
 
-    request.node.user_properties.append(('retained_audit_cost', json.dumps(evidence, sort_keys=True)))
+    request.node.user_properties.append(
+        ("retained_audit_cost", json.dumps(evidence, sort_keys=True))
+    )

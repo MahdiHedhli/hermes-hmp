@@ -1,4 +1,5 @@
 """A lost native close ACK must not stop remaining reserved startup cleanup."""
+
 import os
 import subprocess
 
@@ -8,14 +9,16 @@ from . import test_presentation_entry_files as base
 from .test_presentation_gateway_approval import operator_composed_script
 
 
-@pytest.mark.parametrize('case', ('normal', 'first', 'middle'))
+@pytest.mark.parametrize("case", ("normal", "first", "middle"))
 def test_startup_probe_known_close_cleanup(tmp_path, monkeypatch, case):
-    script, mutation = operator_composed_script('links')
-    script = script.replace('GatewayPackageOwner.verify_recipe(recipe)',
-                            'GatewayPackageOwner.verify_recipe_source_hashes(recipe,entry)')
-    script = script[:script.index('original_bytes=plugin._bytes_read')]
-    script += '\ncleanup_case=' + repr(case) + '\n'
-    script += r'''
+    script, mutation = operator_composed_script("links")
+    script = script.replace(
+        "GatewayPackageOwner.verify_recipe(recipe)",
+        "GatewayPackageOwner.verify_recipe_source_hashes(recipe,entry)",
+    )
+    script = script[: script.index("original_bytes=plugin._bytes_read")]
+    script += "\ncleanup_case=" + repr(case) + "\n"
+    script += r"""
 import os,faulthandler
 # Controlled comparison: no parallel faulthandler stack-dump watchdog.
 # Native fault observer, all outcome/accounting assertions and60s deadline unchanged.
@@ -177,27 +180,29 @@ else:
 diagnostic_stage('assertions_complete')
 os.close(_diagnostic_fd)
 print(json.dumps({'mutation':mutation,'runtime_admitted':False}))
-'''
-    monkeypatch.setattr(base, 'SCRIPT', script)
+"""
+    monkeypatch.setattr(base, "SCRIPT", script)
     try:
         base.test_actual_entry_and_wrapper_files(tmp_path, mutation)
     except subprocess.TimeoutExpired as error:
         # Stack names/lines only from this isolated synthetic child, never locals.
-        path = tmp_path / 'startup-native-watchdog-stack.log'
+        path = tmp_path / "startup-native-watchdog-stack.log"
         fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-        with os.fdopen(fd, 'wb') as stream:
-            stream.write(error.stderr or b'')
-        stdout_path=tmp_path/'startup-native-timeout-stdout.log'
-        stdout_fd=os.open(stdout_path,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
-        with os.fdopen(stdout_fd,'wb') as stream:stream.write((error.stdout or b'')[:8192])
+        with os.fdopen(fd, "wb") as stream:
+            stream.write(error.stderr or b"")
+        stdout_path = tmp_path / "startup-native-timeout-stdout.log"
+        stdout_fd = os.open(stdout_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(stdout_fd, "wb") as stream:
+            stream.write((error.stdout or b"")[:8192])
         raise
     finally:
         # Retain only bounded synthetic timing labels outside pytest's success
         # fixture cleanup. No native result, frame locals or source data copied.
-        timing=tmp_path/'observer-timing.jsonl'
+        timing = tmp_path / "observer-timing.jsonl"
         if timing.exists():
-            raw=timing.read_bytes()
-            assert len(raw)<=8192
-            destination=tmp_path.parent.parent/('startup-observer-'+case+'-timing.jsonl')
-            fd=os.open(destination,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
-            with os.fdopen(fd,'wb') as stream:stream.write(raw)
+            raw = timing.read_bytes()
+            assert len(raw) <= 8192
+            destination = tmp_path.parent.parent / ("startup-observer-" + case + "-timing.jsonl")
+            fd = os.open(destination, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            with os.fdopen(fd, "wb") as stream:
+                stream.write(raw)

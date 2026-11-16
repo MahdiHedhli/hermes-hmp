@@ -1,18 +1,23 @@
 """Startup policy DATA cannot gain admission from an unconfigured scope."""
+
 import pytest
 
 from . import test_presentation_entry_files as base
 from .test_presentation_gateway_approval import operator_composed_script
 
 
-@pytest.mark.parametrize('case', ('unset_origin', 'foreign_module', 'wrong_owner', 'copied_registration'))
+@pytest.mark.parametrize(
+    "case", ("unset_origin", "foreign_module", "wrong_owner", "copied_registration")
+)
 def test_startup_metadata_unconfigured_scope_refuses(tmp_path, monkeypatch, case):
-    script, mutation = operator_composed_script('links')
-    script = script.replace('GatewayPackageOwner.verify_recipe(recipe)',
-                            'GatewayPackageOwner.verify_recipe_source_hashes(recipe,entry)')
-    script = script[:script.rfind('print(json.dumps')]
-    script += '\npolicy_case=' + repr(case) + '\n'
-    script += r'''
+    script, mutation = operator_composed_script("links")
+    script = script.replace(
+        "GatewayPackageOwner.verify_recipe(recipe)",
+        "GatewayPackageOwner.verify_recipe_source_hashes(recipe,entry)",
+    )
+    script = script[: script.rfind("print(json.dumps")]
+    script += "\npolicy_case=" + repr(case) + "\n"
+    script += r"""
 import os
 from hmp_plugin import presentation_native_metadata as metadata
 from hmp_plugin import presentation_startup_artifacts as artifacts
@@ -64,6 +69,6 @@ assert all(current is original for current,original in zip(owner._origin.records
 assert owner._count_cell is before[3] and owner._bytes_read==before[4]
 assert owner._failed is before[5] and owner._unknown is before[6]
 print(json.dumps({'mutation':mutation,'runtime_admitted':False}))
-'''
-    monkeypatch.setattr(base, 'SCRIPT', script)
+"""
+    monkeypatch.setattr(base, "SCRIPT", script)
     base.test_actual_entry_and_wrapper_files(tmp_path, mutation)
