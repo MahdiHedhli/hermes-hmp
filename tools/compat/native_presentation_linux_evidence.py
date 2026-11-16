@@ -29,8 +29,12 @@ _FILES = (
     "run/curated-summary.json",
     "run/matrix/report.json",
     "run/matrix/settlement.json",
+    "run/matrix/unresolved-teardown.json",
+    "run/matrix/progress.json",
     "run/mutation/report.json",
     "run/mutation/settlement.json",
+    "run/mutation/unresolved-teardown.json",
+    "run/mutation/progress.json",
 )
 _DIRECTORIES = ("sources", "preparation-commands", "image-commands", "run/docker-cli")
 

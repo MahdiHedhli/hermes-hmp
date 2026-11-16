@@ -49,7 +49,10 @@ def setup():
             "PidMode": "",
             "UTSMode": "",
             "RestartPolicy": {"Name": "no"},
-            "LogConfig": {"Type": "local", "Config": {"max-size": "1m", "max-file": "1"}},
+            "LogConfig": {
+                "Type": "local",
+                "Config": {"max-size": "1m", "max-file": "1", "compress": "false"},
+            },
             "PidsLimit": 128,
             "Memory": 2 * 1024**3,
             "MemorySwap": 2 * 1024**3,
@@ -293,7 +296,9 @@ def test_uncertain_create_reconciles_name_without_replaying_create(tmp_path, mon
     assert "terminalAfterFailure" not in row
 
 
-@pytest.mark.parametrize("boundary", ["receipt-before-start", "lost-start-response"])
+@pytest.mark.parametrize(
+    "boundary", ["receipt-before-start", "lost-start-response", "lost-start-broken-output"]
+)
 def test_outer_failure_reconciles_original_actor_and_never_advances(
     tmp_path, monkeypatch, boundary
 ):
@@ -355,6 +360,13 @@ def test_outer_failure_reconciles_original_actor_and_never_advances(
             }
 
     monkeypatch.setattr(module, "DockerOwner", Owner)
+    if boundary == "lost-start-broken-output":
+
+        def broken_output(*args, **kwargs):
+            raise BrokenPipeError("synthetic closed console")
+
+        monkeypatch.setattr(module, "print", broken_output, raising=False)
+
     original_save = module.save
     failed = []
 
@@ -382,9 +394,9 @@ def test_outer_failure_reconciles_original_actor_and_never_advances(
         )
     assert sum(x[:2] == ["container", "create"] for x in calls) == 1
     assert sum(x[:2] == ["container", "start"] for x in calls) == (
-        1 if boundary == "lost-start-response" else 0
+        1 if boundary.startswith("lost-start") else 0
     )
-    assert len(inspections) == (3 if boundary == "lost-start-response" else 2)
+    assert len(inspections) == (3 if boundary.startswith("lost-start") else 2)
     assert set(inspections) == {identity}
     receipt = json.loads((root / "receipt.json").read_text())
     assert len(receipt["scenarios"]) == 1 and receipt["stage"] == "refused-or-unresolved"
@@ -392,9 +404,12 @@ def test_outer_failure_reconciles_original_actor_and_never_advances(
     assert result["reconciliationActive"] is False
     assert (
         result.get("terminalAfterFailure") is True
-        if boundary == "lost-start-response"
+        if boundary.startswith("lost-start")
         else result.get("retainedInertNeverStarted") is True
     )
+
+    if boundary == "lost-start-broken-output":
+        assert receipt["publicOutputFailed"] is True
 
 
 def test_runtime_inventory_binds_modes_and_empty_directories(tmp_path):
@@ -436,3 +451,16 @@ def test_manifest_format_binds_modes_and_refuses_legacy_schema(tmp_path):
     module.save(manifest, document)
     with pytest.raises(module.LinuxJourneyError):
         module.verify_runtime(prefix, venv, manifest, module.digest(manifest))
+
+
+@pytest.mark.parametrize("compression", [None, "true"])
+def test_one_file_local_log_requires_explicit_disabled_compression(setup, compression):
+    item = copy.deepcopy(setup[-1])
+    if compression is None:
+        item["HostConfig"]["LogConfig"]["Config"].pop("compress")
+    else:
+        item["HostConfig"]["LogConfig"]["Config"]["compress"] = compression
+    with pytest.raises(module.LinuxJourneyError):
+        check(setup, item)
+    arguments = setup[-2]
+    assert "compress=false" in arguments and "max-file=1" in arguments

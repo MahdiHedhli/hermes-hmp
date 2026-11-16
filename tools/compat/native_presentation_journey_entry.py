@@ -1467,6 +1467,14 @@ try:
                                 "stage": "holding-actual-listener-store",
                                 "retryAllowed": False,
                                 "cleanupErrors": cleanup,
+                                "observedReport": report,
+                                "pendingErrorType": (
+                                    type(sys.exception()).__name__
+                                    if sys.exception() is not None
+                                    else None
+                                ),
+                                "pendingTraceback": traceback.format_exc(),
+                                "qualificationClaimed": False,
                             },
                             f,
                         )

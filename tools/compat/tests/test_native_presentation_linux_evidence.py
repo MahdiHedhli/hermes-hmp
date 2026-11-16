@@ -127,3 +127,15 @@ def test_wrong_public_certificate_pin_refuses_before_bundle(root, monkeypatch):
     with pytest.raises(RuntimeError, match="synthetic_evidence_scope_refused"):
         module.encrypt(root)
     assert not (root / "private-diagnostics.zip").exists()
+
+
+def test_partial_progress_and_unresolved_snapshot_are_private_allowlisted_files(root):
+    matrix = root / "run/matrix"
+    matrix.mkdir(parents=True, mode=0o700)
+    for name in ("progress.json", "unresolved-teardown.json"):
+        path = matrix / name
+        path.write_text('{"qualificationClaimed":false,"synthetic":"private-only"}')
+        path.chmod(0o600)
+    files = module.selected(root)
+    assert len(files) == 3
+    assert matrix / "progress.json" in files and matrix / "unresolved-teardown.json" in files

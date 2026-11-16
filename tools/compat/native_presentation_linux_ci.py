@@ -47,6 +47,9 @@ def run(workspace, temporary):
             (workspace / "native-reference").resolve(strict=True),
             (workspace / "hmp").resolve(strict=True),
         )
+        print(
+            json.dumps({"stage": "software-prepared", "nativeJourneyQualified": False}), flush=True
+        )
         controller = prepare.module(
             "_native_ci_controller", "native_presentation_linux_controller.py"
         )

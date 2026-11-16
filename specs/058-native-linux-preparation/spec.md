@@ -202,3 +202,38 @@ and quarantines the root; a pending/old ledger is never a resumption grant. Thes
 are filesystem fsync semantics, not a guarantee against arbitrary hardware loss.
 Two causal synthetic file/parent-sync failures verify zero mode changes and no
 replay. Actual Linux normalization remains pending.
+
+## Fourth actual experiment: staging passed, task launch refused
+
+Run43819897776/job133140343691 at0d21bf6b ended canceled after its50-minute
+maximum. The encrypted-only artifact14205804688 was digest-verified and privately
+decrypted. Actual Linux preparation and schema2 inventory passed. The complete
+permission receipt records exactly one fresh venv/.lock change0666→0644, same
+inode/owner/type and unchanged empty-file hash. This validates the staging
+correction on this sample, not native or production feature qualification.
+
+The Docker create and inspect CLI calls succeeded, but start returned1: the local
+logging driver rejects compression enabled by default with max-file1. The daemon
+reported failure before task creation. All sampled reconciliation states remained
+created/PID0; no native entry was observed. The controller preserved its original
+created-container intent and made only read-only inspections rather than replay
+start or claim release. Final cleanup is unqualified after external cancellation.
+
+The correction explicitly sets compress=false while retaining max-size1m and
+max-file1, as documented by Docker's local logging driver; inspection must match
+all three values. This changes no daemon-global setting, volume, network, user,
+capability, privilege, native deadline or admission rule. Private unresolved
+teardown snapshots now include accumulated report/error context and remain held
+without release; allowlisted progress/snapshot files are encrypted only. All140
+entry assertions remain unchanged. Fixed coarse software/container status messages
+add observability without publishing diagnostics, keys, identity or message data.
+Previous canceled evidence remains immutable. A new independently reviewed source
+revision may use fresh roots; the old created container is never restarted/reused
+and its cleanup cannot be inferred from the new experiment.
+
+Coarse console progress is explicitly best-effort and non-throwing. Independent
+review caught a handler print that could skip reconciliation on broken stdout;
+it now records publicOutputFailed privately and continues the original actor
+reconciliation. A closed-console/lost-start-response synthetic case verifies
+same-ID observation through terminal with no create/start replay. This does not
+turn a canceled/unknown older actor into a released or accepted one.

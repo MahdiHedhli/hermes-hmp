@@ -26,7 +26,7 @@ _IMAGE = (
     "docker.io/library/ubuntu@sha256:"
     "77eb101c607d6e3d4f5ad0c8a02c2136c689b98aba1f359e6502ba517e5c57ec"
 )
-_ENTRY_SHA = "5abafa57c0cbd902e2976786ebcaabf2d2f22f9630ce8329b7ebc13b28106d79"
+_ENTRY_SHA = "ca598b2332cfb23f847a00a28ae9399b775cdbef7ad46d5c08f5ac1f3ad45863"
 _FD_SHA = "692ae20b7bf86016dc7d7f27a678798cf3eb54dad1d601a4376e77b058554056"
 _MANIFEST_SHA = "1686985c2270a0a6a270b52c81a35fb6aaf7fbce4e87c8a4c8b0d65ce91a6804"
 _LABEL = "app.hermesbot.native-presentation-fixture"
@@ -214,6 +214,8 @@ def create_arguments(name, root, source, prefix, venv, entry, mode, uid, gid):
         "max-size=1m",
         "--log-opt",
         "max-file=1",
+        "--log-opt",
+        "compress=false",
         "--workdir",
         str(root),
         "--entrypoint",
@@ -255,7 +257,10 @@ def verify_container(item, name, root, venv, entry, mode, uid, gid, mounts):
         not host.get("PortBindings") and not host.get("PublishAllPorts") and not host.get("Links")
     )
     require(host["RestartPolicy"]["Name"] == "no" and not host.get("AutoRemove"))
-    require(host["LogConfig"] == {"Type": "local", "Config": {"max-size": "1m", "max-file": "1"}})
+    require(
+        host["LogConfig"]
+        == {"Type": "local", "Config": {"max-size": "1m", "max-file": "1", "compress": "false"}}
+    )
     require(host["PidsLimit"] == 128 and host["Memory"] == 2 * 1024**3)
     require(host["MemorySwap"] == 2 * 1024**3 and host["NanoCpus"] == 2_000_000_000)
     require(host["ShmSize"] == 1024**2 and not host.get("Binds") and not host.get("Tmpfs"))
@@ -349,6 +354,14 @@ class DockerOwner:
         document = json.loads(self.call(["container", "inspect", identity]))
         require(type(document) is list and len(document) == 1)
         return document[0]
+
+
+def public_progress(receipt, payload):
+    """Best-effort fixed metadata; console failure never releases an actor."""
+    try:
+        print(json.dumps(payload), flush=True)
+    except BaseException:
+        receipt["publicOutputFailed"] = True
 
 
 def checkpoint(root, receipt):
@@ -470,6 +483,7 @@ def run(root, source, prefix, venv, docker, runtime_manifest, runtime_sha256):
             )
             started = time.monotonic()
             overdue = False
+            public_state = None
             while True:
                 item = owner.inspect(container)
                 require(
@@ -479,6 +493,12 @@ def run(root, source, prefix, venv, docker, runtime_manifest, runtime_sha256):
                     == container
                 )
                 state = item["State"]
+                if state["Status"] in ("running", "exited") and state["Status"] != public_state:
+                    public_state = state["Status"]
+                    public_progress(
+                        receipt,
+                        {"stage": "native-container", "scenario": mode, "state": public_state},
+                    )
                 row.update(
                     stage="observing-same-container", state=state["Status"], pid=state["Pid"]
                 )
@@ -506,6 +526,7 @@ def run(root, source, prefix, venv, docker, runtime_manifest, runtime_sha256):
             row.update(accepted=True, reportSHA256=digest(fixture / "report.json"))
             save(root / "receipt.json", receipt)
     except BaseException as exc:
+        public_progress(receipt, {"stage": "native-refused-or-unresolved", "retryAllowed": False})
         receipt.update(
             stage="refused-or-unresolved",
             failureType=type(exc).__name__,
