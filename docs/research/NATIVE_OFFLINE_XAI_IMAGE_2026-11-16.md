@@ -1,10 +1,10 @@
 # Native xAI result-path qualification — November 16
 
-Status: [run43867859682](https://github.com/MahdiHedhli/hermes-hmp/actions/runs/43867859682),
-job133300957758, is confirmed in progress on exact head4c2fdcb6a6171a1ec5f2e1cd10b0b544b56a351a.
-The current step covers preparation and all four scenarios; no individual native
-result is inferred. No fourth-scenario runtime pass or host deployment is claimed. The accepted older run43857621548 remains bound to its
-three scenarios and exact583e3988 actor/controller inputs.
+Status: [run43867859682](https://github.com/MahdiHedhli/hermes-hmp/actions/runs/43867859682)
+completed successfully on tested head4c2fdcb6a6171a1ec5f2e1cd10b0b544b56a351a,
+job133300957758. Digest-verified private reports and independent runtime review
+accept all four complete synthetic Linux scenarios. This is not host deployment.
+The older run43857621548 remains bound to its own three scenarios/head583e3988.
 
 ## Purpose and fixed inputs
 
@@ -69,7 +69,7 @@ For each original scenario, a source-only AST projection fixes its scenario
 constant, removes unreachable fourth-case branches/the inert new helper definition
 and normalizes empty-string concatenation. Each matches the original actor's
 projection. This is neither allocation equivalence nor runtime qualification;
-the fresh experiment must still run all four scenarios. Unrelated formatter
+the completed experiment separately ran all four scenarios. Unrelated formatter
 rewrites were removed so existing audit/TLS/cleanup code retains its original text.
 
 Generic CI on4c2fdcb6 stopped at hosted Ruff0.16.9 lint (288 findings), so its
@@ -78,12 +78,27 @@ flagged lines are present in the immutable base; one new long mode guard is
 corrected separately in [PR171](https://github.com/MahdiHedhli/hermes-hmp/pull/171).
 That one-expression wrapping retains the controller AST and actor bytes, and154
 checks pass again. Local Ruff0.15.22 is not hosted-version qualification. The fix
-branch does not trigger or replace the ongoing native experiment; no new-controller
+branch does not trigger or replace the completed native experiment; no new-controller
 runtime result or overall CI pass is claimed. Full lint remains open.
 
-Independent contract/security review accepts this exact source for publication
-and one fresh four-scenario experiment. It has not accepted a runtime result.
-Native runtime/source/software/cleanup report readback
-and independent review remain required afterward. The public Linux result cannot
-qualify private-union/Mac runtime, real provider generation, current phone
-identity, bot authorization, phone rendering, physical startup or release.
+## Terminal runtime evidence
+
+Artifact14228902675 is5,635,200 bytes; its GitHub SHA256 is
+`bfaacb8a719dd83d638c98fa5ffa9004959c1789dcb41481095e7d1e59d5284b`.
+The downloaded encrypted ZIP matches before private decryption. Independent review
+verifies each report hash, the13,206-file golden manifest and runtime binding,
+1,222 known-success Docker commands and1,210 container isolation observations.
+Matrix, mutation, historic and offline_xai each pass their complete journey and
+natural cooldown exceeding602seconds. All four containers exit0/PID0 without OOM.
+
+Both offline xAI profiles report native provider results, disabled storage, exact
+bytes and restored HTTP/credential function objects. Each makes one fake generation
+request; the shared synthetic credential yields exactly one total catalog request.
+Authenticated TLS and revocation/regrant are observed. Canonical rows remain
+manually committed: live-provider and full-agent dispatch flags are false.
+
+An idle status-writer daemon remained alive before whole-process exit; this is
+not proof that every thread joined beforehand. Earlier failed/cancelled cleanup
+is not relabeled. The public Linux result cannot qualify private-union/Mac runtime,
+real provider generation, current phone identity, bot authorization, phone rendering,
+physical startup or release. Generic CI lint remains separate from native success.
