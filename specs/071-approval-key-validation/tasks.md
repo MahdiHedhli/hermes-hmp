@@ -2,6 +2,7 @@
 - [x] Preserve three scan positions and all revalidation calls.
 - [x] Add hostile-key and between-seals controls; focused tests pass.
 - [x] Verify unchanged parent lint findings without waiver.
-- [ ] Run scan-omission and second-seal omission controls.
-- [ ] Independent final review and focused draft publication.
-- [ ] Full operator/cache runtime qualification; do not infer from microbenchmark.
+- [x] Run scan-omission and second-seal omission controls.
+- [x] Independent final review.
+- [ ] Focused draft publication.
+- [ ] Full operator/cache runtime qualification; normal case still times out60s after change. Do not infer from microbenchmark.
