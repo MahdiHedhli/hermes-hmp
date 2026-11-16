@@ -17,7 +17,7 @@ No production fallback, bypass, route, cleanup ordering or authority change.
 - [x] Reproduce the exact isolated AttributeError with normal JUnit.
 - [x] Add the explicit absent optional readiness service to the reduced fixture.
 - [x] Run the complete direct-send file and related listener lifecycle tests.
-- [ ] Independent review and focused publication; keep broad failures separate.
+- [x] Independent review and focused publication; keep broad failures separate.
 
 ## Qualification limits
 
@@ -36,3 +36,6 @@ from the isolated test PATH. This is not wheel-build qualification or a claim
 that the whole broader suite passes. Exact CI Ruff 0.16.9 accepts the one changed
 Python file. Actual tests use Darwin/Python 3.14.4, temporary synthetic homes and
 existing fake bridges; no production source is changed.
+
+Independently accepted and published as [Draft PR177](https://github.com/MahdiHedhli/hermes-hmp/pull/177),
+stacked on PR176. Publication does not install this source.
