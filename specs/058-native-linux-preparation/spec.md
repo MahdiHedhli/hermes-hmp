@@ -137,3 +137,22 @@ the partial private root is quarantined and no Linux binary ran. The preparer
 now observes actual fresh-root case-sensitive name/inode behavior before source
 or software effects. Linux extraction remains to be observed on the target
 filesystem, separate from this expected local filesystem limitation.
+
+## Second actual setup observation and installer syntax correction
+
+Run43816650447 / job133130113295 at35c58c31 is terminal failed. Actual Linux
+case-sensitive probing, both pinned software extractions, Python3.14.9 and uv0.13.5
+version checks and empty environment creation passed. All four setup CLI children
+are known terminal with no late settlement; the wheel-sync CLI returned2 before
+installation because uv0.13.5 rejects --only-binary together with --no-build. No
+Docker/native scenario ran. Ciphertext artifact14202299317 was digest-verified
+and privately decrypted; preserve it unchanged.
+
+Use --only-binary :all: alone, whose pinned help explicitly says no source builds;
+retain hashes/copy/no-config/no-Python-downloads and exact index. A real offline
+Mac uv0.13.5 parser check preserves the old argument-conflict refusal and shows
+the corrected arguments proceed to the deliberately absent interpreter refusal
+(exit2), not an installation pass. No package or Linux binary ran in that check.
+A command-contract test prevents reintroducing the conflicting flag pair. A fresh
+reviewed experiment may proceed after this known terminal setup outcome, never
+as replay of an uncertain actor or waiver of native/runtime requirements.

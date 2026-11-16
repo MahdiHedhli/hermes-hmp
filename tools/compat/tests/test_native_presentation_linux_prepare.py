@@ -190,3 +190,13 @@ def test_actual_filesystem_case_behavior_is_checked_and_own_probe_is_cleaned(tmp
     else:
         assert module.require_case_sensitive(root) is True
     assert list(root.iterdir()) == []
+
+
+def test_wheel_sync_retains_hash_binary_copy_contract_without_conflicting_flag():
+    args = module.wheel_sync_arguments(
+        Path("/synthetic/uv"), Path("/synthetic/python"), Path("/synthetic/requirements")
+    )
+    assert args[args.index("--only-binary") + 1] == ":all:"
+    assert "--require-hashes" in args and "--no-build" not in args
+    assert args[args.index("--link-mode") + 1] == "copy"
+    assert "--no-config" in args and "--no-python-downloads" in args

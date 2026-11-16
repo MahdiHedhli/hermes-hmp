@@ -145,6 +145,28 @@ def expected_packages(requirements):
     return result
 
 
+def wheel_sync_arguments(uv, python, requirements):
+    # uv0.13.5 makes --only-binary and --no-build mutually exclusive. The former
+    # alone explicitly forbids source builds and is the stricter wheel-only contract.
+    return [
+        str(uv),
+        "--no-config",
+        "--no-python-downloads",
+        "pip",
+        "sync",
+        "--python",
+        str(python),
+        "--require-hashes",
+        "--only-binary",
+        ":all:",
+        "--link-mode",
+        "copy",
+        "--default-index",
+        "https://pypi.org/simple",
+        str(requirements),
+    ]
+
+
 def require_case_sensitive(root):
     """Observe actual fresh-root name/inode behavior for this Linux software bundle."""
     require(not any(root.iterdir()))
@@ -269,28 +291,7 @@ def prepare(root, native_repository, hmp_repository):
     requirements = Path(__file__).with_name("native_presentation_linux.requirements.txt")
     require(digest(requirements) == _REQ_SHA)
     expected = expected_packages(requirements.read_text())
-    owned(
-        [
-            str(uv),
-            "--no-config",
-            "--no-python-downloads",
-            "pip",
-            "sync",
-            "--python",
-            str(venv / "bin/python"),
-            "--require-hashes",
-            "--only-binary",
-            ":all:",
-            "--no-build",
-            "--link-mode",
-            "copy",
-            "--default-index",
-            "https://pypi.org/simple",
-            str(requirements),
-        ],
-        "hash-only-wheels",
-        600,
-    )
+    owned(wheel_sync_arguments(uv, venv / "bin/python", requirements), "hash-only-wheels", 600)
     site = venv / "lib/python3.14/site-packages"
     query = (
         "import sys,os,json,importlib.metadata as m;print(json.dumps({"
