@@ -31,7 +31,7 @@ Independent prelaunch source review accepts this bounded preparation.
 - [x] Verify actual all-file staging and source manifest, preserve old failed evidence.
 - [x] Retain full original scenario/actor/isolation contracts and exact runtime fixture.
 - [x] Complete focused preparation tests and independent source review.
-- [ ] Publish and launch one fresh dedicated-branch experiment for this repaired tuple.
+- [x] Publish and launch one fresh dedicated-branch experiment for this repaired tuple.
 - [ ] Observe exact run/job through terminal outcome; no unchanged duplicate actors.
 - [ ] Verify artifact identity/digest before crypto and independently review all four reports.
 
@@ -42,3 +42,14 @@ this tuple. The77-wheel environment is an isolated synthetic fixture, not the fu
 native PM runtime/update. Private composition, Darwin scanner, physical startup,
 rendering, attachments/groups and release require separate evidence. No live host,
 phone/provider/model/grant/job change or release action occurs in this experiment.
+
+## Actual launched identity and separate broad-CI outcome
+
+One push of executable4d5fe0b1a961407a1e25cd48ab206c385716c3a3 launched native
+run43940129806/job133555130458. Fresh observation proves the preparation/all-four
+step in progress; observer follows this same run. No terminal pass is inferred.
+Draft PR182 records this experiment. Later commits change documentation only.
+
+Separate general CI43940130197 failed at285 lint findings, skipping unit/tool
+steps. Descriptor-scope and Unicode jobs passed their own scope. The155 focused
+preparation checks remain distinct from broad-suite and native qualification.
