@@ -69,10 +69,21 @@ inverse and original witnesses run. Independent review recovered both original
 This proves preservation of those old source witnesses, not new allocation/runtime
 funding or transfer of native/Linux qualification to changed code.
 
-The expanded913-case selection has912 passes and one pre-existing registry source
+The earlier expanded913-case selection had912 passes and one pre-existing registry source
 witness mismatch. The unchanged183a baseline reproduces the same case, and the
 registry file is byte-identical. Its old expected b49e6e62 hash differs from current
 f0b040c1 after the earlier permission-generation source addition e1d88b6f. No hash
 was waived or test skipped. Full-suite acceptance remains open pending separate
 reconciliation of that prior delta. Native/helper generation, actual Linux,
 private-host composition and signed-phone/release behavior remain unqualified.
+
+
+## Current composed source checkpoint
+
+The test-only [registry reconciliation](../../docs/research/MEDIA_REGISTRY_GENERATION_WITNESS_2026-11-16.md)
+is now composed with this patch. All1,065 cases across nine selected test files pass
+with no failures/errors/skips; independent composition review verifies unchanged
+production bytes relative to a8ac0668 and the original FROZEN map unchanged.
+The exact f0-input/e1d-inverse/b49-output chain closes the named historical witness
+failure, not any allocation/native/runtime gate. Repository-wide lint and exact
+native/Linux/private-host/physical/release qualification remain open. No deployment.

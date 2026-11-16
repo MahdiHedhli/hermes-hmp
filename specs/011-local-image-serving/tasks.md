@@ -5,7 +5,7 @@
 - [x] LM-HIST01: pin native ed1 resolver/cache getter and confirm exact public/private input parity.
 - [x] LM-HIST02: implement third exact internal layout; retain all original file and authority guards.
 - [x] LM-HIST03: independent source/inverse review;422 focused passes and causal1/2 safety failures.
-- [ ] LM-HIST04: reconcile separately reproduced inherited registry source-witness mismatch; no hash waiver.
+- [x] LM-HIST04: exact e1d registry-delta reconciliation retains original hash;1,065 composed cases pass.
 - [ ] LM-HIST05: exact-source native/Linux fixture and private-union composition, then physical/release acceptance.
 
 [Contract, evidence and limits](HISTORIC_IMAGE_CACHE_AMENDMENT.md). No live activation.

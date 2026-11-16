@@ -23,7 +23,12 @@ byte-identical throughout. Independent bounded review accepts this repair.
 This reconciles historical source preservation only. It does not prove new memory/
 allocation funding, native acquisition, device authorization or runtime/release
 qualification, and transfers none of the old native/platform results to new code.
-The expanded nine-suite selection also passes1,048 distinct cases with no failures,
+The expanded selection across nine test files also passes1,048 distinct cases with no failures,
 errors or skips. The image-cache feature branch must be tested again after
 composition. Repository-
 wide lint and all native/Linux/private/physical/release gates remain separate.
+
+
+The image-cache compatibility composition subsequently passed1,065 distinct cases
+across nine selected test files. Its production files remain identical to the
+previous image source; this is not an additional native/runtime qualification.

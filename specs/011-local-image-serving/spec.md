@@ -3,8 +3,8 @@
 See the [historic native image_cache amendment](HISTORIC_IMAGE_CACHE_AMENDMENT.md):
 the third exact same-profile root is source-implemented and independently reviewed;
 no resolver, fallback, grant or client change. Focused422 synthetic cases pass,
-while the separately reproduced inherited registry-witness failure and full
-native/private/Linux/physical/release qualification remain open.
+and the composed selection now passes1,065 cases after exact registry-witness
+reconciliation. Repository lint and native/private/Linux/physical/release remain open.
 
 Status: **implementation candidate; descriptor/fetch source and bounded native samples exist, not activated, device-qualified or released.** Amended 2026-10-02 for the owner's minimum-version policy (see [`ROOT_DECISIONS.md`](ROOT_DECISIONS.md#minimum-version-conversion-supersedes-s6-manifestfingerprintanchor-s6a-admission-semantics-s6b-preload-qualification-2026-10-02)); the exact-build manifest described by earlier revisions is retired. The normative wire text is [HMP v1 §7e](../../docs/architecture/contracts/HMP_V1.md) (clauses `LM-1`..`LM-20`); this spec is the feature-level view and must not contradict it. Decisions and their authority are in [`ROOT_DECISIONS.md`](ROOT_DECISIONS.md). There is no build list. Availability follows the minimum version and the required Hermes APIs (HMP v1 GU-2d). This feature makes no shipping or broad platform claim.
 

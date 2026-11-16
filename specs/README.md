@@ -5,9 +5,9 @@
 The [historic image_cache layout amendment](011-local-image-serving/HISTORIC_IMAGE_CACHE_AMENDMENT.md) supports a third exact native
 same-profile cache root using the existing authenticated image pipeline.422 focused
 synthetic cases and independent bounded source review pass; no fallback, resolver,
-new grant or phone change. The broader selection retains one independently
-reproduced pre-existing source-witness failure (912/913 pass). Native/Linux/private
-composition and physical/release qualification remain open; no deployment claim.
+new grant or phone change. The earlier inherited registry witness is now repaired without changing its original
+hash;1,065 composed cases across nine selected test files pass. Repository-wide
+lint and native/Linux/private/physical/release qualification remain open. No deployment.
 
 HMP uses [GitHub Spec Kit](https://github.com/github/spec-kit) conventions for collaborative changes. Each feature lives in `specs/<number>-<short-name>/` with:
 
