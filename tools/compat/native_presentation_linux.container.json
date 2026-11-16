@@ -1,0 +1,22 @@
+{
+  "schema": 1,
+  "purpose": "Planned isolated native fixture only; no container started",
+  "image": "docker.io/library/ubuntu@sha256:77eb101c607d6e3d4f5ad0c8a02c2136c689b98aba1f359e6502ba517e5c57ec",
+  "platform": "linux/amd64",
+  "registryReferenceObserved": "docker.io/library/ubuntu:24.04",
+  "manifestMetadataSHA256": "2745e173685b4355bdc233e7f05192ebf0f21978b55f177d08c42c5f6831d795",
+  "metadataObservedUTC": "2026-11-16T05:34:14.164671+00:00",
+  "noImageLayersPulled": true,
+  "requiredRuntimeRestrictions": [
+    "network=none and real child interfaces only lo",
+    "non-root matching fixture-root UID/GID",
+    "cap-drop=ALL; no-new-privileges; read-only image filesystem",
+    "no host PID/network/IPC, privileged mode, devices, port publication or daemon socket",
+    "only exact public source/interpreter/environment/entry read-only mounts and one fresh synthetic fixture root writable",
+    "credential-free allowlisted child environment; no inherited provider/browser/GitHub credentials",
+    "container identity/creation/start/outcome retained before effects; unknown state quarantined, never replayed"
+  ],
+  "controllerImplemented": false,
+  "nativeJourneyExecuted": false,
+  "macOSScanOwnershipQualified": false
+}
