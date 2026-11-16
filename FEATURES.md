@@ -1,3 +1,16 @@
+## Native group capability input — November16, 2026
+
+The first internal GR1 source task is a bounded parser for native
+`groups.capabilities` advertisements. It preserves exact driver/persistent flags,
+known method/feature names and a bounded log count, drops owner/profile/peer
+metadata, and distinguishes advertisement from authorization. Newer protocol
+numbers and bounded unknown additions are not refused merely for being untested.
+This parser has no runtime caller, client, route or grant effect. It does not
+implement mobile group chats or qualify a running host. The complete transport,
+device/room/bot authority, native lifecycle, mobile UI and physical/release tasks
+remain open in [spec047](specs/047-canonical-group-capability-input/tasks.md) and
+[issue152](https://github.com/MahdiHedhli/hermes-hmp/issues/152).
+
 ## Generated record metadata — November 11, 2026 UTC
 
 The character-image startup draft now appends generated-helper metadata as the
