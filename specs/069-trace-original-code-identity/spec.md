@@ -32,7 +32,7 @@ or report that broader prototype as accepted based on this helper.
 - [x] Add actual child regression and retain direct-registration interface.
 - [x] Complete all26 unchanged legacy readlink/fault cases plus the new child regression:27 pass, zero failures/errors/skips,137.333seconds on exact8dab0ffb.
 - [x] Independent terminal coverage review accepted within the helper-only scope.
-- [ ] Publish bounded test-only source.
+- [x] Publish bounded test-only source in Draft PR183.
 
 The full native43940129806 and broad original regression processes remain on their
 unchanged source and handles. No full-suite/native/private/physical/release pass.
@@ -41,3 +41,5 @@ Actual additional child samples pass on installed CPython3.11.15,3.13.13 and3.14
 no3.12 or Linux claim. Complete production subtree Git IDs match published f1b0e6b6.
 Scoped Ruff0.16.9 and source privacy/plugin-surface checks pass. No changes to the
 active native experiment payload or physical candidate are implied.
+
+Published at https://github.com/MahdiHedhli/hermes-hmp/pull/183. Source8dab0ffb and its independent review remain the executable binding; later documentation does not widen that result.
