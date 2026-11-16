@@ -56,3 +56,10 @@ Restore that exact same-profile flat-name layout, no-follow leaf and strict
 historical witnesses; do not broaden arbitrary paths or search/fallback.
 Targeted current tests and a new complete four-case qualification remain required.
 No host, provider, grant or device changes are included in source restoration.
+
+## Repeated approval API metadata checks
+
+[Spec071](071-approval-key-validation/spec.md) and its
+[bounded verification](071-approval-key-validation/VERIFICATION.md) cover inline
+key scans without cached authority or removed seals. The original normal-cache
+timeout remains unresolved; isolated helper timing is not full qualification.

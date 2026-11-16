@@ -1467,3 +1467,14 @@ Restore that exact same-profile flat-name layout, no-follow leaf and strict
 historical witnesses; do not broaden arbitrary paths or search/fallback.
 Targeted current tests and a new complete four-case qualification remain required.
 No host, provider, grant or device changes are included in source restoration.
+
+## Approval metadata key-scan overhead — November16, 2026
+
+[Spec071](specs/071-approval-key-validation/VERIFICATION.md) preserves every live
+key scan and seal while removing three generator allocations from repeated API
+metadata validation. Independent review accepts86 focused passes,20 parent
+metadata passes and six causal omission failures;198 other production files stay
+byte-identical. The isolated helper benchmark is faster, but the full normal
+cache-input case still times out at its original60-second deadline. This is a
+focused source change, not a deployed feature or operator/native/phone/release
+qualification. No permission, provider, model, job or host state changes.

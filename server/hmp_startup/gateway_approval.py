@@ -162,17 +162,27 @@ def _api_state(source, *, _spec_dict=ModuleSpec.__dict__["__dict__"]):
         and _spec_dict.__name__ == "__dict__"
     )
     registry = sys.modules
+    # Inspect every current key before any string lookup. Inline loops avoid
+    # allocating/resuming generators on this repeatedly checked custody path;
+    # they do not cache a previously valid dictionary or skip a later seal.
+    _require(type(registry) is dict)
+    for key in registry:
+        if type(key) is not str:
+            _require(False)
     _require(
-        type(registry) is dict
-        and all(type(key) is str for key in registry)
-        and type(source.module) is ModuleType
+        type(source.module) is ModuleType
         and type(source.namespace) is dict
         and vars(source.module) is source.namespace
-        and all(type(key) is str for key in source.namespace)
-        and type(source.spec) is ModuleSpec
     )
+    for key in source.namespace:
+        if type(key) is not str:
+            _require(False)
+    _require(type(source.spec) is ModuleSpec)
     spec_namespace = _spec_dict.__get__(source.spec, ModuleSpec)
-    _require(type(spec_namespace) is dict and all(type(key) is str for key in spec_namespace))
+    _require(type(spec_namespace) is dict)
+    for key in spec_namespace:
+        if type(key) is not str:
+            _require(False)
     _require(
         registry.get("hermes_constants") is source.module
         and source.namespace.get("get_default_hermes_root") is source.function
