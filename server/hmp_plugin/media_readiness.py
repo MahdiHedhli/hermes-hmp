@@ -7,9 +7,13 @@ The runtime route must fence its sampled authority before disclosing this DTO.
 from collections.abc import Mapping
 
 
-class MediaReadinessUnavailable(ValueError):
+class MediaReadinessUnavailableError(ValueError):
     def __init__(self):
         super().__init__("media readiness unavailable")
+
+
+# Preserve the existing internal import while using the standard exception suffix.
+MediaReadinessUnavailable = MediaReadinessUnavailableError
 
 
 def host_setting(extra: object) -> str:
