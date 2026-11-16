@@ -7,6 +7,7 @@ same guard runs against the real module and against out-of-tree mutants that mus
 from __future__ import annotations
 
 import ast
+import builtins
 import contextlib
 import hashlib
 import importlib.util
@@ -458,30 +459,61 @@ def test_derivation_touches_no_filesystem_api(monkeypatch: pytest.MonkeyPatch) -
     def boom(*_a: Any, **_k: Any) -> Any:
         raise AssertionError("filesystem or path normalization call")
 
-    for owner, attr in (
-        (os, "stat"),
-        (os, "lstat"),
-        (os, "fspath"),
-        (os, "getcwd"),
-        (os, "listdir"),
-        (os, "scandir"),
-        (os, "open"),
-        (os.path, "realpath"),
-        (os.path, "abspath"),
-        (os.path, "normpath"),
-        (os.path, "exists"),
-        (os.path, "expanduser"),
-        (pathlib.Path, "resolve"),
-        (pathlib.Path, "stat"),
-        (pathlib.Path, "exists"),
-        (pathlib.Path, "expanduser"),
-    ):
-        monkeypatch.setattr(owner, attr, boom)
-    monkeypatch.setattr("builtins.open", boom)
-    assert cand.derive_flat_name(PREFIX + "a.png", HOME) == "a.png"
-    got = cand.raw_tool_candidate(trow(3), HOME)
-    assert got is not None and got.tool_row_id == 3
-    assert ids(cand.collect_candidates([trow(3), trow(4)], HOME, frozenset({3, 4}))) == [4, 3]
+    with monkeypatch.context() as probe:
+        for owner, attr in (
+            (os, "stat"),
+            (os, "lstat"),
+            (os, "fspath"),
+            (os, "getcwd"),
+            (os, "listdir"),
+            (os, "scandir"),
+            (os, "open"),
+            (os.path, "realpath"),
+            (os.path, "abspath"),
+            (os.path, "normpath"),
+            (os.path, "exists"),
+            (os.path, "expanduser"),
+            (pathlib.Path, "resolve"),
+            (pathlib.Path, "stat"),
+            (pathlib.Path, "exists"),
+            (pathlib.Path, "expanduser"),
+        ):
+            probe.setattr(owner, attr, boom)
+        probe.setattr("builtins.open", boom)
+        assert cand.derive_flat_name(PREFIX + "a.png", HOME) == "a.png"
+        got = cand.raw_tool_candidate(trow(3), HOME)
+        assert got is not None and got.tool_row_id == 3
+        assert ids(cand.collect_candidates([trow(3), trow(4)], HOME, frozenset({3, 4}))) == [4, 3]
+
+
+@pytest.mark.parametrize("api", ["stat", "abspath", "open"])
+def test_no_filesystem_probe_detects_calls_and_restores_before_reporting(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, api: str
+) -> None:
+    originals = (os.stat, os.path.abspath, pathlib.Path.resolve, builtins.open)
+
+    def open_probe() -> object:
+        with builtins.open("synthetic-probe-must-not-open") as stream:
+            return stream.read(1)
+
+    def touches_filesystem(_image: object, _home: object) -> object:
+        # Resolve the API at call time, after the original probe installs traps.
+        calls = {
+            "stat": lambda: os.stat("synthetic-probe-must-not-open"),
+            "abspath": lambda: os.path.abspath("synthetic-probe-must-not-normalize"),
+            "open": open_probe,
+        }
+        return calls[api]()
+
+    monkeypatch.setattr(cand, "derive_flat_name", touches_filesystem)
+    with pytest.raises(AssertionError, match="filesystem or path normalization call"):
+        test_derivation_touches_no_filesystem_api(monkeypatch)
+
+    restored = (os.stat, os.path.abspath, pathlib.Path.resolve, builtins.open)
+    assert all(actual is original for actual, original in zip(restored, originals, strict=True))
+    path = tmp_path / "restored-test-apis"
+    path.write_bytes(b"synthetic-only")
+    assert path.read_bytes() == b"synthetic-only"
 
 
 # --- raw_tool_candidate ---------------------------------------------------------------------------
