@@ -1,5 +1,29 @@
 # Feature specs
 
+The [native member/history extension trace](059-canonical-group-transport/MEMBER_HISTORY_FENCE.md)
+now pins56 public source files. The canonical history route plus inspected plugin
+RPC facade has a specific joined-authorization/snapshot gap; this is not a
+universal upstream API-absence or deployed-vulnerability claim. Phone group
+policy and full native integration remain open; no route or grant was activated.
+
+## Verified synthetic Linux socket checkpoint — November 16, 2026
+
+[Run43847938372](https://github.com/MahdiHedhli/hermes-hmp/actions/runs/43847938372),
+exact source `de2703593f64e164010a1ccf2e3e495c2302e04e`, passed on actual Linux
+x86_64 with CPython3.11.17 and3.14.9. Each matrix entry passed221 distinct cases:
+67 ledger,85 codec and69 socket, with no failures/errors/skips, actual
+SO_PEERCRED and real same-UID/different-process acceptance/refusal checks.
+The expected PID is checked before sending, but does not prove original native
+listener generation or defeat PID reuse. Earlier205-case run43845881095 remains
+valid evidence for its older source; it does not qualify the PID follow-up. Artifact archive digests, JUnit digests and all six source
+hashes were independently read back locally; before/after source hashes agree.
+This qualifies synthetic components only. The native group adapter, original
+native-process binding, phone group permissions, mobile group UI and physical/
+release acceptance remain unfinished. No real ticket, host restart or grant was used.
+The earlier run43845005376 failed workflow validation before any job started;
+its job-level runner-context error was corrected without changing component source.
+
+
 HMP uses [GitHub Spec Kit](https://github.com/github/spec-kit) conventions for collaborative changes. Each feature lives in `specs/<number>-<short-name>/` with:
 
 | File | Review question |
@@ -37,6 +61,7 @@ are never renumbered; always refer to a spec by its full directory name.
 | `015-approval-notification-inputs` | In-process insertion, settlement and visibility inputs; source accepted, push unwired |
 | `034-approval-minimum-version-admission` | Approvals and Phone chat under the minimum-version policy |
 | `047-canonical-group-capability-input` | Internal bounded native group advertisement DATA; not a group route, grant or complete mobile feature |
+| `059-canonical-group-transport` | Unactivated canonical ticket/operation foundations; complete native shapes and phone authority remain open |
 
 Per-bot send, per-device controls, and approval availability are separate: a controls grant never
 opens an approval route (see `docs/architecture/contracts/HMP_V1.md` §7b). Spec 034 replaces the exact-build

@@ -1,3 +1,53 @@
+## Native group transport foundations — November16, 2026
+
+The [native member/history extension trace](specs/059-canonical-group-transport/MEMBER_HISTORY_FENCE.md)
+now pins56 public source files. The canonical history route plus inspected plugin
+RPC facade has a specific joined-authorization/snapshot gap; this is not a
+universal upstream API-absence or deployed-vulnerability claim. Phone group
+policy and full native integration remain open; no route or grant was activated.
+
+## Verified synthetic Linux socket checkpoint — November 16, 2026
+
+[Run43847938372](https://github.com/MahdiHedhli/hermes-hmp/actions/runs/43847938372),
+exact source `de2703593f64e164010a1ccf2e3e495c2302e04e`, passed on actual Linux
+x86_64 with CPython3.11.17 and3.14.9. Each matrix entry passed221 distinct cases:
+67 ledger,85 codec and69 socket, with no failures/errors/skips, actual
+SO_PEERCRED and real same-UID/different-process acceptance/refusal checks.
+The expected PID is checked before sending, but does not prove original native
+listener generation or defeat PID reuse. Earlier205-case run43845881095 remains
+valid evidence for its older source; it does not qualify the PID follow-up. Artifact archive digests, JUnit digests and all six source
+hashes were independently read back locally; before/after source hashes agree.
+This qualifies synthetic components only. The native group adapter, original
+native-process binding, phone group permissions, mobile group UI and physical/
+release acceptance remain unfinished. No real ticket, host restart or grant was used.
+The earlier run43845005376 failed workflow validation before any job started;
+its job-level runner-context error was corrected without changing component source.
+
+
+[Spec059](specs/059-canonical-group-transport/spec.md) pins fourteen native files
+and preserves full room/history/attachment functionality. A supported15MB native
+attachment produces20,000,000 base64 characters before metadata/RPC; generic8MiB
+limits are not accepted as a complete transport budget. Viewer and recipient
+range authority must not be interchanged.
+
+The unactivated [operation ledger](specs/059-canonical-group-transport/OPERATION_LEDGER.md)
+passes67 focused cases and causal deadline/count/generation-debt checks. The
+[pure control-ticket codec](specs/059-canonical-group-transport/TICKET_CODEC.md)
+passes85 cases and causal ID/profile/duplicate/frame/restart-policy checks. Neither
+has a production caller, actual native ticket mint, group route or phone grant.
+Model accounting and decoded DATA do not prove native cleanup or authority.
+
+A retained one-shot POSIX socket registry is now implemented and independently
+reviewed with205 combined Darwin/CPython3.11.15 cases (53socket), including real
+private Unix I/O and causal ownership/deadline guards. The exact-source Linux
+3.11/3.14 component matrix is prepared but not yet observed; no native control
+endpoint or real ticket was used. See [socket evidence](specs/059-canonical-group-transport/TICKET_SOCKET.md).
+
+Original-native endpoint/authority and WebSocket custody, room/history snapshots, explicit phone group
+authority, complete RPC/decoder/copy shapes, UI/native/platform and physical/release
+qualification remain open. Existing Controls/approval-owner rights do not
+implicitly become group or host/operator permission. See [tasks](specs/059-canonical-group-transport/tasks.md).
+
 ## Native group capability input — November16, 2026
 
 The first internal GR1 source task is a bounded parser for native
