@@ -26,8 +26,8 @@ compatibility stays minimum-version/API based rather than exact-build gated.
 
 - [x] Bind nine production differences and compute complete Git/blob inventories.
 - [x] Actual fresh source materialization and full manifest verification.
-- [ ] Run complete preparation/controller/evidence component tests and source checks.
-- [ ] Independent exact-source/preparation review before one Linux workflow launch.
+- [x] Run complete preparation/controller/evidence component tests and source checks.
+- [x] Independent exact-source/preparation review before one Linux workflow launch.
 - [ ] Observe the same full four-case workflow to terminal; inspect retained evidence.
 - [ ] Independent runtime evidence review and truthful documentation/status sync.
 
@@ -42,3 +42,22 @@ The separate broad local unit/tool run remains on its original source/handle.
 Actual fresh staging independently verifies all 16,035 materialized files and
 the exact new manifest above. Native/Linux execution has not run in this source
 staging step; no prior runtime pass transfers.
+
+## Preparation and launched workflow
+
+Executable fixture/preparation source df59f3c80e7849ed8c14d777bfe2e18e0bc31c12
+passes all 155 component cases, zero failures/errors/skips, on Darwin/Python3.14.4.
+Exact Ruff0.16.9 and privacy/plugin-surface checks pass; no captured runtime-log
+corpus was available. Three existing long expressions were wrapped without AST
+changes. Normalized source/preparer/controller AST equals its parent after only
+fixed source commit/manifest/count substitution; six critical actor/audit/FD/
+CI/evidence/dependency files remain byte-identical. Independent prelaunch review
+accepts preparation and one full experiment, not a runtime result.
+
+One branch push launched [run43926962041](https://github.com/MahdiHedhli/hermes-hmp/actions/runs/43926962041),
+job133508867290. Fresh observation shows the preparation/full-journey step in
+progress, not a terminal native pass or per-scenario admission proof. The retained
+read-only observer follows this same run; no automatic rerun or timeout restart.
+The payload remains exact current public HMP d438d35a and native f8; workflow
+source df59f3c8 is separately identified. Published in
+[Draft PR180](https://github.com/MahdiHedhli/hermes-hmp/pull/180).
