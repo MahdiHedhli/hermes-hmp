@@ -70,6 +70,216 @@
       "path": "gateway/hosted_room_attachments.py",
       "sha256": "d3924c52c8399a5520a918af875eb0439dd426ddea4cda4293e9a4161bc483a1",
       "bytes": 56152
+    },
+    {
+      "path": "gateway/hosted_room_authority_history.py",
+      "sha256": "678a31c7a6453ffafa4ddb62a9b81f146b0de828814c1c9bcd5fbe295ca87e53",
+      "bytes": 5985
+    },
+    {
+      "path": "gateway/hosted_room_discussion.py",
+      "sha256": "6dd2af9f2269d47b649d0dd11a516766b3afd282427cab0f5e1fa5300c3b5b4e",
+      "bytes": 58537
+    },
+    {
+      "path": "gateway/hosted_room_driver.py",
+      "sha256": "d58d38cfb323bc451ab628ab6325544d0ab017ef4841b72ad55751815386e8a1",
+      "bytes": 57613
+    },
+    {
+      "path": "gateway/hosted_room_execution_policy.py",
+      "sha256": "3141f5cbdf60c640239bcb44c2f38d4aa4afa9dbf30f4091d2b9f4f398970184",
+      "bytes": 7515
+    },
+    {
+      "path": "gateway/hosted_room_lead.py",
+      "sha256": "fdd28be412d1e0da4bd70fba0f7e02235ca38385296afac1d362dd4cedb151f8",
+      "bytes": 9614
+    },
+    {
+      "path": "gateway/hosted_room_links.py",
+      "sha256": "b4ac6a2ed11f64231140fc8ec18f6671b50b42e80fc3c559d5d87b4f37680053",
+      "bytes": 6745
+    },
+    {
+      "path": "gateway/hosted_room_peer.py",
+      "sha256": "c74147138331d0333dc44c33b0851578ef4eccfc377e53a5ce4bfb2ef1751d34",
+      "bytes": 28449
+    },
+    {
+      "path": "gateway/hosted_room_policy_checkpoint.py",
+      "sha256": "cd7b52ff6602c02b8c7ee0135d8815fa52413e1738926681e3b050fd1000e98d",
+      "bytes": 31234
+    },
+    {
+      "path": "gateway/hosted_room_replicas.py",
+      "sha256": "1e3c5bda6e2c085ed9fb141555b8be63f8d52c21145f91db7219d27ec1a20f54",
+      "bytes": 16509
+    },
+    {
+      "path": "gateway/hosted_room_router.py",
+      "sha256": "fdc0d3167166eda1d1a5a3ea8e14fa49c2f563be37791cee5d6ac5419897f4a0",
+      "bytes": 11322
+    },
+    {
+      "path": "gateway/hosted_room_task_input.py",
+      "sha256": "0b474b70e29043850acc4428ef280c4f28e5fd98a231102c7e34828341a37ca6",
+      "bytes": 969
+    },
+    {
+      "path": "gateway/hosted_room_work_lineage.py",
+      "sha256": "b05d5910c527b64845d643de99b279aa87daba282c06fb1149d140c913380de7",
+      "bytes": 2264
+    },
+    {
+      "path": "gateway/hosted_room_work_records.py",
+      "sha256": "201847dc8d8eeca2f63daf214328193ac54a7369ee8a75b4622ba3f4dc2221e5",
+      "bytes": 22241
+    },
+    {
+      "path": "gateway/hosted_room_work_storage.py",
+      "sha256": "d5bc4ee64ba4c205aa99f80b57983c9f8fac2bf8aefd6109a8bcb15e334ad5b2",
+      "bytes": 14578
+    },
+    {
+      "path": "gateway/hosted_rooms_common.py",
+      "sha256": "6d4b880834e68e8eb9a9b58f75a0abda22da4181028397639413036919ccfbaf",
+      "bytes": 6514
+    },
+    {
+      "path": "gateway/hosted_rooms_gateway_import.py",
+      "sha256": "7f95d7f8dc6988e80db8992a350f1697197d9a7d084f150d36f5f513871e0863",
+      "bytes": 9957
+    },
+    {
+      "path": "gateway/hosted_rooms_legacy_import.py",
+      "sha256": "dc89a48ecc56e5008aa4eab62aa3520bc8cda8064c55583964d8b9cb16766d7b",
+      "bytes": 7940
+    },
+    {
+      "path": "gateway/session_group_peers.py",
+      "sha256": "359f12ffd61eb55c5c8620c8a9d6e06d229e0c11b37f7537323a65e86add6349",
+      "bytes": 11948
+    },
+    {
+      "path": "gateway/session_hosted_controls.py",
+      "sha256": "4fbc0d4a37981f988b68482ee60032310a02e771c112370b6a6c81938be89011",
+      "bytes": 10958
+    },
+    {
+      "path": "gateway/session_hosted_member_homes.py",
+      "sha256": "5b839589b443ab7e796b7a46b87050782a99b2c37be4e6e50e6c0c069c1a0ead",
+      "bytes": 13338
+    },
+    {
+      "path": "gateway/session_hosted_members.py",
+      "sha256": "8f4a88e37424e025e85e8ba87e2280d8ee018d2fd7efed2e8c3b101e972d6618",
+      "bytes": 6987
+    },
+    {
+      "path": "gateway/session_hosted_rpc.py",
+      "sha256": "ddb74fd2a307521a892ef86299e8a04f8f67952c665afd51e4320cf90d740872",
+      "bytes": 20210
+    },
+    {
+      "path": "gateway/session_hosted_transport.py",
+      "sha256": "f498948980c3e8f69546ca40faf3e6100eb37eb6b3c01454a59786647883ef17",
+      "bytes": 19597
+    },
+    {
+      "path": "tui_gateway/hosted_room_driver.py",
+      "sha256": "5f24d8a7a49565d0f2fd32f6d8d6f38075cccb5e518adc20cdc96b7481bbd8a5",
+      "bytes": 71513
+    },
+    {
+      "path": "tui_gateway/hosted_room_lease_keeper.py",
+      "sha256": "a3a50b255e83002c17e3d93c8e147b6104e3815d81e98431071467d50c726518",
+      "bytes": 2378
+    },
+    {
+      "path": "tui_gateway/hosted_room_member_activity.py",
+      "sha256": "40218e8a06ba1ba70284902c0e4a2fe8c8c8049262dd63632e07f730df8db68c",
+      "bytes": 9724
+    },
+    {
+      "path": "tui_gateway/hosted_room_peer_deadline.py",
+      "sha256": "6886fc91a7be61d74fade79dd6e54531318bf6f92a5dab5e034a0f01aba5b2b8",
+      "bytes": 5303
+    },
+    {
+      "path": "tui_gateway/hosted_room_peer_http.py",
+      "sha256": "3b01aab3a5ff1e5cc21f50f2e7dbb02b6ad3e627f65fce069c24188d11266baf",
+      "bytes": 39280
+    },
+    {
+      "path": "tui_gateway/hosted_room_peer_transport.py",
+      "sha256": "1a940e8ae0129f186047948b19a517b70aa82325ce30d087e1052c26e9ef68fa",
+      "bytes": 13899
+    },
+    {
+      "path": "tui_gateway/hosted_room_prepare_stall.py",
+      "sha256": "96bbfb05cd0d90f255d5ea001d7239c344731a3bb8c94cbd8bfebbf3a9ccfa25",
+      "bytes": 5156
+    },
+    {
+      "path": "tui_gateway/hosted_room_router_call.py",
+      "sha256": "7cca8349f39e5a3f1addc584b65d7ea9c9dc97f73bdd8ba2ea4c79e352c00e8d",
+      "bytes": 8203
+    },
+    {
+      "path": "tui_gateway/hosted_room_server_rpc.py",
+      "sha256": "c014e1a1bed14958fdafbc67f5e7e358fc72e54e793cd5f581c73d82239618a2",
+      "bytes": 8475
+    },
+    {
+      "path": "tui_gateway/hosted_room_service.py",
+      "sha256": "32de7083b8173f83d269759037090915d75f4364fa86d562fcac53a7964fcd35",
+      "bytes": 75501
+    },
+    {
+      "path": "gateway/session_authorities.py",
+      "sha256": "7ff52e18a7c40b16c2551888b3d65f8cb2e932f10f029e06156fa5ac8266202b",
+      "bytes": 17163
+    },
+    {
+      "path": "gateway/session_authority.py",
+      "sha256": "7707c8973647ea5bb223b3c0e44f6d7bf21d121a850a3ca194f4575c6dc2625d",
+      "bytes": 92990
+    },
+    {
+      "path": "gateway/session_controls.py",
+      "sha256": "b7317ba18b74c4b23d9d5683551415ac0c7baaae2187762e9fe02c08d3120794",
+      "bytes": 63020
+    },
+    {
+      "path": "hermes_cli/plugins_capability_ctx.py",
+      "sha256": "259df3f2c4cfa9b315242c3d90981e74e31f9fac78e985dc1be8fd26c6e6890f",
+      "bytes": 6050
+    },
+    {
+      "path": "hermes_cli/plugins_context.py",
+      "sha256": "2984a4def458cb1ac4b6f6406861f4dd905a00e4bb11000f3383ffca9136c25f",
+      "bytes": 52898
+    },
+    {
+      "path": "hermes_cli/plugins_registrars.py",
+      "sha256": "d8935626dc004c7e3acc565582ff64a20efb2161e20d9d58cf5ff42af143f40e",
+      "bytes": 10034
+    },
+    {
+      "path": "hermes_state_runtime.py",
+      "sha256": "52a0bd8e4ff76cbfa2d281876f4778b37ae9789e50f5e64fe57c253c8aec3088",
+      "bytes": 60854
+    },
+    {
+      "path": "hermes_cli/plugin_rpc.py",
+      "sha256": "77ea843a34fb87d7236c8f913f01c19f219e42e7ed21e6243d2f556fbb5da570",
+      "bytes": 2381
+    },
+    {
+      "path": "gateway/session_plugin_rpc.py",
+      "sha256": "a7fab13cc862ba56212d98dbe4ca053e60d7e601ed0b645e0232d8e46fe70b6e",
+      "bytes": 4533
     }
   ],
   "scope": "Pinned source-only contract census; no module imported, ticket minted, socket opened, host queried or rights changed"

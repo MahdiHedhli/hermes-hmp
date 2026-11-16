@@ -12,6 +12,11 @@
       prequeue absolute deadline, retained generations, single-thread confinement,
       precision refusal and67 causal/positive cases. Model settlement is not native
       cleanup, permission or transport completion; see OPERATION_LEDGER.md.
+- [x] GT1-CENSUS: pin56 source files and trace room/history/replica ownership
+      plus supported plugin RPC. Existing state/log and RPC facade do not supply
+      the required HMP phone/history fence; no blanket API-gap claim.
+- [ ] GT1-FENCE: complete supported extension/contract trace and resolve exact
+      original-authority/member/history transaction predicate before integration.
 - [ ] GT2: implement internal bounded owner/deadline/pending/publication lifecycle
       with synthetic transports only and no runtime route/capability activation.
 - [x] GT3-CODEC: fixed profile-scoped control-ticket request/reply codec,

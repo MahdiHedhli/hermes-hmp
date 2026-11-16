@@ -1,5 +1,11 @@
 ## Native group transport foundations — November16, 2026
 
+The [native member/history extension trace](specs/059-canonical-group-transport/MEMBER_HISTORY_FENCE.md)
+now pins56 public source files. The canonical history route plus inspected plugin
+RPC facade has a specific joined-authorization/snapshot gap; this is not a
+universal upstream API-absence or deployed-vulnerability claim. Phone group
+policy and full native integration remain open; no route or grant was activated.
+
 ## Verified synthetic Linux socket checkpoint — November 16, 2026
 
 [Run43847938372](https://github.com/MahdiHedhli/hermes-hmp/actions/runs/43847938372),

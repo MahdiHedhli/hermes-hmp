@@ -177,3 +177,11 @@ cover every supported operation: a native15,000,000-byte attachment produces
 method-aware transport/decoder/copy accounting or a genuinely equivalent viewer
 streaming contract. The recipient-member range read is not such a viewer API.
 No file limit or feature is reduced to make these provisional budgets pass.
+
+
+The [member/history extension trace](MEMBER_HISTORY_FENCE.md) expands the pinned
+source census to56 files, including supported plugin RPC registration/dispatch.
+That facade exists but is not itself a native authorize-and-read snapshot or an
+HMP phone grant. Existing state/log composition remains insufficient for the
+required history-acquisition boundary; this is scoped route evidence, not a
+blanket assertion that every supported extension is absent. GT1 remains open.
