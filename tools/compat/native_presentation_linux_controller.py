@@ -159,7 +159,10 @@ def environment(root):
 
 
 def create_arguments(name, root, source, prefix, venv, entry, mode, uid, gid):
-    require(mode in ("matrix", "mutation", "historic", "offline_xai") and type(uid) is int and uid > 0)
+    require(
+        mode in ("matrix", "mutation", "historic", "offline_xai")
+        and type(uid) is int and uid > 0
+    )
     require(
         type(gid) is int and gid >= 0 and re.fullmatch(r"hmp-native-[0-9a-f]{32}", name) is not None
     )
@@ -329,11 +332,18 @@ def report_acceptance(report, mode):
         require(report.get("nativeHistoricCacheTLSAndRegrantObserved") is True)
         require(report.get("historicCanonicalToolRowsAreSynthetic") is True)
         require(report.get("historicProviderGenerationQualified") is False)
-        require(report.get("historicCacheHelper") == "gateway.platforms.base.cache_image_from_bytes")
+        require(
+            report.get("historicCacheHelper") == "gateway.platforms.base.cache_image_from_bytes"
+        )
         historic = report.get("nativeHistoricCacheProfiles")
         require(type(historic) is list and len(historic) == 2)
         require({x.get("profileHomeName") for x in historic} == {"home", "beta"})
-        require(all(x.get("exactHistoricRoot") is True and x.get("bytesMatched") is True for x in historic))
+        require(
+            all(
+                x.get("exactHistoricRoot") is True and x.get("bytesMatched") is True
+                for x in historic
+            )
+        )
     require(
         [(x["profile"], x["status"]) for x in report["nativePresentationCases"]]
         == [("default", 200), ("beta", 200)]
