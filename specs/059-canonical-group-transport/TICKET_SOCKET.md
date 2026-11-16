@@ -121,3 +121,29 @@ native-process binding, phone group permissions, mobile group UI and physical/
 release acceptance remain unfinished. No real ticket, host restart or grant was used.
 The earlier run43845005376 failed workflow validation before any job started;
 its job-level runner-context error was corrected without changing component source.
+
+## Mandatory peer-process comparison — source follow-up
+
+The next unactivated source requires an exact built-in expected peer PID in
+1..2,147,483,647 at prepare. That value must come from the future original native
+owner, never HTTP input. Linux reads PID and UID from the same SO_PEERCRED result;
+Darwin checks getpeereid plus SOL_LOCAL/LOCAL_PEERPID before the first send.
+The pinned [XNU header](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/bsd/sys/un.h)
+sets those option values to0/2; [the kernel implementation](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/bsd/kern/uipc_usrreq.c)
+returns the connected peer's pid_t. Unknown/unsupported identity refuses; no
+path-only fallback. The binding key remains path/profile/IID: changing the
+expected PID cannot open another slot while the original debt is retained.
+
+Actual Darwin CPython3.11.15 passes221 cases (67 ledger/85 codec/69 socket).
+A real distinct child under the same UID is accepted only with its kernel PID;
+a wrong expected PID receives zero request bytes. Both child cases observe natural
+exit. Removing the comparison causes the wrong-peer case to fail; substituting
+the caller's own PID causes both child cases to fail. The first mutation attempt
+selected original code through repository conftest and is expressly not mutation
+proof; isolated package/test copies produce the stated failures. Exact positive
+source hashes agree before/after. The Linux helper now requires both child cases
+as well as the original kernel case. Linux221 results remain pending.
+
+PID equality does not defeat PID reuse, prove listener generation, or authenticate
+the provenance of the expected value. Original native binding and HMP phone/room
+rights remain external prerequisites. No production caller or real ticket is added.

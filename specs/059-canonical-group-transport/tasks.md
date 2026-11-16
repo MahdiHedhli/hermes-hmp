@@ -24,6 +24,9 @@
 - [x] GT3-SOCKET-LINUX: exact-source run43845881095 passed on actual Linux
       CPython3.11.17/3.14.9,205 cases each, verified archive/JUnit/source hashes
       and actual kernel-peer case. Synthetic component scope only.
+- [ ] GT3-SOCKET-PID: independently review mandatory pre-send kernel PID
+      comparison and real distinct-process causal tests, then qualify the exact
+      follow-up source on actual Linux. Native generation remains separate.
 - [ ] GT3: implement reviewed explicit-endpoint ticket/socket/WebSocket adapter;
       prove real credential/reader/writer/thread ownership and exact cleanup.
 - [ ] GT4: qualify native per-room/member snapshot fencing and define explicit

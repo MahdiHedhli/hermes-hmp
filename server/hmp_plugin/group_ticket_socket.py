@@ -78,11 +78,12 @@ def _linux_peer_uid(raw: bytes) -> int:
     return struct.unpack("3I", raw)[1]
 
 
-def _peer_uid(peer: socket.socket) -> int | None:
+def _peer_identity(peer: socket.socket) -> tuple[int, int] | None:
     """Actual kernel identity; unsupported systems do not fall back to pathname trust."""
     if sys.platform == "linux" and hasattr(socket, "SO_PEERCRED"):
         raw = peer.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, struct.calcsize("3I"))
-        return _linux_peer_uid(raw)
+        pid, uid, _gid = struct.unpack("3I", raw)
+        return uid, pid
     if sys.platform == "darwin":
         library = ctypes.CDLL(None, use_errno=True)
         function = ctypes.CFUNCTYPE(
@@ -95,7 +96,13 @@ def _peer_uid(peer: socket.socket) -> int | None:
         uid, gid = ctypes.c_uint(), ctypes.c_uint()
         if function(peer.fileno(), ctypes.byref(uid), ctypes.byref(gid)) != 0:
             raise OSError(ctypes.get_errno(), "peer identity unavailable")
-        return uid.value
+        # Pinned XNU bsd/sys/un.h: SOL_LOCAL=0, LOCAL_PEERPID=2.
+        # pid_t is a signed 32-bit value; refuse unsupported ABI/unknown peer.
+        if struct.calcsize("i") != 4:
+            return None
+        raw_pid = peer.getsockopt(0, 2, 4)
+        pid = struct.unpack("i", raw_pid)[0]
+        return uid.value, pid
     return None
 
 
@@ -107,6 +114,7 @@ class GroupTicketSocketSnapshot:
     exchange_cleanup_finished: bool
     socket_close_known: bool
     same_uid_observed: bool
+    expected_pid_observed: bool
     send_may_have_occurred: bool
     registry_slot_retained: bool
 
@@ -149,15 +157,22 @@ class GroupTicketSocketRegistry:
         self,
         *,
         socket_path: str,
+        expected_peer_pid: int,
         profile_id: str,
         instance_id: str,
         max_seconds: float,
         deadline: float,
     ) -> _TicketSocketExchange:
-        """Internal DATA only. Native path/PID/generation custody is a prerequisite."""
+        """Internal DATA only. Original native path/PID/generation custody is external.
+
+        PID comparison is mandatory but does not defeat PID reuse or prove that
+        the caller obtained its expected value from the original native owner.
+        """
         self._confined()
         if self._retired:
             raise GroupTicketSocketError("retired")
+        if type(expected_peer_pid) is not int or not 1 <= expected_peer_pid <= 2_147_483_647:
+            raise GroupTicketSocketError("invalid_binding")
         request = None
         with suppress(GroupTicketCodecRefusalError):
             request = build_group_ticket_request(profile_id=profile_id, instance_id=instance_id)
@@ -193,7 +208,7 @@ class GroupTicketSocketRegistry:
             or key in self._bindings
         ):
             raise GroupTicketSocketError("busy")
-        owner = _TicketSocketExchange(self, key, request, end)
+        owner = _TicketSocketExchange(self, key, request, end, expected_peer_pid)
         self._owners[owner._token] = owner
         self._bindings[key] = owner
         return owner
@@ -256,8 +271,11 @@ class _TicketSocketExchange:
         key: tuple[str, str, str],
         request: bytes,
         deadline: float,
+        expected_peer_pid: int,
     ) -> None:
         self._registry, self._key, self._request, self._deadline = registry, key, request, deadline
+        self._expected_peer_pid = expected_peer_pid
+        self._same_pid = False
         self._token = object()
         self._done = registry._loop.create_future()
         self._task: asyncio.Task | None = None
@@ -355,12 +373,18 @@ class _TicketSocketExchange:
                 self._current(end)
                 await self._registry._loop.sock_connect(self._peer, self._key[0])
                 self._current(end)
-                uid = _peer_uid(self._peer)
-                if type(uid) is not int:
+                identity = _peer_identity(self._peer)
+                if type(identity) is not tuple or len(identity) != 2:
+                    raise self._error("unsupported_peer")
+                uid, pid = identity
+                if type(uid) is not int or type(pid) is not int or pid <= 0:
                     raise self._error("unsupported_peer")
                 if uid != os.getuid():  # windows-footgun: ok — constructor requires POSIX
                     raise self._error("peer_refused")
                 self._same_uid = True
+                if pid != self._expected_peer_pid:
+                    raise self._error("peer_refused")
+                self._same_pid = True
                 self._current(end)
                 self._phase = "sending"
                 self._send_attempted = True
@@ -415,6 +439,7 @@ class _TicketSocketExchange:
             self._cleanup_finished,
             self._close_known,
             self._same_uid,
+            self._same_pid,
             self._send_attempted,
             self._registry._registered(self) or self._registry._settlement_unknown is self,
         )

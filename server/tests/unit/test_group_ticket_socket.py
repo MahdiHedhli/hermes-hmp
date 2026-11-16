@@ -6,6 +6,7 @@ import asyncio
 import json
 import os
 import struct
+import sys
 import tempfile
 import time
 from contextlib import asynccontextmanager, suppress
@@ -79,6 +80,7 @@ async def peer(*, response=None, gated=False):
 def prepare(registry, path, **changes):
     values = {
         "socket_path": path,
+        "expected_peer_pid": os.getpid(),
         "profile_id": PROFILE,
         "instance_id": INSTANCE,
         "max_seconds": 5,
@@ -98,7 +100,8 @@ def test_actual_kernel_peer_uid_fixed_request_and_known_close():
             assert grant.ticket == TICKET
             assert TICKET not in repr(grant)
             snapshot = owner.snapshot()
-            assert snapshot.same_uid_observed and snapshot.socket_close_known
+            assert snapshot.same_uid_observed and snapshot.expected_pid_observed
+            assert snapshot.socket_close_known
             assert snapshot.exchange_cleanup_finished and not snapshot.registry_slot_retained
             assert registry.snapshot().registered == 0
             assert len(target.requests) == 1
@@ -119,7 +122,7 @@ def test_actual_kernel_peer_uid_fixed_request_and_known_close():
 
 @pytest.mark.parametrize("uid", [None, True, -1])
 def test_peer_identity_refusal_before_send(monkeypatch, uid):
-    monkeypatch.setattr(module, "_peer_uid", lambda _peer: uid)
+    monkeypatch.setattr(module, "_peer_identity", lambda _peer: (uid, os.getpid()))
 
     async def scenario():
         async with peer(response=reply()) as target:
@@ -578,3 +581,124 @@ def test_multiple_lines_in_acquired_reply_are_refused_without_stream_boundary_as
 def test_linux_ucred_unsigned_abi_simulation(uid):
     # Pure ABI data only. No OS/constant spoofing and no Linux runtime claim on Darwin.
     assert module._linux_peer_uid(struct.pack("3I", 123, uid, 456)) == uid
+
+
+@pytest.mark.parametrize("pid", [None, True, 0, -1, 2_147_483_648, 1.0, "123"])
+def test_expected_pid_refused_before_registration(pid):
+    async def scenario():
+        registry = GroupTicketSocketRegistry(capacity=1)
+        with pytest.raises(GroupTicketSocketError) as error:
+            prepare(registry, "/synthetic/control.sock", expected_peer_pid=pid)
+        assert error.value.reason == "invalid_binding"
+        assert registry.snapshot().registered == 0
+        assert await registry.drain()
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize(
+    "identity", [None, (), (1,), (1, 2, 3), (os.getuid(), True), (os.getuid(), 0)]
+)
+def test_unknown_peer_process_refuses_before_send(monkeypatch, identity):
+    monkeypatch.setattr(module, "_peer_identity", lambda _peer: identity)
+
+    async def scenario():
+        async with peer(response=reply()) as target:
+            registry = GroupTicketSocketRegistry(capacity=1)
+            owner = prepare(registry, target.path)
+            with pytest.raises(GroupTicketSocketError) as error:
+                await owner.exchange()
+            assert error.value.reason == "unsupported_peer"
+            assert not error.value.mint_may_have_occurred
+            assert not owner.snapshot().expected_pid_observed
+            assert await registry.drain()
+        assert all(not request for request in target.requests)
+
+    asyncio.run(scenario())
+
+
+def test_different_pid_does_not_open_second_binding_slot():
+    async def scenario():
+        registry = GroupTicketSocketRegistry(capacity=2)
+        prepare(registry, "/synthetic/control.sock")
+        with pytest.raises(GroupTicketSocketError) as error:
+            prepare(registry, "/synthetic/control.sock", expected_peer_pid=os.getpid() + 1)
+        assert error.value.reason == "busy"
+        assert registry.snapshot().registered == 1
+        assert await registry.drain()
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("correct_pid", [False, True])
+def test_actual_same_uid_child_process_is_checked_before_send(correct_pid):
+    # A distinct real process defeats an implementation that checks only UID or
+    # compares the expected number with our own PID instead of the kernel peer.
+    script = """
+import os, socket, sys
+listener = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+listener.settimeout(3)
+listener.bind(sys.argv[1])
+os.chmod(sys.argv[1], 0o600)
+listener.listen(1)
+print('READY', flush=True)
+try:
+    connection, _ = listener.accept()
+    connection.settimeout(3)
+    with connection:
+        request = b''
+        while len(request) < 4096 and not request.endswith(b'\\n'):
+            chunk = connection.recv(4096 - len(request))
+            if not chunk:
+                break
+            request += chunk
+        if request:
+            connection.sendall(sys.argv[2].encode('utf-8'))
+        print(len(request), flush=True)
+finally:
+    listener.close()
+"""
+
+    async def scenario():
+        with tempfile.TemporaryDirectory(prefix="hgp-", dir="/tmp") as directory:
+            os.chmod(directory, 0o700)
+            path = str(Path(directory) / "control.sock")
+            process = await asyncio.create_subprocess_exec(
+                sys.executable,
+                "-I",
+                "-c",
+                script,
+                path,
+                reply().decode("utf-8"),
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            try:
+                assert process.pid != os.getpid()
+                assert await asyncio.wait_for(process.stdout.readline(), 2) == b"READY\n"
+                registry = GroupTicketSocketRegistry(capacity=1)
+                owner = prepare(
+                    registry, path, expected_peer_pid=process.pid if correct_pid else os.getpid()
+                )
+                if correct_pid:
+                    grant = await owner.exchange()
+                    assert grant.ticket == TICKET
+                    assert owner.snapshot().expected_pid_observed
+                else:
+                    with pytest.raises(GroupTicketSocketError) as error:
+                        await owner.exchange()
+                    assert error.value.reason == "peer_refused"
+                    assert not error.value.mint_may_have_occurred
+                    assert owner.snapshot().same_uid_observed
+                    assert not owner.snapshot().expected_pid_observed
+                assert await registry.drain()
+                output, errors = await asyncio.wait_for(process.communicate(), 5)
+                assert process.returncode == 0 and errors == b""
+                assert int(output.strip()) > 0 if correct_pid else output.strip() == b"0"
+            finally:
+                # Child socket deadlines are finite; observe its natural exit,
+                # never kill a helper or infer exit from observation timeout.
+                await asyncio.wait_for(process.wait(), 5)
+                assert process.returncode is not None
+
+    asyncio.run(scenario())

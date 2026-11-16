@@ -24,7 +24,7 @@ FILES = tuple(path.replace("tests/unit/", "tests/unit/test_") for path in FILES)
 EXPECTED = {
     "test_group_operation_ledger": 67,
     "test_group_ticket_codec": 85,
-    "test_group_ticket_socket": 53,
+    "test_group_ticket_socket": 69,
 }
 
 
@@ -55,7 +55,12 @@ def coverage(result: Path) -> tuple[dict[str, int], str]:
     require(stat.S_ISREG(info.st_mode) and info.st_size <= 4 * 1024 * 1024)
     cases = ET.parse(result).findall(".//testcase")
     counts = dict.fromkeys(EXPECTED, 0)
-    kernel_case = False
+    required_kernel_cases = {
+        "test_actual_kernel_peer_uid_fixed_request_and_known_close",
+        "test_actual_same_uid_child_process_is_checked_before_send[False]",
+        "test_actual_same_uid_child_process_is_checked_before_send[True]",
+    }
+    kernel_cases = set()
     identities = set()
     for case in cases:
         identity = (case.attrib.get("classname", ""), case.attrib.get("name", ""))
@@ -67,12 +72,12 @@ def coverage(result: Path) -> tuple[dict[str, int], str]:
             and all(case.find(tag) is None for tag in ("failure", "error", "skipped"))
         )
         counts[name] += 1
-        kernel_case |= (
+        if (
             name == "test_group_ticket_socket"
-            and case.attrib.get("name")
-            == "test_actual_kernel_peer_uid_fixed_request_and_known_close"
-        )
-    require(counts == EXPECTED and kernel_case)
+            and case.attrib.get("name") in required_kernel_cases
+        ):
+            kernel_cases.add(case.attrib["name"])
+    require(counts == EXPECTED and kernel_cases == required_kernel_cases)
     return counts, hashlib.sha256(result.read_bytes()).hexdigest()
 
 
