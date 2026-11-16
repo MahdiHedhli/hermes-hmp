@@ -30,11 +30,24 @@ entire legacy-native installation or authority receipt.
 ## Tasks / acceptance
 
 - [x] Reproduce original failure; inspect schema3/4 source and unchanged base DDL.
-- [ ] Add causal current/legacy WAL and checkpointed read cases; demonstrate red.
+- [x] Add causal current/legacy WAL and checkpointed read cases; demonstrate red.
 - [ ] Repair the single predicate; run complete diagnostic and related store tests.
-- [ ] Verify unknown formats and no migration/authority/network/file mutation.
+- [ ] Verify unknown formats, no migration/authority/network action, unchanged stored
+  rows during WAL reads and unchanged checkpointed-file hashes.
 - [ ] Independently review source/results and publish focused repair with limits.
 
 Use fresh synthetic test homes. Local Darwin/Python qualification is separate
 from native/Linux, installed private source, device and release. Preserve prior
 broad-suite failures and test-global filesystem reporting trap as separate work.
+
+
+## Red reproduction
+
+Original production predicate plus the extended21-case diagnostic file yields
+10 failures, zero errors/skips. Both legacy3 positive reads pass; the current4
+WAL/checkpointed cases and eight existing current-store diagnostic cases fail.
+This reproduces an actual readonly diagnostic defect, not a fixture-only issue.
+
+The WAL path keeps ordinary SQLite read-lock/SHM bookkeeping; it is not a claim
+that every file byte or access timestamp stays unchanged during a live read.
+Checkpointed immutable-read tests compare the complete fixture file hashes.
