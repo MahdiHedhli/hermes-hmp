@@ -35,7 +35,7 @@ No production source, host permissions, device software or release change.
 - [x] Retain original baseline hashes and all original assertions.
 - [x] Add changed/duplicate/relocated block controls and outside-byte preservation.
 - [x] Complete binding, inverse controls and owning lifecycle test selections.
-- [ ] Independent final review, focused publication and current-status sync.
+- [x] Independent final review and focused publication; current-status sync recorded separately.
 
 ## Limits
 
@@ -80,3 +80,6 @@ are exercised in the separate owning tests above; the historical lexical
 projection is not their qualification by itself. Full broad regression and
 native/private/device/release gates remain open; the frozen registry expectation
 has not been changed.
+
+Published as [Draft PR178](https://github.com/MahdiHedhli/hermes-hmp/pull/178),
+stacked on PR177; no deployment is performed by publication.
