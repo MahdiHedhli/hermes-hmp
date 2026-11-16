@@ -238,7 +238,7 @@ reconciliation. A closed-console/lost-start-response synthetic case verifies
 same-ID observation through terminal with no create/start replay. This does not
 turn a canceled/unknown older actor into a released or accepted one.
 
-## Newer native f8 qualification — November 16 (pending runtime)
+## Newer native f8 qualification — November 16 (source preparation)
 
 The focused `feat/native-f8-image-qualification-20261116` candidate replaces only
 native fixture source ed1afb08 with immutable
@@ -271,3 +271,17 @@ runtime failures or product passes. Independent review and the complete four-cas
 Linux execution remain required. Public-source success cannot qualify the private
 13-production-file-different integration, Darwin WAL scanner ownership, phone
 rendering/startup, actual providers, full attachment/group functionality or release.
+
+
+### Terminal result for the exact f8 candidate
+
+[Run43902423239](https://github.com/MahdiHedhli/hermes-hmp/actions/runs/43902423239),
+job133422291211, succeeds on exact tested head74843ffc8abc578c457ce2e9a667ca17360a109a.
+Independent private readback accepts all four complete scenarios with original
+602+second cooldowns. Artifact14248155364 is5,905,413bytes, SHA256
+`1508a56f9190b829f94d6f61a63f9681ddc29e00729bdd56168656375e0c9115`.
+All1,222 command output pairs and1,210 isolation observations verify; all four
+containers exit0/PID0/noOOM. [Full scope and limits](../../docs/research/NATIVE_F8_IMAGE_2026-11-16.md).
+The earlier preparation paragraph is retained as dated source-stage evidence;
+its experiment requirement is now satisfied for this exact public Linux tuple.
+All full-PM/private/Mac/phone/provider/attachment/group/release gates remain.
